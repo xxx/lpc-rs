@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lpc_rs_core::{EFUN, RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::{EFUN, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, lpc_error, span::Span};
 
 use crate::compiler::{
@@ -9,7 +9,9 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     diagnostics::Diagnostics,
 };
-use crate::interpreter::program::{Program, Region};
+use crate::interpreter::program::linker::InheritedProgram;
+#[cfg(test)]
+use crate::interpreter::program::{Region, linker::place};
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -52,7 +54,7 @@ impl InheritanceWalker {
         Ok(())
     }
 
-    fn check_nomask_variables(&self, program: &Program, span: Option<Span>) -> Result<()> {
+    fn check_nomask_variables(&self, program: &InheritedProgram, span: Option<Span>) -> Result<()> {
         for symbol in program
             .global_variables
             .values()
@@ -96,39 +98,6 @@ impl Pass for InheritanceWalker {
     fn diagnostics_mut(&mut self) -> &mut Diagnostics {
         &mut self.context.diagnostics
     }
-}
-
-/// The block each of `imported`'s regions lands on: a program the child
-/// already holds keeps its block, a new one takes the next slots.
-fn place(
-    layout: &mut Vec<Region>,
-    num_globals: &mut RegisterSize,
-    imported: &[Region],
-    span: Option<Span>,
-) -> Result<Vec<RegisterSize>> {
-    let mut targets = Vec::with_capacity(imported.len());
-    for region in imported {
-        match layout.iter().find(|held| held.filename == region.filename) {
-            Some(held) if held.count != region.count => {
-                return Err(lpc_error!(
-                    span,
-                    "inherited two different versions of `{}`",
-                    region.filename
-                ));
-            }
-            Some(held) => targets.push(held.base),
-            None => {
-                let base = *num_globals;
-                *num_globals += region.count;
-                layout.push(Region {
-                    base,
-                    ..region.clone()
-                });
-                targets.push(base);
-            }
-        }
-    }
-    Ok(targets)
 }
 
 #[async_trait]
@@ -189,6 +158,7 @@ impl TreeWalker for InheritanceWalker {
         let depth = self.context.inherit_depth;
         let compiler = CompilerBuilder::default()
             .config(self.context.config.clone())
+            .code_pool(self.context.code_pool.clone())
             .inherit_depth(depth + 1)
             .gate(self.context.gate.clone())
             .simul_efuns(self.context.simul_efuns.clone())
@@ -240,22 +210,14 @@ impl TreeWalker for InheritanceWalker {
                         .insert(namespace.to_owned(), self.context.inherits.len());
                 }
 
-                let mut program = program;
-                let targets = place(
+                let program = InheritedProgram::place(
+                    program,
                     &mut self.context.layout,
                     &mut self.context.num_globals,
-                    &program.layout,
                     node.span,
                 )
                 .map_err(|e| self.context.diagnostics.fail(e))?;
-                program.relocate_globals(&targets);
                 self.check_nomask_variables(&program, node.span)?;
-                self.context.inherited_functions.extend(
-                    program
-                        .functions
-                        .iter()
-                        .map(|(name, function)| (*name, function.clone())),
-                );
                 self.context.inherits.push(program);
 
                 Ok(())
@@ -267,6 +229,7 @@ impl TreeWalker for InheritanceWalker {
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_core::RegisterSize;
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;

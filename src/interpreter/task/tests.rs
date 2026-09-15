@@ -1,3 +1,4 @@
+use lpc_rs_function_support::program_function::ProgramFunction;
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -4616,7 +4617,7 @@ mod test_instructions {
             initializer.arg_lists = arg_lists;
 
             let mut functions = IndexMap::default();
-            functions.insert(ustr("second"), Arc::new(second(&path)));
+            functions.insert(ustr("second"), Arc::new(second(&path)).into());
             let program = Program {
                 filename: path,
                 dispatch: Box::new(crate::interpreter::program::dispatch_table(&functions)),

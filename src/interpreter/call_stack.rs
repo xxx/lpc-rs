@@ -6,14 +6,12 @@ use std::{
 use delegate::delegate;
 use lpc_rs_core::{RegisterSize, lpc_path::LibRoot};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
-use lpc_rs_function_support::program_function::ProgramFunction;
-use thin_vec::ThinVec;
 
+use crate::interpreter::program::Function;
 use crate::interpreter::{
-    call_frame::CallFrame,
+    call_frame::{CallFrame, FrameCells},
     lpc_ref::{LpcRef, NULL},
     process::Process,
-    stm::VarId,
     task_context::{Caller, Callers},
 };
 
@@ -116,13 +114,13 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     pub fn push_new<V>(
         &mut self,
         process: Arc<Process>,
-        function: Arc<ProgramFunction>,
+        function: Function,
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
         upvalue_ptrs: Option<V>,
     ) -> Result<()>
     where
-        V: Into<ThinVec<VarId>>,
+        V: Into<FrameCells>,
     {
         if self.stack.len() >= STACKSIZE {
             return Err(Self::overflow());

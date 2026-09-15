@@ -1,3 +1,10 @@
+pub mod code_pool;
+mod function;
+pub(crate) mod linker;
+
+pub use function::Function;
+pub use linker::InheritedProgram;
+
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -9,14 +16,10 @@ use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
-    INIT_GLOBALS, INIT_PROGRAM, RegisterSize,
-    global_var_flags::GlobalVarFlags,
-    lpc_path::LpcPath,
-    lpc_type::LpcType,
-    pragma_flags::PragmaFlags,
-    register::{Register, RegisterVariant},
+    INIT_GLOBALS, INIT_PROGRAM, RegisterSize, global_var_flags::GlobalVarFlags, lpc_path::LpcPath,
+    lpc_type::LpcType, pragma_flags::PragmaFlags,
 };
-use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
+use lpc_rs_function_support::symbol::Symbol;
 use path_dedot::*;
 use ustr::{Ustr, existing_ustr};
 
@@ -70,7 +73,7 @@ pub struct GlobalVariable {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Target {
     /// The most-derived definition of the called name.
-    pub function: Arc<ProgramFunction>,
+    pub function: Function,
     /// Whether that is a different function from the one the call was
     /// compiled against.
     pub overridden: bool,
@@ -79,9 +82,9 @@ pub struct Target {
 /// The [`Program::dispatch`] table of `functions`, which holds inherited
 /// functions first, in inherit order, the program's own last.
 pub fn dispatch_table(
-    functions: &IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState>,
+    functions: &IndexMap<Ustr, Function, ahash::RandomState>,
 ) -> IndexMap<Ustr, Target, ahash::RandomState> {
-    let mut latest: HashMap<&str, &Arc<ProgramFunction>> = HashMap::new();
+    let mut latest: HashMap<&str, &Function> = HashMap::new();
     for function in functions.values().filter(|f| !f.is_closure()) {
         latest.insert(function.prototype.name.as_ref(), function);
     }
@@ -98,7 +101,7 @@ pub fn dispatch_table(
                 mangled,
                 Target {
                     function: target.clone(),
-                    overridden: !Arc::ptr_eq(target, function),
+                    overridden: !std::ptr::eq(target, function),
                 },
             )
         })
@@ -114,7 +117,7 @@ pub struct Program {
 
     /// Every function by mangled name, inherited ones first. Keyed by the
     /// interned name so a `Call`'s `Ustr` hashes and compares by pointer.
-    pub functions: Box<IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState>>,
+    pub functions: Box<IndexMap<Ustr, Function, ahash::RandomState>>,
 
     /// Every mangled name mapped to what a plain call of it reaches: the
     /// object's most-derived definition of the same unmangled name, the
@@ -126,12 +129,12 @@ pub struct Program {
     /// This is needed for `call_other`.
     /// Due to unmangled names not being unique, only the last-defined
     /// function with a given unmangled name is referenced here.
-    pub unmangled_functions: Box<IndexMap<String, Arc<ProgramFunction>, ahash::RandomState>>,
+    pub unmangled_functions: Box<IndexMap<String, Function, ahash::RandomState>>,
 
     /// The function that is called when the program is first loaded,
     /// which initializes the global variables. This function is
     /// the combined initializer of all of the inherited programs.
-    pub initializer: Option<Arc<ProgramFunction>>,
+    pub initializer: Option<Function>,
 
     /// The map of global variables in this program.
     pub global_variables: Box<HashMap<String, Symbol>>,
@@ -145,6 +148,9 @@ pub struct Program {
     /// How many globals does this program need storage for?
     /// Note that this number includes inherited globals.
     pub num_globals: RegisterSize,
+
+    /// Canonical slots whose cell identities follow the process's ordinary globals.
+    pub global_views: Arc<[RegisterSize]>,
 
     /// Every program whose globals this one holds, in initialization order,
     /// its own block last. A program reached through two parents appears once.
@@ -170,7 +176,7 @@ impl Program {
 
     /// The function with the mangled name `mangled`, inherited ones included.
     #[inline]
-    pub fn function(&self, mangled: Ustr) -> Option<&Arc<ProgramFunction>> {
+    pub fn function(&self, mangled: Ustr) -> Option<&Function> {
         self.functions.get(&mangled)
     }
 
@@ -185,7 +191,7 @@ impl Program {
     /// `->` arrives here as a string, and the interner's probe on the way
     /// to the mangled table cost call_churn 8%; a name never interned is a
     /// miss, not an interning.
-    pub fn lookup_function<T>(&self, name: T) -> Option<&Arc<ProgramFunction>>
+    pub fn lookup_function<T>(&self, name: T) -> Option<&Function>
     where
         T: AsRef<str>,
     {
@@ -208,51 +214,13 @@ impl Program {
         in_game_dir(self.filename.as_ref())
     }
 
-    /// Move each block of `layout` to the slot in `targets` at the same
-    /// index — blocks two parents share land on one target.
-    pub fn relocate_globals(&mut self, targets: &[RegisterSize]) {
-        debug_assert_eq!(targets.len(), self.layout.len());
-        let layout = std::mem::take(&mut self.layout);
-        if layout.iter().zip(targets).all(|(r, &t)| r.base == t) {
-            self.layout = layout;
-            return;
+    /// The canonical global slot at an index in the execution cell arena.
+    pub(crate) fn global_slot(&self, index: usize) -> RegisterSize {
+        if index < usize::from(self.num_globals) {
+            index as RegisterSize
+        } else {
+            self.global_views[index - usize::from(self.num_globals)]
         }
-
-        let relocate = |register: RegisterVariant| match register {
-            RegisterVariant::Global(reg) => {
-                let index = reg.index();
-                let (position, region) = layout
-                    .iter()
-                    .enumerate()
-                    .find(|(_, r)| (r.base..r.base + r.count).contains(&index))
-                    .expect("every global slot is in a layout block");
-                RegisterVariant::Global(Register(targets[position] + index - region.base))
-            }
-            other => other,
-        };
-        for func in self.functions.values_mut() {
-            let mut moved = ProgramFunction::clone(func);
-            moved.rename_registers(relocate);
-            *func = Arc::new(moved);
-        }
-        for symbol in self.global_variables.values_mut() {
-            symbol.location = symbol.location.map(relocate);
-        }
-        for variable in &mut self.global_variable_info {
-            if let RegisterVariant::Global(register) =
-                relocate(RegisterVariant::Global(Register(variable.slot)))
-            {
-                variable.slot = register.index();
-            }
-        }
-        self.layout = layout
-            .iter()
-            .zip(targets)
-            .map(|(region, &base)| Region {
-                base,
-                ..region.clone()
-            })
-            .collect();
     }
 
     /// Get a listing of this Program's assembly language, suitable for printing
@@ -298,10 +266,16 @@ impl Program {
 
         self.initializer
             .as_ref()
-            .map(|init| init.listing())
+            .map(|init| {
+                init.projected(self.num_globals, &self.global_views)
+                    .listing()
+            })
             .unwrap_or_default()
             .into_iter()
-            .chain(functions.into_iter().flat_map(|func| func.listing()))
+            .chain(functions.into_iter().flat_map(|func| {
+                func.projected(self.num_globals, &self.global_views)
+                    .listing()
+            }))
             .collect()
     }
 }
@@ -316,6 +290,7 @@ impl Display for Program {
 mod tests {
     use lpc_rs_core::{lpc_type::LpcType, mangle::Mangle};
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+    use lpc_rs_function_support::program_function::ProgramFunction;
     use ustr::ustr;
 
     use super::*;
@@ -340,62 +315,6 @@ mod tests {
 
         program.filename = Arc::new("../foo/bar/marf.c".into());
         assert_eq!(program.cwd().to_str().unwrap(), "/foo/bar");
-    }
-
-    #[test]
-    fn relocate_moves_each_block_to_its_target() {
-        use lpc_rs_asm::instruction::Instruction;
-        use lpc_rs_core::lpc_type::LpcType;
-        use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
-        use ustr::ustr;
-
-        let region = |filename: &str, base, count| Region {
-            filename: Arc::new(LpcPath::in_game(filename.into())),
-            base,
-            count,
-            init: ustr(""),
-        };
-        let prototype = FunctionPrototypeBuilder::default()
-            .name("f")
-            .filename(Arc::new(LpcPath::in_game("/own.c".into())))
-            .return_type(LpcType::Void)
-            .build()
-            .unwrap();
-        let mut function = ProgramFunction::new(prototype, 0);
-        function.push_instruction(
-            Instruction::Copy(
-                RegisterVariant::Global(Register(1)),
-                RegisterVariant::Global(Register(4)),
-            ),
-            None,
-        );
-        let mut functions: IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState> =
-            IndexMap::default();
-        functions.insert(ustr("f"), Arc::new(function));
-        let mut symbol = Symbol::new("g", LpcType::Int(false));
-        symbol.location = Some(RegisterVariant::Global(Register(4)));
-        let mut program = Program {
-            functions: Box::new(functions),
-            global_variables: Box::new(HashMap::from([("g".to_string(), symbol)])),
-            layout: Box::new([region("/gp.c", 0, 3), region("/own.c", 3, 2)]),
-            ..Program::default()
-        };
-
-        program.relocate_globals(&[10, 0]);
-
-        assert_eq!(
-            program.functions[&ustr("f")].instructions,
-            [Instruction::Copy(
-                RegisterVariant::Global(Register(11)),
-                RegisterVariant::Global(Register(1)),
-            )]
-        );
-        assert_eq!(
-            program.global_variables["g"].location,
-            Some(RegisterVariant::Global(Register(1)))
-        );
-        let bases: Vec<_> = program.layout.iter().map(|r| r.base).collect();
-        assert_eq!(bases, [10, 0]);
     }
 
     #[test]
@@ -424,8 +343,7 @@ mod tests {
         let childs_g = function("g", "/c.c", FunctionKind::Local, public);
         let childs_h = function("h", "/c.c", FunctionKind::Local, public);
         let childs_init = function(INIT_GLOBALS, "/c.c", FunctionKind::Local, public);
-        let mut functions: IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState> =
-            IndexMap::default();
+        let mut functions: IndexMap<Ustr, Function, ahash::RandomState> = IndexMap::default();
         for f in [
             &parents_g,
             &parents_h,
@@ -435,26 +353,26 @@ mod tests {
             &childs_h,
             &childs_init,
         ] {
-            functions.insert(ustr(&f.mangle()), Arc::clone(f));
+            functions.insert(ustr(&f.mangle()), Arc::clone(f).into());
         }
 
         let dispatch = dispatch_table(&functions);
 
         let target = |f: &Arc<ProgramFunction>| &dispatch[&ustr(&f.mangle())];
-        assert!(Arc::ptr_eq(&target(&parents_g).function, &childs_g));
+        assert!(Arc::ptr_eq(&target(&parents_g).function.code, &childs_g));
         assert!(target(&parents_g).overridden);
-        assert!(Arc::ptr_eq(&target(&childs_g).function, &childs_g));
+        assert!(Arc::ptr_eq(&target(&childs_g).function.code, &childs_g));
         assert!(!target(&childs_g).overridden);
         assert!(
-            Arc::ptr_eq(&target(&parents_h).function, &parents_h),
+            Arc::ptr_eq(&target(&parents_h).function.code, &parents_h),
             "private is not overridden"
         );
         assert!(
-            Arc::ptr_eq(&target(&parents_init).function, &parents_init),
+            Arc::ptr_eq(&target(&parents_init).function.code, &parents_init),
             "an initializer is its own"
         );
         assert!(
-            Arc::ptr_eq(&target(&closure).function, &closure),
+            Arc::ptr_eq(&target(&closure).function.code, &closure),
             "a closure is its own"
         );
     }
@@ -467,12 +385,10 @@ mod tests {
             .build()
             .unwrap();
         let function = Arc::new(ProgramFunction::new(prototype, 0));
-        let mut functions: IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState> =
-            IndexMap::default();
-        functions.insert(ustr(&function.mangle()), function.clone());
-        let mut unmangled: IndexMap<String, Arc<ProgramFunction>, ahash::RandomState> =
-            IndexMap::default();
-        unmangled.insert(name.to_string(), function);
+        let mut functions: IndexMap<Ustr, Function, ahash::RandomState> = IndexMap::default();
+        functions.insert(ustr(&function.mangle()), function.clone().into());
+        let mut unmangled: IndexMap<String, Function, ahash::RandomState> = IndexMap::default();
+        unmangled.insert(name.to_string(), function.into());
         Program {
             functions: Box::new(functions),
             unmangled_functions: Box::new(unmangled),

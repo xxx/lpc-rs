@@ -7,6 +7,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
 use ustr::Ustr;
 
+use crate::interpreter::program::Function;
 use crate::interpreter::{
     call_frame::CallFrame,
     efun::{Efun, call_efun, call_efun_sync, efun_context::EfunContext},
@@ -88,7 +89,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn push_call_frame(
         &mut self,
         process: Arc<Process>,
-        func: Arc<ProgramFunction>,
+        func: Function,
         list: ArgList,
         entry: CallEntry,
     ) -> lpc_rs_errors::Result<()> {
@@ -119,7 +120,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         trace!("pushing new frame; copying arguments: {num_args}");
         self.stack
             .push_new(process, func, num_args, num_args, None::<&[VarId]>)?;
-        self.stack.current_frame_mut()?.external = entry.external();
+        if entry.external() {
+            self.stack.current_frame_mut()?.external = true;
+        }
         if let Err(e) = self.populate_arguments(list) {
             // The half-built frame comes off; the error names the caller.
             let depth = self.stack.len() - 1;
@@ -289,16 +292,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.settle_efun_async().await
     }
 
-    /// Push the frame an efun fired through a pointer runs in: `owner`'s,
-    /// written by `origin`.
-    pub(crate) fn push_entry_frame(
-        &mut self,
-        owner: Arc<Process>,
-        origin: Option<Arc<LpcPath>>,
-    ) -> lpc_rs_errors::Result<()> {
-        let mut frame = CallFrame::entry(owner);
-        frame.origin = origin;
-        self.stack.push(frame)
+    /// Push the frame an efun fired through a pointer runs in, as `owner`.
+    pub(crate) fn push_entry_frame(&mut self, owner: Arc<Process>) -> lpc_rs_errors::Result<()> {
+        self.stack.push(CallFrame::entry(owner))
     }
 
     /// The by-reference parameter no pointer call can satisfy, as the error;

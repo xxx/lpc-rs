@@ -19,9 +19,9 @@ use crate::interpreter::{
 fn argument_offset(ptr: &FunctionPtr) -> usize {
     match &ptr.address {
         FunctionAddress::Dynamic(_) => 1,
-        FunctionAddress::Local(_, function) if Arc::ptr_eq(function, &COMPOSE_EXECUTOR) => 2,
+        FunctionAddress::Local(_, function) if Arc::ptr_eq(&function.code, &COMPOSE_EXECUTOR) => 2,
         FunctionAddress::Local(_, function)
-            if Arc::ptr_eq(function, &COMPOSE_RECEIVER_EXECUTOR) =>
+            if Arc::ptr_eq(&function.code, &COMPOSE_RECEIVER_EXECUTOR) =>
         {
             3
         }
@@ -36,7 +36,9 @@ pub(super) fn receiver<const N: usize>(
 ) -> LpcRef {
     loop {
         let value = match &ptr.address {
-            FunctionAddress::Local(_, function) if Arc::ptr_eq(function, &COMPOSE_EXECUTOR) => {
+            FunctionAddress::Local(_, function)
+                if Arc::ptr_eq(&function.code, &COMPOSE_EXECUTOR) =>
+            {
                 let Some(Some(LpcRef::Function(outer))) = ptr.partial_args().first() else {
                     return NULL;
                 };
@@ -44,7 +46,7 @@ pub(super) fn receiver<const N: usize>(
                 continue;
             }
             FunctionAddress::Local(_, function)
-                if Arc::ptr_eq(function, &COMPOSE_RECEIVER_EXECUTOR) =>
+                if Arc::ptr_eq(&function.code, &COMPOSE_RECEIVER_EXECUTOR) =>
             {
                 ptr.partial_args().get(2).and_then(Option::as_ref).cloned()
             }

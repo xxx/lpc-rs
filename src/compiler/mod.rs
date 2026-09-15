@@ -47,6 +47,9 @@ pub mod source;
 #[educe(Debug)]
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Compiler {
+    /// Completed code shared by this compiler and its recursive parents.
+    #[builder(default)]
+    code_pool: Arc<crate::interpreter::program::code_pool::CodePool>,
     /// The configuration to be used for this instance of the compiler
     #[builder(setter(into))]
     config: Arc<Config>,
@@ -219,6 +222,7 @@ impl Compiler {
         let context = CompilationContextBuilder::default()
             .source(source.clone())
             .config(self.config.clone())
+            .code_pool(self.code_pool.clone())
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
             .gate(self.gate.clone())

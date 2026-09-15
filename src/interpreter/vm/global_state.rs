@@ -1,12 +1,12 @@
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use lpc_rs_errors::{Result, lpc_error};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 use tracing::{instrument, trace};
 
+use crate::interpreter::program::Function;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
@@ -29,7 +29,7 @@ use crate::{
 /// the receiver, the command giver, and the pointer's captures.
 pub struct PreparedCall {
     pub context: TaskContext,
-    pub function: Arc<ProgramFunction>,
+    pub function: Function,
     pub args: Vec<LpcRef>,
 }
 

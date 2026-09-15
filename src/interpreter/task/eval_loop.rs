@@ -110,6 +110,17 @@ fn integer_action(frame: &CallFrame, instruction: &Instruction) -> Option<Intege
     })
 }
 
+// Cell writes stay outside the register-only instruction loop.
+#[inline(never)]
+fn store_nonlocal_integer(
+    frame: &mut CallFrame,
+    txn: &TxnHandle,
+    location: RegisterVariant,
+    value: LpcIntInner,
+) -> lpc_rs_errors::Result<()> {
+    frame.set_int(txn, location, value)
+}
+
 /// Keep one frame borrowed until an instruction needs the full dispatcher.
 #[inline(never)]
 fn run_integer_frame(
@@ -142,7 +153,12 @@ fn run_integer_frame(
         crate::interpreter::opcode_profile::record(&counted_instruction);
 
         match action {
-            IntegerAction::Store(location, value) => frame.set_int(txn, location, value)?,
+            IntegerAction::Store(RegisterVariant::Local(reg), value) => {
+                frame.set_int(txn, RegisterVariant::Local(reg), value)?;
+            }
+            IntegerAction::Store(location, value) => {
+                store_nonlocal_integer(frame, txn, location, value)?;
+            }
             IntegerAction::Branch(taken, address) => {
                 if taken {
                     frame.set_pc(address);

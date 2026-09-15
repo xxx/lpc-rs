@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use indexmap::IndexMap;
 use lpc_rs_errors::{LpcError, Result, lpc_error};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::lpc_string::LpcString;
 
 use super::{SeedArg, SeedEntry, TaskSeed};
+use crate::interpreter::program::Function;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
@@ -72,7 +72,7 @@ impl Applied {
 ///
 /// # Arguments
 ///
-/// * `f` - The [`ProgramFunction`] to apply.
+/// * `f` - The [`Function`] to apply.
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
 /// * `ctx` - The [`TaskContext`] to run the function in.
 /// * `timeout` - The execution limit in milliseconds; `None` for no limit.
@@ -82,7 +82,7 @@ impl Applied {
 /// * `Ok(LpcRef)` - The result of the function.
 /// * `Err(LpcError)` - The error that occurred.
 pub async fn apply_function(
-    f: Arc<ProgramFunction>,
+    f: impl Into<Function>,
     args: &[LpcRef],
     ctx: TaskContext,
     timeout: Option<u64>,
@@ -95,7 +95,7 @@ pub async fn apply_function(
 /// As [`apply_function`], with the result readable through the returned
 /// [`Applied`].
 pub(crate) async fn applied(
-    f: Arc<ProgramFunction>,
+    f: impl Into<Function>,
     args: &[LpcRef],
     ctx: TaskContext,
     timeout: Option<u64>,
@@ -113,7 +113,7 @@ pub(crate) async fn applied(
 /// As [`apply_function`], with [`SeedArg`] arguments: a
 /// [`SeedArg::FreshMapping`] is minted into each attempt's transaction.
 pub async fn apply_function_seeded(
-    f: Arc<ProgramFunction>,
+    f: impl Into<Function>,
     args: Vec<SeedArg>,
     ctx: TaskContext,
     timeout: Option<u64>,
@@ -121,7 +121,7 @@ pub async fn apply_function_seeded(
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
     let seed = TaskSeed {
         process: task.context.process().clone(),
-        entry: SeedEntry::Function(f),
+        entry: SeedEntry::Function(f.into()),
         args,
         initializes: false,
     };

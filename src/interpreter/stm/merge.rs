@@ -97,6 +97,7 @@ impl MergeOp {
 
     /// Fold `next` into this op when the kinds compose; a returned op did
     /// not fold and keeps its own slot.
+    #[inline(always)]
     pub(crate) fn fold(&mut self, next: MergeOp) -> Option<MergeOp> {
         match (self, next) {
             (MergeOp::IntAdd(a), MergeOp::IntAdd(b)) => {

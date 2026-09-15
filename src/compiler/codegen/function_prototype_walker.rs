@@ -261,7 +261,7 @@ mod tests {
 
         program.functions.insert(ustr("duplicate"), func.into());
 
-        context.inherits.push(program);
+        context.inherits.push(program.into());
 
         let mut walker = FunctionPrototypeWalker::new(context);
         let result = walker.visit_function_def(&mut node).await;
@@ -307,7 +307,7 @@ mod tests {
         program
             .functions
             .insert(ustr("g"), ProgramFunction::new(prototype, 0).into());
-        context.inherits.push(program);
+        context.inherits.push(program.into());
         let mut walker = FunctionPrototypeWalker::new(context);
         walker.visit_function_def(&mut node).await
     }

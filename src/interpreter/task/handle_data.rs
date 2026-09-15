@@ -123,7 +123,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     func.clone()
                 };
 
-                FunctionAddress::Local(Arc::downgrade(&process), func)
+                FunctionAddress::local(&process, func)
             }
             FunctionReceiver::Var(receiver_location) => {
                 let receiver_ref =
@@ -206,10 +206,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 process
             )));
         }
-        Ok(FunctionAddress::Local(
-            Arc::downgrade(process),
-            func.clone(),
-        ))
+        Ok(FunctionAddress::local(process, func.clone()))
     }
 
     fn store_functionptr(
@@ -226,7 +223,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let frame = self.stack.current_frame()?;
         // Only a closure continues its creator's capture numbering.
         let upvalue_ptrs = match &address {
-            FunctionAddress::Local(_, func) if func.is_closure() => frame.upvalue_ptrs.clone(),
+            FunctionAddress::Local(_, func) if func.is_closure() => (&*frame.upvalue_ptrs).into(),
             _ => ThinVec::new(),
         };
         let fp = FunctionPtrBuilder::default()

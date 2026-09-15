@@ -123,6 +123,61 @@ mod gate_tests {
     }
 
     #[tokio::test]
+    async fn sharing_completed_code_keeps_every_permission_apply() {
+        let root = TempLib::new("gate-shared-code");
+        write(
+            &root,
+            "parent.c",
+            "#include \"/value.h\"\nint value() { return VALUE; }",
+        );
+        write(&root, "value.h", "#define VALUE 7\n");
+        let pool = Arc::new(crate::interpreter::program::code_pool::CodePool::default());
+        let gate = Arc::new(RecordingGate::allowing());
+        let compiler = CompilerBuilder::default()
+            .config(config_at(&root))
+            .code_pool(pool.clone())
+            .gate(Some(gate.clone() as Arc<dyn CompileGate>))
+            .build()
+            .unwrap();
+        let a = compiler
+            .compile_string("/a.c", "inherit \"/parent\";")
+            .await
+            .unwrap();
+        let b = compiler
+            .compile_string("/b.c", "inherit \"/parent\";")
+            .await
+            .unwrap();
+        assert!(Arc::ptr_eq(
+            &a.program.lookup_function("value").unwrap().code,
+            &b.program.lookup_function("value").unwrap().code
+        ));
+        assert_eq!(
+            gate.inherits(),
+            pairs(&[("/parent.c", "/a.c"), ("/parent.c", "/b.c")])
+        );
+        assert_eq!(
+            gate.includes(),
+            pairs(&[("/value.h", "/parent.c"), ("/value.h", "/parent.c")])
+        );
+        let denied = CompilerBuilder::default()
+            .config(config_at(&root))
+            .code_pool(pool)
+            .gate(Some(
+                Arc::new(RecordingGate::denying()) as Arc<dyn CompileGate>
+            ))
+            .build()
+            .unwrap();
+        assert!(
+            denied
+                .compile_string("/denied.c", "inherit \"/parent\";")
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("permission denied")
+        );
+    }
+
+    #[tokio::test]
     async fn an_inherit_asks_with_the_program_as_from() {
         let root = TempLib::new("gate-inherit");
         write(&root, "parent.c", "int p;\n");

@@ -70,9 +70,7 @@ pub struct Process {
     /// The second this process was constructed: what `object_time` answers.
     pub created: i64,
 
-    /// One slot per program global; fixed size at construction. The slot is a
-    /// pure identity cell (a `VarId`); the *committed value* lives only in
-    /// the committer's world.
+    /// Canonical global cells followed by view aliases; values live only in the committer's world.
     globals: Box<[SVar<LpcRef>]>,
 
     /// How this process is named.
@@ -150,13 +148,14 @@ impl Process {
     /// Shared constructor body for `new`, `new_clone` and `new_virtual`.
     fn with_name(program: Arc<Program>, name: ObjectName) -> Self {
         let num_globals = program.num_globals;
+        let mut globals: Vec<_> = (0..num_globals).map(|_| SVar::new()).collect();
+        for &slot in program.global_views.iter() {
+            globals.push(globals[usize::from(slot)].clone());
+        }
         Self {
             program,
             created: chrono::Utc::now().timestamp(),
-            globals: (0..num_globals as usize)
-                .map(|_| SVar::new())
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+            globals: globals.into_boxed_slice(),
             name,
             connection: SVar::new(),
             initialized: SVar::new(),
@@ -426,6 +425,11 @@ impl Process {
         self.globals[reg as usize].id
     }
 
+    #[inline(always)]
+    pub(crate) fn execution_global(&self, index: usize) -> VarId {
+        self.globals[index].id
+    }
+
     /// Resolve structural and global cell names only when emitting a diagnostic.
     pub(crate) fn describe_cell(&self, cell: VarId) -> Option<String> {
         for (id, field) in [
@@ -446,7 +450,9 @@ impl Process {
         if cell == self.program.clones.id {
             return Some(format!("{}.clones", self.program.filename));
         }
-        let index = self.globals.iter().position(|slot| slot.id == cell)?;
+        let index = self.globals[..usize::from(self.program.num_globals)]
+            .iter()
+            .position(|slot| slot.id == cell)?;
         let name = self
             .program
             .global_variables
@@ -468,7 +474,7 @@ impl Process {
     /// The world ids a live object keeps alive, rooted even when the object
     /// has no committed `Process` cell.
     pub(crate) fn world_var_ids(&self) -> Vec<VarId> {
-        self.globals
+        self.globals[..usize::from(self.program.num_globals)]
             .iter()
             .map(|slot| slot.id)
             .chain([

@@ -8,10 +8,10 @@ use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::lpc_path::{LibRoot, LpcPath};
 use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
 use ustr::Ustr;
 
+use crate::interpreter::program::Function;
 use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
     efun::{CALL_OTHER, EFUN_FUNCTIONS, compose::COMPOSE_RECEIVER_EXECUTOR},
@@ -41,7 +41,7 @@ pub(crate) fn call_other_name(name: &LpcRef) -> Result<Ustr> {
 #[derive(Debug)]
 pub struct ResolvedCall {
     pub process: Arc<Process>,
-    pub function: Arc<ProgramFunction>,
+    pub function: Function,
     pub args: Vec<LpcRef>,
 }
 
@@ -169,7 +169,7 @@ impl FunctionPtr {
         let index = match &self.address {
             FunctionAddress::Dynamic(_) => 0,
             FunctionAddress::Local(_, function)
-                if Arc::ptr_eq(function, &COMPOSE_RECEIVER_EXECUTOR) =>
+                if Arc::ptr_eq(&function.code, &COMPOSE_RECEIVER_EXECUTOR) =>
             {
                 2
             }
@@ -221,7 +221,7 @@ impl FunctionPtr {
         receiver: LpcRef,
         ctx: &TaskContext,
         callers: impl FnOnce() -> Result<Callers>,
-    ) -> Result<Option<(Arc<Process>, Arc<ProgramFunction>)>> {
+    ) -> Result<Option<(Arc<Process>, Function)>> {
         let txn = ctx.txn();
         let process = match &receiver {
             LpcRef::Object(_) => {
@@ -289,7 +289,7 @@ impl FunctionPtr {
                         self
                     )));
                 };
-                (process, function.clone())
+                (process, function.function.clone())
             }
             FunctionAddress::Dynamic(name) => {
                 let receiver = first_arg(&mut args);
@@ -313,7 +313,7 @@ impl FunctionPtr {
                         self
                     )));
                 };
-                (owner, EFUN_FUNCTIONS[name.as_str()].clone())
+                (owner, EFUN_FUNCTIONS[name.as_str()].clone().into())
             }
             FunctionAddress::SimulEfun(name) => {
                 // Links by name to the resident of the task firing it, like a

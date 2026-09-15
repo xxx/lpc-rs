@@ -5,14 +5,11 @@ use crate::compiler::{
     source::CompilerSource,
 };
 use derive_builder::Builder;
-use indexmap::IndexMap;
 use lpc_rs_core::{
     EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
 };
 use lpc_rs_errors::{source_map::FileId, span::Span};
-use lpc_rs_function_support::{
-    function_prototype::FunctionPrototype, program_function::ProgramFunction, symbol::Symbol,
-};
+use lpc_rs_function_support::{function_prototype::FunctionPrototype, symbol::Symbol};
 use lpc_rs_utils::config::Config;
 use ustr::{Ustr, ustr};
 
@@ -21,7 +18,7 @@ use crate::{
     interpreter::{
         efun::EFUN_PROTOTYPES,
         process::Process,
-        program::{Program, Region},
+        program::{InheritedProgram, Region, code_pool::CodePool},
     },
 };
 
@@ -37,6 +34,8 @@ use crate::{
     build_fn(private, name = "build_context", error = "lpc_rs_errors::LpcError")
 )]
 pub struct CompilationContext {
+    /// Completed code shared by this compilation and its recursive parent compilers.
+    pub code_pool: Arc<CodePool>,
     /// The identity of the main file being compiled.
     #[builder(setter(into))]
     pub source: Arc<CompilerSource>,
@@ -62,13 +61,10 @@ pub struct CompilationContext {
     /// it; an `#include` never inherits the includer's entry.
     pub strict_types_from: HashMap<FileId, usize>,
 
-    /// All of the inherited functions, keyed by their mangled name.
-    pub inherited_functions: IndexMap<Ustr, Arc<ProgramFunction>>,
-
     /// All of my Inherited parent objects
     /// The ordering of this field can be assumed to be in the order of
     /// declaration
-    pub inherits: Vec<Program>,
+    pub inherits: Vec<InheritedProgram>,
 
     /// The index of name -> inherited objects, for inherits with names
     pub inherit_names: HashMap<String, usize>,
@@ -283,6 +279,7 @@ impl Default for CompilationContext {
     fn default() -> Self {
         let config = Arc::new(Config::default());
         Self {
+            code_pool: Arc::default(),
             source: Arc::new(CompilerSource::new(LpcPath::default(), &config)),
             config,
             diagnostics: Diagnostics::default(),
@@ -292,7 +289,6 @@ impl Default for CompilationContext {
             strict_types_from: HashMap::new(),
             inherits: vec![],
             inherit_names: HashMap::new(),
-            inherited_functions: IndexMap::new(),
             inherit_depth: 0,
             num_globals: 0,
             layout: vec![],
@@ -307,6 +303,7 @@ impl Default for CompilationContext {
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::program::Program;
     use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
     use lpc_rs_function_support::{
         function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
@@ -379,8 +376,8 @@ mod tests {
             .functions
             .insert("simul_efun".into(), simul_efun.clone().into());
 
-        context.inherits.push(named_inherit);
-        context.inherits.push(inherited);
+        context.inherits.push(named_inherit.into());
+        context.inherits.push(inherited.into());
 
         context.inherit_names.insert("my_named_inherit".into(), 0);
 
@@ -684,9 +681,9 @@ mod tests {
             .global_variables
             .insert("solo".into(), solo.clone());
 
-        context.inherits.push(visible_parent);
-        context.inherits.push(hidden_parent);
-        context.inherits.push(private_parent);
+        context.inherits.push(visible_parent.into());
+        context.inherits.push(hidden_parent.into());
+        context.inherits.push(private_parent.into());
 
         // a later private declaration does not hide the earlier visible one
         assert_eq!(context.lookup_var("shared"), Some(&visible));
@@ -726,8 +723,8 @@ mod tests {
             .global_variables
             .insert("overridden".into(), overridden_global);
 
-        context.inherits.push(earlier_inherit);
-        context.inherits.push(inherited);
+        context.inherits.push(earlier_inherit.into());
+        context.inherits.push(inherited.into());
 
         let global = Symbol::new("my_global", LpcType::Function(true));
         context.scopes.current_mut().unwrap().insert(global);

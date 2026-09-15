@@ -1,11 +1,10 @@
 //! Driving a frame's pending call: sync first, the async arm only to load
 //! or initialize a receiver.
 
+use crate::interpreter::program::Function;
 use std::sync::Arc;
 
-use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
-use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{
     call_frame::{CallFrame, CollectionCall},
@@ -120,12 +119,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 function,
                 args,
             } => {
-                self.push_external_frame(
-                    process.clone(),
-                    function.clone(),
-                    args.iter().cloned(),
-                    None,
-                )?;
+                self.push_external_frame(process.clone(), function.clone(), args.iter().cloned())?;
                 Ok(Called::Framed)
             }
         }
@@ -166,7 +160,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 "a `->` callee has a body"
                             );
                             let args = call.args.clone();
-                            self.push_external_frame(process, function, args.into_iter(), None)?;
+                            self.push_external_frame(process, function, args.into_iter())?;
                             return Ok(Collected::Framed);
                         }
                         None => call.results.push(NULL),
@@ -236,7 +230,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 "a `->` callee has a body"
                             );
                             let args = call.args.clone();
-                            self.push_external_frame(process, function, args.into_iter(), None)?;
+                            self.push_external_frame(process, function, args.into_iter())?;
                             Resolved::Framed
                         }
                         None => {
@@ -297,13 +291,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Push a frame for `function` on `process` entered through a door,
-    /// with `args` stored in place and `origin` the pointer's writer.
+    /// with `args` stored in place.
     pub(crate) fn push_external_frame(
         &mut self,
         process: Arc<Process>,
-        function: Arc<ProgramFunction>,
+        function: Function,
         args: impl ExactSizeIterator<Item = LpcRef>,
-        origin: Option<Arc<LpcPath>>,
     ) -> Result<()> {
         if let Some(i) = function.prototype.first_ref_param() {
             return Err(self.runtime_error(format!(
@@ -317,7 +310,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         for (i, arg) in args.enumerate() {
             frame.push_arg(&self.context.txn, i, arg)?;
         }
-        frame.origin = origin;
         frame.external = true;
         self.stack.push(frame)
     }

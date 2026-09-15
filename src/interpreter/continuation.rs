@@ -1,10 +1,10 @@
 //! What a frame is waiting on while callee frames above it run: a collection
 //! `->`, or an efun's callbacks.
 
+use crate::interpreter::program::Function;
 use std::{fmt::Debug, sync::Arc};
 
 use lpc_rs_errors::{Result, span::Span};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use smallvec::SmallVec;
 
 use crate::interpreter::{
@@ -46,7 +46,7 @@ pub(crate) enum Callee {
     /// `function` on `process` with `args`, entered through a door.
     Function {
         process: Arc<Process>,
-        function: Arc<ProgramFunction>,
+        function: Function,
         args: SmallVec<[LpcRef; 4]>,
     },
 }

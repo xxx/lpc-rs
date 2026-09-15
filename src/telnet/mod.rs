@@ -768,7 +768,7 @@ mod tests {
         let func = proc.program.lookup_function("foo").unwrap().clone();
 
         let ptr = FunctionPtrBuilder::default()
-            .address(FunctionAddress::Local(Arc::downgrade(&proc), func.clone()))
+            .address(FunctionAddress::local(&proc, func.clone()))
             .build()
             .unwrap();
 
@@ -821,7 +821,7 @@ mod tests {
         let func = proc.program.lookup_function("heard").unwrap().clone();
         let ptr = FunctionPtrBuilder::default()
             .owner(Arc::downgrade(&owner))
-            .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
+            .address(FunctionAddress::local(&proc, func))
             .build()
             .unwrap();
         let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
@@ -1105,8 +1105,8 @@ mod tests {
                     .process;
                 let ptr = FunctionPtrBuilder::default()
                     .owner(Arc::downgrade(&body))
-                    .address(FunctionAddress::Local(
-                        Arc::downgrade(&receiver),
+                    .address(FunctionAddress::local(
+                        &receiver,
                         receiver.program.lookup_function("answer").unwrap().clone(),
                     ))
                     .build()
@@ -1451,7 +1451,7 @@ mod tests {
             let proc = r.unwrap().context.process;
             let func = proc.program.lookup_function("foo").unwrap().clone();
             let ptr = FunctionPtrBuilder::default()
-                .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
+                .address(FunctionAddress::local(&proc, func))
                 .build()
                 .unwrap();
             w.connection.set_body(Some(proc.clone()));
@@ -1690,7 +1690,7 @@ mod tests {
             .await;
             let func = proc.program.lookup_function("line").unwrap().clone();
             let ptr = FunctionPtrBuilder::default()
-                .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
+                .address(FunctionAddress::local(&proc, func))
                 .build()
                 .unwrap();
             w.connection

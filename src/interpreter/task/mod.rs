@@ -24,12 +24,12 @@ use lpc_rs_core::{
     register::{Register, RegisterVariant},
 };
 use lpc_rs_errors::{LpcError, Result, lpc_bug};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::{ThinVec, thin_vec};
 use tracing::{error, instrument, trace, warn};
 
 use lpc_rs_utils::{lpc_string::LpcString, string::MAX_STRING_LENGTH};
 
+use crate::interpreter::program::Function;
 #[cfg(test)]
 use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
@@ -74,7 +74,7 @@ pub enum SeedArg {
 #[derive(Debug, Clone)]
 pub enum SeedEntry {
     /// A function resolved before the task began.
-    Function(Arc<ProgramFunction>),
+    Function(Function),
     /// A name resolved in each attempt through the object's shadow chain,
     /// so a shadow attached under a concurrent commit is seen on retry.
     Named(String),
@@ -110,7 +110,7 @@ impl TaskSeed {
     pub(crate) fn build_call_frame(
         &self,
         process: Arc<Process>,
-        function: Arc<ProgramFunction>,
+        function: Function,
         txn: &TxnHandle,
         upvalue_ptrs: Option<&[VarId]>,
     ) -> Result<CallFrame> {
@@ -348,7 +348,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let efun = self.efun_of(&function)?;
             self.refuse_ref_params(efun)?;
             let args = seed.arg_values(&self.context.txn);
-            self.push_entry_frame(process.clone(), None)?;
+            self.push_entry_frame(process.clone())?;
             self.call_fired_efun(efun, args, process, None).await?;
         } else {
             let frame = seed.build_call_frame(
@@ -367,14 +367,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     pub async fn timed_eval(
         &mut self,
-        f: Arc<ProgramFunction>,
+        f: impl Into<Function>,
         args: &[LpcRef],
         timeout_ms: u64,
     ) -> Result<()> {
         Box::pin(async move {
             let seed = TaskSeed {
                 process: self.context.process().clone(),
-                entry: SeedEntry::Function(f),
+                entry: SeedEntry::Function(f.into()),
                 args: args.iter().cloned().map(SeedArg::Value).collect(),
                 initializes: false,
             };
@@ -855,7 +855,11 @@ mod stm_retry_tests {
         let (tx, handle) = committer();
         let seed = TaskSeed {
             process: task.context.process().clone(),
-            entry: SeedEntry::Function(crate::interpreter::efun::EFUN_FUNCTIONS[name].clone()),
+            entry: SeedEntry::Function(
+                crate::interpreter::efun::EFUN_FUNCTIONS[name]
+                    .clone()
+                    .into(),
+            ),
             args: args.into_iter().map(SeedArg::Value).collect(),
             initializes: false,
         };
@@ -921,7 +925,11 @@ mod stm_retry_tests {
         let tx = task.context.global_state.committer_tx.clone();
         let seed = TaskSeed {
             process: task.context.process().clone(),
-            entry: SeedEntry::Function(crate::interpreter::efun::EFUN_FUNCTIONS["map"].clone()),
+            entry: SeedEntry::Function(
+                crate::interpreter::efun::EFUN_FUNCTIONS["map"]
+                    .clone()
+                    .into(),
+            ),
             args: vec![SeedArg::Value(array), SeedArg::Value(pointer)],
             initializes: false,
         };

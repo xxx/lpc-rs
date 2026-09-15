@@ -115,7 +115,7 @@ mod tests {
         let proc = r.unwrap().context.process;
         let func = proc.program.lookup_function("foo").unwrap().clone();
         let ptr = FunctionPtrBuilder::default()
-            .address(FunctionAddress::Local(Arc::downgrade(&proc), func.clone()))
+            .address(FunctionAddress::local(&proc, func.clone()))
             .build()
             .unwrap();
 
@@ -157,8 +157,8 @@ mod tests {
                 .await
                 .unwrap();
             let ptr = FunctionPtrBuilder::default()
-                .address(FunctionAddress::Local(
-                    Arc::downgrade(&proc),
+                .address(FunctionAddress::local(
+                    &proc,
                     proc.program.lookup_function("tick").unwrap().clone(),
                 ))
                 .build()

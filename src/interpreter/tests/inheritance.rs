@@ -15,6 +15,145 @@ const MASTER: &str = "int valid_load(mixed a, mixed b, mixed c, mixed d) { retur
 /// `f()` calls `g()` and `x()` reads what `g` set.
 const PARENT: &str = "int x;\nvoid g() { x = 1; }\nvoid f() { g(); }\nint x() { return x; }\n";
 
+mod shared_code {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::{
+        interpreter::{
+            process::Process,
+            task::{apply_function::apply_function, task_template::TaskTemplate},
+        },
+        test_support::temp_lib_config,
+    };
+
+    async fn call(vm: &Vm, process: &Arc<Process>, name: &str) -> LpcRef {
+        apply_function(
+            process.program.lookup_function(name).unwrap().clone(),
+            &[],
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(process.clone()),
+            None,
+        )
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn reordered_diamonds_share_code_and_keep_independent_cells() {
+        let root = lib_holding(
+            "shared-inheritance",
+            &[
+                ("base.c", "int common = 1;"),
+                (
+                    "left.c",
+                    r#"
+                inherit "/base";
+                int left = 10;
+                void bump(int ref value) { value++; }
+                void exercise() { bump(ref common); bump(ref left); }
+                function later() { return (: common += 2; left += 3; return common + left; :); }
+                int total() { return common + left; }
+            "#,
+                ),
+                ("right.c", "inherit \"/base\"; int right = 100;"),
+            ],
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        let create = "void create() { exercise(); function f = later(); f(); }";
+        let a = vm
+            .initialize_process_from_code(
+                "/a.c",
+                format!("inherit \"/left\"; inherit \"/right\"; {create}"),
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let b = vm
+            .initialize_process_from_code(
+                "/b.c",
+                format!("inherit \"/right\"; inherit \"/left\"; {create}"),
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        for name in ["bump", "exercise", "later", "total"] {
+            assert!(
+                Arc::ptr_eq(
+                    &a.program.lookup_function(name).unwrap().code,
+                    &b.program.lookup_function(name).unwrap().code
+                ),
+                "{name}"
+            );
+        }
+        assert_ne!(
+            a.program.global_variables["left"].location,
+            b.program.global_variables["left"].location
+        );
+        assert_eq!(call(&vm, &a, "total").await, LpcRef::from(18));
+        assert_eq!(call(&vm, &b, "total").await, LpcRef::from(18));
+        call(&vm, &a, "exercise").await;
+        assert_eq!(call(&vm, &a, "total").await, LpcRef::from(20));
+        assert_eq!(call(&vm, &b, "total").await, LpcRef::from(18));
+        assert_ne!(a.program.clones.id, b.program.clones.id);
+        let roots = b.world_var_ids();
+        assert_eq!(
+            roots.len(),
+            roots.iter().collect::<std::collections::HashSet<_>>().len()
+        );
+        assert!(a.world_var_ids().iter().all(|id| !roots.contains(id)));
+    }
+
+    #[tokio::test]
+    async fn source_and_header_edits_preserve_live_descendants() {
+        let root = lib_holding(
+            "shared-inheritance-edits",
+            &[
+                ("value.h", "#define VALUE 1\n"),
+                (
+                    "parent.c",
+                    "#include \"/value.h\"\nint value() { return VALUE; }\n",
+                ),
+            ],
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        let load = |name| vm.initialize_process_from_code(name, "inherit \"/parent\";");
+        let old = load("/old.c").await.unwrap().context.process;
+        let equal = load("/equal.c").await.unwrap().context.process;
+        assert!(Arc::ptr_eq(
+            &old.program.lookup_function("value").unwrap().code,
+            &equal.program.lookup_function("value").unwrap().code
+        ));
+        std::fs::write(root.join("value.h"), "#define VALUE 2\n").unwrap();
+        let changed_header = load("/header.c").await.unwrap().context.process;
+        std::fs::write(root.join("parent.c"), "int value() { return 3; }\n").unwrap();
+        let changed_parent = load("/parent_edit.c").await.unwrap().context.process;
+        assert_eq!(call(&vm, &old, "value").await, LpcRef::from(1));
+        assert_eq!(call(&vm, &changed_header, "value").await, LpcRef::from(2));
+        assert_eq!(call(&vm, &changed_parent, "value").await, LpcRef::from(3));
+        let span = old
+            .program
+            .lookup_function("value")
+            .unwrap()
+            .prototype
+            .span
+            .unwrap();
+        assert!(span.code().unwrap().contains("value"));
+        assert_ne!(
+            span.file_id(),
+            changed_parent
+                .program
+                .lookup_function("value")
+                .unwrap()
+                .prototype
+                .span
+                .unwrap()
+                .file_id()
+        );
+    }
+}
+
 mod nomask_variables {
     use lpc_rs_errors::Result;
 

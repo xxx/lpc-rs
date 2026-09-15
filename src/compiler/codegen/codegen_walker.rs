@@ -334,17 +334,50 @@ impl CodegenWalker {
 
     /// Consume this walker and convert it into a [`Program`]
     pub fn into_program(mut self) -> Result<Program> {
-        // These are expected and assumed to be in 1:1 correspondence at runtime
+        use crate::interpreter::program::code_pool::GlobalRegion;
+        use crate::interpreter::program::{Function, linker::ProgramLinker};
+
         self.ensure_sync()?;
+        let num_globals = self.global_counter.number_emitted();
+        let filename = self.context.source.program_path().clone();
+        let layout: Box<[Region]> = std::mem::take(&mut self.context.layout)
+            .into_iter()
+            .chain(std::iter::once(Region {
+                filename: filename.clone(),
+                base: self.context.num_globals,
+                count: num_globals - self.context.num_globals,
+                init: self.init_globals,
+            }))
+            .collect();
+        let defining_layout: Arc<[GlobalRegion]> = layout
+            .iter()
+            .map(|r| GlobalRegion {
+                filename: r.filename.clone(),
+                base: r.base,
+                count: r.count,
+            })
+            .collect();
+        let publish = |code: Arc<ProgramFunction>| -> Result<Function> {
+            let code = Arc::unwrap_or_clone(code);
+            Ok(Function::new(
+                self.context
+                    .code_pool
+                    .publish(code, defining_layout.clone())?,
+                0,
+                num_globals,
+            ))
+        };
 
         let inherits = std::mem::take(&mut self.context.inherits);
         let direct_inherits = inherits.iter().map(|p| p.filename.clone()).collect();
+        let mut linker = ProgramLinker::new(num_globals);
+        let mut functions: IndexMap<ustr::Ustr, Function, ahash::RandomState> = IndexMap::default();
         let mut global_variable_info = Vec::new();
         let mut global_variables: HashMap<String, Symbol> = HashMap::new();
         for parent in inherits {
+            functions.extend(parent.functions(&mut linker)?);
             global_variable_info.extend(parent.global_variable_info.into_vec());
             for (name, symbol) in *parent.global_variables {
-                // Match inherited lookup: private siblings cannot hide a visible declaration.
                 if symbol.visible_to_children()
                     || !global_variables
                         .get(&name)
@@ -354,13 +387,19 @@ impl CodegenWalker {
                 }
             }
         }
+        for (name, code) in self.functions {
+            functions.insert(ustr(&name), publish(code)?);
+        }
+        functions.shrink_to_fit();
+        let initializer = self.initializer.map(publish).transpose()?;
+
         self.context.scopes.goto_root();
         let own_symbols = std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
         for symbol in own_symbols.values() {
             if let Some(RegisterVariant::Global(register)) = symbol.location {
                 global_variable_info.push(GlobalVariable {
                     name: symbol.name.clone(),
-                    filename: self.context.source.program_path().clone(),
+                    filename: filename.clone(),
                     type_: symbol.type_,
                     flags: symbol.flags,
                     slot: register.index(),
@@ -371,52 +410,23 @@ impl CodegenWalker {
         global_variable_info.dedup_by_key(|variable| variable.slot);
         global_variables.extend(own_symbols);
 
-        let functions: IndexMap<_, _, ahash::RandomState> = self
-            .context
-            .inherited_functions
-            .into_iter()
-            .chain(
-                self.functions
-                    .into_iter()
-                    .map(|(name, function)| (ustr(&name), function)),
-            )
-            .collect();
-
-        // Note that due to name clashes, only the latest seen version of a function is included,
-        // but that should be fine, as they are inserted in the order they are processed.
         let unmangled_functions = functions
             .values()
             .filter(|f| !f.is_closure())
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _, ahash::RandomState>>();
-
         let dispatch = dispatch_table(&functions);
-
-        let num_globals = self.global_counter.number_emitted();
-
-        let filename = self.context.source.program_path().clone();
-
-        let own = Region {
-            filename: Arc::clone(&filename),
-            base: self.context.num_globals,
-            count: num_globals - self.context.num_globals,
-            init: self.init_globals,
-        };
-        let layout = std::mem::take(&mut self.context.layout)
-            .into_iter()
-            .chain(std::iter::once(own))
-            .collect();
-
         Ok(Program {
             filename,
             functions: Box::new(functions),
             dispatch: Box::new(dispatch),
-            initializer: self.initializer,
+            initializer,
             unmangled_functions: Box::new(unmangled_functions),
             global_variables: Box::new(global_variables),
             global_variable_info: global_variable_info.into_boxed_slice(),
             direct_inherits,
             num_globals,
+            global_views: linker.finish(),
             layout,
             pragmas: self.context.pragmas,
             clones: Default::default(),
@@ -2829,10 +2839,10 @@ mod tests {
     }
 
     fn find_function<'a, K, S>(
-        map: &'a IndexMap<K, Arc<ProgramFunction>, S>,
+        map: &'a IndexMap<K, crate::interpreter::program::Function, S>,
         name: &str,
     ) -> Option<&'a Arc<ProgramFunction>> {
-        map.values().find(|f| f.name() == name)
+        map.values().find(|f| f.name() == name).map(|f| &f.code)
     }
 
     #[tokio::test]
@@ -7418,7 +7428,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sibling_parents_are_imported_with_shifted_globals() {
+    async fn sibling_parents_bind_their_original_global_operands() {
         let code = r##"
             inherit "/sibling_a";
             inherit "/sibling_b";
@@ -7445,7 +7455,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(globals_written, vec![4, 5, 6]);
+        assert_eq!(globals_written, vec![0, 1, 2]);
 
         let own_init = &program.functions[&ustr("init-globals__v____pv__")];
         assert!(own_init.instructions.iter().all(|i| !matches!(i, Call(..))));

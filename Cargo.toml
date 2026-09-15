@@ -111,6 +111,10 @@ name = "bench_cells"
 harness = false
 
 [[bench]]
+name = "bench_inheritance"
+harness = false
+
+[[bench]]
 name = "bench_concurrency"
 harness = false
 

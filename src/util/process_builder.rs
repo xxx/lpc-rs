@@ -30,6 +30,7 @@ where
     let config = object_space.config();
     let compiler = CompilerBuilder::default()
         .config(config.clone())
+        .code_pool(object_space.code_pool.clone())
         .simul_efuns(get_simul_efuns(config, object_space))
         .gate(gate)
         .build()?;

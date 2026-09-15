@@ -4,9 +4,9 @@ use itertools::Itertools;
 use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::Result;
-use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
 
+use crate::interpreter::program::Function;
 use crate::interpreter::{
     call_frame::CollectionCall,
     continuation::Pending,
@@ -193,7 +193,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &self,
         receiver: Arc<Process>,
         name: &str,
-    ) -> Result<Option<(Arc<Process>, Arc<ProgramFunction>)>> {
+    ) -> Result<Option<(Arc<Process>, Function)>> {
         let caller = &self.stack.current_frame()?.process;
         let entry = Process::shadow_entry(&self.context.txn, &receiver, name, caller);
         Ok(match entry {

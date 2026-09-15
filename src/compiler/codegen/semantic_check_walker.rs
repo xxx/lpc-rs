@@ -1589,7 +1589,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker).await;
 
@@ -1622,7 +1622,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker).await;
 
@@ -1656,7 +1656,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker).await;
 
@@ -1694,7 +1694,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             context
                 .inherit_names
                 .insert("parent".into(), context.inherits.len() - 1);
@@ -1748,7 +1748,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             context
                 .inherit_names
                 .insert("parent".into(), context.inherits.len() - 1);
@@ -1789,7 +1789,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker).await;
 
@@ -1827,7 +1827,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker).await;
 
@@ -1918,7 +1918,7 @@ mod tests {
 
             let context = CompilationContext {
                 scopes,
-                inherits: vec![parent],
+                inherits: vec![parent.into()],
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
@@ -2702,7 +2702,7 @@ mod tests {
             scopes.push_new();
 
             let mut context = CompilationContext::default();
-            context.inherits.push(program);
+            context.inherits.push(program.into());
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker).await;
 

@@ -31,7 +31,8 @@ use crate::compiler::{
     diagnostics::Diagnostics,
     semantic::semantic_checks::check_var_redefinition,
 };
-use crate::interpreter::program::Program;
+
+use crate::interpreter::program::InheritedProgram;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
@@ -66,7 +67,7 @@ struct DeclaredLocal {
 }
 
 /// The programs' names for a message: "`/a.c`, `/b.c` and `/c.c`".
-fn file_list(declarations: &[(&Program, &Symbol)]) -> String {
+fn file_list(declarations: &[(&InheritedProgram, &Symbol)]) -> String {
     let names: Vec<String> = declarations
         .iter()
         .map(|(program, _)| format!("`{}`", program.filename))
@@ -80,7 +81,7 @@ fn file_list(declarations: &[(&Program, &Symbol)]) -> String {
 
 /// Each distinct declaration's site, keyed by slot — a diamond's two parents
 /// carry the one declaration under two source-map ids.
-fn declaration_sites(declarations: &[(&Program, &Symbol)]) -> Vec<Option<Span>> {
+fn declaration_sites(declarations: &[(&InheritedProgram, &Symbol)]) -> Vec<Option<Span>> {
     declarations
         .iter()
         .unique_by(|(_, symbol)| symbol.location)
@@ -103,7 +104,7 @@ impl ScopeWalker {
 
     /// The visible declarations of `name` among the inherited programs, in
     /// inherit order.
-    fn inherited_declarations(&self, name: &str) -> Vec<(&Program, &Symbol)> {
+    fn inherited_declarations(&self, name: &str) -> Vec<(&InheritedProgram, &Symbol)> {
         self.context
             .inherits
             .iter()
@@ -1282,7 +1283,7 @@ mod tests {
 
             inherited.global_variables.insert("foo".to_string(), sym);
 
-            walker.context.inherits.push(inherited);
+            walker.context.inherits.push(inherited.into());
 
             let _ = walker.visit_var(&mut node).await;
 

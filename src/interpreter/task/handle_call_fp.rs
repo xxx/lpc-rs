@@ -2,12 +2,12 @@
 //! resident object and pushes its frame inside `step`; the slow door loads
 //! and initializes.
 
+use crate::interpreter::program::Function;
 use std::{borrow::Cow, sync::Arc};
 
 use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::instrument;
 use ustr::Ustr;
 
@@ -213,7 +213,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Resolved::Efun { ptr, efun, owner } => {
                 let args = ptr.bound_args(&self.passed_values(passed)?);
                 self.refuse_ref_params(efun)?;
-                self.push_entry_frame(owner.clone(), ptr.origin.clone())?;
+                self.push_entry_frame(owner.clone())?;
                 match self.call_fired_efun_now(efun, args, owner, ptr.origin.clone())? {
                     Advance::Running => Ok(Called::Framed),
                     Advance::Suspends => Ok(Called::Pending),
@@ -238,7 +238,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn resident_frame(
         &self,
         process: Arc<Process>,
-        function: &Arc<ProgramFunction>,
+        function: &Function,
         ptr: &FunctionPtr,
         passed: Passed<'_>,
     ) -> Result<CallFrame> {
@@ -269,7 +269,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn pointer_frame(
         &self,
         process: Arc<Process>,
-        function: &Arc<ProgramFunction>,
+        function: &Function,
         ptr: &FunctionPtr,
         passed: impl ExactSizeIterator<Item = Result<LpcRef>>,
     ) -> Result<CallFrame> {
@@ -287,7 +287,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             function.clone(),
             num_args,
             num_args,
-            Some(ptr.upvalue_ptrs.clone()),
+            Some(ptr.upvalue_ptrs.as_slice()),
         );
         let prototype = &function.prototype;
         ptr.each_bound(passed, |i, value| {
@@ -408,7 +408,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 &prototype.name,
             )?;
         }
-        self.push_external_frame(process, function, args.into_iter(), None)?;
+        self.push_external_frame(process, function, args.into_iter())?;
         Ok(Called::Framed)
     }
 
@@ -450,7 +450,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if function.prototype.is_efun() {
             let efun = self.efun_of(&function)?;
             self.refuse_ref_params(efun)?;
-            self.push_entry_frame(process.clone(), ptr.origin.clone())?;
+            self.push_entry_frame(process.clone())?;
             self.call_fired_efun(efun, args, process, ptr.origin.clone())
                 .await?;
             return Ok(Called::Framed);
@@ -461,7 +461,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             process,
             function.clone(),
             num_args,
-            Some(ptr.upvalue_ptrs.clone()),
+            Some(ptr.upvalue_ptrs.as_slice()),
         );
         for (i, arg) in args.into_iter().enumerate() {
             new_frame.push_arg(&self.context.txn, i, arg)?;

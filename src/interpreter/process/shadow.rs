@@ -1,12 +1,11 @@
 //! The shadow chain: which objects shadow an object, and what an object
 //! shadows. Two transactional cells and two hint bits per object.
 
+use crate::interpreter::program::Function;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-
-use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{
     lpc_array::LpcArray,
@@ -130,7 +129,7 @@ pub(crate) enum ShadowEntry {
     /// the receiver it already holds.
     Unshadowed,
     /// A shadow defines the function publicly: run it there.
-    Found(Arc<Process>, Arc<ProgramFunction>),
+    Found(Arc<Process>, Function),
     /// No shadow answers: the door looks the function up on this object,
     /// the real target of the chain the called object belongs to.
     Fallback(Arc<Process>),
@@ -171,7 +170,7 @@ impl Process {
         txn: &TxnHandle,
         ob: &Arc<Process>,
         name: &str,
-    ) -> Option<(Arc<Process>, Arc<ProgramFunction>)> {
+    ) -> Option<(Arc<Process>, Function)> {
         let defined_on = |object: Arc<Process>| {
             let function = object.program.unmangled_functions.get(name).cloned()?;
             Some((object, function))

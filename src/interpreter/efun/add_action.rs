@@ -90,8 +90,8 @@ pub(crate) fn handler_from<const N: usize>(
             };
             let owner = Arc::downgrade(this_object);
             let ptr = FunctionPtrBuilder::default()
-                .owner(owner.clone())
-                .address(FunctionAddress::Local(owner, function.clone()))
+                .owner(owner)
+                .address(FunctionAddress::local(this_object, function.clone()))
                 .build()
                 .map_err(|e| context.runtime_bug(format!("{efun}: {e}")))?;
             Ok(Arc::new(ptr))

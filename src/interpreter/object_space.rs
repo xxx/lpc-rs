@@ -29,6 +29,7 @@ const OBJECT_SPACE_SIZE: usize = 100_000;
 /// uses.
 #[derive(Debug)]
 pub struct ObjectSpace {
+    pub(crate) code_pool: Arc<crate::interpreter::program::code_pool::CodePool>,
     /// The actual mapping of "paths" to processes. This is the *committed*
     /// object space: the physical state, read directly by non-transactional
     /// consumers (GC, the committed reader, function-pointer lookup) and kept
@@ -267,6 +268,7 @@ impl Default for ObjectSpace {
         let processes = DashMap::with_capacity(OBJECT_SPACE_SIZE);
 
         Self {
+            code_pool: Arc::default(),
             processes,
             cell_ids: DashMap::new(),
             clone_count: AtomicUsize::new(0),

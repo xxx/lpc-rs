@@ -21,8 +21,11 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction,
 };
 use lpc_rs_utils::lpc_string::LpcString;
-use thin_vec::ThinVec;
+mod cells;
 
+pub use cells::FrameCells;
+
+use crate::interpreter::program::Function;
 use crate::interpreter::{
     bank::RefBank,
     continuation::Pending,
@@ -87,6 +90,9 @@ pub struct CallFrame {
     #[builder(setter(into))]
     pub function: Arc<ProgramFunction>,
 
+    #[builder(default)]
+    globals_start: u32,
+
     /// Our registers. By convention, `registers[0]` is for the return value of
     /// the call, and is not otherwise used for storage of locals.
     #[builder(default)]
@@ -104,22 +110,20 @@ pub struct CallFrame {
 
     /// The captured cells this call can reach: its creators' first, then its own.
     #[builder(default, setter(into))]
-    pub upvalue_ptrs: ThinVec<VarId>,
+    pub upvalue_ptrs: FrameCells,
 
     /// The call this frame has in flight, advanced by every `Ret` into it.
     #[builder(default)]
     pub(crate) pending: Option<Box<Pending>>,
-
-    /// For an efun frame fired through a pointer: the file that wrote the
-    /// pointer, which is the code the efun acts for.
-    #[builder(default)]
-    pub origin: Option<Arc<LpcPath>>,
 
     /// Entered through a door — `->`, a pointer call, a simul efun — rather
     /// than a local call: the frame below is what `previous_object` names.
     #[builder(default)]
     pub external: bool,
 }
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<CallFrame>() == 64);
 
 /// The function an efun fired through a pointer runs in: one `Ret`, so the
 /// efun's result in `r0` reaches the frame that called the pointer, or the
@@ -147,15 +151,16 @@ impl CallFrame {
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
     /// * `upvalue_ptrs` - The captured cells inherited from the creator
-    pub(crate) fn new<P, V>(
+    pub(crate) fn new<P, V, F>(
         process: P,
-        function: Arc<ProgramFunction>,
+        function: F,
         called_with_num_args: RegisterSize,
         upvalue_ptrs: Option<V>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
-        V: Into<ThinVec<VarId>>,
+        V: Into<FrameCells>,
+        F: Into<Function>,
     {
         Self::with_minimum_arg_capacity(
             process,
@@ -200,33 +205,35 @@ impl CallFrame {
     /// The frame is the tail expression so a caller's slot receives it
     /// directly; a `&mut` step before the move copied it wide.
     #[inline]
-    pub(crate) fn with_minimum_arg_capacity<P, V>(
+    pub(crate) fn with_minimum_arg_capacity<P, V, F>(
         process: P,
-        function: Arc<ProgramFunction>,
+        function: F,
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
         upvalue_ptrs: Option<V>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
-        V: Into<ThinVec<VarId>>,
+        V: Into<FrameCells>,
+        F: Into<Function>,
     {
-        let mut upvalue_ptrs: ThinVec<VarId> = upvalue_ptrs.map(Into::into).unwrap_or_default();
-        // This call's own captured cells come after the inherited ones. A cell
-        // is an identity only; its value lives in the committer's world once written.
-        if function.num_upvalues > 0 {
-            upvalue_ptrs.extend((0..function.num_upvalues).map(|_| VarId::new()));
-        }
+        let function = function.into();
+        let globals_start = function.globals_start();
+        let function = function.code;
+        let upvalue_ptrs = upvalue_ptrs
+            .map(Into::into)
+            .unwrap_or_default()
+            .with_new(usize::from(function.num_upvalues));
 
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
             process: process.into(),
             function,
-            pc: 0,
+            globals_start,
             called_with_num_args,
+            pc: 0,
             upvalue_ptrs,
             pending: None,
-            origin: None,
             external: false,
         }
     }
@@ -332,7 +339,8 @@ impl CallFrame {
     /// The world cell behind global `reg`.
     #[inline(always)]
     fn global(&self, reg: Register) -> VarId {
-        self.process.var_id(reg.into())
+        self.process
+            .execution_global(self.globals_start as usize + usize::from(reg.index()))
     }
 
     /// The captured cell `reg` names.

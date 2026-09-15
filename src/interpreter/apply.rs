@@ -1,6 +1,7 @@
 //! Applies made on a command's behalf: nested in the caller's transaction,
 //! bounded by the configured execution time and `MAX_TASK_CHAIN` levels.
 
+use crate::interpreter::program::Function;
 pub(crate) mod diagnostics;
 
 use std::sync::Arc;
@@ -8,7 +9,6 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result, span::Span};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::lpc_string::LpcString;
 
 use crate::{
@@ -37,7 +37,7 @@ pub(crate) async fn apply_nested(
     ctx: &TaskContext,
     callers: Callers,
     target: &Arc<Process>,
-    function: Arc<ProgramFunction>,
+    function: Function,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
     timed(ctx, ctx.nested(callers, target.clone())?, function, args).await
@@ -50,7 +50,7 @@ pub(crate) async fn apply_on(
     callers: Callers,
     target: &Arc<Process>,
     this_player: &Arc<Process>,
-    function: Arc<ProgramFunction>,
+    function: Function,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
     let nested = ctx.nested(callers, target.clone())?;
@@ -264,7 +264,7 @@ pub(crate) fn in_game_location(span: Option<Span>) -> String {
 async fn timed(
     ctx: &TaskContext,
     nested: TaskContext,
-    function: Arc<ProgramFunction>,
+    function: Function,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
     let timeout = ctx.config().max_execution_time;
