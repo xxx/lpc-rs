@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Transaction Town — inside the LPC driver</title>
+    <meta
+      name="description"
+      content="Follow a transaction through the LPC driver: snapshots, private writes, conflicts, retry admission, and committed output. An offline interactive model."
+    />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <canvas
+      id="stage"
+      aria-label="Isometric transaction town. The live panel describes each operation and its state."
+    ></canvas>
+    <div id="tooltip" class="tooltip" hidden></div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div class="brand-text">
+          <p>LPC-RS / A DRIVER FIELD GUIDE</p>
+          <h1>Transaction Town</h1>
+          <span>One action. Several attempts. One committed result.</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="btn-about" class="ghost">About &amp; accuracy</button
+        ><button id="btn-panel" class="ghost" aria-expanded="true">
+          Hide panel
+        </button>
+      </div>
+    </header>
+    <div class="hud" id="hud">
+      <div class="hud-item">
+        <span class="hud-k">Attempt</span
+        ><span class="hud-v" id="hud-attempt">1</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-k">World</span
+        ><span class="hud-v" id="hud-world">v0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-k">Conflicts</span
+        ><span class="hud-v" id="hud-conflicts">0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-k">Receipts</span
+        ><span class="hud-v" id="hud-output">0</span>
+      </div>
+      <div class="hud-note" id="hud-note"></div>
+    </div>
+    <div class="zoomer">
+      <button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+      <button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+      <button
+        id="zoom-fit"
+        title="Fit the town (or double-click the map)"
+        aria-label="Fit whole town"
+      >
+        ⤢
+      </button>
+    </div>
+    <div class="map-key">
+      <span><i class="blue"></i> Read</span
+      ><span><i class="gold"></i> Write / merge</span
+      ><span><i class="violet"></i> Effect</span
+      ><small>One cart tile per entry</small>
+    </div>
+    <aside
+      class="inspector"
+      id="inspector"
+      aria-label="Transaction explanation and live state"
+    >
+      <button
+        class="sheet-handle"
+        id="sheet-handle"
+        aria-expanded="false"
+        aria-controls="inspector"
+      >
+        <span class="grip" aria-hidden="true"></span
+        ><span class="sheet-label">Read the explanation &amp; live state</span>
+      </button>
+      <div class="stage-card">
+        <div class="eyebrow">
+          <span class="chip" id="stage-chip">01 / 10</span
+          ><span class="tag" id="stage-tag">Begin an attempt</span>
+        </div>
+        <h2 id="stage-name" aria-live="polite">Snapshot Archive</h2>
+        <p class="lede" id="stage-short"></p>
+        <p class="muted" id="stage-body"></p>
+        <a
+          class="source"
+          id="stage-source"
+          href="../../src/interpreter/stm/snapshot.rs"
+          >Driver source ↗</a
+        >
+        <button id="btn-live" class="ghost" hidden>
+          Return to the live tour
+        </button>
+        <div class="dwell" id="dwell">
+          <i id="dwell-bar"></i><span id="dwell-hint"></span>
+        </div>
+      </div>
+      <section class="sec">
+        <h3>
+          The state, right now <span class="hint" id="attempt-status"></span>
+        </h3>
+        <table class="state-table">
+          <caption class="sr-only">
+            A's snapshot and private changes, beside committed world values
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Cell</th>
+              <th scope="col" id="snapshot-heading">Snapshot</th>
+              <th scope="col">A’s change</th>
+              <th scope="col" id="world-heading">World</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">gold</th>
+              <td id="snapshot-gold">10</td>
+              <td class="private" id="private-gold">—</td>
+              <td class="public" id="world-gold">10</td>
+            </tr>
+            <tr>
+              <th scope="row">bells</th>
+              <td id="snapshot-bells">0</td>
+              <td id="private-bells">—</td>
+              <td class="public" id="world-bells">0</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="read-set">
+          <span>Tracked reads</span><b id="read-set">∅</b>
+        </div>
+        <p id="interpretation" class="interpretation"></p>
+        <p class="fine" id="validation"></p>
+      </section>
+      <section class="sec output-section">
+        <h3>
+          Delivered output
+          <span class="hint" id="pending-output">0 pending</span>
+        </h3>
+        <div id="output" class="output">No receipt has left the attempt.</div>
+      </section>
+      <section class="sec">
+        <h3>Explore the town <span class="hint">select a stop</span></h3>
+        <div class="chips" id="district-chips"></div>
+      </section>
+    </aside>
+    <footer class="dock" id="dock">
+      <div class="dock-row">
+        <div class="group transport">
+          <button
+            id="btn-play"
+            class="icon"
+            title="Play or pause (Space)"
+            aria-label="Pause tour"
+          >
+            <span id="play-glyph">❚❚</span>
+          </button>
+          <button
+            id="btn-step"
+            class="icon"
+            title="Advance one station, then pause (S)"
+            aria-label="Next station"
+          >
+            ⇥
+          </button>
+          <button
+            id="btn-reset"
+            class="icon"
+            title="Reset and replay the reading tour (R)"
+            aria-label="Replay reading tour"
+          >
+            ⟲
+          </button>
+        </div>
+        <button
+          id="btn-run"
+          class="primary"
+          title="New run, keeping stations already read"
+        >
+          New run
+        </button>
+        <button
+          id="btn-tune"
+          class="icon"
+          title="Show experiment controls"
+          aria-label="Experiment controls"
+          aria-expanded="false"
+          aria-controls="dock-tune"
+        >
+          ⚙
+        </button>
+        <div class="dock-tune" id="dock-tune">
+          <label class="field"
+            ><span>A’s operation</span
+            ><select id="operation">
+              <option value="read">Read + write</option>
+              <option value="blind">Blind assignment</option>
+              <option value="merge">Unread merge add</option>
+            </select></label
+          >
+          <label class="field slider"
+            ><span>A’s amount <b id="v-amount">4</b></span
+            ><input id="amount" type="range" min="1" max="9" step="1" value="4"
+          /></label>
+          <label class="field slider"
+            ><span>B adds <b id="v-rival">3</b></span
+            ><input
+              id="rival-amount"
+              type="range"
+              min="1"
+              max="9"
+              step="1"
+              value="3"
+          /></label>
+          <label class="field slider"
+            ><span>Competing writes <b id="v-rounds">1</b></span
+            ><input id="rounds" type="range" min="0" max="3" step="1" value="1"
+          /></label>
+          <label class="field slider"
+            ><span>Tour speed <b id="v-speed">1×</b></span
+            ><input
+              id="speed"
+              type="range"
+              min="0.4"
+              max="8"
+              step="0.1"
+              value="1"
+          /></label>
+          <div class="group toggles">
+            <label class="toggle"
+              ><input id="same-cell" type="checkbox" checked /><span
+                >B writes gold</span
+              ></label
+            >
+            <label class="toggle"
+              ><input id="follow" type="checkbox" checked /><span
+                >Follow cart</span
+              ></label
+            >
+            <label class="toggle"
+              ><input id="labels" type="checkbox" checked /><span
+                >Labels</span
+              ></label
+            >
+          </div>
+          <p class="control-note" id="control-note">
+            Parameters affect upcoming operations. Changing operation starts a
+            new run.
+          </p>
+        </div>
+      </div>
+    </footer>
+    <div
+      class="modal"
+      id="about"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="about-title"
+      hidden
+    >
+      <div class="modal-card">
+        <button
+          class="modal-close"
+          id="about-close"
+          title="Close (Escape)"
+          aria-label="Close accuracy notes"
+        >
+          ×
+        </button>
+        <p class="modal-kicker">TRANSACTION TOWN</p>
+        <h2 id="about-title">A small town running a real rule.</h2>
+        <p>
+          Follow owning task A through the LPC driver’s transaction lifecycle. B
+          is another owning task. The cart’s blue, gold, and violet tiles count
+          its tracked reads, pending writes or merges, and buffered effects. The
+          return road is a retry; the green exit follows a successful atomic
+          commit.
+        </p>
+        <h2>How much of it is real</h2>
+        <p>
+          <strong>Computed:</strong> immutable snapshot values; read tracking
+          including absent cells and reads of own writes; private changes;
+          intersections with newer write history; commit-order blind writes;
+          integer addition merges; atomic rejection; fresh-snapshot retries;
+          FIFO cell-turn bookkeeping; and delivery of only the successful
+          attempt’s buffered receipt. Every visible value comes from
+          <code>js/model.js</code>.
+        </p>
+        <p>
+          <strong>Scaled down:</strong> two named scalar cells, one followed
+          owner, and at most three competing B actions stand in for the driver’s
+          VarId-keyed world and many concurrent owning tasks. Versions start at
+          v0 for each run. Only addition is demonstrated from the driver’s
+          larger merge-operation family. Small exact JavaScript integers replace
+          LPC’s integer width and wrapping arithmetic.
+        </p>
+        <p>
+          <strong>Assumed:</strong> gold begins at 10 and bells at 0. B commits
+          before A at the Neighbour Yard for the selected number of attempts.
+          Only A queues for a retry turn, so that queue has no waiting time.
+          Receipts always deliver into an in-memory list. Changes to parameters
+          affect operations not yet performed; the operation selector starts a
+          fresh run.
+        </p>
+        <p>
+          <strong>Illustrated / omitted:</strong> this is a JavaScript teaching
+          model, not the Rust VM or LPC execution. Road speed, buildings, and
+          reading stops have no performance meaning. Snapshot maps are copied
+          instead of structurally shared; all write history is retained. Worker
+          scheduling, history reclamation, GC, timeouts, cancellation, backoff,
+          general WorldValues, object lifecycles, and real I/O failures are not
+          simulated. A successful state commit is separate from effect delivery;
+          real delivery can fail, and output order across tasks is not
+          guaranteed.
+        </p>
+        <p>
+          Unread merge mode chooses the runtime’s merge operation directly. It
+          does not claim every LPC increment or assignment compiles to a merge.
+          Reading a pending merge restores a read dependency.
+        </p>
+        <h2>Reading the tour</h2>
+        <p>
+          First visits pause for 9–26 seconds, based on the paragraph’s length.
+          Repeat visits are shorter; New run keeps your reading history. The
+          replay button clears it. Space pauses, S advances one stop, R replays,
+          F follows the cart, and L toggles labels. Drag to pan, scroll or pinch
+          to zoom, and use ⤢ to see the whole town.
+        </p>
+        <p>
+          Built from the MIT-licensed isometric-explainer template.
+          <a href="README.md">Read the model notes and source map</a> ·
+          <a href="LICENSE">Template license</a>.
+        </p>
+      </div>
+    </div>
+    <script src="js/iso.js"></script>
+    <script src="js/model.js"></script>
+    <script src="js/world.js"></script>
+    <script src="js/sim.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

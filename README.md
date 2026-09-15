@@ -19,3 +19,10 @@ Some compile-time defaults can be changed in `lpc-rs/src/compile_time_config.rs`
 
 Runtime configuration is entirely via environment variables, and `.env` files are also supported.
 See `default.env` for a commented example.
+
+### Explore the transaction runtime
+
+[Transaction Town](doc/transaction-town/README.md) is an offline isometric explainer
+of snapshots, private writes, conflicts, retries, and committed output. Open
+[`doc/transaction-town/index.html`](doc/transaction-town/index.html) in a browser
+to follow an action through the driver and experiment with competing writes.
