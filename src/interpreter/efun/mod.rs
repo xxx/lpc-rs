@@ -42,6 +42,7 @@ pub(crate) mod function_exists;
 pub(crate) mod function_info;
 pub(crate) mod function_name;
 pub(crate) mod function_object;
+pub(crate) mod functions;
 pub(crate) mod get_dir;
 pub(crate) mod hash_string;
 pub(crate) mod implode;
@@ -1167,6 +1168,11 @@ efuns! {
     source_cache_stats => {
         returns: LpcType::Mapping(false),
     },
+    functions [async] => {
+        returns: LpcType::String(true),
+        arity: (2, 2),
+        args: [LpcType::Object(false) | LpcType::String(false), LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1513,6 +1519,7 @@ mod tests {
                 "inherit_list",
                 "deep_inherit_list",
                 "source_cache_stats",
+                "functions",
             ]
         );
     }

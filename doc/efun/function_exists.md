@@ -22,4 +22,4 @@ if (function_exists("query_weight", ob)) {
 
 ### See also
 
-`call_other`, `functionp`, `file_name`
+`functions`, `call_other`, `functionp`, `file_name`
