@@ -5,14 +5,17 @@ use unicode_width::UnicodeWidthStr;
 
 use super::colour::Style;
 
-pub(super) const LIMIT: usize = 1024 * 1024;
+pub(in crate::interpreter::efun) const LIMIT: usize = 1024 * 1024;
 
-pub(super) enum Part<'a> {
+pub(in crate::interpreter::efun) enum Part<'a> {
     Text(&'a str),
     Key(&'a str),
 }
 
-pub(super) fn next_part<'a>(text: &'a str, cursor: &mut usize) -> Option<Part<'a>> {
+pub(in crate::interpreter::efun) fn next_part<'a>(
+    text: &'a str,
+    cursor: &mut usize,
+) -> Option<Part<'a>> {
     let rest = text.get(*cursor..).filter(|s| !s.is_empty())?;
     if rest.starts_with("%%^^") {
         *cursor += 4;
@@ -42,19 +45,62 @@ pub(super) fn next_part<'a>(text: &'a str, cursor: &mut usize) -> Option<Part<'a
     Some(Part::Text(&rest[..end]))
 }
 
-#[derive(Debug, Default, Clone)]
-pub(super) struct Text {
+#[derive(Debug, Clone)]
+pub(in crate::interpreter::efun) struct Text {
     plain: String,
     changes: Vec<(usize, Style)>,
     style: Style,
     charged: usize,
     after_cr: bool,
+    caller: &'static str,
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self::new("terminal_colour")
+    }
 }
 
 impl Text {
+    pub(in crate::interpreter::efun) fn new(caller: &'static str) -> Self {
+        Self {
+            plain: String::new(),
+            changes: Vec::new(),
+            style: Style::default(),
+            charged: 0,
+            after_cr: false,
+            caller,
+        }
+    }
+
+    pub(in crate::interpreter::efun) fn plain(&self) -> &str {
+        &self.plain
+    }
+
+    pub(in crate::interpreter::efun) fn set_style(&mut self, style: Style) {
+        let previous = self.style;
+        self.style = style;
+        self.record_style(previous);
+    }
+
+    pub(in crate::interpreter::efun) fn extend(&mut self, text: &Self) -> Result<()> {
+        self.charge(text.charged)?;
+        self.set_style(Style::default());
+        let base = self.plain.len();
+        self.plain.push_str(&text.plain);
+        self.changes.extend(
+            text.changes
+                .iter()
+                .map(|&(offset, style)| (base + offset, style)),
+        );
+        self.style = text.style;
+        self.after_cr = text.after_cr;
+        Ok(())
+    }
+
     fn charge(&mut self, len: usize) -> Result<()> {
         if len > LIMIT.saturating_sub(self.charged) {
-            return Err(lpc_error!("terminal_colour: expansion exceeds 1 MiB"));
+            return Err(lpc_error!("{}: expansion exceeds 1 MiB", self.caller));
         }
         self.charged += len;
         Ok(())
@@ -73,7 +119,7 @@ impl Text {
         }
     }
 
-    pub(super) fn token(&mut self, name: &str) -> Result<bool> {
+    pub(in crate::interpreter::efun) fn token(&mut self, name: &str) -> Result<bool> {
         self.charge(name.len())?;
         let previous = self.style;
         let found = self.style.token(name);
@@ -81,9 +127,9 @@ impl Text {
         Ok(found)
     }
 
-    pub(super) fn builtins(&mut self, text: &str) -> Result<()> {
+    pub(in crate::interpreter::efun) fn builtins(&mut self, text: &str) -> Result<()> {
         if text.len() > LIMIT {
-            return Err(lpc_error!("terminal_colour: replacement exceeds 1 MiB"));
+            return Err(lpc_error!("{}: replacement exceeds 1 MiB", self.caller));
         }
         let mut cursor = 0;
         while let Some(part) = next_part(text, &mut cursor) {
@@ -97,13 +143,21 @@ impl Text {
         Ok(())
     }
 
-    pub(super) fn literal(&mut self, text: &str) -> Result<()> {
+    pub(in crate::interpreter::efun) fn literal(&mut self, text: &str) -> Result<()> {
+        self.append(text, true)
+    }
+
+    pub(in crate::interpreter::efun) fn unstyled(&mut self, text: &str) -> Result<()> {
+        self.append(text, false)
+    }
+
+    fn append(&mut self, text: &str, accept_sgr: bool) -> Result<()> {
         self.charge(text.len())?;
         let mut rest = text;
         while !rest.is_empty() {
             if rest.starts_with('\x1b') {
                 let (len, sgr) = escape(rest);
-                if let Some(params) = sgr {
+                if accept_sgr && let Some(params) = sgr {
                     let previous = self.style;
                     self.style.sgr(params);
                     self.record_style(previous);
@@ -134,7 +188,12 @@ impl Text {
         Ok(())
     }
 
-    pub(super) fn render(&self, depth: ColourDepth, wrap: i64, indent: usize) -> Result<String> {
+    pub(in crate::interpreter::efun) fn render(
+        &self,
+        depth: ColourDepth,
+        wrap: i64,
+        indent: usize,
+    ) -> Result<String> {
         let width = wrap.unsigned_abs() as usize;
         let atoms: Vec<_> = self
             .plain
@@ -145,7 +204,7 @@ impl Text {
                 width: text.width(),
             })
             .collect();
-        let mut output = Output::new(depth, &self.changes);
+        let mut output = Output::new(depth, &self.changes, self.caller);
         let mut start = 0;
         let mut continuation = false;
         while start < atoms.len() {
@@ -270,22 +329,24 @@ struct Output<'a> {
     emitted: Style,
     source: Style,
     changes: &'a [(usize, Style)],
+    caller: &'static str,
 }
 
 impl<'a> Output<'a> {
-    fn new(depth: ColourDepth, changes: &'a [(usize, Style)]) -> Self {
+    fn new(depth: ColourDepth, changes: &'a [(usize, Style)], caller: &'static str) -> Self {
         Self {
             text: String::new(),
             depth,
             emitted: Style::default(),
             source: Style::default(),
             changes,
+            caller,
         }
     }
 
     fn push(&mut self, text: &str) -> Result<()> {
         if text.len() > LIMIT.saturating_sub(self.text.len()) {
-            return Err(lpc_error!("terminal_colour: output exceeds 1 MiB"));
+            return Err(lpc_error!("{}: output exceeds 1 MiB", self.caller));
         }
         self.text.push_str(text);
         Ok(())
@@ -293,7 +354,7 @@ impl<'a> Output<'a> {
 
     fn spaces(&mut self, n: usize) -> Result<()> {
         if n > LIMIT.saturating_sub(self.text.len()) {
-            return Err(lpc_error!("terminal_colour: output exceeds 1 MiB"));
+            return Err(lpc_error!("{}: output exceeds 1 MiB", self.caller));
         }
         self.text.extend(std::iter::repeat_n(' ', n));
         Ok(())

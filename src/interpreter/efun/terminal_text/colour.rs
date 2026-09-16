@@ -1,7 +1,7 @@
 use lpc_rs_telnet::ColourDepth;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Colour {
+pub(in crate::interpreter::efun) enum Colour {
     Indexed(u8),
     Rgb([u8; 3]),
 }
@@ -56,7 +56,7 @@ impl Colour {
         }
     }
 
-    pub(super) fn sgr(self, depth: ColourDepth, background: bool) -> String {
+    pub(in crate::interpreter::efun) fn sgr(self, depth: ColourDepth, background: bool) -> String {
         let base = if background { 48 } else { 38 };
         match depth {
             ColourDepth::Plain => String::new(),
@@ -85,14 +85,14 @@ impl Colour {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub(super) struct Style {
-    pub(super) foreground: Option<Colour>,
-    pub(super) background: Option<Colour>,
+pub(in crate::interpreter::efun) struct Style {
+    pub(in crate::interpreter::efun) foreground: Option<Colour>,
+    pub(in crate::interpreter::efun) background: Option<Colour>,
     flags: u8,
 }
 
 impl Style {
-    pub(super) fn token(&mut self, name: &str) -> bool {
+    pub(in crate::interpreter::efun) fn token(&mut self, name: &str) -> bool {
         match name {
             "RESET" => *self = Self::default(),
             "BOLD" => self.flags |= 1,
@@ -144,7 +144,7 @@ impl Style {
         true
     }
 
-    pub(super) fn sgr(&mut self, params: &str) {
+    pub(in crate::interpreter::efun) fn sgr(&mut self, params: &str) {
         let Some(params) = params
             .split(';')
             .map(|s| {
@@ -209,7 +209,7 @@ impl Style {
         *self = next;
     }
 
-    pub(super) fn sequence(self, depth: ColourDepth) -> String {
+    pub(in crate::interpreter::efun) fn sequence(self, depth: ColourDepth) -> String {
         if depth == ColourDepth::Plain || self == Self::default() {
             return String::new();
         }

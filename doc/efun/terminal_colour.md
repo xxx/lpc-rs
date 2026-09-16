@@ -144,4 +144,4 @@ Unlike FluffOS, ordinary words are never looked up as tokens and input mappings 
 not modified. Unlike LDMud, `0` strips tokens rather than selecting pure wrapping.
 `break_string` remains available for ordinary text wrapping.
 
-See also: `query_connection`, `break_string`, `sprintf`, `write_socket`.
+See also: `render_markdown`, `query_connection`, `break_string`, `sprintf`, `write_socket`.

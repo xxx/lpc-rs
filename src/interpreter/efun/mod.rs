@@ -96,6 +96,7 @@ pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
 pub(crate) mod rename;
+pub(crate) mod render_markdown;
 pub(crate) mod restore_map;
 pub(crate) mod restore_object;
 pub(crate) mod rm;
@@ -115,6 +116,7 @@ pub(crate) mod sscanf;
 pub(crate) mod system_reload;
 pub(crate) mod tell_object;
 pub(crate) mod terminal_colour;
+mod terminal_text;
 pub(crate) mod text_encoding;
 pub(crate) mod this_interactive;
 pub(crate) mod this_object;
@@ -1191,6 +1193,15 @@ efuns! {
     query_system_reload [in system_reload] => {
         returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
     },
+    render_markdown => {
+        returns: LpcType::String(false),
+        arity: (3, 2),
+        args: [
+            LpcType::String(false),
+            LpcType::Int(false),
+            LpcType::Int(false) | LpcType::Object(false),
+        ],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1542,6 +1553,7 @@ mod tests {
                 "compile_string",
                 "request_system_reload",
                 "query_system_reload",
+                "render_markdown",
             ]
         );
     }

@@ -1,8 +1,5 @@
 //! Pinkfish expansion, terminal color conversion, and display-column wrapping.
 
-mod colour;
-mod format;
-
 use std::sync::Arc;
 
 use lpc_rs_errors::{Result, lpc_error};
@@ -10,7 +7,7 @@ use lpc_rs_telnet::ColourDepth;
 use lpc_rs_utils::lpc_string::LpcString;
 use smallvec::smallvec;
 
-use self::format::{LIMIT, Part, Text, next_part};
+use super::terminal_text::{LIMIT, Part, Text, next_part};
 use crate::interpreter::{
     continuation::{Callee, Continuation, Next},
     efun::efun_context::EfunContext,
