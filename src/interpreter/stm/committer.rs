@@ -556,8 +556,12 @@ impl Committer {
 
         let new_version = Version::new();
         let origin = changeset.origin.clone();
+        let publications = std::mem::take(&mut changeset.system_publications);
         let new_snapshot = self.snapshot.apply(new_version, changeset);
         self.snapshot = new_snapshot;
+        for publication in publications {
+            publication.apply();
+        }
 
         // Keep history insert after the snapshot apply, else a problem in apply leads to
         // all transactions conflicting in the future.

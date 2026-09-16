@@ -1011,6 +1011,7 @@ mod tests {
             assert_eq!(lpc_ref.not(&destructing), LpcRef::from(1));
 
             let another = TxnHandle::empty();
+            another.with(|t| t.write_process(cell, process.clone()));
             assert!(lpc_ref.live_object(&another).is_some());
             assert!(lpc_ref.is_truthy(&another));
             assert!(!lpc_ref.eq_in(&NULL, &another));
@@ -1057,6 +1058,7 @@ mod tests {
             let live_ref = LpcRef::from(Arc::downgrade(&process));
 
             let live_txn = TxnHandle::empty();
+            live_txn.with(|t| t.write_process(cell, process.clone()));
             assert!(!live_ref.passes_cast(LpcType::String(false), &live_txn));
 
             let destructing = TxnHandle::empty();

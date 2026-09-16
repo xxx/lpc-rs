@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn concurrent_clone_insertions_merge_and_invalidate_an_empty_enumeration() {
         let mut committer = Committer::new();
-        let space = ObjectSpace::default();
+        let space = Arc::new(ObjectSpace::default());
         let program = Arc::new(Program::new("/target.c"));
         let first = space.create_clone_process(program.clone());
         let second = space.create_clone_process(program.clone());
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn removal_preserves_an_old_snapshot_but_invalidates_its_enumeration() {
         let mut committer = Committer::new();
-        let space = ObjectSpace::default();
+        let space = Arc::new(ObjectSpace::default());
         let program = Arc::new(Program::new("/target.c"));
         let clone = space.create_clone_process(program.clone());
         let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));

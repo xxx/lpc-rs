@@ -11,7 +11,9 @@ use crate::{
         lpc_ref::LpcRef,
         process::Process,
         task::{
-            apply_function::{apply_function_by_name, report_runtime_error},
+            apply_function::{
+                apply_function_by_name, apply_function_in_master, report_runtime_error,
+            },
             task_template::TaskTemplate,
         },
         vm::Vm,
@@ -56,10 +58,9 @@ impl Vm {
                 return;
             };
 
-            let maybe_login_ob = match apply_function_by_name(
+            let maybe_login_ob = match apply_function_in_master(
                 CONNECT,
                 &[ip_ref.clone(), port_ref.clone()],
-                master.clone(),
                 task_template.clone(),
                 Some(task_template.global_state.config.max_execution_time),
             )

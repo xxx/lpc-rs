@@ -125,7 +125,7 @@ pub(crate) async fn master_apply(
     name: &str,
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
-    let Some(master) = ctx.object_space().master_object() else {
+    let Some(master) = ctx.master_object() else {
         diagnostics::missing(name, None);
         return Ok(None);
     };
@@ -133,7 +133,7 @@ pub(crate) async fn master_apply(
         diagnostics::missing(name, Some(&master));
         return Ok(None);
     };
-    apply_nested(ctx, callers, &master, function, args)
+    apply_nested(&ctx.authority_context(), callers, &master, function, args)
         .await
         .map(Some)
 }
@@ -211,7 +211,7 @@ pub(crate) async fn report_warnings(
     file: &LpcPath,
     warnings: Vec<LpcError>,
 ) -> Result<()> {
-    let handler = ctx.object_space().master_object().and_then(|master| {
+    let handler = ctx.master_object().and_then(|master| {
         let function = master
             .program
             .unmangled_functions
@@ -220,10 +220,7 @@ pub(crate) async fn report_warnings(
         Some((master, function))
     });
     if handler.is_none() && !warnings.is_empty() {
-        diagnostics::missing(
-            WARNING_HANDLER,
-            ctx.object_space().master_object().as_deref(),
-        );
+        diagnostics::missing(WARNING_HANDLER, ctx.master_object().as_deref());
     }
     for warning in warnings {
         let Some((master, function)) = &handler else {
@@ -232,7 +229,14 @@ pub(crate) async fn report_warnings(
             continue;
         };
         let mapping = warning_mapping(ctx, file, &warning);
-        apply_nested(ctx, callers.clone(), master, function.clone(), &[mapping]).await?;
+        apply_nested(
+            &ctx.authority_context(),
+            callers.clone(),
+            master,
+            function.clone(),
+            &[mapping],
+        )
+        .await?;
     }
     Ok(())
 }

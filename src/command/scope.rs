@@ -128,7 +128,7 @@ pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<
 
 /// `master->parse_command_users()`'s livings; empty without the apply.
 pub(crate) async fn users(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<Arc<Process>>> {
-    let Some(master) = ctx.object_space().master_object() else {
+    let Some(master) = ctx.master_object() else {
         return Ok(Vec::new());
     };
     let Some(value) = apply_hook(

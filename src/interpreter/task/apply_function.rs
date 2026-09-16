@@ -249,7 +249,22 @@ where
         return Some(Err(lpc_error!("No master object defined.")));
     };
 
-    applied_by_name(name, args, master, template, timeout).await
+    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(template.into_task_context(master.clone()));
+    let seed = TaskSeed {
+        process: master,
+        entry: SeedEntry::Master(name.as_ref().to_owned()),
+        args: args.iter().cloned().map(SeedArg::Value).collect(),
+        initializes: false,
+    };
+    match task.timed_eval_seed(seed, timeout.unwrap_or(0)).await {
+        Err(e) => Some(Err(e)),
+        Ok(()) => task.result().map(|value| {
+            Ok(Applied {
+                value,
+                txn: task.context.txn().clone(),
+            })
+        }),
+    }
 }
 
 /// Send a runtime error to the master object's `error_handler` function.
@@ -262,15 +277,6 @@ pub async fn apply_runtime_error(
     let mut mapping = IndexMap::new();
     let Some(master) = template.global_state.object_space.master_object() else {
         diagnostics::missing(ERROR_HANDLER, None);
-        return None;
-    };
-    let Some(error_handler) = master
-        .program
-        .unmangled_functions
-        .get(ERROR_HANDLER)
-        .cloned()
-    else {
-        diagnostics::missing(ERROR_HANDLER, Some(&master));
         return None;
     };
     let mut ctx = template.into_task_context(master);
@@ -300,7 +306,17 @@ pub async fn apply_runtime_error(
     // task opens its own.
     let args = vec![SeedArg::FreshMapping(LpcMapping::new(mapping))];
     // TODO wire the timeout up to config
-    Some(apply_function_seeded(error_handler, args, ctx, Some(300)).await)
+    let seed = TaskSeed {
+        process: ctx.process.clone(),
+        entry: SeedEntry::Master(ERROR_HANDLER.into()),
+        args,
+        initializes: false,
+    };
+    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
+    match task.timed_eval_seed(seed, 300).await {
+        Err(error) => Some(Err(error)),
+        Ok(()) => task.result().map(Ok),
+    }
 }
 
 /// Log an uncaught error to the server and notify the master's `error_handler`,

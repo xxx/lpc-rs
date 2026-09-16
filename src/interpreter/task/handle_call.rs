@@ -411,8 +411,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         func_name: Ustr,
         list: ArgList,
     ) -> lpc_rs_errors::Result<()> {
-        // A caller links by name to whichever resident a task starts with, so a
-        // destructed or recompiled simul-efun object is a runtime miss here.
+        // The path-cell read invalidates this attempt if the binding changes.
         let Some(simul_efuns) = self.context.simul_efuns() else {
             return Err(self.runtime_error(format!(
                 "call to simul efun `{func_name}`: no simul-efun object is loaded"

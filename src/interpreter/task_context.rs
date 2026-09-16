@@ -32,10 +32,7 @@ use crate::{
         task::Task,
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
-    util::{
-        get_simul_efuns,
-        process_builder::{compile_process_from_code, compile_process_from_path},
-    },
+    util::process_builder::compile_process_in_context,
 };
 
 /// The command a task is running: what `query_verb`, `query_command`, and
@@ -219,8 +216,8 @@ pub struct TaskContext {
     //       The process in the call frame is more accurate, and this probably should be removed.
     pub process: Arc<Process>,
 
-    /// Direct pointer to the simul efuns
-    pub simul_efuns: Option<Arc<Process>>,
+    /// Private dispatch and lookup view while preparing replacements.
+    pub(crate) system_view: Option<Arc<crate::interpreter::vm::system_reload::SystemView>>,
 
     /// The final result of the original function that was called.
     pub result: TaskResult,
@@ -265,13 +262,11 @@ impl TaskContext {
     where
         P: Into<Arc<Process>>,
     {
-        let simul_efuns = get_simul_efuns(&global_state.config, &global_state.object_space);
-
         Self {
             global_state,
             process: process.into(),
             result: TaskResult::new(),
-            simul_efuns,
+            system_view: None,
             entry_player: ArcSwapAny::from(this_player.clone()),
             this_player: ArcSwapAny::from(this_player),
             upvalue_ptrs: None,
@@ -319,6 +314,12 @@ impl TaskContext {
     /// Does not initialize or create (use `load_object` / the site's own
     /// create step for that).
     pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
+        if let Some(view) = &self.system_view {
+            let key = self.object_space().path_key(path.as_ref());
+            if let Some(process) = view.staged.get(&key) {
+                return ObjectLookup::Found(process.clone());
+            }
+        }
         txn_find_object(self.txn(), self.object_space(), path)
     }
 
@@ -384,22 +385,8 @@ impl TaskContext {
             let compiling = self.txn().time_compilation();
             let reader: Arc<dyn SourceReader> =
                 Arc::new(TransactionSourceReader(self.txn().clone()));
-            let (process, warnings) = match code {
-                Some(code) => {
-                    compile_process_from_code(
-                        self.object_space(),
-                        path.source_file(),
-                        code,
-                        Some(gate),
-                        Some(reader),
-                    )
-                    .await?
-                }
-                None => {
-                    compile_process_from_path(self.object_space(), path, Some(gate), Some(reader))
-                        .await?
-                }
-            };
+            let (process, warnings) =
+                compile_process_in_context(self, path, code, gate, reader).await?;
             drop(compiling);
             report_warnings(self, loader.callers(), &process.program.filename, warnings).await?;
             Ok(process)
@@ -675,10 +662,53 @@ impl TaskContext {
         &self.global_state.config
     }
 
-    /// Return the current pointer to the simul_efuns, if any
+    /// Resolve the simul-efun object in this attempt.
     #[inline]
-    pub fn simul_efuns(&self) -> Option<&Arc<Process>> {
-        self.simul_efuns.as_ref()
+    pub fn simul_efuns(&self) -> Option<Arc<Process>> {
+        if let Some(view) = &self.system_view {
+            return view.simul.clone();
+        }
+        let path = self.config().simul_efun_source()?;
+        if !self.txn.joinable() {
+            return crate::util::get_simul_efuns(self.config(), self.object_space());
+        }
+        match self.find_object(&path) {
+            ObjectLookup::Found(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn authority_context(&self) -> std::borrow::Cow<'_, Self> {
+        if self.system_view.is_none() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut ctx = self.clone();
+        if let Some(view) = &self.system_view {
+            let mut view = (**view).clone();
+            view.simul = view.authority_simul.clone();
+            view.staged.clear();
+            ctx.system_view = Some(Arc::new(view));
+        }
+        std::borrow::Cow::Owned(ctx)
+    }
+
+    /// Resolve the authorizing master in this attempt.
+    pub fn master_object(&self) -> Option<Arc<Process>> {
+        if let Some(view) = &self.system_view {
+            return Some(view.master.clone());
+        }
+        if !self.txn.joinable() {
+            return self.object_space().master_object();
+        }
+        let path = LpcPath::new_in_game(
+            self.config().master_object.as_str(),
+            "/",
+            &*self.config().lib_dir,
+        );
+        match self.find_object(&path) {
+            ObjectLookup::Found(p) => Some(p),
+            _ => None,
+        }
     }
 
     /// Return the [`Process`] that the task roots from.
@@ -739,7 +769,7 @@ impl Clone for TaskContext {
             global_state: self.global_state.clone(),
             process: self.process.clone(),
             result: TaskResult::new(),
-            simul_efuns: self.simul_efuns.clone(),
+            system_view: self.system_view.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             entry_player: ArcSwapAny::from(self.entry_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),

@@ -109,6 +109,7 @@ pub(crate) struct Transaction {
     interrupted: Option<InterruptedExecution>,
     compilation: diagnostics::CompilationTiming,
     presence_revision: u64,
+    pub(crate) reload_preparing: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +131,7 @@ impl Transaction {
             interrupted: None,
             compilation: diagnostics::CompilationTiming::default(),
             presence_revision: 0,
+            reload_preparing: false,
         }
     }
 
@@ -182,6 +184,25 @@ impl Transaction {
     /// Write a slot value to the changeset.
     pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
         self.changeset.write(var_id, WorldValue::ref_of(value));
+    }
+
+    /// Publish a system-object projection inside the accepted committer operation.
+    pub(crate) fn publish_system(
+        &mut self,
+        space: &Arc<ObjectSpace>,
+        process: &Arc<Process>,
+        insert: bool,
+    ) {
+        self.track_read(space.system_revision.id);
+        self.write(space.system_revision.id, LpcRef::from(0));
+        self.changeset
+            .system_publications
+            .push(changeset::SystemPublication {
+                space: space.clone(),
+                key: space.process_key(process),
+                process: process.clone(),
+                insert,
+            });
     }
 
     /// Write an object-space cell into the changeset. The `Process` is held
@@ -524,6 +545,9 @@ pub(crate) fn txn_find_object(
     path: &LpcPath,
 ) -> ObjectLookup {
     let key = object_space.path_key(path.as_ref());
+    if object_space.is_system_key(&key) {
+        txn.with(|t| t.track_read(object_space.system_revision.id));
+    }
     match object_space.get_cell_id(&key) {
         Some(var_id) => txn.with(|t| {
             if t.is_removed(var_id) {
@@ -547,7 +571,7 @@ pub(crate) fn txn_find_object(
 /// both commit.
 pub(crate) fn txn_insert_process(
     txn: &TxnHandle,
-    object_space: &ObjectSpace,
+    object_space: &Arc<ObjectSpace>,
     process: &Arc<Process>,
 ) {
     let key = object_space.process_key(process);
@@ -561,17 +585,25 @@ pub(crate) fn txn_insert_process(
                 MergeOp::ArrayAppend(vec![LpcRef::from(Arc::downgrade(process))]),
             );
         }
-        t.record_effect(Effect::InsertObject {
-            key,
-            process: process.clone(),
-        })
+        if object_space.is_system_key(&key) {
+            t.publish_system(object_space, process, true);
+        } else {
+            t.record_effect(Effect::InsertObject {
+                key,
+                process: process.clone(),
+            });
+        }
     });
 }
 
 /// Undo a [`txn_insert_process`] on the same `process`: drops its cell and
 /// records the matching removal, so for the rest of this attempt it reads as
 /// removed rather than never created.
-pub(crate) fn txn_undo_insert(txn: &TxnHandle, object_space: &ObjectSpace, process: &Arc<Process>) {
+pub(crate) fn txn_undo_insert(
+    txn: &TxnHandle,
+    object_space: &Arc<ObjectSpace>,
+    process: &Arc<Process>,
+) {
     let key = object_space.process_key(process);
     let var_id = *process.cell.get_or_init(|| object_space.cell_id(&key));
     txn.with(|t| {
@@ -582,10 +614,14 @@ pub(crate) fn txn_undo_insert(txn: &TxnHandle, object_space: &ObjectSpace, proce
                 MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(process))),
             );
         }
-        t.record_effect(Effect::RemoveObject {
-            key,
-            process: process.clone(),
-        });
+        if object_space.is_system_key(&key) {
+            t.publish_system(object_space, process, false);
+        } else {
+            t.record_effect(Effect::RemoveObject {
+                key,
+                process: process.clone(),
+            });
+        }
     });
 }
 

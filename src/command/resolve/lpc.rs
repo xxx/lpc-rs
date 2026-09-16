@@ -121,7 +121,7 @@ impl<'a> LpcVocabulary<'a> {
     }
 
     async fn master_strings(&self, name: &str, args: &[LpcRef]) -> Result<Vec<String>> {
-        let Some(master) = self.ctx.object_space().master_object() else {
+        let Some(master) = self.ctx.master_object() else {
             diagnostics::missing(name, None);
             return Ok(Vec::new());
         };
@@ -148,7 +148,7 @@ impl Vocabulary for LpcVocabulary<'_> {
     }
 
     async fn defaults(&mut self) -> Result<Defaults> {
-        let all_word = match self.ctx.object_space().master_object() {
+        let all_word = match self.ctx.master_object() {
             Some(master) => match self.apply(&master, PARSE_COMMAND_ALL_WORD, &[]).await? {
                 Some(LpcRef::String(word)) => Some(word.to_string()),
                 _ => None,
@@ -169,7 +169,7 @@ impl Vocabulary for LpcVocabulary<'_> {
     }
 
     async fn numeral(&mut self, word: &str) -> Result<i64> {
-        let Some(master) = self.ctx.object_space().master_object() else {
+        let Some(master) = self.ctx.master_object() else {
             return Ok(0);
         };
         Ok(

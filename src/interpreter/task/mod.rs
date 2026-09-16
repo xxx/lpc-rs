@@ -75,16 +75,28 @@ pub enum SeedArg {
 pub enum SeedEntry {
     /// A function resolved before the task began.
     Function(Function),
+    /// Bootstrap initialization that publishes the system-object path.
+    SystemInitializer(Function),
     /// A name resolved in each attempt through the object's shadow chain,
     /// so a shadow attached under a concurrent commit is seen on retry.
     Named(String),
+    /// A master apply resolved against each attempt.
+    Master(String),
+    /// A driver-fired pointer whose owner and symbolic simul binding are rechecked.
+    Callback {
+        function: Function,
+        owner: std::sync::Weak<Process>,
+        simul: Option<String>,
+    },
 }
 
 impl SeedEntry {
     fn name(&self) -> &str {
         match self {
-            Self::Function(function) => function.name().as_ref(),
-            Self::Named(name) => name,
+            Self::Function(function)
+            | Self::SystemInitializer(function)
+            | Self::Callback { function, .. } => function.name().as_ref(),
+            Self::Named(name) | Self::Master(name) => name,
         }
     }
 }
@@ -250,6 +262,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// The task is returned unevaluated when another transaction already
     /// initialized the process.
     pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
+        Self::initialize(context, false).await
+    }
+
+    pub(crate) async fn bootstrap_system_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
+        Self::initialize(context, true).await
+    }
+
+    async fn initialize(context: TaskContext, publish: bool) -> Result<Task<STACKSIZE>> {
         let Some(initializer) = context.process.program.initializer.clone() else {
             let msg = format!(
                 "Init function not found for `{}`. This should never happen.",
@@ -264,7 +284,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut task = Task::new(context);
         let seed = TaskSeed {
             process: task.context.process().clone(),
-            entry: SeedEntry::Function(initializer),
+            entry: if publish {
+                SeedEntry::SystemInitializer(initializer)
+            } else {
+                SeedEntry::Function(initializer)
+            },
             args: Vec::new(),
             initializes: true,
         };
@@ -305,6 +329,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         self.reset();
 
+        if live.is_some() && matches!(seed.entry, SeedEntry::SystemInitializer(_)) {
+            let space = self.context.object_space();
+            if space.is_system_key(&space.process_key(&seed.process))
+                && !seed.process.is_initialized(&self.context.txn)
+            {
+                self.context.insert_process_transactional(&seed.process);
+            }
+        }
+
         // Claimed inside the attempt, so a rejected initialization re-runs
         // instead of staying marked.
         if seed.initializes && !seed.process.claim_init(&self.context.txn) {
@@ -334,8 +367,59 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// nothing in the chain defines runs nothing, leaving no result.
     async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
         let (process, function) = match &seed.entry {
-            SeedEntry::Function(function) => (seed.process.clone(), function.clone()),
+            SeedEntry::Function(function) | SeedEntry::SystemInitializer(function) => {
+                if !seed.process.is_live(&self.context.txn) {
+                    return Err(self.runtime_error("attempted to execute a retired object"));
+                }
+                (seed.process.clone(), function.clone())
+            }
+            SeedEntry::Callback {
+                function,
+                owner,
+                simul,
+            } => {
+                if !owner
+                    .upgrade()
+                    .is_some_and(|owner| owner.is_live(&self.context.txn))
+                {
+                    return Err(self.runtime_error("callback owner is retired"));
+                }
+                if let Some(name) = simul {
+                    let process = self
+                        .context
+                        .simul_efuns()
+                        .ok_or_else(|| self.runtime_error("no simul-efun object is loaded"))?;
+                    let function =
+                        process
+                            .program
+                            .lookup_function(name)
+                            .cloned()
+                            .ok_or_else(|| {
+                                self.runtime_error(format!("unknown simul efun `{name}`"))
+                            })?;
+                    self.context.process = process.clone();
+                    (process, function)
+                } else {
+                    if !seed.process.is_live(&self.context.txn) {
+                        return Err(self.runtime_error("callback target is retired"));
+                    }
+                    (seed.process.clone(), function.clone())
+                }
+            }
+            SeedEntry::Master(name) => {
+                let Some(master) = self.context.master_object() else {
+                    return Ok(());
+                };
+                let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
+                    return Ok(());
+                };
+                self.context.process = master.clone();
+                (master, function)
+            }
             SeedEntry::Named(name) => {
+                if !seed.process.is_live(&self.context.txn) {
+                    return Err(self.runtime_error("attempted to execute a retired object"));
+                }
                 let Some(found) = Process::apply_entry(&self.context.txn, &seed.process, name)
                 else {
                     return Ok(());
@@ -389,8 +473,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Box::pin(async move {
             let entry = seed.entry.clone();
             let name = match &entry {
-                SeedEntry::Function(function) => function.name().as_ref(),
-                SeedEntry::Named(name) => name.as_str(),
+                SeedEntry::Function(function)
+                | SeedEntry::SystemInitializer(function)
+                | SeedEntry::Callback { function, .. } => function.name().as_ref(),
+                SeedEntry::Named(name) | SeedEntry::Master(name) => name.as_str(),
             };
             diagnostics::started(
                 name,
@@ -1175,7 +1261,8 @@ mod stm_retry_tests {
         .await;
         task.context
             .global_state
-            .initialize_process_from_code(
+            .object_space
+            .create_process_from_code(
                 "/secure/master.c",
                 "int valid_write(string p, string e, object c, string g) { return 1; }",
             )

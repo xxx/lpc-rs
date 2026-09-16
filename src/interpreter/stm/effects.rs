@@ -113,6 +113,9 @@ pub(crate) enum Effect {
     /// is already gone (e.g. it already fired and removed itself).
     CancelCallOut { id: u64 },
 
+    /// Cancel all work owned by the retired instance, including delayed scheduling.
+    RetireSystemCallOuts(Arc<Process>),
+
     /// The physical half of a handover: the connection cell on `new_process`
     /// committed with the owning task; the flush points `connection`'s
     /// back-reference at `new_process` and announces `Attached` on it.
@@ -161,6 +164,9 @@ pub(crate) enum Effect {
     /// `shutdown(code)` committed: the main loop is told to leave with
     /// `code`.
     Shutdown { code: i32 },
+
+    /// Start an authorized reload only after the requesting attempt commits.
+    SystemReload(Arc<crate::interpreter::vm::system_reload::ReloadRequest>),
 
     /// `rm`'s unlink, applied once the attempt commits.
     RemoveFile { path: ResolvedPath },
@@ -262,7 +268,37 @@ impl Effect {
                 global_state.object_space.apply_remove(&key, &process);
             }
             Self::ScheduleCallOut(schedule) => {
-                global_state.call_outs().write().materialize(schedule);
+                let mut calls = global_state.call_outs().write();
+                if let Some(owner) = schedule.process.upgrade() {
+                    let space = &global_state.object_space;
+                    let key = space.process_key(&owner);
+                    if space.is_system_key(&key)
+                        && !space
+                            .lookup(&key)
+                            .is_some_and(|live| Arc::ptr_eq(&live, &owner))
+                    {
+                        return;
+                    }
+                } else {
+                    return;
+                }
+                calls.materialize(schedule);
+            }
+            Self::RetireSystemCallOuts(owner) => {
+                let mut calls = global_state.call_outs().write();
+                let ids: Vec<_> = calls
+                    .queue()
+                    .iter()
+                    .filter_map(|(_, call)| {
+                        call.process()
+                            .upgrade()
+                            .filter(|p| Arc::ptr_eq(p, &owner))
+                            .map(|_| call.id)
+                    })
+                    .collect();
+                for id in ids {
+                    calls.remove_by_id(id);
+                }
             }
             Self::CancelCallOut { id } => {
                 global_state.call_outs().write().remove_by_id(id);
@@ -317,6 +353,23 @@ impl Effect {
                         .config
                         .debug_log(format!("save file: {path}: {e}"))
                         .await;
+                }
+            }
+            Self::SystemReload(request) => {
+                let id = request.id;
+                global_state.reloads.enqueue(request.clone());
+                if global_state
+                    .tx
+                    .send(VmOp::SystemReload(request))
+                    .await
+                    .is_err()
+                {
+                    global_state.reloads.finish(
+                        id,
+                        Err(lpc_rs_errors::LpcError::runtime(
+                            "system reload: VM channel closed",
+                        )),
+                    );
                 }
             }
             Self::Shutdown { code } => {
@@ -424,6 +477,10 @@ impl std::fmt::Debug for Effect {
             Self::ScheduleCallOut(schedule) => {
                 f.debug_tuple("ScheduleCallOut").field(schedule).finish()
             }
+            Self::RetireSystemCallOuts(owner) => f
+                .debug_tuple("RetireSystemCallOuts")
+                .field(&owner.filename())
+                .finish(),
             Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
@@ -432,6 +489,9 @@ impl std::fmt::Debug for Effect {
             Self::WriteBytes { path, .. } => f.debug_tuple("WriteBytes").field(path).finish(),
             Self::ReplaceChars { path, .. } => f.debug_tuple("ReplaceChars").field(path).finish(),
             Self::Shutdown { code } => f.debug_tuple("Shutdown").field(code).finish(),
+            Self::SystemReload(request) => {
+                f.debug_tuple("SystemReload").field(&request.id).finish()
+            }
             Self::RemoveFile { path, .. } => f.debug_tuple("RemoveFile").field(path).finish(),
             Self::CreateDir { path, .. } => f.debug_tuple("CreateDir").field(path).finish(),
             Self::RemoveDir { path, .. } => f.debug_tuple("RemoveDir").field(path).finish(),

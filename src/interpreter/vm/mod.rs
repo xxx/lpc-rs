@@ -28,6 +28,7 @@ mod prioritize_call_out;
 
 pub mod binding;
 pub mod global_state;
+pub mod system_reload;
 pub mod vm_op;
 
 #[derive(Debug)]
@@ -147,6 +148,10 @@ impl Vm {
                         }
                         VmOp::PrioritizeCallOut(id) => {
                             self.global_state.prioritize_call_out(id).await;
+                        }
+                        VmOp::SystemReload(request) => {
+                            let state = self.global_state.clone();
+                            tokio::spawn(async move { state.run_system_reload(request).await; });
                         }
                         VmOp::Shutdown(code) => {
                             info!("shutdown({code}) committed... shutting down");

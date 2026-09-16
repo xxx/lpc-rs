@@ -138,7 +138,7 @@ async fn report(
     if failure.kind == Kind::Refused {
         return Ok(silent);
     }
-    let Some(master) = ctx.object_space().master_object() else {
+    let Some(master) = ctx.master_object() else {
         return Ok(silent);
     };
     let Some(function) = master

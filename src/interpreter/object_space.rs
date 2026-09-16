@@ -14,6 +14,7 @@ use tracing::{debug, trace};
 use crate::{
     command::registry::RuleList,
     interpreter::{
+        lpc_ref::LpcRef,
         process::Process,
         program::Program,
         stm::{SVar, VarId},
@@ -55,6 +56,9 @@ pub struct ObjectSpace {
     /// The parser package's verb-attached rules, every verb object's, in
     /// registration order; absent means none.
     pub verb_rules: SVar<RuleList>,
+
+    /// Invalidates readers of bootstrap fixtures when system objects change.
+    pub(crate) system_revision: SVar<LpcRef>,
 }
 
 impl ObjectSpace {
@@ -148,7 +152,11 @@ impl ObjectSpace {
     /// root set. Stale ids (destructed objects) read back as absent in the
     /// world, so they add no edges.
     pub(crate) fn all_cell_ids(&self) -> Vec<VarId> {
-        self.cell_ids.iter().map(|cell| *cell).collect()
+        self.cell_ids
+            .iter()
+            .map(|cell| *cell)
+            .chain(std::iter::once(self.system_revision.id))
+            .collect()
     }
 
     /// Every global-slot and structural cell of every live object, for the
@@ -195,6 +203,14 @@ impl ObjectSpace {
         key == master.as_str() || key == stripped
     }
 
+    pub(crate) fn is_system_key(&self, key: &str) -> bool {
+        self.is_master_key(key)
+            || self
+                .config
+                .simul_efun_source()
+                .is_some_and(|path| self.path_key(path.as_ref()) == key)
+    }
+
     pub fn with_leading_slash(s: &str) -> String {
         if s.starts_with('/') {
             s.to_owned()
@@ -203,9 +219,8 @@ impl ObjectSpace {
         }
     }
 
-    /// Apply a committed deferred insert: place the process in the physical
-    /// map under its key (updating the master pointer if relevant). Called
-    /// by the retry loop when flushing a committed `InsertObject` effect.
+    /// Publish a committed object in the physical map and update the master pointer.
+    /// System objects publish inside the committer; other inserts flush afterward.
     pub(crate) fn apply_insert(&self, key: &str, process: Arc<Process>) {
         if self.is_master_key(key) {
             debug!("Setting new master object: {}", key);
@@ -251,6 +266,7 @@ impl ObjectSpace {
         P: Into<Arc<Process>>,
     {
         let process = process.into();
+        process.physical.store(true, Ordering::Release);
         object_space.apply_insert(&object_space.process_key(&process), process);
     }
 
@@ -276,6 +292,7 @@ impl Default for ObjectSpace {
             config: Config::default().into(),
             master_object: ArcSwapAny::from(None),
             verb_rules: SVar::new(),
+            system_revision: SVar::new(),
         }
     }
 }

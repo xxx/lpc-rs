@@ -8,7 +8,10 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use lpc_rs_core::{
@@ -105,6 +108,9 @@ pub struct Process {
     /// inserted or destructed transactionally.
     pub cell: OnceLock<VarId>,
 
+    /// Physical bootstrap objects may have no value in their path cell.
+    pub(crate) physical: AtomicBool,
+
     /// Where are we in the game world?
     pub position: ProcessPosition,
 
@@ -127,6 +133,7 @@ impl Default for Process {
             rules: SVar::new(),
             parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
+            physical: AtomicBool::new(false),
             position: Default::default(),
             shadow: Default::default(),
         }
@@ -163,6 +170,7 @@ impl Process {
             rules: SVar::new(),
             parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
+            physical: AtomicBool::new(false),
             position: Default::default(),
             shadow: Default::default(),
         }
@@ -373,10 +381,19 @@ impl Process {
     /// Whether this object is still live for `txn`: not removed by a
     /// committed destruct, nor by this attempt.
     pub(crate) fn is_live(&self, txn: &TxnHandle) -> bool {
-        !self
-            .cell
-            .get()
-            .is_some_and(|&cell| txn.with(|t| t.is_removed(cell)))
+        txn.with(|t| self.is_live_in(t))
+    }
+
+    fn is_live_in(&self, t: &mut Transaction) -> bool {
+        self.cell.get().is_none_or(|&cell| {
+            if t.is_removed(cell) {
+                return false;
+            }
+            match t.read_object(cell) {
+                Some(current) => std::ptr::eq(current.as_ref(), self),
+                None => self.physical.load(Ordering::Acquire),
+            }
+        })
     }
 
     /// Whether the initializer has run, read through `txn` and tracked.
@@ -388,7 +405,7 @@ impl Process {
     /// in one trip through the lock; a dead object's marker is not read.
     pub(crate) fn liveness(&self, txn: &TxnHandle) -> Liveness {
         txn.with(|t| {
-            if self.cell.get().is_some_and(|&cell| t.is_removed(cell)) {
+            if !self.is_live_in(t) {
                 Liveness::Dead
             } else if t.read(self.initialized.id).is_some() {
                 Liveness::Ready

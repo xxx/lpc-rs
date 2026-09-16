@@ -58,7 +58,7 @@ pub(super) fn receiver<const N: usize>(
             FunctionAddress::SimulEfun(name) => {
                 context.task_context().simul_efuns().and_then(|target| {
                     target.program.lookup_function(name)?;
-                    Some(Arc::downgrade(target).into())
+                    Some(Arc::downgrade(&target).into())
                 })
             }
         };

@@ -526,7 +526,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             t.drop_var(process.shadow.shadows.id);
             t.drop_var(process.shadow.shadowing.id);
         });
-        self.record_effect(Effect::RemoveObject { key, process });
+        if self.object_space().is_system_key(&key) {
+            self.txn()
+                .with(|t| t.publish_system(self.task_context().object_space(), &process, false));
+        } else {
+            self.record_effect(Effect::RemoveObject { key, process });
+        }
     }
 
     /// The task context this efun runs in.
@@ -759,8 +764,14 @@ mod tests {
     // identity.
     #[tokio::test]
     async fn destruct_and_recreate_cycles_yield_fresh_objects() {
-        let (task_context, mut stack) = efun_context();
+        let (mut task_context, mut stack) = efun_context();
         crate::test_support::permissive_master(&task_context.global_state.object_space).await;
+        let live = crate::interpreter::stm::start_txn(&task_context.global_state.committer_tx)
+            .await
+            .unwrap();
+        task_context.txn = crate::interpreter::stm::TxnHandle::new(
+            crate::interpreter::stm::Transaction::new(live.inner.clone()),
+        );
         let ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
 
         let path = LpcPath::new_in_game(

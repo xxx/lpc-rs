@@ -41,7 +41,7 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     if let Some(reason) = structural_refusal(&txn, context.task_context(), &caller, &target) {
         return Err(context.runtime_error(refuse(reason)));
     }
-    let master = context.task_context().object_space().master_object();
+    let master = context.task_context().master_object();
     let defined = master.as_ref().is_some_and(|m| {
         m.program
             .unmangled_functions
@@ -101,7 +101,6 @@ fn structural_refusal(
         return Some("Can't shadow a shadow.".into());
     }
     if ctx
-        .object_space()
         .master_object()
         .is_some_and(|master| Arc::ptr_eq(&master, target))
     {
@@ -109,7 +108,7 @@ fn structural_refusal(
     }
     if ctx
         .simul_efuns()
-        .is_some_and(|sefuns| Arc::ptr_eq(sefuns, target))
+        .is_some_and(|sefuns| Arc::ptr_eq(&sefuns, target))
     {
         return Some("Can't shadow the simul-efun object.".into());
     }

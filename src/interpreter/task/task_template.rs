@@ -4,14 +4,11 @@ use arc_swap::ArcSwapAny;
 use thin_vec::ThinVec;
 
 use crate::interpreter::stm::VarId;
-use crate::{
-    interpreter::{
-        process::Process,
-        stm::TxnHandle,
-        task_context::{TaskContext, TaskResult},
-        vm::global_state::GlobalState,
-    },
-    util::get_simul_efuns,
+use crate::interpreter::{
+    process::Process,
+    stm::TxnHandle,
+    task_context::{TaskContext, TaskResult},
+    vm::global_state::GlobalState,
 };
 
 /// A struct to handle the Task state, so we can prepare it ahead of time.
@@ -44,14 +41,11 @@ impl TaskTemplate {
 
     /// Create the [`TaskContext`] for a task running in `process`.
     pub fn into_task_context(self, process: Arc<Process>) -> TaskContext {
-        let simul_efuns =
-            get_simul_efuns(&self.global_state.config, &self.global_state.object_space);
-
         TaskContext {
             global_state: self.global_state,
             process,
             result: TaskResult::new(),
-            simul_efuns,
+            system_view: None,
             entry_player: ArcSwapAny::from(self.this_player.load_full()),
             this_player: self.this_player,
             upvalue_ptrs: self.upvalue_ptrs,

@@ -12,7 +12,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     process::Process,
     task::{
-        apply_function::{applied_in_master, apply_function_by_name, report_runtime_error},
+        apply_function::{applied_in_master, apply_function_in_master, report_runtime_error},
         task_template::TaskTemplate,
     },
     vm::{Vm, global_state::GlobalState},
@@ -57,7 +57,7 @@ impl GlobalState {
             let template = TaskTemplate::from(self.clone());
             let timeout = Some(self.config.max_execution_time);
             if let Some(Err(e)) =
-                apply_function_by_name(PRELOAD, &[file], master.clone(), template, timeout).await
+                apply_function_in_master(PRELOAD, &[file], template, timeout).await
             {
                 self.report_boot_error(&e, Some(master)).await;
             }

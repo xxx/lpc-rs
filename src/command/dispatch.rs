@@ -97,7 +97,7 @@ async fn modify_command(
     actor: &Arc<Process>,
     line: &str,
 ) -> Result<Option<String>> {
-    let Some(master) = ctx.object_space().master_object() else {
+    let Some(master) = ctx.master_object() else {
         return Ok(Some(line.to_owned()));
     };
     let args = [
@@ -187,7 +187,7 @@ async fn master_message(
     actor: &Arc<Process>,
     line: &str,
 ) -> Result<Option<String>> {
-    let Some(master) = ctx.object_space().master_object() else {
+    let Some(master) = ctx.master_object() else {
         return Ok(Some(default_message(ctx, actor)));
     };
     let args = [

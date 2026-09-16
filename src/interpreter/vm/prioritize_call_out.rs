@@ -3,13 +3,10 @@ use std::sync::Arc;
 use lpc_rs_errors::lpc_error;
 use tokio::task::JoinHandle;
 
-use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
-    interpreter::{
-        lpc_ref::LpcRef,
-        task::{Task, apply_function::report_runtime_error, task_template::TaskTemplate},
-        vm::global_state::GlobalState,
-    },
+use crate::interpreter::{
+    lpc_ref::LpcRef,
+    task::{apply_function::report_runtime_error, task_template::TaskTemplate},
+    vm::global_state::GlobalState,
 };
 
 impl GlobalState {
@@ -66,12 +63,7 @@ impl GlobalState {
 
             let max_execution_time = global_state.config.max_execution_time;
             let receiver = prepared.context.process.clone();
-            let mut task = Task::<MAX_CALL_STACK_SIZE>::new(prepared.context);
-
-            if let Err(e) = task
-                .timed_eval(prepared.function, &prepared.args, max_execution_time)
-                .await
-            {
+            if let Err(e) = prepared.execute(max_execution_time).await {
                 let template = TaskTemplate::from(global_state.clone());
                 report_runtime_error(&e, Some(receiver), template).await;
             }

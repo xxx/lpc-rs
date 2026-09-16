@@ -29,12 +29,10 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         process::Process,
         task::{
-            apply_function::{
-                applied_in_master, apply_function, apply_function_by_name, report_runtime_error,
-            },
+            apply_function::{applied_in_master, apply_function_by_name, report_runtime_error},
             task_template::TaskTemplate,
         },
-        vm::{global_state::PreparedCall, vm_op::VmOp},
+        vm::vm_op::VmOp,
     },
     telnet::{
         connection::{Connection, InputTo},
@@ -674,11 +672,7 @@ impl Telnet {
                 connection.body(),
             )
             .await;
-        let PreparedCall {
-            context,
-            function,
-            args,
-        } = match prepared {
+        let prepared = match prepared {
             Ok(Some(prepared)) => prepared,
             Ok(None) => return,
             Err(e) => {
@@ -688,9 +682,9 @@ impl Telnet {
             }
         };
 
-        let process = context.process.clone();
+        let process = prepared.context.process.clone();
         let max_execution_time = template.global_state.config.max_execution_time;
-        let result = apply_function(function, &args, context, Some(max_execution_time)).await;
+        let result = prepared.execute(max_execution_time).await;
 
         if let Err(e) = result {
             report_runtime_error(&e, Some(process), template.clone()).await;

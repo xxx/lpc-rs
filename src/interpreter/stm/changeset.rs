@@ -73,6 +73,30 @@ pub(crate) struct Changeset {
     version: Version,
     entries: AHashMap<VarId, Entry>,
     pub(crate) origin: Option<Arc<CommitOrigin>>,
+    pub(crate) system_publications: Vec<SystemPublication>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SystemPublication {
+    pub space: Arc<crate::interpreter::object_space::ObjectSpace>,
+    pub key: String,
+    pub process: Arc<crate::interpreter::process::Process>,
+    pub insert: bool,
+}
+
+impl SystemPublication {
+    pub(crate) fn apply(self) {
+        if self.insert {
+            if let Some(old) = self.space.lookup(&self.key) {
+                old.cell.get_or_init(|| self.space.cell_id(&self.key));
+                old.physical
+                    .store(false, std::sync::atomic::Ordering::Release);
+            }
+            self.space.apply_insert(&self.key, self.process);
+        } else {
+            self.space.apply_remove(&self.key, &self.process);
+        }
+    }
 }
 
 impl Changeset {
@@ -81,6 +105,7 @@ impl Changeset {
             version,
             entries: AHashMap::new(),
             origin: None,
+            system_publications: Vec::new(),
         }
     }
 

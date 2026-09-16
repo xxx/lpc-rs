@@ -31,6 +31,22 @@ pub struct PreparedCall {
     pub context: TaskContext,
     pub function: Function,
     pub args: Vec<LpcRef>,
+    entry: crate::interpreter::task::SeedEntry,
+}
+
+impl PreparedCall {
+    /// Run the callback, resolving a simul-efun target anew on every attempt.
+    pub async fn execute(self, timeout_ms: u64) -> Result<()> {
+        use crate::interpreter::task::{SeedArg, TaskSeed};
+        let seed = TaskSeed {
+            process: self.context.process.clone(),
+            entry: self.entry,
+            args: self.args.into_iter().map(SeedArg::Value).collect(),
+            initializes: false,
+        };
+        let mut task = Task::<MAX_CALL_STACK_SIZE>::new(self.context);
+        task.timed_eval_seed(seed, timeout_ms).await
+    }
 }
 
 /// A type for globally-shared state that every [`Task`] will need access to.
@@ -63,6 +79,8 @@ pub struct GlobalState {
 
     /// Every live connection; the loop registers and removes itself.
     pub registry: crate::interpreter::vm::binding::Registry,
+
+    pub(crate) reloads: super::system_reload::Reloads,
 }
 
 impl GlobalState {
@@ -87,6 +105,7 @@ impl GlobalState {
             attempt_runner,
             booted_at: std::time::SystemTime::now(),
             registry: Default::default(),
+            reloads: Default::default(),
         }
     }
 
@@ -182,6 +201,7 @@ impl GlobalState {
         };
 
         // A pointer the driver fires is called by its owner.
+        let owner = Arc::downgrade(&seat);
         let callers = Some(Caller::link(seat, None));
         let process = &resolved.process;
         if !self.is_initialized(process) {
@@ -203,6 +223,14 @@ impl GlobalState {
         context.callers = callers;
         Ok(Some(PreparedCall {
             context,
+            entry: crate::interpreter::task::SeedEntry::Callback {
+                function: resolved.function.clone(),
+                owner,
+                simul: match &ptr.address {
+                    FunctionAddress::SimulEfun(name) => Some(name.to_string()),
+                    _ => None,
+                },
+            },
             function: resolved.function,
             args: resolved.args,
         }))
