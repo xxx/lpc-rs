@@ -22,8 +22,11 @@ Creation and entry into an object's code refresh its idle time. Calls within
 the same object do not refresh it, and the automatic cleanup task exempts its
 target. An aborted call can still postpone cleanup. Merely holding an object
 reference or scheduling a future call-out does not keep an object active.
-The master and simul-efun objects are never automatically queried. Shadows do
-not intercept this hook, and `this_player()` is zero.
+The master and simul-efun objects are never automatically queried. Programs
+declaring `#pragma resident` also skip automatic queries, including their
+clones; `request_clean_up()` cannot override that pragma. Explicit calls to
+`clean_up()` and authorized `destruct()` are still allowed. Shadows do not
+intercept the automatic hook, and `this_player()` is zero.
 
 The hook runs in a normal transaction under `MAX_EXECUTION_TIME`. Conflict
 retries recheck eligibility and rerun the hook. An uncaught error rolls back

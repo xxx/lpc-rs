@@ -26,10 +26,8 @@ pub struct PragmaFlags {
     /// were declared as `nomask`.
     pub no_shadow: bool,
 
-    /// Prevent the master object from being unloaded from memory, even if all
-    /// clones have been removed from the game. This should not be used for
-    /// normal in-game objects, but is useful for e.g. singleton daemons
-    /// that run in the background.
+    /// Exclude this program's objects, including clones, from automatic cleanup.
+    /// Explicit `destruct()` remains subject to the usual authorization.
     pub resident: bool,
 
     /// The root file declared `#pragma strict_types`; the per-file scope

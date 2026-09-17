@@ -77,7 +77,18 @@ async fn idle_delay_activity_and_repeated_queries() {
 #[tokio::test]
 async fn opt_out_survives_gc_and_request_reenables_queries() {
     let vm = vm(10);
-    let process = object(&vm, "/room.c", "int calls; int clean_up() { calls++; return 0; } void again() { request_clean_up(); } void fail() { request_clean_up(); throw(\"abort\"); }").await;
+    let process = object(
+        &vm,
+        "/room.c",
+        r#"
+        int calls;
+        int clean_up() { calls++; return 0; }
+        int again() { return request_clean_up(); }
+        void fail() { request_clean_up(); throw("abort"); }
+        "#,
+    )
+    .await;
+    assert_eq!(call(&vm, &process, "again").await.unwrap(), LpcRef::from(1));
     advance(10).await;
     vm.global_state.clean_up().await;
     assert_eq!(calls(&vm, &process), LpcRef::from(1));
@@ -89,7 +100,10 @@ async fn opt_out_survives_gc_and_request_reenables_queries() {
     advance(10).await;
     vm.global_state.clean_up().await;
     assert_eq!(calls(&vm, &process), LpcRef::from(1));
-    call(&vm, &process, "again").await.unwrap();
+    assert_eq!(call(&vm, &process, "again").await.unwrap(), LpcRef::from(1));
+    assert_eq!(call(&vm, &process, "again").await.unwrap(), LpcRef::from(1));
+    vm.global_state.clean_up().await;
+    assert_eq!(calls(&vm, &process), LpcRef::from(1));
     advance(10).await;
     vm.global_state.clean_up().await;
     assert_eq!(calls(&vm, &process), LpcRef::from(2));
@@ -117,9 +131,10 @@ async fn disabled_scheduler_leaves_objects_alone() {
     let process = object(
         &vm,
         "/room.c",
-        "int calls; int clean_up() { calls++; return 1; }",
+        "int calls; int clean_up() { calls++; return 1; } int again() { return request_clean_up(); }",
     )
     .await;
+    assert_eq!(call(&vm, &process, "again").await.unwrap(), LpcRef::from(0));
     advance(10000).await;
     vm.global_state.clean_up().await;
     assert_eq!(calls(&vm, &process), LpcRef::from(0));
@@ -135,7 +150,7 @@ async fn missing_hooks_uninitialized_and_system_objects_are_skipped() {
             .build()
             .unwrap(),
     );
-    let code = "int calls; int clean_up() { calls++; return 1; }";
+    let code = "int calls; int clean_up() { calls++; return 1; } int again() { return request_clean_up(); }";
     let master = object(&vm, "/secure/master.c", code).await;
     let simul = object(&vm, "/simul.c", code).await;
     let uninitialized = vm
@@ -144,13 +159,101 @@ async fn missing_hooks_uninitialized_and_system_objects_are_skipped() {
         .create_process_from_code("/uninitialized.c", code)
         .await
         .unwrap();
-    let plain = object(&vm, "/plain.c", "void create() { request_clean_up(); }").await;
+    let plain = object(
+        &vm,
+        "/plain.c",
+        "void create() { request_clean_up(); } int again() { return request_clean_up(); }",
+    )
+    .await;
     assert!(plain.cleanup.is_none());
+    for process in [&master, &simul, &plain] {
+        assert_eq!(call(&vm, process, "again").await.unwrap(), LpcRef::from(0));
+    }
     advance(10).await;
     vm.global_state.clean_up().await;
     for process in [&master, &simul, &uninitialized] {
         assert_eq!(calls(&vm, process), LpcRef::from(0));
     }
+}
+
+#[tokio::test]
+async fn resident_objects_and_clones_skip_automatic_cleanup_even_after_requesting_it() {
+    let vm = vm(10);
+    permissive_master(&vm.global_state.object_space).await;
+    let resident = object(
+        &vm,
+        "/daemon.c",
+        r#"
+        #pragma resident
+        int calls;
+        int clean_up() { calls++; return 1; }
+        void make() { clone_object("/daemon"); }
+        int again() { return request_clean_up(); }
+    "#,
+    )
+    .await;
+    call(&vm, &resident, "make").await.unwrap();
+    let clone = vm.global_state.object_space.lookup("/daemon#0").unwrap();
+    let ordinary = object(
+        &vm,
+        "/room.c",
+        "int calls; int clean_up() { calls++; return 1; }",
+    )
+    .await;
+
+    advance(10).await;
+    vm.global_state.clean_up().await;
+    for process in [&resident, &clone] {
+        assert_eq!(calls(&vm, process), LpcRef::from(0));
+        assert_eq!(call(&vm, process, "again").await.unwrap(), LpcRef::from(0));
+    }
+    assert_eq!(calls(&vm, &ordinary), LpcRef::from(1));
+
+    advance(10).await;
+    vm.global_state.clean_up().await;
+    for process in [&resident, &clone] {
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(process.clone()),
+        );
+        task.timed_eval_seed(
+            TaskSeed {
+                process: process.clone(),
+                entry: SeedEntry::CleanUp,
+                args: vec![],
+                initializes: false,
+            },
+            0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(calls(&vm, process), LpcRef::from(0));
+        call(&vm, process, "clean_up").await.unwrap();
+        assert_eq!(calls(&vm, process), LpcRef::from(1));
+    }
+    assert_eq!(calls(&vm, &ordinary), LpcRef::from(2));
+}
+
+#[tokio::test]
+async fn resident_objects_and_clones_can_be_explicitly_destructed() {
+    let vm = vm(10);
+    permissive_master(&vm.global_state.object_space).await;
+    let resident = object(
+        &vm,
+        "/daemon.c",
+        r#"
+        #pragma resident
+        int clean_up() { return 1; }
+        void make() { clone_object("/daemon"); }
+        void die() { destruct(this_object()); }
+    "#,
+    )
+    .await;
+    call(&vm, &resident, "make").await.unwrap();
+    let clone = vm.global_state.object_space.lookup("/daemon#0").unwrap();
+    call(&vm, &clone, "die").await.unwrap();
+    call(&vm, &resident, "die").await.unwrap();
+    assert!(vm.global_state.object_space.lookup("/daemon#0").is_none());
+    assert!(vm.global_state.object_space.lookup("/daemon").is_none());
 }
 
 #[tokio::test]

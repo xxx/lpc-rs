@@ -74,7 +74,7 @@ pub struct Process {
     /// The second this process was constructed: what `object_time` answers.
     pub created: i64,
 
-    /// Present only for programs defining the idle cleanup apply.
+    /// Present only for nonresident programs defining the idle cleanup apply.
     pub(crate) cleanup: Option<Box<cleanup::Cleanup>>,
 
     /// Canonical global cells followed by view aliases; values live only in the committer's world.
@@ -165,10 +165,11 @@ impl Process {
             globals.push(globals[usize::from(slot)].clone());
         }
         Self {
-            cleanup: program
-                .unmangled_functions
-                .contains_key(crate::interpreter::CLEAN_UP)
-                .then(Box::default),
+            cleanup: (!program.pragmas.resident()
+                && program
+                    .unmangled_functions
+                    .contains_key(crate::interpreter::CLEAN_UP))
+            .then(Box::default),
             program,
             created: chrono::Utc::now().timestamp(),
             globals: globals.into_boxed_slice(),

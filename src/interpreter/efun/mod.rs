@@ -1203,7 +1203,7 @@ efuns! {
             LpcType::Int(false) | LpcType::Object(false),
         ],
     },
-    request_clean_up => { returns: LpcType::Void },
+    request_clean_up => { returns: LpcType::Int(false) },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.

@@ -11,9 +11,11 @@ See [PRODUCT.md](PRODUCT.md) for the apply contract.
 ## Proposed changes
 
 - Store optional cleanup metadata only on processes whose programs define the
-  hook: monotonic activity/query times, a per-instance in-flight flag, and a
-  transactional opt-out cell. A short metadata mutex does not serialize LPC
-  execution or replace the committer.
+  hook without `#pragma resident`: monotonic activity/query times, a per-instance
+  in-flight flag, and a transactional opt-out cell. A short metadata mutex does
+  not serialize LPC execution or replace the committer. The shared process
+  constructor applies this exclusion to blueprints, clones, and virtual objects,
+  so both sweep selection and automatic seed execution skip them.
 - Refresh activity at call-stack entry across object boundaries. Exempt the
   cleanup target within its automatic task so retries do not invalidate their
   own idle check. No transactional activity writes enter ordinary calls.
@@ -26,8 +28,11 @@ See [PRODUCT.md](PRODUCT.md) for the apply contract.
   in-flight flag and postpones the next query even on error or cancellation.
 - Cancel and join the sweep on shutdown. Use the existing runtime error
   reporting path. Keep GC unchanged except rooting the new structural cell.
-- Expose configuration and the self-only `request_clean_up` efun; document
-  the lifetime and reference-count differences from other LPC drivers.
+- Expose configuration and the self-only `int request_clean_up()` efun.
+  Return zero without writing for absent cleanup metadata, system objects,
+  or a disabled scheduler; otherwise clear opt-out transactionally and return
+  one, including when queries are already enabled. Document the lifetime
+  and reference-count differences from other LPC drivers.
 
 Activity times are advisory eligibility metadata. Mudlib safety decisions
 must read transactional state (for example `all_inventory`) so concurrent
@@ -37,10 +42,12 @@ movement invalidates an unsafe destruction attempt.
 
 `src/interpreter/vm/clean_up/tests.rs` uses clock advancement and real LPC
 applies to cover configuration, idle delay, cross-object activity, repeated
-queries, system exclusions, and clone counts (behavior 1–4). Zero/void opt-out,
-re-enabling, and aborted requests cover behavior 5–6. Error, timeout, and
-authorization tests cover behavior 7–8. GC, stale-instance, reservation, and
-VM-loop shutdown tests cover behavior 9.
+queries, system/resident exclusions, and clone counts (behavior 1–4). Resident
+objects and clones reject automatic queries even after `request_clean_up`,
+while explicit calls and destruction remain allowed. Zero/void opt-out,
+re-enabling, request acceptance/rejection results, and aborted requests cover
+behavior 5–6. Error, timeout, and authorization tests cover behavior 7–8. GC,
+stale-instance, reservation, and VM-loop shutdown tests cover behavior 9.
 
 `src/interpreter/task/clean_up_tests.rs` rejects an attempted destruction after
 an arrival commits, then reruns the hook and preserves the occupied room. It

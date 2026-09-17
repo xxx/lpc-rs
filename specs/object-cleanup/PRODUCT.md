@@ -12,9 +12,12 @@ room contents, persistent state, and scheduled work.
    and disables automatic cleanup when zero. `LPC_CLEAN_UP_INTERVAL` takes
    precedence. Checks run at most once per minute, or once per interval when
    the interval is shorter; deadlines are approximate.
-2. Only initialized objects defining `clean_up` are queried. The master and
-   simul-efun objects are excluded. The hook runs directly on the object,
-   without shadow interception or a command giver.
+2. Only initialized objects defining `clean_up` are queried. The master,
+   simul-efun objects, and objects whose programs declare `#pragma resident`
+   are excluded. The resident exemption includes clones of those programs;
+   explicit `clean_up()` calls and authorized `destruct()` remain allowed.
+   The automatic hook runs directly on the object, without shadow interception
+   or a command giver.
 3. Creation and entry into an object's code start its idle period. Recursive
    calls within that object do not refresh it. Automatic cleanup execution in
    the target does not count as activity. Aborted execution may conservatively
@@ -27,9 +30,13 @@ room contents, persistent state, and scheduled work.
 5. A zero or void return disables future queries for that instance. Nonzero
    returns permit another query after at least the configured interval.
    Returning a value never destroys the object automatically.
-6. `void request_clean_up()` enables future queries in the calling object.
-   It has no effect on objects without the hook or on a disabled driver
-   scheduler. A hook returning zero overrides its own request to re-enable.
+6. `int request_clean_up()` enables future queries in the calling object
+   when its transaction commits. It returns `1` when accepted, including
+   when queries are already enabled. It returns `0` without changing cleanup
+   state for objects without the hook, programs declaring `#pragma resident`,
+   master or simul-efun objects, or a disabled driver scheduler. Acceptance
+   does not run the hook immediately. A hook returning zero overrides its
+   own request to re-enable.
 7. Each hook executes as an ordinary transaction with the configured evaluation
    limit and conflict retries. Inventory checks, destruction, and disabling
    queries commit together; retries recheck liveness and idleness. Existing
@@ -41,4 +48,3 @@ room contents, persistent state, and scheduled work.
    queued for checking are skipped, including when the path has been reloaded.
    Opt-out state survives memory GC. Shutdown cancels pending cleanup work
    before closing the committer.
-
