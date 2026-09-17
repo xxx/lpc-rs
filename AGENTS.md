@@ -57,8 +57,9 @@ CI (`.github/workflows/ci.yml`) runs: `cargo clippy --workspace`,
 (broken intra-doc links fail CI).
 
 `.cargo/config` sets `--cfg tokio_unstable` for all builds. Runtime configuration is
-entirely environment variables (`.env` supported); see `default.env` for the commented
-list. Compile-time constants live in `src/compile_time_config.rs`.
+entirely environment variables (`.env` requires driver `-e` or compiler `-c`); see
+`default.env` for the commented list. Compile-time constants live in
+`src/compile_time_config.rs`.
 
 ### Profiling the benches
 

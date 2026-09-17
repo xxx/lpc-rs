@@ -113,16 +113,16 @@ impl ConfigBuilder {
         Ok(config)
     }
 
-    /// Set config values from a `dotenv` file. If `env_path` is `None`, the default `.env` is used.
+    /// Set config values from the environment, optionally loading an explicit `dotenv` file first.
+    /// If `env_path` is `None`, no file is loaded.
     pub async fn load_env<P>(self, env_path: Option<P>) -> Self
     where
         P: AsRef<Path>,
     {
-        let _ = match env_path {
-            Some(p) => dotenvy::from_filename(p.as_ref())
-                .map_err(|e| info!("{:?} not loaded: {}", p.as_ref(), e.to_string())),
-            None => dotenvy::dotenv().map_err(|e| info!(".env not loaded: {}", e.to_string())),
-        };
+        if let Some(p) = env_path {
+            let _ = dotenvy::from_filename(p.as_ref())
+                .map_err(|e| info!("{:?} not loaded: {}", p.as_ref(), e.to_string()));
+        }
 
         let env = std::env::vars()
             .map(|(k, v)| {

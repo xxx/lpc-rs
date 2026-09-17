@@ -17,7 +17,9 @@ This will eventually be an [LPC](https://mud.fandom.com/wiki/LPC) compiler and d
 
 Some compile-time defaults can be changed in `lpc-rs/src/compile_time_config.rs`.
 
-Runtime configuration is entirely via environment variables, and `.env` files are also supported.
+Runtime configuration is entirely via environment variables. To load a `.env` file explicitly,
+pass `-e <path>` / `--env <path>` to the driver or `-c <path>` / `--config <path>` to the compiler.
+No `.env` file is loaded automatically.
 See `default.env` for a commented example.
 
 ### Explore the transaction runtime
