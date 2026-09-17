@@ -9,6 +9,8 @@ mod location;
 pub mod task_template;
 
 #[cfg(test)]
+mod clean_up_tests;
+#[cfg(test)]
 mod tests;
 
 use std::{fmt::Debug, sync::Arc};
@@ -38,7 +40,7 @@ use crate::interpreter::{
     call_stack::CallStack,
     lpc_int::LpcInt,
     lpc_mapping::LpcMapping,
-    lpc_ref::{BYTES_STRING_MIX, LpcRef},
+    lpc_ref::{BYTES_STRING_MIX, LpcRef, NULL},
     process::Process,
     stm::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle, VarId,
@@ -73,6 +75,8 @@ pub enum SeedArg {
 /// The function a [`TaskSeed`] enters.
 #[derive(Debug, Clone)]
 pub enum SeedEntry {
+    /// An idle apply whose eligibility is checked again in each attempt.
+    CleanUp,
     /// A function resolved before the task began.
     Function(Function),
     /// Bootstrap initialization that publishes the system-object path.
@@ -93,6 +97,7 @@ pub enum SeedEntry {
 impl SeedEntry {
     fn name(&self) -> &str {
         match self {
+            Self::CleanUp => crate::interpreter::CLEAN_UP,
             Self::Function(function)
             | Self::SystemInitializer(function)
             | Self::Callback { function, .. } => function.name().as_ref(),
@@ -328,6 +333,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         self.reset();
+        self.stack.cleanup_target =
+            matches!(seed.entry, SeedEntry::CleanUp).then(|| seed.process.clone());
 
         if live.is_some() && matches!(seed.entry, SeedEntry::SystemInitializer(_)) {
             let space = self.context.object_space();
@@ -367,6 +374,38 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// nothing in the chain defines runs nothing, leaving no result.
     async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
         let (process, function) = match &seed.entry {
+            SeedEntry::CleanUp => {
+                let process = &seed.process;
+                let interval = self.context.config().clean_up_interval;
+                let Some(cleanup) = &process.cleanup else {
+                    return Ok(());
+                };
+                if interval == 0
+                    || !self
+                        .context
+                        .object_space()
+                        .lookup(self.context.object_space().process_key(process))
+                        .is_some_and(|current| Arc::ptr_eq(&current, process))
+                    || !process.is_live(&self.context.txn)
+                    || !process.is_initialized(&self.context.txn)
+                    || !cleanup.is_idle(std::time::Duration::from_secs(interval))
+                    || self
+                        .context
+                        .txn
+                        .with(|txn| txn.read(cleanup.disabled.id))
+                        .is_some_and(|value: LpcRef| value != NULL)
+                {
+                    return Ok(());
+                }
+                let Some(function) = process
+                    .program
+                    .unmangled_functions
+                    .get(crate::interpreter::CLEAN_UP)
+                else {
+                    return Ok(());
+                };
+                (process.clone(), function.clone())
+            }
             SeedEntry::Function(function) | SeedEntry::SystemInitializer(function) => {
                 if !seed.process.is_live(&self.context.txn) {
                     return Err(self.runtime_error("attempted to execute a retired object"));
@@ -435,7 +474,25 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.push_entry_frame(process.clone())?;
             self.call_fired_efun(efun, args, process, None).await?;
         } else {
-            let frame = seed.build_call_frame(
+            let cleanup_seed;
+            let frame_seed = if matches!(seed.entry, SeedEntry::CleanUp) {
+                let references = if process.is_clone() {
+                    0
+                } else {
+                    1 + self.context.txn.with(|txn| {
+                        txn.read_array(process.program.clones.id)
+                            .map_or(0, |clones| clones.len())
+                    }) as i64
+                };
+                cleanup_seed = TaskSeed {
+                    args: vec![SeedArg::Value(LpcRef::from(references))],
+                    ..seed.clone()
+                };
+                &cleanup_seed
+            } else {
+                seed
+            };
+            let frame = frame_seed.build_call_frame(
                 process,
                 function,
                 &self.context.txn,
@@ -443,7 +500,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             )?;
             self.stack.push(frame)?;
         }
-        self.resume().await
+        self.resume().await?;
+        if matches!(seed.entry, SeedEntry::CleanUp)
+            && self.result().is_none_or(|value| value == NULL)
+            && seed.process.is_live(&self.context.txn)
+            && let Some(cleanup) = &seed.process.cleanup
+        {
+            self.context
+                .txn
+                .with(|txn| txn.write(cleanup.disabled.id, LpcRef::from(1)));
+        }
+        Ok(())
     }
 
     /// Evaluate `f` to completion, or an error; a `timeout_ms` of 0 means
@@ -472,12 +539,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) async fn timed_eval_seed(&mut self, seed: TaskSeed, timeout_ms: u64) -> Result<()> {
         Box::pin(async move {
             let entry = seed.entry.clone();
-            let name = match &entry {
-                SeedEntry::Function(function)
-                | SeedEntry::SystemInitializer(function)
-                | SeedEntry::Callback { function, .. } => function.name().as_ref(),
-                SeedEntry::Named(name) | SeedEntry::Master(name) => name.as_str(),
-            };
+            let name = entry.name();
             diagnostics::started(
                 name,
                 &seed.process,

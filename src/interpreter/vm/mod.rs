@@ -21,6 +21,7 @@ use crate::{
 /// How long shutdown waits for the last connection loop to flush and exit.
 const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
+mod clean_up;
 mod initiate_login;
 mod object_initializers;
 mod preload;
@@ -113,6 +114,12 @@ impl Vm {
         // `interval` panics on a zero period; a disabled collector is gated off at the arm.
         let mut gc_ticks = tokio::time::interval(Duration::from_secs(gc_interval.max(1)));
         gc_ticks.tick().await;
+        let clean_up_interval = self.global_state.config.clean_up_interval;
+        let mut cleanup_ticks =
+            tokio::time::interval(Duration::from_secs(clean_up_interval.clamp(1, 60)));
+        cleanup_ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        cleanup_ticks.tick().await;
+        let mut cleanup_tasks = tokio::task::JoinSet::new();
 
         // Process managers stop a server with TERM first; it must reach the
         // same clean shutdown as Ctrl-C.
@@ -141,6 +148,17 @@ impl Vm {
                         }
                     });
                 }
+                Some(result) = cleanup_tasks.join_next(), if !cleanup_tasks.is_empty() => {
+                    if let Err(error) = result {
+                        error!("cleanup sweep failed: {error}");
+                    }
+                }
+                _ = cleanup_ticks.tick(), if clean_up_interval > 0 => {
+                    if cleanup_tasks.is_empty() {
+                        let state = self.global_state.clone();
+                        cleanup_tasks.spawn(async move { state.clean_up().await; });
+                    }
+                }
                 Some(op) = self.rx.recv() => {
                     match op {
                         VmOp::InitiateLogin(connection) => {
@@ -164,6 +182,7 @@ impl Vm {
         }
 
         // Only the VM shuts down on its own. Everything else shuts down only at the behest of the VM.
+        cleanup_tasks.shutdown().await;
         self.shutdown().await?;
         Ok(exit_code)
     }

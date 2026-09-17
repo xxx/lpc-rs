@@ -35,6 +35,8 @@ pub use stm::{AttemptTelemetrySnapshot, CommitterStats};
 pub use stm::{GcRefused, GcReport};
 
 // Applies - functions in LPC objects that are called directly by the driver at various times.
+/// Object apply: asks an idle object whether to clean itself up.
+pub const CLEAN_UP: &str = "clean_up";
 /// Living apply: receives in-game output addressed to the living (`doc/apply/living/catch_tell.md`).
 pub const CATCH_TELL: &str = "catch_tell";
 /// Master apply: called with the living and its line when no rule handled it (`doc/apply/master/command_not_found.md`).

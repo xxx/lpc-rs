@@ -1,3 +1,4 @@
+pub(crate) mod cleanup;
 pub(crate) mod shadow;
 pub mod util;
 
@@ -73,6 +74,9 @@ pub struct Process {
     /// The second this process was constructed: what `object_time` answers.
     pub created: i64,
 
+    /// Present only for programs defining the idle cleanup apply.
+    pub(crate) cleanup: Option<Box<cleanup::Cleanup>>,
+
     /// Canonical global cells followed by view aliases; values live only in the committer's world.
     globals: Box<[SVar<LpcRef>]>,
 
@@ -125,6 +129,7 @@ impl Default for Process {
         Self {
             program: Arc::default(),
             created: 0,
+            cleanup: None,
             globals: Vec::new().into_boxed_slice(),
             name: ObjectName::File,
             connection: SVar::new(),
@@ -160,6 +165,10 @@ impl Process {
             globals.push(globals[usize::from(slot)].clone());
         }
         Self {
+            cleanup: program
+                .unmangled_functions
+                .contains_key(crate::interpreter::CLEAN_UP)
+                .then(Box::default),
             program,
             created: chrono::Utc::now().timestamp(),
             globals: globals.into_boxed_slice(),
@@ -449,6 +458,13 @@ impl Process {
 
     /// Resolve structural and global cell names only when emitting a diagnostic.
     pub(crate) fn describe_cell(&self, cell: VarId) -> Option<String> {
+        if self
+            .cleanup
+            .as_ref()
+            .is_some_and(|cleanup| cleanup.disabled.id == cell)
+        {
+            return Some(format!("{}.cleanup_disabled", self.filename()));
+        }
         for (id, field) in [
             (self.initialized.id, "initialized"),
             (self.commands_enabled.id, "commands_enabled"),
@@ -494,6 +510,7 @@ impl Process {
         self.globals[..usize::from(self.program.num_globals)]
             .iter()
             .map(|slot| slot.id)
+            .chain(self.cleanup.as_ref().map(|cleanup| cleanup.disabled.id))
             .chain([
                 self.initialized.id,
                 self.commands_enabled.id,

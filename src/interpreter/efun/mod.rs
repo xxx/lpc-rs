@@ -97,6 +97,7 @@ pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
 pub(crate) mod rename;
 pub(crate) mod render_markdown;
+pub(crate) mod request_clean_up;
 pub(crate) mod restore_map;
 pub(crate) mod restore_object;
 pub(crate) mod rm;
@@ -1202,6 +1203,7 @@ efuns! {
             LpcType::Int(false) | LpcType::Object(false),
         ],
     },
+    request_clean_up => { returns: LpcType::Void },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1554,6 +1556,7 @@ mod tests {
                 "request_system_reload",
                 "query_system_reload",
                 "render_markdown",
+                "request_clean_up",
             ]
         );
     }

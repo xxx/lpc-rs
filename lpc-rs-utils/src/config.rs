@@ -12,6 +12,7 @@ use crate::debug_log::DebugLog;
 const DEFAULT_MAX_INHERIT_DEPTH: u8 = 10;
 const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
 const DEFAULT_GC_INTERVAL: u64 = 300;
+const DEFAULT_CLEAN_UP_INTERVAL: u64 = 600;
 const DEFAULT_MAX_PENDING_OUTPUT: usize = 64 * 1024;
 const DEFAULT_MAX_IDLE_TIME: u64 = 0;
 
@@ -66,6 +67,10 @@ pub struct Config {
     /// Seconds between garbage-collection passes; `0` disables them.
     #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
     pub gc_interval: u64,
+
+    /// Minimum idle seconds before an object is queried for cleanup; zero disables queries.
+    #[builder(setter(into), default = "DEFAULT_CLEAN_UP_INTERVAL")]
+    pub clean_up_interval: u64,
 
     /// The simul-efun file, as an in-game path with or without its `.c`.
     #[builder(setter(into, strip_option), default = "None")]
@@ -209,6 +214,11 @@ impl ConfigBuilder {
                 .or_else(|| env.get("GC_INTERVAL"))
                 .map(|x| x.parse::<u64>().unwrap())
                 .or(self.gc_interval),
+            clean_up_interval: env
+                .get("LPC_CLEAN_UP_INTERVAL")
+                .or_else(|| env.get("CLEAN_UP_INTERVAL"))
+                .map(|x| x.parse::<u64>().unwrap())
+                .or(self.clean_up_interval),
             port: env
                 .get("LPC_PORT")
                 .or_else(|| env.get("PORT"))
@@ -431,6 +441,19 @@ mod tests {
         assert_eq!(
             optional_in_game_file(Some(&"/secure/x".to_string()), ""),
             Some(Some(ustr("/secure/x")))
+        );
+    }
+
+    #[test]
+    fn cleanup_defaults_to_ten_minutes_and_can_be_disabled() {
+        assert_eq!(Config::default().clean_up_interval, 600);
+        assert_eq!(
+            ConfigBuilder::default()
+                .clean_up_interval(0u64)
+                .build()
+                .unwrap()
+                .clean_up_interval,
+            0
         );
     }
 

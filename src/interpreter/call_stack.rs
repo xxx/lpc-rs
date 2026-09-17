@@ -23,6 +23,9 @@ const INITIAL_CAPACITY: usize = 8;
 pub struct CallStack<const STACKSIZE: usize> {
     /// The call stack; grows on demand, `push` refuses past `STACKSIZE` frames.
     stack: Vec<CallFrame>,
+
+    /// An automatic query must not refresh its own target's idle time on retries.
+    pub(crate) cleanup_target: Option<Arc<Process>>,
 }
 
 impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
@@ -103,6 +106,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             return Err(Self::overflow());
         }
 
+        self.record_activity(&frame.process);
         self.stack.push(frame);
 
         Ok(())
@@ -126,6 +130,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             return Err(Self::overflow());
         }
 
+        self.record_activity(&process);
         self.stack.push(CallFrame::with_minimum_arg_capacity(
             process,
             function,
@@ -141,6 +146,21 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// to it.
     pub fn pop(&mut self) -> Option<CallFrame> {
         self.stack.pop()
+    }
+
+    fn record_activity(&self, process: &Arc<Process>) {
+        if let Some(cleanup) = &process.cleanup
+            && !self
+                .cleanup_target
+                .as_ref()
+                .is_some_and(|target| Arc::ptr_eq(target, process))
+            && !self
+                .stack
+                .last()
+                .is_some_and(|frame| Arc::ptr_eq(&frame.process, process))
+        {
+            cleanup.touch();
+        }
     }
 
     /// Create a runtime error at the current frame's location; `None` span
@@ -209,6 +229,7 @@ impl<const STACKSIZE: usize> Default for CallStack<STACKSIZE> {
     fn default() -> Self {
         Self {
             stack: Vec::with_capacity(INITIAL_CAPACITY),
+            cleanup_target: None,
         }
     }
 }
