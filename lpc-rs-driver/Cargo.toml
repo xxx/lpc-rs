@@ -1,6 +1,6 @@
 [package]
 name = "lpc-rs-driver"
-description = "lpc-rs LPC compiler and gamedriver suite gamedriver. The server that runs the game."
+description = "lpc-rs gamedriver. The server that runs the game."
 version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2024"
