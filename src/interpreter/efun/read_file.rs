@@ -3,12 +3,13 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     VALID_READ,
     efun::{efun_context::EfunContext, file_access::authorize},
-    lpc_ref::LpcRef,
+    lpc_ref::{LpcRef, NULL},
 };
 
 /// `read_file(path [, start [, lines]])`: the file as a string, once the
 /// master's `valid_read` allows it; `start` a 1-based line (0 is 1), `lines`
-/// a count (0 means to the end). A write earlier in this task is seen.
+/// a count (0 means to the end). A start past EOF returns 0; an empty file
+/// read from the beginning returns "". A write earlier in this task is seen.
 pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "read_file", VALID_READ, 0).await?;
     let start = line_number(context, 1, "start")?;
@@ -21,7 +22,12 @@ pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
     } else {
         contents
     };
-    context.return_efun_result(LpcRef::from(contents));
+    let result = if start > 1 && contents.is_empty() {
+        NULL
+    } else {
+        LpcRef::from(contents)
+    };
+    context.return_efun_result(result);
     Ok(())
 }
 
@@ -259,7 +265,7 @@ mod tests {
         root
     }
 
-    async fn lines_read_as(name: &str, call: &str) -> String {
+    async fn lines_read_as(name: &str, call: &str) -> LpcRef {
         let root = lib_with_lines(name);
         let vm = Vm::new(temp_lib_config(&root));
         vm.initialize_process_from_code(
@@ -277,14 +283,14 @@ mod tests {
             .unwrap()
             .context
             .process;
-        committed_string(&vm, &process, 0)
+        vm.global_state.committed_global(&process, 0u16)
     }
 
     #[tokio::test]
     async fn a_start_line_reads_from_there_to_the_end() {
         assert_eq!(
             lines_read_as("read-start", r#"read_file("/lines.txt", 2)"#).await,
-            "two\nthree\nfour\n"
+            LpcRef::from("two\nthree\nfour\n")
         );
     }
 
@@ -292,7 +298,7 @@ mod tests {
     async fn a_line_count_bounds_the_read() {
         assert_eq!(
             lines_read_as("read-count", r#"read_file("/lines.txt", 2, 2)"#).await,
-            "two\nthree\n"
+            LpcRef::from("two\nthree\n")
         );
     }
 
@@ -300,16 +306,138 @@ mod tests {
     async fn a_zero_start_is_the_first_line() {
         assert_eq!(
             lines_read_as("read-zero", r#"read_file("/lines.txt", 0, 1)"#).await,
-            "one\n"
+            LpcRef::from("one\n")
         );
     }
 
     #[tokio::test]
-    async fn a_start_past_the_end_is_empty() {
+    async fn a_start_past_the_end_returns_zero() {
         assert_eq!(
             lines_read_as("read-past", r#"read_file("/lines.txt", 9)"#).await,
-            ""
+            LpcRef::from(0)
         );
+    }
+
+    #[tokio::test]
+    async fn a_start_immediately_after_the_last_line_returns_zero() {
+        assert_eq!(
+            lines_read_as("read-after-last", r#"read_file("/lines.txt", 5, 100)"#).await,
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_partial_final_chunk_is_returned() {
+        assert_eq!(
+            lines_read_as("read-final-chunk", r#"read_file("/lines.txt", 4, 100)"#).await,
+            LpcRef::from("four\n")
+        );
+    }
+
+    #[tokio::test]
+    async fn an_empty_file_read_from_the_beginning_is_an_empty_string() {
+        let root = TempLib::new("read-empty");
+        std::fs::write(root.join("data.txt"), "").unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { return 1; }",
+        )
+        .await
+        .unwrap();
+        let reader = read_under(&vm).await;
+        assert_eq!(committed_string(&vm, &reader, 0), "");
+    }
+
+    #[tokio::test]
+    async fn an_unterminated_last_line_is_returned_before_eof() {
+        let root = TempLib::new("read-unterminated");
+        std::fs::write(root.join("data.txt"), "first\n\nlast").unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { return 1; }",
+        )
+        .await
+        .unwrap();
+        let reader = vm
+            .initialize_process_from_code(
+                "/reader.c",
+                indoc! { r#"
+                    string blank, last, eof;
+                    void create() {
+                        blank = read_file("/data.txt", 2, 1);
+                        last = read_file("/data.txt", 3, 100);
+                        eof = read_file("/data.txt", 4, 100);
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(committed_string(&vm, &reader, 0), "\n");
+        assert_eq!(committed_string(&vm, &reader, 1), "last");
+        assert_eq!(
+            vm.global_state.committed_global(&reader, 2u16),
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_scheduled_chunk_reader_finishes_at_eof() {
+        let root = TempLib::new("read-scheduled");
+        std::fs::write(root.join("data.txt"), "line\n".repeat(1079)).unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { return 1; }",
+        )
+        .await
+        .unwrap();
+        let reader = vm
+            .initialize_process_from_code(
+                "/reader.c",
+                indoc! { r#"
+                    int finished, chunks;
+                    void done() { finished++; }
+                    void scan(int start, function callback) {
+                        for (int tries = 0; tries < 10; tries++) {
+                            string data = read_file("/data.txt", start, 100);
+                            start += 100;
+                            if (!data) {
+                                callback();
+                                return;
+                            }
+                            chunks++;
+                        }
+                        call_out(&scan(start, callback), 100);
+                    }
+                    void create() { call_out(&scan(0, done), 100); }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        // docmake reads at most ten chunks before scheduling its next batch.
+        for _ in 0..2 {
+            let id = vm
+                .global_state
+                .with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+            vm.global_state.prioritize_call_out(id).await.await.unwrap();
+        }
+
+        assert_eq!(
+            vm.global_state.committed_global(&reader, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&reader, 1u16),
+            LpcRef::from(11)
+        );
+        vm.global_state.with_call_outs(|co| assert!(co.is_empty()));
     }
 
     #[tokio::test]
