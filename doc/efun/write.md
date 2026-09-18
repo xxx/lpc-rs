@@ -9,7 +9,7 @@ return 0 or 1, depending on whether an object was able to receive the message.
 Both players and NPCs can receive messages via `write()`.
 
 If `catch_tell()` isn't defined, the message goes straight to the player's
-connection. If there is no current player, or the player has neither
+connection (as `write_socket()` does). If there is no current player, or the player has neither
 `catch_tell()` nor a connection, the message is written to the debug log and
 0 is returned.
 
@@ -19,4 +19,4 @@ with by NPCs.
 
 ### See Also
 
-`write_socket`, `this_player`, `dump`
+`write_socket`, `this_player`, `dump`, `catch_tell`

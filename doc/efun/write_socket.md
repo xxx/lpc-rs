@@ -10,3 +10,6 @@ will instead be written to the debug log, and the function will return 0.
 
 A `bytes` is an error: decode it with `to_text` first.
 
+### See also
+
+`write`, `catch_tell`
