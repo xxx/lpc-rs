@@ -37,10 +37,15 @@ pub struct CallOut {
     #[builder(default)]
     next_run: DateTime<Utc>,
 
-    /// The RAII object that determines if the callback runs, or not.
-    /// If the [`JoinHandle`] is dropped, the callback will not run.
+    /// The timer task, aborted when this call out is dropped.
     #[educe(Debug(ignore))]
     _handle: JoinHandle<()>,
+}
+
+impl Drop for CallOut {
+    fn drop(&mut self) {
+        self._handle.abort();
+    }
 }
 
 impl CallOut {
@@ -220,5 +225,36 @@ impl CallOuts {
             next_run: Utc::now() + delay,
             _handle: handle,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn removing_or_clearing_call_outs_stops_their_timers() {
+        for clear in [false, true] {
+            for repeat in [None, Some(Duration::seconds(100))] {
+                let (tx, mut rx) = tokio::sync::mpsc::channel(16);
+                let mut calls = CallOuts::new(tx);
+                calls.materialize(CallOutSchedule {
+                    id: 0,
+                    process: Weak::new(),
+                    func_ref: 0.into(),
+                    delay: Duration::seconds(100),
+                    repeat,
+                });
+                tokio::task::yield_now().await;
+                if clear {
+                    calls.clear();
+                } else {
+                    calls.remove_by_id(0);
+                }
+                tokio::time::advance(std::time::Duration::from_secs(101)).await;
+                tokio::task::yield_now().await;
+                assert!(rx.try_recv().is_err(), "a canceled timer still fired");
+            }
+        }
     }
 }

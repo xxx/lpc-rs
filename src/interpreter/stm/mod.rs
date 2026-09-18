@@ -428,6 +428,19 @@ impl Transaction {
         self.record_effect(Effect::CancelCallOut { id });
     }
 
+    /// Cancel this owner's pending and committed call outs without affecting a replacement.
+    pub(crate) fn cancel_process_call_outs(
+        &mut self,
+        owner: &Arc<Process>,
+        committed_ids: impl Iterator<Item = u64>,
+    ) {
+        let weak = Arc::downgrade(owner);
+        self.pending_call_outs
+            .retain(|schedule| !schedule.process.ptr_eq(&weak));
+        self.cancelled_call_outs.extend(committed_ids);
+        self.record_effect(Effect::CancelProcessCallOuts(owner.clone()));
+    }
+
     /// Whether this attempt canceled the committed call out with `id`.
     pub(crate) fn is_cancelled_call_out(&self, id: u64) -> bool {
         self.cancelled_call_outs.contains(&id)

@@ -634,6 +634,18 @@ impl TaskContext {
         }
     }
 
+    /// Cancel all call outs owned by this exact process when the attempt commits.
+    pub(crate) fn cancel_process_call_outs(&self, owner: &Arc<Process>) {
+        let weak = Arc::downgrade(owner);
+        self.global_state.with_call_outs(|calls| {
+            let ids = calls
+                .queue()
+                .iter()
+                .filter_map(|(_, call)| call.process().ptr_eq(&weak).then_some(call.id));
+            self.txn().with(|t| t.cancel_process_call_outs(owner, ids));
+        });
+    }
+
     /// The in-game directory of `process`'s name (lib root stripped): what
     /// its relative object paths resolve against.
     pub fn in_game_cwd_of(&self, process: &Process) -> PathBuf {

@@ -114,7 +114,7 @@ pub(crate) enum Effect {
     CancelCallOut { id: u64 },
 
     /// Cancel all work owned by the retired instance, including delayed scheduling.
-    RetireSystemCallOuts(Arc<Process>),
+    CancelProcessCallOuts(Arc<Process>),
 
     /// The physical half of a handover: the connection cell on `new_process`
     /// committed with the owning task; the flush points `connection`'s
@@ -270,6 +270,9 @@ impl Effect {
             Self::ScheduleCallOut(schedule) => {
                 let mut calls = global_state.call_outs().write();
                 if let Some(owner) = schedule.process.upgrade() {
+                    if owner.call_outs_retired.load(Ordering::Relaxed) {
+                        return;
+                    }
                     let space = &global_state.object_space;
                     let key = space.process_key(&owner);
                     if space.is_system_key(&key)
@@ -284,17 +287,14 @@ impl Effect {
                 }
                 calls.materialize(schedule);
             }
-            Self::RetireSystemCallOuts(owner) => {
+            Self::CancelProcessCallOuts(owner) => {
                 let mut calls = global_state.call_outs().write();
+                owner.call_outs_retired.store(true, Ordering::Relaxed);
+                let weak = Arc::downgrade(&owner);
                 let ids: Vec<_> = calls
                     .queue()
                     .iter()
-                    .filter_map(|(_, call)| {
-                        call.process()
-                            .upgrade()
-                            .filter(|p| Arc::ptr_eq(p, &owner))
-                            .map(|_| call.id)
-                    })
+                    .filter_map(|(_, call)| call.process().ptr_eq(&weak).then_some(call.id))
                     .collect();
                 for id in ids {
                     calls.remove_by_id(id);
@@ -477,8 +477,8 @@ impl std::fmt::Debug for Effect {
             Self::ScheduleCallOut(schedule) => {
                 f.debug_tuple("ScheduleCallOut").field(schedule).finish()
             }
-            Self::RetireSystemCallOuts(owner) => f
-                .debug_tuple("RetireSystemCallOuts")
+            Self::CancelProcessCallOuts(owner) => f
+                .debug_tuple("CancelProcessCallOuts")
                 .field(&owner.filename())
                 .finish(),
             Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
@@ -508,6 +508,41 @@ mod tests {
     fn global_state() -> GlobalState {
         let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
         GlobalState::new(crate::test_support::test_config(), vm_tx)
+    }
+
+    #[tokio::test]
+    async fn call_out_scheduling_can_precede_the_owners_physical_insert() {
+        use crate::interpreter::stm::{
+            Transaction, TxnHandle, commit_changeset, start_txn, txn_insert_process,
+        };
+        use crate::util::process_builder::compile_process_from_code;
+
+        let gs = global_state();
+        let (owner, _) = compile_process_from_code(&gs.object_space, "/pending.c", "", None, None)
+            .await
+            .unwrap();
+        let mut live = start_txn(&gs.committer_tx).await.unwrap();
+        let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        txn_insert_process(&txn, &gs.object_space, &owner);
+        let changeset = txn.with(|t| t.take_changeset());
+        live.disarm();
+        commit_changeset(&gs.committer_tx, changeset)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(gs.object_space.lookup("/pending").is_none());
+
+        Effect::ScheduleCallOut(CallOutSchedule {
+            id: 0,
+            process: Arc::downgrade(&owner),
+            func_ref: 0.into(),
+            delay: chrono::Duration::seconds(100),
+            repeat: None,
+        })
+        .flush(&gs)
+        .await;
+        flush_effects(&gs, txn.with(|t| t.take_effects())).await;
+        gs.with_call_outs(|calls| assert_eq!(calls.len(), 1));
     }
 
     /// A recorded socket op must arrive on its own channel when the batch is

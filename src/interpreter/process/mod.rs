@@ -115,6 +115,9 @@ pub struct Process {
     /// Physical bootstrap objects may have no value in their path cell.
     pub(crate) physical: AtomicBool,
 
+    /// Set under the call-out queue lock when committed destruction or reload cancels this owner's timers.
+    pub(crate) call_outs_retired: AtomicBool,
+
     /// Where are we in the game world?
     pub position: ProcessPosition,
 
@@ -139,6 +142,7 @@ impl Default for Process {
             parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
             physical: AtomicBool::new(false),
+            call_outs_retired: AtomicBool::new(false),
             position: Default::default(),
             shadow: Default::default(),
         }
@@ -181,6 +185,7 @@ impl Process {
             parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
             physical: AtomicBool::new(false),
+            call_outs_retired: AtomicBool::new(false),
             position: Default::default(),
             shadow: Default::default(),
         }

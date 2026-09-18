@@ -357,6 +357,196 @@ mod tests {
         assert!(connected.rx.try_recv().is_err());
     }
 
+    mod call_outs {
+        use super::*;
+        use crate::interpreter::stm::{CallOutSchedule, Effect};
+
+        const SCHEDULE: &str = r#"
+            int runs;
+            int once;
+            int repeating;
+            void time_out() { runs++; }
+            void create() {
+                once = call_out(time_out, 100);
+                repeating = call_out(time_out, 100, 100);
+            }
+        "#;
+
+        #[tokio::test]
+        async fn destruction_cancels_committed_call_outs_and_queued_firings() {
+            let vm = vm_with_master(Some(
+                r#"
+                int errors;
+                int valid_destruct() { return 1; }
+                void error_handler(mapping error) { errors++; }
+            "#,
+            ))
+            .await;
+            let login = vm
+                .initialize_process_from_code("/secure/login.c", SCHEDULE)
+                .await
+                .unwrap()
+                .context
+                .process;
+            let survivor = vm
+                .initialize_process_from_code("/survivor.c", SCHEDULE)
+                .await
+                .unwrap()
+                .context
+                .process;
+            let ids = [1, 2].map(|reg| {
+                let LpcRef::Int(id) = vm.global_state.committed_global(&login, reg) else {
+                    panic!("expected call out ID");
+                };
+                id.0 as u64
+            });
+            let err = caught(&vm, "destruct(find_object(\"/secure/login\"))").await;
+            assert!(err.is_empty(), "{err}");
+            drop(login);
+
+            for id in ids {
+                vm.global_state.prioritize_call_out(id).await.await.unwrap();
+            }
+            let master = vm.global_state.object_space.master_object().unwrap();
+            assert_eq!(
+                vm.global_state.committed_global(&master, 0),
+                LpcRef::from(0)
+            );
+            vm.global_state.with_call_outs(|calls| {
+                assert_eq!(calls.len(), 2);
+                assert!(
+                    calls
+                        .queue()
+                        .iter()
+                        .all(|(_, call)| call.process().ptr_eq(&Arc::downgrade(&survivor)))
+                );
+            });
+        }
+
+        #[tokio::test]
+        async fn destruction_hides_committed_and_pending_call_outs_in_the_same_attempt() {
+            let vm = vm_with_master(Some("int valid_destruct() { return 1; }")).await;
+            vm.initialize_process_from_code("/secure/login.c", format!(r#"
+                {SCHEDULE}
+                int remove() {{
+                    int pending = call_out(time_out, 100);
+                    destruct(this_object());
+                    return !query_call_out(once) && !query_call_out(repeating) && !query_call_out(pending);
+                }}
+            "#)).await.unwrap();
+            let task = vm
+                .initialize_process_from_code(
+                    "/caller.c",
+                    r#"
+                int hidden;
+                void create() { hidden = find_object("/secure/login")->remove(); }
+            "#,
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                vm.global_state.committed_global(&task.context.process, 0),
+                LpcRef::from(1)
+            );
+            vm.global_state
+                .with_call_outs(|calls| assert!(calls.is_empty()));
+        }
+
+        #[tokio::test]
+        async fn self_destruction_does_not_materialize_pending_call_outs() {
+            let task = run_prog(
+                r#"
+                void time_out() {}
+                void create() {
+                    function callback = time_out;
+                    call_out(callback, 100);
+                    call_out(callback, 100, 100);
+                    destruct(this_object());
+                    call_out(callback, 100);
+                }
+            "#,
+            )
+            .await;
+            task.context
+                .global_state
+                .with_call_outs(|calls| assert!(calls.is_empty()));
+        }
+
+        #[tokio::test]
+        async fn refused_or_rolled_back_destruction_preserves_call_outs() {
+            for allowed in [0, 1] {
+                let vm = vm_with_master(Some(&format!(
+                    "int valid_destruct() {{ return {allowed}; }}"
+                )))
+                .await;
+                let login = vm
+                    .initialize_process_from_code("/secure/login.c", SCHEDULE)
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                let result = vm
+                    .initialize_process_from_code(
+                        "/caller.c",
+                        r#"
+                    void create() { destruct(find_object("/secure/login")); throw("abort"); }
+                "#,
+                    )
+                    .await;
+                assert!(result.is_err());
+                vm.global_state
+                    .with_call_outs(|calls| assert_eq!(calls.len(), 2));
+                let LpcRef::Int(id) = vm.global_state.committed_global(&login, 1) else {
+                    panic!("expected call out ID");
+                };
+                vm.global_state
+                    .prioritize_call_out(id.0 as u64)
+                    .await
+                    .await
+                    .unwrap();
+                assert_eq!(vm.global_state.committed_global(&login, 0), LpcRef::from(1));
+            }
+        }
+
+        #[tokio::test]
+        async fn delayed_scheduling_cannot_restore_a_destructed_instances_call_outs() {
+            let vm = vm_with_master(Some("int valid_destruct() { return 1; }")).await;
+            let old = vm
+                .initialize_process_from_code("/secure/login.c", SCHEDULE)
+                .await
+                .unwrap()
+                .context
+                .process;
+            let deferred = CallOutSchedule {
+                id: 100000,
+                process: Arc::downgrade(&old),
+                func_ref: 0.into(),
+                delay: chrono::Duration::seconds(100),
+                repeat: None,
+            };
+            let err = caught(&vm, "destruct(find_object(\"/secure/login\"))").await;
+            assert!(err.is_empty(), "{err}");
+            let replacement = vm
+                .initialize_process_from_code("/secure/login.c", SCHEDULE)
+                .await
+                .unwrap()
+                .context
+                .process;
+            Effect::ScheduleCallOut(deferred)
+                .flush(&vm.global_state)
+                .await;
+            vm.global_state.with_call_outs(|calls| {
+                assert_eq!(calls.len(), 2);
+                assert!(
+                    calls
+                        .queue()
+                        .iter()
+                        .all(|(_, call)| call.process().ptr_eq(&Arc::downgrade(&replacement)))
+                );
+            });
+        }
+    }
+
     #[tokio::test]
     async fn retries_commit_authorization_and_destruction_together_once() {
         let (tx, _rx) = tokio::sync::mpsc::channel(16);

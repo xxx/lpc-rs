@@ -530,8 +530,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             self.txn()
                 .with(|t| t.publish_system(self.task_context().object_space(), &process, false));
         } else {
-            self.record_effect(Effect::RemoveObject { key, process });
+            self.record_effect(Effect::RemoveObject {
+                key,
+                process: process.clone(),
+            });
         }
+        self.task_context.cancel_process_call_outs(&process);
     }
 
     /// The task context this efun runs in.

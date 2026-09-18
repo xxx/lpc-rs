@@ -285,8 +285,7 @@ impl ReloadBody<'_> {
             ensure_replaceable(ctx, old)?;
         }
         for (_, old, new) in replacements {
-            ctx.txn()
-                .with(|t| t.record_effect(Effect::RetireSystemCallOuts(old)));
+            ctx.cancel_process_call_outs(&old);
             ctx.insert_process_transactional(&new);
         }
         Ok(())
