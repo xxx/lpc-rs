@@ -13,7 +13,10 @@ Convert `value` to an int:
 - A destructed object is `0`.
 
 Anything else (a live object, an array, a mapping, a function) is an error.
-There are no casts in lpc-rs; this is the conversion.
+
+LPC casts such as `(int) value` assert a type without converting the value;
+`to_int` performs the conversion. See [supported types](../lpc/types.md) for
+cast rules.
 
 ### See also
 

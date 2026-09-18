@@ -1,5 +1,5 @@
-//! `to_int`, `to_float` and `to_string`: the one conversion door, as
-//! there are no casts.
+//! `to_int`, `to_float` and `to_string` convert values; LPC casts assert a
+//! type without converting the value.
 
 use lpc_rs_core::BaseFloat;
 use lpc_rs_errors::Result;
