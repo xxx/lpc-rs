@@ -18,8 +18,13 @@ stashing the ID in a variable somewhere.
 
 ### Examples
 
+Run this from a player command, where `this_player()` identifies the recipient.
+Capture the player before scheduling: `this_player()` is 0 inside a call out,
+so use `tell_object()` with the captured recipient to deliver the message.
+
 ```c
-int call_out_id = call_out(&dump("repeats!"), 0, 0.1);
+object player = this_player();
+int call_out_id = call_out(&tell_object(player, "repeats!\n"), 0, 0.1);
 
 call_out(&remove_call_out(call_out_id), 0.5);
 ```
