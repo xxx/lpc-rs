@@ -1,4 +1,4 @@
-// Registration and lookup from cdlib-lpc/secure/lpc-rs.c.
+// Registration scans every name's object list before adding the new name.
 private mapping living_names = ([ ]);
 private object *players = ({ });
 

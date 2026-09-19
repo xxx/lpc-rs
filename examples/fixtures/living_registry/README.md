@@ -13,8 +13,9 @@ lookup, before the transaction commits. Operations are the total across all
 workers, and must be a multiple of 100 times every selected worker count.
 Supported worker counts divide eight, to keep the 800-operation warmup mix exact.
 
-`scan.c` reproduces the living-name registration and lookup implementation in
-`cdlib-lpc/secure/lpc-rs.c` at commit `8ae083d`, including its `pointerp` wrapper.
+`scan.c` maps living names to arrays of objects. Registration scans every entry
+to remove the object from its previous names, then adds it to the requested name.
+Lookups filter out invalid or non-living objects.
 `indexed.c` remembers each object's old name, replacing the whole-registry scan
 with updates to the old and new entries. `sharded.c` uses the same implementation
 with 64 fixed mappings for each of the name and reverse indexes.
