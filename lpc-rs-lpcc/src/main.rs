@@ -33,7 +33,7 @@ async fn run() {
     let config = ConfigBuilder::default()
         .load_env(args.config)
         .await
-        .build()
+        .and_then(ConfigBuilder::build)
         .unwrap_or_else(|error| {
             error.emit_diagnostics();
             std::process::exit(1);

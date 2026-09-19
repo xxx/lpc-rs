@@ -3,11 +3,14 @@ use std::{borrow::Cow, collections::HashMap, fmt::Debug, fs, path::Path};
 use derive_builder::Builder;
 use lpc_rs_core::lpc_path::{LibRoot, LpcPath, ResolvedPath};
 use lpc_rs_errors::{Result, lpc_error, span::Span};
-use tracing::{info, warn};
+use tracing::warn;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use ustr::{Ustr, ustr};
 
-use crate::debug_log::DebugLog;
+use crate::{
+    debug_log::DebugLog,
+    tls::{TlsConfig, boolean_setting, outside_mudlib},
+};
 
 const DEFAULT_MAX_INHERIT_DEPTH: u8 = 10;
 const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
@@ -37,6 +40,10 @@ pub struct Config {
 
     #[builder(setter(into, strip_option), default = "Some(ustr(\"STDOUT\"))")]
     pub server_log_file: Option<Ustr>,
+
+    /// Tracing directives loaded from the explicit environment file.
+    #[builder(setter(into, strip_option), default)]
+    pub log_filter: Option<String>,
 
     #[builder(setter(into, strip_option), default = "None")]
     pub debug_log: Option<DebugLog>,
@@ -82,6 +89,31 @@ pub struct Config {
 
     #[builder(default = "24960")]
     pub port: u16,
+
+    /// Whether to accept plaintext Telnet connections.
+    #[builder(default = "true")]
+    pub telnet_enabled: bool,
+
+    /// Certificate files and port for the optional TLS listener.
+    #[builder(setter(strip_option), default)]
+    pub tls: Option<TlsConfig>,
+}
+
+/// Read an explicit dotenv file without modifying the process environment.
+pub fn read_env<P: AsRef<Path>>(path: Option<P>) -> Result<HashMap<String, String>> {
+    let mut values = HashMap::new();
+    if let Some(path) = path {
+        let vars = dotenvy::from_path_iter(path.as_ref()).map_err(|e| {
+            lpc_error!("cannot read configuration {}: {e}", path.as_ref().display())
+        })?;
+        for pair in vars {
+            let (key, value) = pair
+                .map_err(|_| lpc_error!("invalid configuration in {}", path.as_ref().display()))?;
+            values.insert(key.to_uppercase(), value);
+        }
+    }
+    values.extend(std::env::vars().map(|(key, value)| (key.to_uppercase(), value)));
+    Ok(values)
 }
 
 /// The in-game file a setting names; `Some(None)` for a blank value, which
@@ -110,32 +142,30 @@ fn in_game_include_dirs(dirs: &[Ustr], lib_dir: &str) -> Result<Vec<Ustr>> {
 }
 
 impl ConfigBuilder {
-    /// Build the configuration, rejecting system include directories outside the lib root.
+    /// Validate include paths, listener settings, and TLS private-material placement.
     pub fn build(self) -> Result<Config> {
         let mut config = self.build_config()?;
         config.system_include_dirs =
             in_game_include_dirs(&config.system_include_dirs, config.lib_dir.as_str())?;
+        if !config.telnet_enabled && config.tls.is_none() {
+            return Err(lpc_error!("TELNET_ENABLED=false requires TLS_PORT"));
+        }
+        if let Some(tls) = &config.tls {
+            if tls.port == config.port && config.telnet_enabled && tls.port != 0 {
+                return Err(lpc_error!("TLS_PORT and PORT must be different"));
+            }
+            outside_mudlib(&tls.files.private_key, config.lib_dir.as_str())?;
+        }
         Ok(config)
     }
 
     /// Set config values from the environment, optionally loading an explicit `dotenv` file first.
     /// If `env_path` is `None`, no file is loaded.
-    pub async fn load_env<P>(self, env_path: Option<P>) -> Self
+    pub async fn load_env<P>(self, env_path: Option<P>) -> Result<Self>
     where
         P: AsRef<Path>,
     {
-        if let Some(p) = env_path {
-            let _ = dotenvy::from_filename(p.as_ref())
-                .map_err(|e| info!("{:?} not loaded: {}", p.as_ref(), e.to_string()));
-        }
-
-        let env = std::env::vars()
-            .map(|(k, v)| {
-                let key = k.to_uppercase();
-
-                (key, v)
-            })
-            .collect::<HashMap<_, _>>();
+        let env = read_env(env_path)?;
 
         let debug_log = {
             let path = env
@@ -156,7 +186,20 @@ impl ConfigBuilder {
         // No LIB_DIR means no lib dir, not a panic: the optional-file arms fall back to "".
         let lib_dir_str = lib_dir.map(|d| d.to_string()).unwrap_or_default();
 
-        Self {
+        Ok(Self {
+            log_filter: crate::tls::setting(&env, "RUST_LOG")
+                .map(|value| Some(value.to_owned()))
+                .or(self.log_filter),
+            tls: if crate::tls::setting(&env, "TLS_PORT").is_some() {
+                Some(TlsConfig::from_env(&env)?)
+            } else {
+                self.tls
+            },
+            telnet_enabled: Some(boolean_setting(
+                &env,
+                "TELNET_ENABLED",
+                self.telnet_enabled.unwrap_or(true),
+            )?),
             auto_include_file: optional_in_game_file(
                 env.get("LPC_AUTO_INCLUDE_FILE")
                     .or_else(|| env.get("AUTO_INCLUDE_FILE")),
@@ -235,7 +278,7 @@ impl ConfigBuilder {
                 .or_else(|| env.get("SYSTEM_INCLUDE_DIRS"))
                 .map(|x| x.split(':').map(ustr).collect())
                 .or_else(|| self.system_include_dirs.clone()),
-        }
+        })
     }
 
     pub fn lib_dir<S>(mut self, lib_dir: S) -> Self
@@ -292,15 +335,18 @@ impl Config {
             .map_err(|e| lpc_error!(span, "{e}"))
     }
 
+    fn tracing_filter(&self) -> EnvFilter {
+        let builder = EnvFilter::builder().with_default_directive(tracing::Level::INFO.into());
+        match &self.log_filter {
+            Some(value) => builder.parse_lossy(value),
+            None => builder.with_env_var("RUST_LOG").from_env_lossy(),
+        }
+    }
+
     /// Set up the global tracing subscriber for the server logs.
     /// This will panic if called multiple times.
     pub fn init_tracing_subscriber(&self) {
-        let filter = EnvFilter::builder()
-            .with_env_var("RUST_LOG")
-            .with_default_directive(tracing::Level::INFO.into())
-            .from_env_lossy();
-
-        let registry = tracing_subscriber::registry().with(filter);
+        let registry = tracing_subscriber::registry().with(self.tracing_filter());
 
         let file = self.server_log_file.as_deref().unwrap_or("STDOUT");
 
@@ -353,6 +399,77 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn explicit_config_files_fail_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mud.env");
+        assert!(
+            ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .is_err()
+        );
+        fs::write(&path, "broken = 'unterminated").unwrap();
+        assert!(
+            ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .is_err()
+        );
+        fs::write(&path, "TLS_PORT=not-a-port").unwrap();
+        assert!(
+            ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn reading_a_config_file_does_not_export_its_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mud.env");
+        let key = format!("LPC_CONFIG_TEST_{}", std::process::id());
+        fs::write(&path, format!("{key}=hello\nPATH=from-file\n")).unwrap();
+        let values = read_env(Some(&path)).unwrap();
+        assert_eq!(values[&key], "hello");
+        assert!(std::env::var(key).is_err());
+        assert_eq!(values["PATH"], std::env::var("PATH").unwrap());
+    }
+
+    #[test]
+    fn disabling_both_listeners_is_an_error() {
+        assert!(
+            ConfigBuilder::default()
+                .telnet_enabled(false)
+                .build()
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn dotenv_logging_directives_reach_the_subscriber_without_being_exported() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mud.env");
+        fs::write(&path, "LPC_RUST_LOG=info,lpc_rs::applies=debug\n").unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        let expected =
+            std::env::var("LPC_RUST_LOG").unwrap_or_else(|_| "info,lpc_rs::applies=debug".into());
+        assert_eq!(config.log_filter.as_deref(), Some(expected.as_str()));
+        assert_eq!(
+            config.tracing_filter().to_string(),
+            EnvFilter::builder()
+                .with_default_directive(tracing::Level::INFO.into())
+                .parse_lossy(expected)
+                .to_string()
+        );
+    }
 
     #[test]
     fn config_build_rejects_escaping_include_directories_in_any_search_position() {

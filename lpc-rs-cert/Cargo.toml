@@ -1,0 +1,16 @@
+[package]
+name = "lpc-rs-cert"
+description = "Obtain, renew, and install TLS certificates for lpc-rs."
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+lpc-rs-utils = { version = "0.1", path = "../lpc-rs-utils" }
+anyhow = "1.0"
+clap = { version = "4.6.7", features = ["derive"] }
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
+tempfile = "3.27.0"
+
+[dev-dependencies]
+rcgen = "0.14.10"

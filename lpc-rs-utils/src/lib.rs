@@ -9,6 +9,7 @@ pub mod debug_log;
 pub mod lpc_bytes;
 pub mod lpc_string;
 pub mod string;
+pub mod tls;
 
 /// A source file's text, decoded with a trailing newline appended
 /// if one wasn't there.

@@ -60,6 +60,7 @@ stable-vec = "0.4.3"
 smallvec = "1.16.1"
 thin-vec = "0.2.19"
 tokio = { version = "1.53.1", features = ["io-std", "io-util", "sync", "fs", "rt-multi-thread", "signal", "parking_lot", "net", "time", "macros"] }
+tokio-rustls = { version = "0.26.5", default-features = false, features = ["ring", "tls12"] }
 tracing = "~0.1.44"
 ustr = "1.1.0"
 unicode-segmentation = "1.13.3"
@@ -73,6 +74,8 @@ fake = "5.1.0"
 indoc = "2.0.7"
 pprof = { version = "0.15.0", default-features = false, features = ["flamegraph"] }
 rpds = "1.2.1"
+rcgen = "0.14.10"
+tempfile = "3.27.0"
 # Adds test-util (the paused clock) to test builds; production builds carry no dev-deps.
 tokio = { version = "1.53.1", features = ["test-util"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
@@ -135,6 +138,7 @@ harness = false
 members = [
     "lpc-rs-asm",
     "lpc-rs-core",
+    "lpc-rs-cert",
     "lpc-rs-driver",
     "lpc-rs-errors",
     "lpc-rs-function-support",

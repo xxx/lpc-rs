@@ -1,6 +1,7 @@
 pub mod connection;
 pub mod ops;
 
+mod listener;
 mod outbox;
 
 use std::{
@@ -11,14 +12,12 @@ use std::{
 
 use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
-use lpc_rs_errors::lpc_error;
 use lpc_rs_telnet::{Event, MAX_LINE, Op, Session};
 use lpc_rs_utils::lpc_string::LpcString;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::{TcpListener, ToSocketAddrs},
+    net::ToSocketAddrs,
     sync::mpsc,
-    task::JoinHandle,
 };
 use tracing::{error, info, instrument, trace, warn};
 
@@ -44,8 +43,8 @@ use crate::{
 /// The listener: accepts clients and runs one loop per connection.
 #[derive(Debug, Default)]
 pub struct Telnet {
-    /// The acceptor task; dropping it stops new connections, not existing ones.
-    handle: OnceLock<JoinHandle<()>>,
+    /// Dropping the acceptors leaves established connections running.
+    handle: OnceLock<listener::Acceptors>,
 }
 
 /// Which side ended a connection.
@@ -88,6 +87,7 @@ enum Turn {
     Read(std::io::Result<usize>),
     /// A socket write of what was pending.
     Wrote(std::io::Result<usize>),
+    Flushed(std::io::Result<()>),
     /// The idle deadline passed with no line of input.
     Idle,
 }
@@ -98,8 +98,9 @@ impl Telnet {
         Self::default()
     }
 
-    /// Bind `address` and start accepting; `Err` when the bind fails. A
-    /// second call is a no-op.
+    /// Start the configured plaintext and TLS listeners, binding plaintext at `address`.
+    /// Invalid TLS material or either bind failure leaves both listeners stopped.
+    /// A second call is a no-op.
     pub async fn run<A>(&self, address: A, template: TaskTemplate) -> lpc_rs_errors::Result<()>
     where
         A: ToSocketAddrs + Send + 'static,
@@ -108,38 +109,9 @@ impl Telnet {
             return Ok(());
         }
 
-        let listener = TcpListener::bind(address)
-            .await
-            .map_err(|e| lpc_error!("telnet failed to bind its listener: {e}"))?;
-        info!(
-            "Listening for connections on {}",
-            listener
-                .local_addr()
-                .map_or_else(|e| e.to_string(), |a| a.to_string())
-        );
-
-        let handle = tokio::spawn(async move {
-            loop {
-                match listener.accept().await {
-                    Ok((stream, remote_ip)) => {
-                        let template = template.clone();
-                        tokio::spawn(async move {
-                            info!("New connection from {}", &remote_ip);
-                            Self::connection_loop(stream, remote_ip, template).await;
-                        });
-                    }
-                    Err(e) => {
-                        // A sticky error (EMFILE/ENFILE) would otherwise spin
-                        // this loop and flood the log.
-                        warn!("accept failed: {e}");
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
-                }
-            }
-        });
-
+        let handle = listener::bind(address, template).await?;
         if self.handle.set(handle).is_err() {
-            warn!("telnet started twice; the second acceptor keeps running");
+            warn!("telnet started twice; stopping the second set of listeners");
         }
         Ok(())
     }
@@ -190,6 +162,7 @@ impl Telnet {
         }
 
         let mut shutting_down = false;
+        let mut needs_flush = false;
         let mut buf = [0u8; 4096];
         // The master's MSSP contribution, run at most once per connection.
         let mut mud_stats: Option<IndexMap<String, Vec<String>>> = None;
@@ -200,7 +173,10 @@ impl Telnet {
             let turn = tokio::select! {
                 op = connection_rx.recv() => Turn::Op(op),
                 read = reader.read(&mut buf), if !outbox.is_overflowed() => Turn::Read(read),
-                wrote = writer.write(outbox.pending()), if !outbox.pending().is_empty() => Turn::Wrote(wrote),
+                wrote = async {
+                    if needs_flush { Turn::Flushed(writer.flush().await) }
+                    else { Turn::Wrote(writer.write(outbox.pending()).await) }
+                }, if needs_flush || !outbox.pending().is_empty() => wrote,
                 _ = idle_deadline(&connection, max_idle_time), if max_idle_time != 0 => Turn::Idle,
             };
             let flow = match turn {
@@ -262,7 +238,16 @@ impl Telnet {
                 }
                 Turn::Wrote(Ok(n)) if n > 0 => {
                     outbox.wrote(n);
+                    needs_flush = true;
                     Flow::Continue
+                }
+                Turn::Flushed(Ok(())) => {
+                    needs_flush = false;
+                    Flow::Continue
+                }
+                Turn::Flushed(Err(e)) => {
+                    warn!("Failed to flush to {remote_ip}: {e}");
+                    Flow::Leave(Departure::Client)
                 }
                 Turn::Wrote(Ok(_)) => {
                     warn!("{} took no bytes; closing", &remote_ip);
@@ -505,7 +490,13 @@ impl Telnet {
         vars.insert("NAME".into(), vec!["lpc-rs".into()]);
         vars.insert("PLAYERS".into(), vec![players.to_string()]);
         vars.insert("UPTIME".into(), vec![uptime.to_string()]);
-        vars.insert("PORT".into(), vec![global_state.config.port.to_string()]);
+        let config = &global_state.config;
+        let port = if config.telnet_enabled {
+            config.port
+        } else {
+            config.tls.as_ref().map_or(config.port, |tls| tls.port)
+        };
+        vars.insert("PORT".into(), vec![port.to_string()]);
         vars.insert(
             "CODEBASE".into(),
             vec![format!("lpc-rs {}", env!("CARGO_PKG_VERSION"))],
@@ -695,9 +686,7 @@ impl Telnet {
     /// drop any of the existing connections.
     pub fn shutdown(&mut self) {
         info!("Shutting down telnet server & disabling new connections");
-        if let Some(h) = self.handle.take() {
-            h.abort()
-        }
+        self.handle.take();
     }
 }
 
@@ -710,7 +699,12 @@ async fn say_goodbye<W: AsyncWrite + Unpin>(
     address: SocketAddr,
 ) {
     outbox.fill_from(session);
-    match tokio::time::timeout(GOODBYE_FLUSH, writer.write_all(outbox.pending())).await {
+    match tokio::time::timeout(GOODBYE_FLUSH, async {
+        writer.write_all(outbox.pending()).await?;
+        writer.shutdown().await
+    })
+    .await
+    {
         Ok(Ok(())) => {}
         Ok(Err(e)) => trace!("goodbye to {address} failed: {e}"),
         Err(_) => info!("{address} did not take its goodbye within {GOODBYE_FLUSH:?}"),
