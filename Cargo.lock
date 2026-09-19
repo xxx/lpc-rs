@@ -1773,7 +1773,9 @@ dependencies = [
  "clap",
  "lpc-rs",
  "lpc-rs-core",
+ "lpc-rs-errors",
  "lpc-rs-utils",
+ "tempfile",
 ]
 
 [[package]]

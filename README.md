@@ -120,6 +120,17 @@ This should finish successfully without printing the greeting. The runner exits
 after initialisation; use the gamedriver for a running world, network connections
 and scheduled callbacks.
 
+To inspect the compiled instructions without executing LPC, use `-S` (or
+`--emit-asm`):
+
+```sh
+LPC_LIB_DIR=./lib lpc-rs-lpcc -S lib/hello.c
+```
+
+The assembly listing goes to stdout, so you can redirect it with `> hello.asm`.
+Warnings and errors go to stderr. Assembly mode also leaves configured simulated
+efuns uninitialised, and cannot be combined with `--check`.
+
 ## Connect to a running world
 
 The repository includes a small [test mudlib](tests/fixtures/mudlib) with a login
@@ -217,7 +228,7 @@ The repository is a Cargo workspace. Its executable crates are:
 
 | Crate / binary | Purpose |
 |---|---|
-| `lpc-rs-lpcc` | Compile and run a single LPC file, or check it with `--check` |
+| `lpc-rs-lpcc` | Run an LPC file, check it with `--check`, or print instructions with `-S` |
 | `lpc-rs-driver` | Run the game server |
 | `lpc-rs-lsp` | Run the language server over stdio |
 | `lpc-rs-cert` | Manage TLS certificates, with issuance and renewal via Certbot |
