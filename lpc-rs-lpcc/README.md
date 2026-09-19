@@ -1,7 +1,42 @@
 # lpc-rs-lpcc
 
 Compile, inspect or run a single LPC file. See the root
-[README](../README.md#build-and-install) for installation instructions.
+[README](../README.md#develop-and-debug-lpc) for installation instructions.
+
+## Try a single object
+
+From the repository root, create a directory for your LPC code:
+
+```sh
+mkdir -p lib
+```
+
+Create `lib/hello.c`:
+
+```c
+void create() {
+    dump("hello, world!\n");
+}
+```
+
+Compile and run it from the repository root:
+
+```sh
+LPC_LIB_DIR=./lib lpc-rs-lpcc lib/hello.c
+```
+
+You should see:
+
+```text
+hello, world!
+```
+
+The runner initialises the object and calls its `create()` hook. With no player
+attached, `dump()` writes to the debug log, which defaults to standard output.
+Change the greeting and run the command again to compile and execute your edit.
+
+The runner exits after initialisation. [Run a game](../README.md#run-a-game)
+with the gamedriver for network connections and scheduled callbacks.
 
 ## Usage
 
@@ -41,5 +76,3 @@ lpc-rs-lpcc --config mud.env --emit-asm /path/to/mudlib/object.c
 No `.env` file is loaded automatically. See [default.env](../default.env) for
 configuration options. Include paths, automatic includes and inheritance, and
 simulated efuns apply in assembly mode as they do during compilation for execution.
-
-For network connections and scheduled callbacks, use `lpc-rs-driver`.

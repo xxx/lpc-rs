@@ -45,93 +45,21 @@ git clone https://github.com/xxx/lpc-rs.git
 cd lpc-rs
 ```
 
-Install the gamedriver and command-line compiler from the checkout:
+Install the gamedriver from the checkout:
 
 ```sh
 cargo install --locked --path lpc-rs-driver
-cargo install --locked --path lpc-rs-lpcc
 ```
 
 `cargo install` builds optimised release binaries by default and installs them
 in Cargo's binary directory, normally `~/.cargo/bin`. Ensure that directory is
-on your `PATH`. The examples below use these installed commands.
+on your `PATH`. The game examples below use the installed driver.
 
-Install the editor and certificate tools if you need them:
+The installed driver can run from any directory. Your mudlib and configuration
+are managed separately from the executable; the next section uses the bundled
+ulib to start a game.
 
-```sh
-cargo install --locked --path lpc-rs-lsp
-cargo install --locked --path lpc-rs-cert
-```
-
-The certificate helper requires a separate Certbot installation for certificate
-issuance and renewal; see [secure connections](doc/secure-connections.md).
-
-To build the whole workspace without installing it:
-
-```sh
-cargo build --release --workspace --locked
-```
-
-The executables are in `target/release/` and can be run directly, for example
-`./target/release/lpc-rs-driver --env /path/to/mud.env`. Installed binaries can
-run from any directory; use absolute paths in your configuration when running
-outside the checkout. Your mudlib and configuration are managed separately
-from the executables.
-
-## Run your first LPC object
-
-From the repository root, create a directory for your LPC code:
-
-```sh
-mkdir -p lib
-```
-
-Create `lib/hello.c`:
-
-```c
-void create() {
-    dump("hello, world!\n");
-}
-```
-
-Compile and run it from the repository root:
-
-```sh
-LPC_LIB_DIR=./lib lpc-rs-lpcc lib/hello.c
-```
-
-You should see:
-
-```text
-hello, world!
-```
-
-The runner initialises the object and calls its `create()` hook. With no player
-attached, `dump()` writes to the debug log, which defaults to standard output.
-Change the greeting and run the command again to compile and execute your edit.
-
-Check the same file without running its `create()`:
-
-```sh
-LPC_LIB_DIR=./lib lpc-rs-lpcc --check lib/hello.c
-```
-
-This should finish successfully without printing the greeting. The runner exits
-after initialisation; use the gamedriver for a running world, network connections
-and scheduled callbacks.
-
-To inspect the compiled instructions without executing LPC, use `-S` (or
-`--emit-asm`):
-
-```sh
-LPC_LIB_DIR=./lib lpc-rs-lpcc -S lib/hello.c
-```
-
-The assembly listing goes to stdout, so you can redirect it with `> hello.asm`.
-Warnings and errors go to stderr. Assembly mode also leaves configured simulated
-efuns uninitialised, and cannot be combined with `--check`.
-
-## Connect to a running world
+## Run a game
 
 The distribution includes [ulib (microlib)](ulib/README.md), a tiny mudlib for
 guest login and chat. Its documented source and apply examples provide a
@@ -167,8 +95,7 @@ or disabled example.
 ## Run your own mudlib
 
 Adapt [ulib](ulib/README.md) or supply your own master object for driver policy
-and login, along with the
-objects that make up the game. Start with the
+and login, along with the objects that make up the game. Start with the
 [master hooks](doc/apply/master), especially
 [`connect`](doc/apply/master/connect.md), and the player object's
 [`logon`](doc/apply/special/logon.md) hook.
@@ -193,14 +120,21 @@ lpc-rs-driver --env .env
 Configuration comes from environment variables, optionally supplemented by an
 explicitly selected dotenv file. No `.env` file is loaded automatically.
 Process variables override file entries with the same name; `LPC_`-prefixed
-settings take precedence over their unprefixed forms. The compiler accepts
-`--config .env` for the same purpose.
+settings take precedence over their unprefixed forms. Use absolute paths in
+your configuration when starting the driver from another directory.
 
 See [default.env](default.env) for configuration options, including include
-paths, simulated efuns, execution limits and logging. The
-[secure connections guide](doc/secure-connections.md) covers TLS certificates
-and renewal, and the [language server guide](lpc-rs-lsp/README.md) covers editor
-setup.
+paths, simulated efuns, execution limits and logging.
+
+For TLS certificate issuance and renewal, install the optional certificate helper
+from the repository checkout:
+
+```sh
+cargo install --locked --path lpc-rs-cert
+```
+
+The helper requires a separate Certbot installation; see the
+[secure connections guide](doc/secure-connections.md) for setup.
 
 ## How execution works
 
@@ -234,6 +168,23 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 | Save and restore game data | [`save_object`](doc/efun/save_object.md), [`restore_object`](doc/efun/restore_object.md), [save-file format](doc/save-format.md) |
 | Replace the master or simulated efuns at runtime | [`request_system_reload`](doc/efun/request_system_reload.md) |
 
+## Develop and debug LPC
+
+The command-line compiler helps you check LPC files, inspect their compiled
+instructions and run small examples while developing a mudlib. The language
+server adds editor diagnostics, completion and hover documentation. Install
+either tool as needed from the repository checkout:
+
+```sh
+cargo install --locked --path lpc-rs-lpcc
+cargo install --locked --path lpc-rs-lsp
+```
+
+The [compiler guide](lpc-rs-lpcc/README.md) covers running a single object,
+checking files with `--check` and inspecting instructions with `-S`. Use
+`--config /path/to/driver.env` to load your mudlib's configuration. See the
+[language server guide](lpc-rs-lsp/README.md) for editor setup.
+
 ## Work on the driver
 
 The repository is a Cargo workspace. Its executable crates are:
@@ -250,6 +201,15 @@ The root `lpc-rs` crate contains the [compiler](src/compiler),
 [efuns](src/interpreter/efun) and [command system](src/command).
 Supporting crates provide core types, bytecode instructions, function metadata,
 errors, configuration and Telnet protocol handling.
+
+To build the whole workspace without installing it:
+
+```sh
+cargo build --release --workspace --locked
+```
+
+The executables are in `target/release/` and can be run directly, for example
+`./target/release/lpc-rs-driver --env /path/to/mud.env`.
 
 During development, Cargo can rebuild and run a binary from the checkout:
 
