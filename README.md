@@ -133,15 +133,16 @@ efuns uninitialised, and cannot be combined with `--check`.
 
 ## Connect to a running world
 
-The repository includes a small [test mudlib](tests/fixtures/mudlib) with a login
-prompt, a room and a handful of commands. It is a demonstration fixture; a full
-game needs its own mudlib.
+The distribution includes [ulib (microlib)](ulib/README.md), a tiny mudlib for
+guest login and chat. Its documented source and apply examples provide a
+starting point for writing your own mudlib.
 
-From the repository root, start it on the loopback interface:
+From the repository root, copy it somewhere you can edit and start it:
 
 ```sh
-LPC_LIB_DIR=./tests/fixtures/mudlib LPC_BIND_ADDRESS=127.0.0.1 LPC_PORT=24960 \
-  lpc-rs-driver
+cp -R ulib ~/my-mud
+cd ~/my-mud
+lpc-rs-driver --env driver.env
 ```
 
 In another terminal, connect with a Telnet client:
@@ -150,14 +151,23 @@ In another terminal, connect with a Telnet client:
 telnet 127.0.0.1 24960
 ```
 
-Enter a name when prompted. You should receive a welcome message, followed by
-`The place where it all begins.` and a prompt bearing your name. Try `look`,
-`stats` and `colour`, then `quit` to disconnect. Stop the driver with Ctrl-C in
-its terminal.
+Enter a guest name when prompted. You should receive a welcome message,
+`The Common Room` and a prompt bearing your name. Connect a second client with
+another name and try `say Hello!`, `who` and `emote waves.`. Use `help` for the
+command list and `quit` to disconnect. Stop the driver with Ctrl-C in its terminal.
+
+Run from the copied directory so its relative configuration paths resolve.
+It listens on loopback by default. Names last for the connection; no accounts
+or conversations are saved. `ulib/` ships with the source distribution, and
+is copied separately from the installed driver binary. Its
+[guide](ulib/README.md) covers configuration and adding commands, and its
+[apply reference](ulib/doc/applies.md) maps every driver hook to an implementation
+or disabled example.
 
 ## Run your own mudlib
 
-Your mudlib supplies a master object for driver policy and login, along with the
+Adapt [ulib](ulib/README.md) or supply your own master object for driver policy
+and login, along with the
 objects that make up the game. Start with the
 [master hooks](doc/apply/master), especially
 [`connect`](doc/apply/master/connect.md), and the player object's
@@ -214,6 +224,7 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 
 | If you want to… | Start here |
 |---|---|
+| Run and adapt a tiny mudlib | [ulib guide](ulib/README.md), [add a command](ulib/doc/add-a-command.md), [apply examples](ulib/doc/applies.md) |
 | Learn the project's LPC terminology | [Glossary](doc/glossary.md) |
 | Understand values and callable functions | [Types](doc/lpc/types.md), [functions and closures](doc/lpc/function_type.md), [references](doc/lpc/references.md), [argument spreading](doc/lpc/argument_spreading.md) |
 | Look up a built-in function | [Efun reference](doc/efun) |
@@ -265,6 +276,10 @@ options; stable rustfmt's warnings about those options are expected.
 Tests live alongside the Rust code and in [tests](tests); performance workloads
 live in [benches](benches) and [examples](examples). See [AGENTS.md](AGENTS.md)
 for repository conventions and profiling commands.
+
+Apply changes also update ulib's implementations, examples and source comments;
+see [keeping ulib aligned with applies](doc/maintaining-ulib.md) for the checks
+and review process.
 
 ## Licence
 

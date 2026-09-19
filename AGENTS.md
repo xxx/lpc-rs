@@ -82,6 +82,32 @@ Quick start: create `lib/hello.c` with `void create() { dump("hi"); }` and run
 `cargo run -p lpc-rs-lpcc lib/hello.c` (`-p` selects the CLI and builds it plus
 `lpc-rs`; it is not the whole-workspace gate above).
 
+## Keeping applies and ulib aligned
+
+`ulib/` is shipped learning material, and part of the apply API's maintenance
+surface. When adding, removing or changing an apply, update these in the same
+change:
+
+- The driver implementation and its behaviour tests, plus the apply constants
+  in `src/interpreter/mod.rs` (or `CREATE_FUNCTION` in `lpc-rs-core`).
+- Its canonical reference under `doc/apply/`, including arguments, result and
+  omission semantics, execution timing, and caller/player context.
+- Its live implementation or disabled example under `ulib/`, the adjacent
+  source documentation, and `ulib/doc/applies.md`; adjust the learning guides
+  and integration tests when their behaviour depends on the change.
+
+This also applies when only semantics change: examples can still compile after
+a default, permission, transaction or callback-context change. Do not treat
+passing signature checks as proof that their explanations remain correct.
+
+Run `cargo test --workspace --test ulib_test --test ulib`. The tests compare
+documented signatures with the compiled examples and keep a reviewed digest of
+the apply references, including the dynamic parser-handler contract. After
+reviewing the affected ulib code and prose, refresh only the reviewed paths with
+`python3 tests/update_ulib_apply_review.py doc/apply/<category>/<apply>.md`
+and commit the review record with the changes; never refresh it just to silence
+a failing test. See [the maintenance guide](doc/maintaining-ulib.md).
+
 ## Architecture facts that constrain changes
 
 - **The STM committer is the sole serialization control.** There is no GIL, no
