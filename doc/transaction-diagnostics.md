@@ -1,3 +1,28 @@
+# Transaction diagnostics
+
+## Execution allowance
+
+`MAX_EXECUTION_TIME` sets a task's wall-clock evaluation allowance in milliseconds.
+The default is **5,000 ms (5 seconds)**; `LPC_MAX_EXECUTION_TIME` takes precedence
+when both settings exist, and `0` disables the limit.
+
+Commands, object initialisation and call-outs use this allowance. Calls into
+other objects share the owning transaction. Snapshot acquisition, compilation
+during evaluation, conflict retries, backoff and waiting for a retry turn all
+consume the same allowance; retries do not start a fresh clock. Compilation
+before the task starts is outside this allowance. Commit and effect delivery
+are allowed to finish after the deadline, so this is not a hard bound on the
+total time until completion.
+
+The default provides headroom for compilation and contention, but is not a
+latency target or a guarantee that every workload will finish. Choose a limit
+using representative workloads on your host and the timing fields below.
+For timeouts with few conflicts, inspect evaluation and compilation work;
+for repeated conflicts, inspect shared writes and retry admission waits.
+Raising the limit also lets runaway tasks consume resources for longer.
+
+## Diagnostic output
+
 Transaction failures emit one `lpc_rs::transactions` warning for the owning task and attach the same diagnostic to its error notes. Nested applies contribute to the owner's transaction; they do not emit separate transaction summaries. Successful transactions that needed retries emit a debug summary. Set `RUST_LOG` in the driver's environment or a `.env` file explicitly loaded with `-e <path>`:
 
 ```dotenv

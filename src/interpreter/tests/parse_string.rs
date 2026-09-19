@@ -338,8 +338,7 @@ fn on_a_1_mib_stack<T: Send + 'static>(
         .expect("the thread finished")
 }
 
-/// The depth pins run 4096 action applies, which pass the default 300 ms
-/// evaluation limit under load.
+/// Depth-limit fixtures allow extra time for 4096 action applies under test load.
 fn deep_config() -> Config {
     crate::test_config_builder!()
         .max_execution_time(10_000_u64)

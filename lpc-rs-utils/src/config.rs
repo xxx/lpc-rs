@@ -13,7 +13,7 @@ use crate::{
 };
 
 const DEFAULT_MAX_INHERIT_DEPTH: u8 = 10;
-const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
+const DEFAULT_MAX_EXECUTION_TIME: u64 = 5_000;
 const DEFAULT_GC_INTERVAL: u64 = 300;
 const DEFAULT_CLEAN_UP_INTERVAL: u64 = 600;
 const DEFAULT_MAX_PENDING_OUTPUT: usize = 64 * 1024;
@@ -54,7 +54,8 @@ pub struct Config {
     #[builder(default = "ustr(\"/secure/master.c\")")]
     pub master_object: Ustr,
 
-    /// Evaluation allowance in milliseconds across all conflict retries; zero disables it.
+    /// Wall-clock evaluation allowance in milliseconds across conflict retries; defaults to 5,000.
+    /// Compilation during evaluation, backoff and retry admission share it; zero disables it.
     #[builder(setter(into), default = "DEFAULT_MAX_EXECUTION_TIME")]
     pub max_execution_time: u64,
 
