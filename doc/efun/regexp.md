@@ -17,8 +17,12 @@ Patterns are the Rust `regex` crate's: Perl-style classes (`\d`, `\w`,
 `\s`, `\b`), POSIX classes (`[[:alpha:]]`), counted repeats (`a{2,5}`),
 lazy repeats (`a*?`), alternation, non-capturing groups (`(?:...)`), flags
 (`(?i)`), and Unicode by default. It has no back-references and no
-look-around, so `\1` and `(?=...)` are errors. This dialect differs from
-LDMud's and CD's POSIX ERE and FluffOS's PCRE.
+look-around, so `\1` and `(?=...)` are errors.
+
+CD uses a traditional regex engine. LDMud can select traditional or optional
+PCRE engines; FluffOS provides traditional `regexp` and separate `pcre_*` efuns.
+Patterns and option flags need review when porting; see the public sources in
+the [driver comparison](../driver-comparison.md#differences-when-porting).
 
 ### Examples
 

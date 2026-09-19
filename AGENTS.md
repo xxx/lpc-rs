@@ -108,6 +108,14 @@ reviewing the affected ulib code and prose, refresh only the reviewed paths with
 and commit the review record with the changes; never refresh it just to silence
 a failing test. See [the maintenance guide](doc/maintaining-ulib.md).
 
+## Keeping driver comparisons accurate
+
+When changing a feature covered by [the driver comparison](doc/driver-comparison.md),
+review its overview cell and porting notes alongside the canonical reference.
+Upstream claims need publicly accessible sources pinned to a reviewed revision;
+record the review date and relevant build options. Distinguish source review
+from cross-driver execution tests, and leave unchecked behaviour labelled as such.
+
 ## Architecture facts that constrain changes
 
 - **The STM committer is the sole serialization control.** There is no GIL, no

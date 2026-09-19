@@ -1,8 +1,10 @@
 # The save-file format
 
 `save_object`, `restore_object`, `save_map` and `restore_map` share one
-text format, the one CD-lineage libs' `.o` files are written in, so a file
-from such a lib loads unchanged and a file written here loads there.
+line-oriented text format based on CD-lineage `.o` files. The grammar and
+extensions below define what this driver reads and writes. Cross-driver
+interchange depends on the value types and encodings used; in particular,
+the `bytes` form is an extension.
 
 A file is a sequence of lines, each `name value` with exactly one space
 between: `name` is the variable name, or for `save_map` the key: any text
