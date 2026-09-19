@@ -162,6 +162,7 @@ impl TreeWalker for InheritanceWalker {
             .inherit_depth(depth + 1)
             .gate(self.context.gate.clone())
             .source_reader(self.context.source_reader.clone())
+            .diagnostic_sources(self.context.diagnostic_sources.clone())
             .simul_efuns(self.context.simul_efuns.clone())
             .build()?;
 

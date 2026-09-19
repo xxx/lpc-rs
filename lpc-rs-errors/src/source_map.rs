@@ -2,11 +2,11 @@ use std::{
     collections::{HashMap, HashSet},
     hash::BuildHasher,
     ops::Range,
-    sync::LazyLock,
+    sync::{Arc, LazyLock},
 };
 
 use codespan_reporting::files::{Error, Files};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard};
 
 mod source_file;
 
@@ -22,11 +22,45 @@ pub type FileId = usize;
 pub static SOURCE_MAP: LazyLock<RwLock<SourceMap>> =
     LazyLock::new(|| RwLock::new(SourceMap::default()));
 
+/// Diagnostic storage shared by a compile and its inherited files; defaults to [`SOURCE_MAP`].
+#[derive(Debug, Default, Clone)]
+pub struct DiagnosticSources(Option<Arc<RwLock<SourceMap>>>);
+
+impl DiagnosticSources {
+    /// Retain sources only as long as this handle and its clones live.
+    ///
+    /// Scoped spans must be resolved through this handle, not [`SOURCE_MAP`].
+    pub fn scoped() -> Self {
+        Self(Some(Arc::new(RwLock::new(SourceMap {
+            // Scoped IDs cannot accidentally resolve against the global registry.
+            id_offset: 1 << 31,
+            ..SourceMap::default()
+        }))))
+    }
+
+    /// Register the exact text used by the compiler.
+    pub fn add(&self, name: String, source: String) -> FileId {
+        match &self.0 {
+            Some(sources) => sources.write().add(name, source),
+            None => SOURCE_MAP.write().add(name, source),
+        }
+    }
+
+    /// Borrow sources while converting diagnostics or inspecting spans.
+    pub fn read(&self) -> RwLockReadGuard<'_, SourceMap> {
+        match &self.0 {
+            Some(sources) => sources.read(),
+            None => SOURCE_MAP.read(),
+        }
+    }
+}
+
 /// Immutable diagnostic sources, shared across recompiles by name and contents.
 #[derive(Debug, Default)]
 pub struct SourceMap {
     files: Vec<SourceFile>,
     by_content: HashMap<u64, Vec<FileId>>,
+    id_offset: usize,
 }
 
 /// Retained source storage, excluding allocator overhead and hidden container capacities.
@@ -54,18 +88,20 @@ impl SourceMap {
         for &id in bucket.iter() {
             let file = self.files.get(id).expect("indexed source exists");
             if file.name() == &name && file.source() == &source {
-                return id;
+                return self.id_offset + id;
             }
         }
         let id = self.files.len();
         self.files.push(SourceFile::new(name, source));
         bucket.push(id);
-        id
+        self.id_offset + id
     }
 
     /// The immutable source version associated with an id.
     pub fn get(&self, id: FileId) -> Result<&SourceFile, Error> {
-        self.files.get(id).ok_or(Error::FileMissing)
+        id.checked_sub(self.id_offset)
+            .and_then(|index| self.files.get(index))
+            .ok_or(Error::FileMissing)
     }
 
     /// Inspect retained versions without copying or scanning their source text.
@@ -75,8 +111,7 @@ impl SourceMap {
     pub fn stats(&self) -> Result<SourceMapStats, Error> {
         let mut stats = SourceMapStats::default();
         let mut names = HashSet::new();
-        for &id in self.by_content.values().flatten() {
-            let file = self.get(id)?;
+        for file in &self.files {
             names.insert(file.name().as_str());
             stats.file_versions += 1;
             stats.source_bytes += file.source().len();
@@ -120,6 +155,22 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn scoped_sources_are_released_and_cannot_resolve_in_the_global_map() {
+        let sources = DiagnosticSources::scoped();
+        let weak = Arc::downgrade(sources.0.as_ref().unwrap());
+        let id = sources.add("/editor.c".into(), "int old;".into());
+        let span = crate::span::Span::new(id, 4..7);
+        assert_eq!(sources.add("/editor.c".into(), "int old;".into()), id);
+        sources.add("/editor.c".into(), "int new;".into());
+        assert_eq!(span.code_in(&sources.read()).as_deref(), Some("old"));
+        assert!(span.code().is_none());
+        assert!(sources.read().get(0).is_err());
+        assert_eq!(sources.read().stats().unwrap().file_versions, 2);
+        drop(sources);
+        assert!(weak.upgrade().is_none());
+    }
 
     #[test]
     fn missing_file_ids_report_file_missing() {

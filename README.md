@@ -22,6 +22,9 @@ pass `-e <path>` / `--env <path>` to the driver or `-c <path>` / `--config <path
 No `.env` file is loaded automatically.
 See `default.env` for a commented example.
 
+For editor diagnostics and built-in efun completion and hover, see the
+[language server](lpc-rs-lsp/README.md).
+
 For encrypted player connections and automatic Let's Encrypt renewal, see
 [secure connections](doc/secure-connections.md).
 

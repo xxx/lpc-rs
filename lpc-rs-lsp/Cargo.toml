@@ -1,0 +1,27 @@
+[package]
+name = "lpc-rs-lsp"
+version = "0.1.0"
+edition = "2024"
+description = "Language server for lpc-rs"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+lpc-rs = { path = "..", version = "0.1" }
+lpc-rs-core = { path = "../lpc-rs-core", version = "0.1" }
+lpc-rs-errors = { path = "../lpc-rs-errors", version = "0.1" }
+lpc-rs-utils = { path = "../lpc-rs-utils", version = "0.1" }
+anyhow = "1"
+async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
+codespan-reporting = "0.13"
+flume = "0.12"
+lsp-server = "0.10"
+lsp-types = "0.97"
+parking_lot = "0.12"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "fs", "time"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"

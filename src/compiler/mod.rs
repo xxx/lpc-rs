@@ -17,6 +17,7 @@ use lexer::{Token, TokenTriples};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{
     self, LpcError, Result, lpc_error,
+    source_map::DiagnosticSources,
     span::{HasSpan, Span},
 };
 use lpc_rs_utils::{LpcSource, config::Config};
@@ -71,6 +72,10 @@ pub struct Compiler {
     /// Source reads and probes; `None` uses the host filesystem.
     #[builder(default)]
     source_reader: Option<Arc<dyn SourceReader>>,
+
+    /// Source storage shared by this compiler and its inherited compilers.
+    #[builder(default)]
+    diagnostic_sources: DiagnosticSources,
 }
 
 /// One program's own compile warnings.
@@ -234,6 +239,7 @@ impl Compiler {
             .simul_efuns(self.simul_efuns.clone())
             .gate(self.gate.clone())
             .source_reader(self.source_reader.clone())
+            .diagnostic_sources(self.diagnostic_sources.clone())
             .build()?;
 
         let mut preprocessor = Preprocessor::new(context);
@@ -293,6 +299,43 @@ impl Compiler {
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<Compiled> {
+        let (mut program_node, context) = self.analyze_source(source, code, warning).await?;
+
+        let mut asm_walker: CodegenWalker = apply(&mut program_node, context, true).await?;
+        let own = asm_walker.diagnostics_mut().finish()?;
+        let mut warnings = std::mem::take(&mut asm_walker.context_mut().inherited_warnings);
+        let program = asm_walker.into_program()?;
+        warnings.push(ProgramWarnings {
+            filename: Arc::clone(&program.filename),
+            warnings: own,
+        });
+
+        Ok(Compiled { program, warnings })
+    }
+
+    /// Parse and check source without generating code for the root program.
+    ///
+    /// Inherited programs still compile fully; diagnostics and declarations
+    /// remain in the returned context on success.
+    pub async fn analyze_string<T, U>(
+        &self,
+        path: T,
+        code: U,
+    ) -> Result<(ProgramNode, CompilationContext)>
+    where
+        T: Into<LpcPath>,
+        U: AsRef<str> + Send + Sync,
+    {
+        let source = Arc::new(CompilerSource::new(path, &self.config));
+        self.analyze_source(source, code.as_ref(), None).await
+    }
+
+    async fn analyze_source(
+        &self,
+        source: Arc<CompilerSource>,
+        code: &str,
+        warning: Option<LpcError>,
+    ) -> Result<(ProgramNode, CompilationContext)> {
         let (mut program_node, context) = self.parse_source(source, code, warning).await?;
 
         // inject the auto-inherit if it's to be used.
@@ -322,16 +365,7 @@ impl Compiler {
             .await?
             .into_context();
 
-        let mut asm_walker: CodegenWalker = apply(&mut program_node, context, true).await?;
-        let own = asm_walker.diagnostics_mut().finish()?;
-        let mut warnings = std::mem::take(&mut asm_walker.context_mut().inherited_warnings);
-        let program = asm_walker.into_program()?;
-        warnings.push(ProgramWarnings {
-            filename: Arc::clone(&program.filename),
-            warnings: own,
-        });
-
-        Ok(Compiled { program, warnings })
+        Ok((program_node, context))
     }
 
     /// Preprocess, then parse a string of code for the file at `path`
@@ -383,6 +417,61 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn analysis_retains_declarations_and_scoped_inherited_sources() {
+        use crate::test_support::TempLib;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        let root = TempLib::new("editor-analysis");
+        std::fs::write(root.join("parent.c"), "int inherited() { return 1; }\n").unwrap();
+        std::fs::write(root.join("header.h"), "#define VALUE 2\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .build()
+            .unwrap();
+        let sources = DiagnosticSources::scoped();
+        let compiler = CompilerBuilder::default()
+            .config(config)
+            .diagnostic_sources(sources.clone())
+            .build()
+            .unwrap();
+        let code = "inherit \"/parent\";\n#include \"header.h\"\nint local() { return inherited() + VALUE; }\n";
+        let (_, context) = compiler.analyze_string("/editor.c", code).await.unwrap();
+        assert!(context.function_prototypes.contains_key("local"));
+        assert!(
+            context
+                .lookup_function(
+                    "inherited",
+                    &lpc_rs_core::call_namespace::CallNamespace::Local
+                )
+                .is_some()
+        );
+        let inherited = context
+            .lookup_function(
+                "inherited",
+                &lpc_rs_core::call_namespace::CallNamespace::Local,
+            )
+            .unwrap()
+            .span
+            .unwrap();
+        assert_eq!(
+            inherited.code_in(&sources.read()).as_deref(),
+            Some("int inherited")
+        );
+        assert!(inherited.code().is_none());
+        assert_eq!(sources.read().stats().unwrap().file_versions, 3);
+
+        let error = compiler
+            .analyze_string("/editor.c", "int local() { return missing; }")
+            .await
+            .unwrap_err();
+        assert!(error.message().contains("undefined variable"));
+        assert_eq!(
+            error.span().unwrap().code_in(&sources.read()).as_deref(),
+            Some("missing")
+        );
+    }
 
     mod test_compile_file {
         use super::*;

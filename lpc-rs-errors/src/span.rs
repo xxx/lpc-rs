@@ -5,7 +5,7 @@ use std::{
 
 use codespan_reporting::files::Files;
 
-use crate::source_map::{FileId, SOURCE_MAP};
+use crate::source_map::{FileId, SOURCE_MAP, SourceMap};
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l()..span.r()` will return the correct span of
@@ -14,7 +14,7 @@ use crate::source_map::{FileId, SOURCE_MAP};
 pub struct Span {
     l: u32,
     r: u32,
-    // The SOURCE_MAP id, stored +1 for the niche.
+    // The diagnostic source id, stored +1 for the niche.
     file_id: std::num::NonZeroU32,
 }
 
@@ -48,9 +48,8 @@ impl Span {
     /// Create a new [`Span`]
     ///
     /// # Arguments
-    /// `file_id` - The [`FileId`] of the file in the
-    /// [`SOURCE_MAP`](static@crate::source_map::SOURCE_MAP). `range` - The
-    /// range containing the start and end indices of the span.
+    /// `file_id` - The [`FileId`] in this compilation's diagnostic sources.
+    /// `range` - The start and end byte offsets of the span.
     ///           It's assumed that `l..r` is the correct code span in error
     /// messaging.
     ///
@@ -87,7 +86,7 @@ impl Span {
         self.r as usize
     }
 
-    /// The ID of the file in the global [`SOURCE_MAP`](static@SOURCE_MAP)
+    /// The file ID in the diagnostic storage used for this compilation.
     #[inline]
     pub fn file_id(&self) -> FileId {
         (self.file_id.get() - 1) as FileId
@@ -116,11 +115,15 @@ impl Span {
         }
     }
 
-    /// Return the string of the actual source code that this span represents.
+    /// Return source text from the global registry; use [`Self::code_in`] for scoped sources.
     /// Formatting will be as it appears in the source file.
     pub fn code(&self) -> Option<String> {
         let files = SOURCE_MAP.read();
+        self.code_in(&files)
+    }
 
+    /// Read this span from its compilation's diagnostic sources.
+    pub fn code_in(&self, files: &SourceMap) -> Option<String> {
         files.get(self.file_id()).ok().and_then(|f| {
             f.source()
                 .get(self.l()..self.r())

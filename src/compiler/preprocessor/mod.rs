@@ -89,6 +89,7 @@ impl Preprocessor {
     /// ```
     pub fn new(context: CompilationContext) -> Self {
         Self {
+            includes: IncludeWalk::new(context.diagnostic_sources.clone()),
             context,
             ..Self::default()
         }

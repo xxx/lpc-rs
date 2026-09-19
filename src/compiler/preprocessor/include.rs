@@ -10,7 +10,7 @@ use std::{
 use lpc_rs_core::lpc_path::{LpcPath, ResolvedPath};
 use lpc_rs_errors::{
     LpcError, Result, lpc_error,
-    source_map::{FileId, SOURCE_MAP},
+    source_map::{DiagnosticSources, FileId},
     span::Span,
 };
 use lpc_rs_utils::{LpcSource, config::Config};
@@ -49,7 +49,7 @@ pub(super) enum IncludeSource<'a> {
 /// A successfully opened include: its registered id and its text.
 #[derive(Debug)]
 pub(super) struct Opened {
-    /// The `SOURCE_MAP` id for this version of the file.
+    /// The diagnostic source ID for this version of the file.
     pub file_id: FileId,
     /// The file's text, shared with the memo.
     pub content: Arc<str>,
@@ -68,29 +68,35 @@ impl fmt::Debug for Frame {
 }
 
 /// The one owner of `#include` traversal for a compile: resolution,
-/// containment, IO, `SOURCE_MAP` registration, the active chain, the
+/// containment, IO, source registration, the active chain, the
 /// depth cap, and the `#pragma once` set. The memo, once and cycle keys
 /// are canonical server paths; the name registered for rendering is the
 /// in-game path.
 #[derive(Debug, Default)]
 pub(super) struct IncludeWalk {
+    sources: DiagnosticSources,
     /// The active chain, root first.
     stack: Vec<Frame>,
-    /// One disk read and one `SOURCE_MAP` id per file per compile.
+    /// One source read and one diagnostic source ID per file per compile.
     memo: HashMap<PathBuf, (FileId, Arc<str>)>,
     /// Files marked `#pragma once`.
     once: HashSet<PathBuf>,
 }
 
 impl IncludeWalk {
+    pub fn new(sources: DiagnosticSources) -> Self {
+        Self {
+            sources,
+            ..Self::default()
+        }
+    }
+
     /// Register the root file's text and push its frame. Called once,
     /// first, by `scan`.
     pub fn open_root(&mut self, source: &CompilerSource, code: &str) -> FileId {
         let path = source.resolved().clone();
         let canon = path.server().to_owned();
-        let file_id = SOURCE_MAP
-            .write()
-            .add(path.name().to_string(), code.to_owned());
+        let file_id = self.sources.add(path.name().to_string(), code.to_owned());
         self.memo.insert(canon, (file_id, Arc::from(code)));
         self.stack.push(Frame {
             path,
@@ -184,9 +190,7 @@ impl IncludeWalk {
                     diagnostics.record(latin1_warning(in_game, span));
                 }
                 let text = source.text;
-                let file_id = SOURCE_MAP
-                    .write()
-                    .add(path.name().to_string(), text.clone());
+                let file_id = self.sources.add(path.name().to_string(), text.clone());
                 let content: Arc<str> = Arc::from(text);
                 self.memo.insert(canon.clone(), (file_id, content.clone()));
                 (file_id, content)

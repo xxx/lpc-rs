@@ -8,7 +8,10 @@ use derive_builder::Builder;
 use lpc_rs_core::{
     EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
 };
-use lpc_rs_errors::{source_map::FileId, span::Span};
+use lpc_rs_errors::{
+    source_map::{DiagnosticSources, FileId},
+    span::Span,
+};
 use lpc_rs_function_support::{function_prototype::FunctionPrototype, symbol::Symbol};
 use lpc_rs_utils::config::Config;
 use ustr::{Ustr, ustr};
@@ -91,6 +94,9 @@ pub struct CompilationContext {
 
     /// Source reads and probes shared with inherited compilers.
     pub source_reader: Option<Arc<dyn SourceReader>>,
+
+    /// Diagnostic storage shared with inherited compilers.
+    pub diagnostic_sources: DiagnosticSources,
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.
@@ -299,6 +305,7 @@ impl Default for CompilationContext {
             simul_efuns: None,
             gate: None,
             source_reader: None,
+            diagnostic_sources: DiagnosticSources::default(),
             closure_count: 0,
             lvalue_temp_count: 0,
         }

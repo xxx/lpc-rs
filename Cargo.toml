@@ -143,6 +143,7 @@ members = [
     "lpc-rs-errors",
     "lpc-rs-function-support",
     "lpc-rs-lpcc",
+    "lpc-rs-lsp",
     "lpc-rs-telnet",
     "lpc-rs-utils",
 ]
