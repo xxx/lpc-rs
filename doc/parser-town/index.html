@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Parser Town · Three frontends, one engine</title>
+    <meta
+      name="description"
+      content="Explore how lpc-rs native patterns, parser-package rules and DGD grammars meet in one Earley parsing engine."
+    />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <canvas
+      id="stage"
+      aria-label="Isometric parsing town. The inspector provides the same state in text."
+    ></canvas>
+    <div id="tooltip" class="tooltip" hidden></div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div>
+          <p class="kicker">LPC-RS / AN EXPLORABLE EXPLANATION</p>
+          <h1>Parser Town<span>Three frontends. One engine.</span></h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="btn-about" class="ghost">About &amp; accuracy</button
+        ><button
+          id="btn-panel"
+          class="ghost"
+          aria-expanded="true"
+          aria-controls="inspector"
+        >
+          Hide panel
+        </button>
+      </div>
+    </header>
+    <div id="hud" class="hud">
+      <nav class="frontends" aria-label="Choose a parsing frontend">
+        <button data-family="native" aria-pressed="true">
+          <i class="native"></i>Native patterns
+        </button>
+        <button data-family="parser" aria-pressed="false">
+          <i class="parser"></i>Parser package
+        </button>
+        <button data-family="dgd" aria-pressed="false">
+          <i class="dgd"></i>DGD grammars
+        </button>
+      </nav>
+      <div class="hud-stats">
+        <span>ENGINE <b>Earley</b></span
+        ><span>TOKENS <b id="hud-tokens">—</b></span
+        ><span>COLUMN <b id="hud-column">—</b></span
+        ><span>ITEMS <b id="hud-items">—</b></span>
+      </div>
+      <p id="hud-note">Following the first reading tour.</p>
+    </div>
+    <div class="zoomer">
+      <button id="zoom-in" aria-label="Zoom in">+</button
+      ><button id="zoom-out" aria-label="Zoom out">−</button
+      ><button
+        id="zoom-fit"
+        aria-label="Fit the whole town"
+        title="Fit the whole town"
+      >
+        ⤢
+      </button>
+    </div>
+    <div class="map-key">
+      <span><i class="native"></i>Native</span
+      ><span><i class="parser"></i>Package</span
+      ><span><i class="dgd"></i>DGD</span
+      ><span><i class="shared"></i>Shared engine</span
+      ><small>Cart boxes = tokens · yard racks = chart items</small>
+    </div>
+    <aside
+      class="inspector"
+      id="inspector"
+      aria-label="Explanation and live parser state"
+    >
+      <button
+        class="sheet-handle"
+        id="sheet-handle"
+        aria-expanded="false"
+        aria-controls="inspector"
+      >
+        <span class="grip"></span>Explanation &amp; live state
+      </button>
+      <article class="stage-card">
+        <div class="eyebrow">
+          <span id="stage-chip"></span><span id="stage-tag"></span>
+        </div>
+        <h2 id="stage-name" aria-live="polite">Pattern Studio</h2>
+        <p id="stage-short" class="lede"></p>
+        <p id="stage-body" class="muted"></p>
+        <a
+          id="stage-source"
+          class="source"
+          href="../../src/command/frontend/native/mod.rs"
+          >Driver source ↗</a
+        >
+        <div class="dwell" id="dwell">
+          <i id="dwell-bar"></i
+          ><span id="dwell-hint">Reading stop · Space holds here</span>
+        </div>
+        <button id="btn-live" class="ghost" hidden>
+          Return to the live tour
+        </button>
+      </article>
+      <section class="sec" id="entrance-section">
+        <h3>At this entrance <span id="family-name" class="hint"></span></h3>
+        <pre id="rule-text"></pre>
+        <p id="input-text" class="fine"></p>
+      </section>
+      <section class="sec">
+        <h3>Inside the shared engine <span class="hint">live model</span></h3>
+        <div class="tokens" id="token-list"></div>
+        <p id="token-note" class="fine">Token spans appear at Token Works.</p>
+        <div
+          class="chart-bars"
+          id="chart-bars"
+          aria-label="Items in each Earley chart column"
+        ></div>
+        <p id="chart-note" class="fine"></p>
+        <details id="grammar-details">
+          <summary>Compiled productions <span id="rule-count"></span></summary>
+          <pre id="grammar-text">Waiting for Grammar Foundry.</pre>
+        </details>
+        <details id="chart-details">
+          <summary>Current chart’s dot rules</summary>
+          <pre id="chart-text">Waiting for Earley Yard.</pre>
+        </details>
+        <details id="tree-details">
+          <summary>Derivation &amp; capture spans</summary>
+          <pre id="tree-text">Waiting for Derivation Grove.</pre>
+        </details>
+      </section>
+      <section class="sec" id="result-section">
+        <h3>Outside the engine</h3>
+        <p id="interpretation" class="interpretation"></p>
+        <pre id="call-text"></pre>
+        <p id="result-text" class="result"></p>
+      </section>
+      <section class="sec" id="stations-section">
+        <h3>Explore the town <span class="hint">pause &amp; read</span></h3>
+        <div id="district-chips" class="chips"></div>
+      </section>
+    </aside>
+    <footer id="dock" class="dock">
+      <div class="dock-row">
+        <div class="group transport">
+          <button
+            id="btn-play"
+            class="icon"
+            aria-label="Pause"
+            title="Play / pause (Space)"
+          >
+            ❚❚</button
+          ><button
+            id="btn-step"
+            class="icon"
+            aria-label="Next station"
+            title="Next station (S)"
+          >
+            ⇥</button
+          ><button
+            id="btn-reset"
+            class="icon"
+            aria-label="Replay the reading tour"
+            title="Replay the reading tour (R)"
+          >
+            ⟲
+          </button>
+        </div>
+        <button id="btn-run" class="primary">New run</button
+        ><button
+          id="btn-tune"
+          class="icon"
+          aria-label="Experiment controls"
+          aria-expanded="false"
+          aria-controls="dock-tune"
+        >
+          ⚙
+        </button>
+        <div class="dock-tune" id="dock-tune">
+          <label class="field"
+            ><span>Lesson</span
+            ><select id="lesson">
+              <option value="give">Give an object</option>
+              <option value="chat">Chat / empty text</option>
+            </select></label
+          >
+          <form id="sentence-form">
+            <label class="field"
+              ><span>Try a sentence</span
+              ><input
+                id="sentence"
+                value="give red sword to bob"
+                maxlength="120"
+                autocomplete="off"
+                spellcheck="false" /></label
+            ><button class="ghost" type="submit">Try</button>
+          </form>
+          <div class="group toggles">
+            <label
+              ><input type="checkbox" id="sword" checked />Sword in scope</label
+            ><label
+              ><input type="checkbox" id="allow" checked />Handler
+              accepts</label
+            >
+          </div>
+          <label class="field slider"
+            ><span>Tour speed <b id="v-speed">1×</b></span
+            ><input
+              type="range"
+              id="speed"
+              min="0.4"
+              max="8"
+              step="0.1"
+              value="1"
+          /></label>
+          <div class="group toggles view-toggles">
+            <label><input type="checkbox" id="follow" checked />Follow</label
+            ><label><input type="checkbox" id="labels" checked />Labels</label>
+          </div>
+        </div>
+      </div>
+      <p class="control-note">
+        Choose an entrance or change an experiment to start a new run. Sentence
+        edits apply with Try or Enter.
+        <span>Space pause · S next · R replay · Drag pan · Scroll zoom</span>
+      </p>
+    </footer>
+    <div
+      class="modal"
+      id="about"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="about-title"
+      hidden
+    >
+      <div class="modal-card">
+        <button
+          id="about-close"
+          class="modal-close"
+          aria-label="Close accuracy notes"
+        >
+          ×
+        </button>
+        <p class="kicker">PARSER TOWN / ACCURACY NOTES</p>
+        <h2 id="about-title">Three entrances, one shared middle</h2>
+        <p>
+          This is the driver’s command parsing system. Native patterns (<code
+            >add_rule</code
+          >
+          / <code>parse_command</code>), parser-package rules (<code
+            >parse_add_rule</code
+          >
+          / <code>parse_sentence</code>), and DGD-style
+          <code>parse_string</code> grammars feed one grammar engine. The native
+          and package routes also share a group builder. The
+          <code>add_action</code> compatibility adapter uses that engine too; it
+          is outside the three grammar dialects explored here.
+        </p>
+        <p>
+          The cart carries the selected grammar, input, token spans, chart, and
+          result. Each box is one retained token; blue boxes have been scanned.
+          Yard racks show actual chart-column item counts at 0.16 grid units per
+          item. A loop processes the next token boundary, including the final
+          column. The roads after Derivation Grove show where frontend-specific
+          meaning resumes.
+        </p>
+        <h2>How much of it is real</h2>
+        <div id="fidelity-ledger">
+          <p>
+            <strong>Computed:</strong> pattern-to-group lowering;
+            group-to-grammar expansion; the printed DGD grammar subset;
+            maximal-munch tokenization with rule-order ties and source spans;
+            Earley prediction, scanning, completion, nullable advancement and
+            item deduplication; derivation reconstruction in production order
+            with longest spans first; capture extraction; noun matching against
+            the example scope; and the demonstrated frontend call order. Every
+            live count comes from <code>js/model.js</code>.
+          </p>
+          <p>
+            <strong>Scaled down:</strong> two fixed lessons, one selected rule,
+            two example objects, at most 120 input characters and 24 tokens. The
+            browser caps work at 20,000 operations per chart or derivation pass,
+            trees at 32 per span, and depth at 64. These are teaching limits,
+            not driver defaults. Only the native and package capture forms
+            printed in the lessons are exercised. DGD compilation accepts the
+            displayed line-oriented subset and three simple regex forms.
+          </p>
+          <p>
+            <strong>Assumed:</strong> the sword has id sword and adjective red;
+            bob is a living with id bob. Direct and indirect checks always
+            accept. Handler accepts controls the native handler’s result, the
+            package’s can_ result, or the DGD accept action, which returns its
+            input array or 0. All examples use case-sensitive matching. Changing
+            an experiment begins a fresh run.
+          </p>
+          <p>
+            <strong>Illustrated / omitted:</strong> this is JavaScript, not the
+            Rust VM. Tokenization tests regexes separately instead of using a
+            joint DFA; spans use JavaScript character offsets instead of UTF-8
+            byte offsets. The model eagerly materializes bounded derivations and
+            skips same-span cycles; Rust enumerates lazily with different
+            limits. It does not implement general LPC actions, action
+            memoization, the full DGD dialect, many-object selection, complete
+            noun vocabulary or scope traversal, multiple-rule dispatch, caches,
+            STM or I/O. Buildings, travel time, and reading stops have no
+            performance meaning. Trust the demonstrated mechanism and values
+            within this subset, not the animation as a benchmark.
+          </p>
+        </div>
+        <h2>Reading the tour</h2>
+        <p>
+          First visits stop for 9–26 seconds, based on the explanation’s length.
+          Later visits take a short beat. The default native tour takes about
+          four minutes at 1×. Space holds any stop indefinitely. Next advances
+          one station, including one chart column per loop. New run keeps
+          reading history; Replay clears it. Reduced-motion preferences start
+          the tour paused.
+        </p>
+        <h2>Follow the source</h2>
+        <p>
+          <a href="README.md">Guide, experiments and source map</a> ·
+          <a href="../efun/add_rule.md">Native patterns</a> ·
+          <a href="../efun/parse_add_rule.md">Parser package</a> ·
+          <a href="../efun/parse_string.md">DGD grammars</a>
+        </p>
+        <p class="fine">
+          Offline Canvas 2D. Adapted from the
+          <a href="LICENSE">MIT-licensed isometric-explainer template</a> by
+          Laurentiu Gabriel.
+        </p>
+      </div>
+    </div>
+    <script src="js/iso.js"></script>
+    <script src="js/model.js"></script>
+    <script src="js/world.js"></script>
+    <script src="js/sim.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

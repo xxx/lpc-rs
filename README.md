@@ -230,6 +230,7 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 | Look up a built-in function | [Efun reference](doc/efun) |
 | Implement callbacks the driver calls | [Master hooks](doc/apply/master), [object hooks](doc/apply/object), [living hooks](doc/apply/living), [connection hooks](doc/apply/special) |
 | Add player commands | [`add_action`](doc/efun/add_action.md), [`add_rule`](doc/efun/add_rule.md), [`parse_sentence`](doc/efun/parse_sentence.md) |
+| See how the parsing frontends share one engine | [Parser Town](doc/parser-town/README.md) · open [the interactive tour](doc/parser-town/index.html) locally in a browser |
 | Save and restore game data | [`save_object`](doc/efun/save_object.md), [`restore_object`](doc/efun/restore_object.md), [save-file format](doc/save-format.md) |
 | Replace the master or simulated efuns at runtime | [`request_system_reload`](doc/efun/request_system_reload.md) |
 
