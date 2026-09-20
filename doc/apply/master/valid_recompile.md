@@ -11,11 +11,13 @@ The active master is asked by `request_object_recompile` and again in the upgrad
 job's transaction before compilation. Both invocations preserve the original
 command giver (`this_player()`). `this_object()` is the master; the requesting
 object is its caller. A zero result, missing hook or thrown error denies the
-operation. For system targets (including object arguments), the driver first asks
-`valid_reload` with `"master"`, `"simul_efun"`, or `"both"`. A paired upgrade then
-asks this hook for the simul-efun prototype and the master prototype, in that
-order. Both hooks are required and both are checked again during preparation.
-A retired requester or command giver cannot run the queued job.
+operation. System targets use this same hook: a string selector is resolved to
+the actual prototype before authorization. A paired upgrade asks for the
+simul-efun prototype and the master prototype, in that order, both at request
+time and again during preparation. Policies should explicitly control access to
+these system prototypes; authorizing ordinary objects must not accidentally
+grant permission to change driver policy. A retired requester or command giver
+cannot run the queued job.
 
 Permission authorizes compilation of the backing source; `valid_load` is not also
 asked for the top-level source. Includes and inherits retain their ordinary
@@ -35,5 +37,5 @@ int valid_recompile(object prototype, object caller, string program) {
 
 ### See also
 
-`request_object_recompile`, `query_object_recompile`, `valid_reload`, `valid_read`,
+`request_object_recompile`, `query_object_recompile`, `valid_read`,
 `valid_inherit`

@@ -109,7 +109,7 @@ pub(crate) struct Transaction {
     interrupted: Option<InterruptedExecution>,
     compilation: diagnostics::CompilationTiming,
     presence_revision: u64,
-    pub(crate) reload_preparing: bool,
+    pub(crate) recompile_preparing: bool,
     view: Option<Arc<AuthorityView>>,
 }
 
@@ -132,7 +132,7 @@ impl Transaction {
             interrupted: None,
             compilation: diagnostics::CompilationTiming::default(),
             presence_revision: 0,
-            reload_preparing: false,
+            recompile_preparing: false,
             view: None,
         }
     }

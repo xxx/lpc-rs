@@ -2,12 +2,12 @@
 
 use super::{
     object_update::UpdateRequest,
-    system_reload::{ReloadTarget, SystemView, compatible_exports},
+    system_recompile::{SystemTarget, SystemView, compatible_exports},
 };
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
-        CLEAN_UP, VALID_RECOMPILE, VALID_RELOAD,
+        CLEAN_UP, VALID_RECOMPILE,
         apply::{report_warnings, valid_apply},
         compile_gate::MasterGate,
         file_view::TransactionSourceReader,
@@ -30,13 +30,13 @@ use std::{
 #[derive(Debug, Clone)]
 pub(crate) enum RecompileTarget {
     Object(Weak<Process>),
-    System(ReloadTarget),
+    System(SystemTarget),
 }
 
 impl RecompileTarget {
     pub(crate) fn parse(value: &LpcRef, ctx: &TaskContext) -> Result<Self> {
         if let Some(name) = value.as_str() {
-            return Ok(Self::System(ReloadTarget::parse(name, ctx)?));
+            return Ok(Self::System(SystemTarget::parse(name, ctx)?));
         }
         let target = value.live_object(ctx.txn()).ok_or_else(|| {
             LpcError::runtime(
@@ -66,12 +66,12 @@ impl RecompileTarget {
             ],
             Self::System(target) => {
                 let mut targets = Vec::new();
-                if *target != ReloadTarget::Master {
+                if *target != SystemTarget::Master {
                     targets.push(ctx.simul_efuns().ok_or_else(|| {
                         LpcError::runtime("object recompilation: no simul-efun object is loaded")
                     })?);
                 }
-                if *target != ReloadTarget::Simul {
+                if *target != SystemTarget::Simul {
                     targets.push(ctx.master_object().ok_or_else(|| {
                         LpcError::runtime("object recompilation: no master is loaded")
                     })?);
@@ -111,30 +111,6 @@ pub(crate) async fn authorize(
     {
         return Err(LpcError::runtime(
             "object recompilation: master and simul-efun paths must differ",
-        ));
-    }
-    let contains = |object: &Option<Arc<Process>>| {
-        object
-            .as_ref()
-            .is_some_and(|p| targets.iter().any(|target| Arc::ptr_eq(target, p)))
-    };
-    let system = match (contains(&master), contains(&simul)) {
-        (true, true) => Some(ReloadTarget::Both),
-        (true, false) => Some(ReloadTarget::Master),
-        (false, true) => Some(ReloadTarget::Simul),
-        _ => None,
-    };
-    if let Some(system) = system
-        && !valid_apply(
-            ctx,
-            callers.clone(),
-            VALID_RELOAD,
-            &request.args(system.name().into()),
-        )
-        .await?
-    {
-        return Err(LpcError::runtime(
-            "object recompilation: system update permission denied",
         ));
     }
     for target in &targets {
@@ -210,9 +186,7 @@ pub(crate) async fn prepare(
         ctx.system_view = Some(Arc::new(SystemView {
             master,
             simul: simul.clone(),
-            authority_simul: simul.clone(),
-            authority: Some(Arc::new(authority)),
-            staged: Default::default(),
+            authority: Arc::new(authority),
         }));
     }
     let mut updated = Vec::new();
@@ -304,8 +278,7 @@ async fn recompile_group(
             let retained = ctx
                 .system_view
                 .as_ref()
-                .and_then(|view| view.authority.as_ref())
-                .and_then(|authority| authority.retained(ctx.txn(), *cell))
+                .and_then(|view| view.authority.retained(ctx.txn(), *cell))
                 .unwrap_or_else(|| value.clone());
             ctx.txn().with(|t| t.write(*cell, retained));
         }

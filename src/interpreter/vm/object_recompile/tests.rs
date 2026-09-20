@@ -87,7 +87,7 @@ const ADMIN: &str = r#"
     int invalid_targets() {
         return !!catch(request_object_recompile(0))
             && !!catch(request_object_recompile(first))
-            && !!catch(request_object_recompile(find_object("/secure/master")));
+            && !!catch(request_object_recompile("invalid"));
     }
 "#;
 

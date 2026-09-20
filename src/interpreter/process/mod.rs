@@ -112,7 +112,7 @@ pub struct Process {
     /// Physical bootstrap objects may have no value in their path cell.
     pub(crate) physical: AtomicBool,
 
-    /// Set under the call-out queue lock when committed destruction or reload cancels this owner's timers.
+    /// Set under the call-out queue lock when committed destruction cancels this owner's timers.
     pub(crate) call_outs_retired: AtomicBool,
 
     /// Where are we in the game world?

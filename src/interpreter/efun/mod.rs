@@ -1188,12 +1188,6 @@ efuns! {
         arity: 2,
         args: [LpcType::String(false), LpcType::String(false)],
     },
-    request_system_reload [async in object_update] => {
-        returns: LpcType::Int(false), arity: 1, args: [LpcType::String(false)],
-    },
-    query_system_reload [in object_update] => {
-        returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
-    },
     render_markdown => {
         returns: LpcType::String(false),
         arity: (3, 2),
@@ -1559,8 +1553,6 @@ mod tests {
                 "functions",
                 "call_inherited",
                 "compile_string",
-                "request_system_reload",
-                "query_system_reload",
                 "render_markdown",
                 "request_clean_up",
                 "request_object_recompile",

@@ -31,7 +31,7 @@ pub mod binding;
 pub mod global_state;
 pub mod object_recompile;
 pub mod object_update;
-pub mod system_reload;
+pub(crate) mod system_recompile;
 pub mod vm_op;
 
 #[derive(Debug)]

@@ -9,9 +9,8 @@ that process; local pointers retain code and the original layout. Clone membersh
 already lives in a transactional array on `Program`.
 
 Relevant modules are `src/interpreter/process/mod.rs`, `program.rs`,
-`call_frame.rs`, `function_type/`, `task/`, `stm/`, and `vm/system_reload.rs`.
-The existing system reload provides the compilation and attempt-runner pattern,
-but replaces object identities and initializes fresh state.
+`call_frame.rs`, `function_type/`, `task/`, `stm/`, `vm/object_update.rs`,
+`vm/object_recompile.rs`, and `vm/system_recompile.rs`.
 
 ## Implementation
 
@@ -105,11 +104,18 @@ Local recursion keeps the existing 64-byte frame and two retained references per
 call (code and receiver). It shares the receiver's pinned image instead of reading
 the transactional image binding or allocating a receiver on every local call.
 
-## System upgrades and common orchestration
+## System upgrades and job orchestration
 
-Use one update request, registry, committed effect, VM operation and attempt body
-for state-preserving recompilation and fresh-state system restart. Keep their
-preparation rules separate behind this shared runner.
+Use one recompilation request, registry, committed effect, VM operation and
+attempt body for ordinary and system targets. `valid_recompile` authorizes each
+selected prototype at request and execution time. There is no separate system
+restart operation or permission hook.
+
+Resolve master and simul-efun objects transactionally, with named driver entries
+and simul callbacks resolving their programs on every attempt. Bootstrap publishes
+object cells transactionally; retired initializers cannot reclaim a replaced path.
+System preparation uses the same object identities throughout, with an authority
+view selecting their previous program images for permission applies.
 
 Compiler simul-efun input is an explicitly selected `Arc<Program>`, never a
 construction-time program inferred from a live process. System preparation pins
@@ -123,12 +129,13 @@ writes and compatible cell identities. All views are attempt-local.
 
 Validate identity/state retention, paired publication, repeated upgrades, current
 compiler exports, old-policy code and state, rollback, permissions, requester
-provenance, stale callbacks and conflicts with running work and fresh-state restart.
+provenance, stale callbacks and conflicts with running work and other upgrades.
 
 ### System upgrade validation
 
-The system-upgrade extension passes the workspace suite (3,733 tests; two existing
-ignored tests), strict all-target Clippy, formatting, warning-free rustdoc and the
+Before removal of the separate restart API, commit `e1188c4b` passed the workspace
+suite (3,733 tests; two existing ignored tests), strict all-target Clippy,
+formatting, warning-free rustdoc and the
 ulib checks. Eleven additional scenarios cover paired publication, preserved
 identity and clone state, skipped `create`, current compiler exports, repeated
 upgrades, old authorization code and globals, permission-apply counter writes,
@@ -136,7 +143,7 @@ rollback, captured global-cell identity, permissions, conflicting restart, old
 attempt invalidation, callout retention and retirement during a paired initializer.
 
 Repeated `fib(20)` comparisons used the preserved `68ae16dd` release binary and
-this implementation, with no concurrent builds and all threads pinned to one CPU:
+`e1188c4b`, with no concurrent builds and all threads pinned to one CPU:
 
 | CPU | Runs per version | Warmup / measurement | Before system upgrades | After |
 | --- | --- | --- | --- | --- |
@@ -148,3 +155,16 @@ version order was alternated and reversed. The performance-core result is
 unchanged; the efficiency-core difference is 1.3% in this short comparison.
 These runs do not reproduce the earlier 10% recursion regression and are not a
 production throughput guarantee.
+
+### Single recompilation interface validation
+
+After removing the separate restart API, `cargo test --workspace --no-fail-fast`
+passes 3,725 tests with two existing ignored tests. Explicit ulib checks, strict
+all-target Clippy, formatting and warning-free rustdoc also pass; Cargo retains
+the existing `sha1` dependency documentation filename warning.
+
+Coverage includes per-prototype system permissions for selectors and object
+arguments, caller provenance, concurrent upgrades, incompatible exports, prepared
+callbacks, recursive-request refusal and missing system objects. The retired
+initializer/GC check now lives alongside bootstrap initialization; destruction
+tests continue to cover delayed callout cancellation.

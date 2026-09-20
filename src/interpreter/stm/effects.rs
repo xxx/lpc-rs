@@ -165,7 +165,7 @@ pub(crate) enum Effect {
     /// `code`.
     Shutdown { code: i32 },
 
-    /// Start an authorized reload only after the requesting attempt commits.
+    /// Start authorized recompilation only after the requesting attempt commits.
     ObjectUpdate(Arc<crate::interpreter::vm::object_update::UpdateRequest>),
 
     /// `rm`'s unlink, applied once the attempt commits.

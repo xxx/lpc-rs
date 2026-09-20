@@ -1,4 +1,4 @@
-//! Committed update jobs share ownership, status retention and transaction execution.
+//! Ownership, status retention and transaction execution for committed recompilation jobs.
 
 use std::{
     collections::BTreeMap,
@@ -11,9 +11,7 @@ use std::{
 use lpc_rs_errors::{LpcError, Result};
 use parking_lot::Mutex;
 
-use super::{
-    global_state::GlobalState, object_recompile::RecompileTarget, system_reload::ReloadTarget,
-};
+use super::{global_state::GlobalState, object_recompile::RecompileTarget};
 use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     process::Process,
@@ -24,17 +22,11 @@ use crate::interpreter::{
     task::task_template::TaskTemplate,
 };
 
-#[derive(Debug, Clone)]
-pub(crate) enum UpdateTarget {
-    Recompile(RecompileTarget),
-    Restart(ReloadTarget),
-}
-
 /// An administrative update delivered after the requesting transaction commits.
 #[derive(Debug)]
 pub struct UpdateRequest {
     pub(crate) id: i64,
-    pub(crate) target: UpdateTarget,
+    pub(crate) target: RecompileTarget,
     pub(crate) caller: Weak<Process>,
     pub(crate) player: Option<Weak<Process>>,
     pub(crate) program: Option<String>,
@@ -177,7 +169,7 @@ impl AttemptBody for UpdateBody<'_> {
             .ok_or_else(|| LpcError::runtime("object update: requester is gone"))?;
         txn.with(|t| {
             t.set_origin(&caller, "object_update");
-            t.reload_preparing = true;
+            t.recompile_preparing = true;
         });
         let mut template = TaskTemplate::from(self.gs.clone());
         template.txn = txn;
@@ -196,14 +188,8 @@ impl AttemptBody for UpdateBody<'_> {
                 "object update: original command giver is gone",
             ));
         }
-        self.updated = match &self.request.target {
-            UpdateTarget::Recompile(target) => {
-                super::object_recompile::prepare(&mut ctx, self.request, target).await?
-            }
-            UpdateTarget::Restart(target) => {
-                super::system_reload::prepare(&mut ctx, self.request, *target).await?
-            }
-        };
+        self.updated =
+            super::object_recompile::prepare(&mut ctx, self.request, &self.request.target).await?;
         Ok(Some(live))
     }
 
@@ -232,11 +218,9 @@ mod tests {
         for id in 1..=132 {
             updates.enqueue(Arc::new(UpdateRequest {
                 id,
-                target: if id % 2 == 0 {
-                    UpdateTarget::Restart(ReloadTarget::Master)
-                } else {
-                    UpdateTarget::Recompile(RecompileTarget::System(ReloadTarget::Master))
-                },
+                target: RecompileTarget::System(
+                    super::super::system_recompile::SystemTarget::Master,
+                ),
                 caller: Weak::new(),
                 player: None,
                 program: None,

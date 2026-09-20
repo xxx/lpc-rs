@@ -15,10 +15,10 @@ An object argument binds the request to that exact identity. The strings
 `"master"`, `"simul_efun"`, and `"both"` select the configured resident system
 objects when the job starts. A simul-efun selector requires a configured source.
 
-System targets additionally require `valid_reload(selector, caller, program)` at
-request and execution time, followed by `valid_recompile` for each selected
-prototype. This also applies when passing the system object itself. A missing
-hook denies the update. With `"both"`, the simul-efun group is prepared first and
+System targets use the same `valid_recompile` hook, with each selected prototype
+passed as an object, including when a string selector was supplied. Policies
+should explicitly control access to the master and simul-efun prototypes.
+With `"both"`, the simul-efun group is prepared first and
 the new master compiles against its exports; publication is atomic for both groups.
 Existing simul-efun exports must retain return and argument types, argument/default
 counts, reference parameters and function flags. New exports are allowed.
@@ -27,8 +27,7 @@ Preparation uses the old master and simul-efun code for authorization. Their old
 global layouts and values remain available to permission applies while new global
 initializers run; permission-apply writes are transactional and retained. System
 objects follow the same identity and state rules as ordinary prototypes, including
-clones. Use `request_system_reload` only when fresh globals, a new identity and
-another `create()` are wanted; that operation also requires detached daemons.
+clones.
 
 The driver compiles the prototype's backing source file and upgrades it and its
 current clone group in one transaction. Object references, names, creation times,
@@ -58,7 +57,7 @@ and are unchanged. New clones use the new program after publication.
 This version refuses a group containing a member in an active shadow chain, and
 changes that add or remove cleanup eligibility (a nonresident program defining
 `clean_up`). Initializers must leave every target live and initialized, with no
-active shadow chain. Requests for either kind of update during preparation are
+active shadow chain. Recompilation requests during preparation are
 refused. Normal destruct/load remains available with its existing semantics.
 
 ```c
@@ -81,4 +80,4 @@ void show_upgrade() {
 
 ### See also
 
-`query_object_recompile`, `valid_recompile`, `object_clones`, `request_system_reload`
+`query_object_recompile`, `valid_recompile`, `object_clones`

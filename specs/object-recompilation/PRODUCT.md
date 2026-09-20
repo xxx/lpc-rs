@@ -63,26 +63,21 @@ upgrade; failed preparation leaves the entire group unchanged.
     the request. `updated` includes all selected prototypes and is zero unless
     successful; `error` is empty unless failed. A destructed object target appears
     as zero; system selectors remain strings. The most recent 128 completed jobs
-    across recompilation and restart are retained; aborted IDs may be skipped.
+    are retained; aborted IDs may be skipped.
 
-## System objects and shared jobs
+## System objects
 
 14. A target may also be `"master"`, `"simul_efun"`, or `"both"`. Selectors resolve
     the configured live objects when preparation starts; an object argument binds
     to that exact identity. A pair upgrades the simul-efun group first, then
     compiles the master against its new exports, and publishes both atomically.
-15. System upgrades require `valid_reload(selector, caller, program)` as well as
-    `valid_recompile` for each selected prototype, at request and execution time.
-    Missing hooks deny the operation. Old master and simul-efun code and global
-    layouts authorize the whole preparation; initializers cannot install new
-    authorization policy before commit.
+15. System upgrades require `valid_recompile` for each selected prototype, at
+    request and execution time. String selectors and object arguments use the
+    same permission hook with actual objects; policies must explicitly control
+    system-prototype access. A missing hook denies the operation. Old master and
+    simul-efun code and global layouts authorize the whole preparation;
+    initializers cannot install new authorization policy before commit.
 16. Existing simul-efun exports keep their signatures and function flags. New
     exports are available to newly compiled callers immediately after publication.
     System objects follow ordinary upgrade rules for identity, globals, clones,
-    callbacks, shadows and cleanup eligibility; they need not be detached daemons.
-17. `request_system_reload` remains an explicit fresh-state restart: new identity,
-    normal `create()`, and cancellation of the retired objects' callouts. Both
-    operations share job IDs, queueing, retries, completion and status retention.
-    Query functions expose only their own operation, and the most recent 128
-    completed jobs across both operations are retained. Recompilation status
-    returns the supplied object or system selector as `target`.
+    callbacks, shadows and cleanup eligibility.

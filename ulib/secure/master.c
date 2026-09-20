@@ -135,26 +135,13 @@ int valid_variable_info(object caller, object target, string program) {
 }
 
 /**
- * Authorise system updates through request_system_reload() or request_object_recompile().
- * target is "master", "simul_efun" or "both"; caller requested the change
- * and program defines that request; the current master checks it again when
- * the update is prepared, before new policy can become active.
- * In-place system upgrades also require valid_recompile() for each prototype.
- * Return 0 because ulib provides no administration commands; restart from
- * the host to load edits instead of granting guests policy-replacement rights.
- */
-int valid_reload(string target, object caller, string program) {
-    return 0;
-}
-
-/**
  * Authorise an in-place upgrade of prototype and its current clones.
  * caller requested it and program defines the request; the active master
  * asks again before compilation, preserving the original command giver.
  * Missing this hook also denies upgrades; return 0 because ulib provides
  * no administration command to rebuild local callbacks after an upgrade.
- * System targets also need valid_reload(); preparation uses the old policy
- * code and global layouts until the entire update commits.
+ * This hook also controls master and simul-efun upgrades; preparation uses
+ * the old policy code and global layouts until the entire update commits.
  */
 int valid_recompile(object prototype, object caller, string program) {
     return 0;

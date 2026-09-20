@@ -4,11 +4,15 @@ use lpc_rs_errors::Result;
 use lpc_rs_utils::config::ConfigBuilder;
 
 use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
-        lpc_ref::{LpcRef, NULL},
+        lpc_ref::LpcRef,
         process::Process,
         stm::{AttemptBody, Transaction, TxnHandle, commit_changeset, start_txn},
-        task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+        task::{
+            SeedArg, SeedEntry, Task, TaskSeed, apply_function::apply_function_by_name,
+            task_template::TaskTemplate,
+        },
         vm::{
             Vm,
             object_update::{UpdateBody, UpdateRequest, UpdateStatus},
@@ -40,12 +44,11 @@ const ADMIN: &str = r#"
         local = &(simul)->version();
     }
     int request(mixed target) { return request_object_recompile(target); }
-    int restart(string target) { return request_system_reload(target); }
     mapping status(int id) { return query_object_recompile(id); }
-    mapping restart_status(int id) { return query_system_reload(id); }
     int identity() { return master == find_object("/secure/master") && simul == find_object("/secure/simul_efuns"); }
     int stale() { return !!catch(local()); }
     int named_call() { return named(); }
+    int direct() { return version(); }
     int load() { return load_object("/consumer")->value(); }
     void clone_simul() { object clone = clone_object("/secure/simul_efuns"); clone->bump(); clone->bump(); clone->bump(); }
     void remember_capture() { captured = master->capture_global(); }
@@ -54,9 +57,7 @@ const ADMIN: &str = r#"
 "#;
 
 fn master(extra: &str) -> String {
-    format!(
-        "{PERMISSIVE_MASTER}\nint valid_reload() {{ return 1; }}\nint valid_recompile() {{ return 1; }}\n{extra}"
-    )
+    format!("{PERMISSIVE_MASTER}\nint valid_recompile() {{ return 1; }}\n{extra}")
 }
 
 async fn setup(name: &str, master: &str, simul: &str) -> (TempLib, Vm, Arc<Process>) {
@@ -193,7 +194,7 @@ async fn paired_upgrade_preserves_identity_state_and_uses_new_exports() {
 }
 
 #[tokio::test]
-async fn repeated_upgrades_and_restart_validate_the_current_simul_exports() {
+async fn repeated_upgrades_validate_the_current_simul_exports() {
     let (root, mut vm, admin) = setup("system-upgrade-exports", &master(""), SIMUL).await;
     std::fs::write(
         root.join("secure/simul_efuns.c"),
@@ -209,8 +210,15 @@ async fn repeated_upgrades_and_restart_validate_the_current_simul_exports() {
         format!("{SIMUL} int added() {{ return 2; }} int newest() {{ return 5; }}"),
     )
     .unwrap();
+    let simul = vm
+        .global_state
+        .object_space
+        .lookup("/secure/simul_efuns")
+        .unwrap();
     assert_eq!(
-        run(&mut vm, &admin, "simul_efun".into()).await.state,
+        run(&mut vm, &admin, Arc::downgrade(&simul).into())
+            .await
+            .state,
         "succeeded"
     );
     std::fs::write(
@@ -226,24 +234,41 @@ async fn repeated_upgrades_and_restart_validate_the_current_simul_exports() {
     let failed = run(&mut vm, &admin, "simul_efun".into()).await;
     assert_eq!(failed.state, "failed");
     assert!(failed.error.contains("was removed"), "{}", failed.error);
-    let id = call(&vm, &admin, "restart", &["simul_efun".into()])
-        .await
+}
+
+#[tokio::test]
+async fn incompatible_simul_exports_refuse_publication_for_selectors_and_object_targets() {
+    for (label, replacement) in [
+        ("return", "string version() { return \"bad\"; }"),
+        ("reference", "int version(int ref value) { return value; }"),
+    ] {
+        let (root, mut vm, admin) =
+            setup(&format!("system-exports-{label}"), &master(""), SIMUL).await;
+        let simul = vm
+            .global_state
+            .object_space
+            .lookup("/secure/simul_efuns")
+            .unwrap();
+        std::fs::write(
+            root.join("secure/simul_efuns.c"),
+            SIMUL.replace("int version() { return count; }", replacement),
+        )
         .unwrap();
-    let Some(VmOp::ObjectUpdate(restart)) = vm.next_op() else {
-        panic!("restart queued");
-    };
-    vm.global_state.run_object_update(restart.clone()).await;
-    let failed = vm.global_state.updates.get(restart.id).unwrap();
-    assert_eq!(failed.state, "failed");
-    assert!(failed.error.contains("was removed"));
-    assert_eq!(call(&vm, &admin, "status", &[id]).await.unwrap(), NULL);
-    assert_eq!(
-        call(&vm, &admin, "restart_status", &[failed.request.id.into()])
-            .await
-            .unwrap()
-            .as_lpc_type(),
-        lpc_rs_core::lpc_type::LpcType::Mapping(false)
-    );
+        for target in [LpcRef::from("both"), Arc::downgrade(&simul).into()] {
+            let status = run(&mut vm, &admin, target).await;
+            assert_eq!(status.state, "failed");
+            assert!(status.error.contains("incompatible"), "{}", status.error);
+            assert_eq!(status.updated, 0);
+            assert_eq!(
+                call(&vm, &admin, "identity", &[]).await.unwrap(),
+                LpcRef::from(1)
+            );
+            assert_eq!(
+                call(&vm, &admin, "named_call", &[]).await.unwrap(),
+                LpcRef::from(10)
+            );
+        }
+    }
 }
 
 #[tokio::test]
@@ -389,7 +414,7 @@ async fn object_target_preserves_global_cells_captured_by_unchanged_simul_code()
 #[tokio::test]
 async fn system_permission_is_required_for_selectors_and_object_targets_and_rechecked() {
     let policy = format!(
-        "{PERMISSIVE_MASTER} int allow = 1; int valid_reload() {{ return allow; }} int valid_recompile() {{ return 1; }} void revoke() {{ allow = 0; }}"
+        "{PERMISSIVE_MASTER} int allow = 1; int valid_recompile() {{ return allow; }} void revoke() {{ allow = 0; }}"
     );
     let (_root, mut vm, admin) = setup("system-upgrade-permission", &policy, SIMUL).await;
     let queued = request(&mut vm, &admin, "master".into()).await;
@@ -406,16 +431,12 @@ async fn system_permission_is_required_for_selectors_and_object_targets_and_rech
     );
     for target in [LpcRef::from("master"), Arc::downgrade(&current).into()] {
         let error = call(&vm, &admin, "request", &[target]).await.unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("system update permission denied")
-        );
+        assert!(error.to_string().contains("permission denied"));
     }
 }
 
 #[tokio::test]
-async fn upgrade_invalidates_running_system_code_and_conflicts_with_restart() {
+async fn concurrent_system_upgrades_conflict_and_retry() {
     let (root, mut vm, admin) = setup("system-upgrade-conflict", &master(""), SIMUL).await;
     let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
     let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
@@ -443,17 +464,8 @@ async fn upgrade_invalidates_running_system_code_and_conflicts_with_restart() {
         .await
         .unwrap()
         .unwrap();
-    call(&vm, &admin, "restart", &["simul_efun".into()])
-        .await
-        .unwrap();
-    let Some(VmOp::ObjectUpdate(restart)) = vm.next_op() else {
-        panic!("restart queued");
-    };
-    vm.global_state.run_object_update(restart.clone()).await;
-    assert_eq!(
-        vm.global_state.updates.get(restart.id).unwrap().state,
-        "succeeded"
-    );
+    let concurrent = run(&mut vm, &admin, "simul_efun".into()).await;
+    assert_eq!(concurrent.state, "succeeded", "{}", concurrent.error);
     assert!(
         body.commit_phase(&vm.global_state.committer_tx, staged)
             .await
@@ -554,4 +566,224 @@ async fn a_later_initializer_cannot_retire_an_earlier_member_of_the_pair() {
         call(&vm, &admin, "named_call", &[]).await.unwrap(),
         LpcRef::from(10)
     );
+}
+
+#[tokio::test]
+async fn each_system_prototype_requires_permission_for_selectors_and_object_arguments() {
+    for allowed in ["master", "simul_efuns"] {
+        let policy = format!(
+            "{PERMISSIVE_MASTER} int valid_recompile(object prototype) {{ return prototype == find_object(\"/secure/{allowed}\"); }}"
+        );
+        let (_root, mut vm, admin) =
+            setup(&format!("system-permission-{allowed}"), &policy, SIMUL).await;
+        let denied = if allowed == "master" {
+            "simul_efuns"
+        } else {
+            "master"
+        };
+        let object = vm
+            .global_state
+            .object_space
+            .lookup(format!("/secure/{denied}"))
+            .unwrap();
+        let selector = if denied == "master" {
+            "master"
+        } else {
+            "simul_efun"
+        };
+        for target in [
+            LpcRef::from(selector),
+            Arc::downgrade(&object).into(),
+            "both".into(),
+        ] {
+            let error = call(&vm, &admin, "request", &[target]).await.unwrap_err();
+            assert!(error.to_string().contains("permission denied"), "{error}");
+            assert!(vm.next_op().is_none());
+        }
+    }
+}
+
+#[tokio::test]
+async fn missing_permission_denies_system_selectors_and_object_arguments() {
+    let (_root, mut vm, admin) = setup("system-missing-permission", PERMISSIVE_MASTER, SIMUL).await;
+    let current = vm.global_state.object_space.master_object().unwrap();
+    for target in [
+        LpcRef::from("master"),
+        "simul_efun".into(),
+        "both".into(),
+        Arc::downgrade(&current).into(),
+    ] {
+        let error = call(&vm, &admin, "request", &[target]).await.unwrap_err();
+        assert!(error.to_string().contains("permission denied"), "{error}");
+    }
+    assert!(vm.next_op().is_none());
+}
+
+#[tokio::test]
+async fn deferred_authorization_preserves_caller_program_and_command_giver() {
+    let policy = format!(
+        r#"{PERMISSIVE_MASTER}
+        int valid_recompile(object prototype, object caller, string program) {{
+            return prototype == this_object() && caller == find_object("/admin")
+                && program == "/admin.c" && this_player() == caller;
+        }}
+    "#
+    );
+    let (_root, mut vm, admin) = setup("system-upgrade-provenance", &policy, SIMUL).await;
+    let template = TaskTemplate::from(vm.global_state.clone());
+    template.set_this_player(Some(admin.clone()));
+    apply_function_by_name("request", &["master".into()], admin, template, Some(5000))
+        .await
+        .unwrap()
+        .unwrap();
+    let Some(VmOp::ObjectUpdate(request)) = vm.next_op() else {
+        panic!("request queued");
+    };
+    vm.global_state.run_object_update(request.clone()).await;
+    let status = vm.global_state.updates.get(request.id).unwrap();
+    assert_eq!(status.state, "succeeded", "{}", status.error);
+}
+
+#[tokio::test]
+async fn callbacks_prepared_before_upgrade_resolve_new_simul_functions() {
+    let original = master("int valid_write() { return 1; }");
+    let (root, mut vm, admin) = setup("system-upgrade-prepared", &original, SIMUL).await;
+    let function =
+        match crate::interpreter::CommittedReader::committed_global(&vm.global_state, &admin, 2) {
+            LpcRef::Function(ptr) => ptr,
+            _ => panic!("saved function"),
+        };
+    let prepared = vm
+        .global_state
+        .prepare_function_ptr(&function, &[], None)
+        .await
+        .unwrap()
+        .unwrap();
+    std::fs::write(
+        root.join("secure/simul_efuns.c"),
+        SIMUL.replace(
+            "return count;",
+            "write_file(\"/callback\", \"new\"); return count;",
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        run(&mut vm, &admin, "simul_efun".into()).await.state,
+        "succeeded"
+    );
+    prepared.execute(5000).await.unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.join("callback")).unwrap(),
+        "new"
+    );
+}
+
+#[tokio::test]
+async fn an_existing_task_resolves_simul_and_master_at_attempt_start() {
+    let (root, mut vm, admin) = setup(
+        "system-upgrade-existing-task",
+        &master("int policy() { return 1; }"),
+        SIMUL,
+    )
+    .await;
+    let mut task: Task<MAX_CALL_STACK_SIZE> =
+        Task::new(TaskTemplate::from(vm.global_state.clone()).into_task_context(admin.clone()));
+    let current = vm.global_state.object_space.master_object().unwrap();
+    let mut master_task: Task<MAX_CALL_STACK_SIZE> =
+        Task::new(TaskTemplate::from(vm.global_state.clone()).into_task_context(current.clone()));
+    std::fs::write(
+        root.join("secure/simul_efuns.c"),
+        SIMUL.replace("return count;", "return 77;"),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("secure/master.c"),
+        master("int policy() { return 88; }"),
+    )
+    .unwrap();
+    assert_eq!(run(&mut vm, &admin, "both".into()).await.state, "succeeded");
+    task.timed_eval(
+        admin
+            .initial_program()
+            .lookup_function("direct")
+            .unwrap()
+            .clone(),
+        &[],
+        5000,
+    )
+    .await
+    .unwrap();
+    assert_eq!(task.result(), Some(LpcRef::from(77)));
+    master_task
+        .timed_eval_seed(
+            TaskSeed {
+                process: current,
+                entry: SeedEntry::Master("policy".into()),
+                args: Vec::<SeedArg>::new(),
+                initializes: false,
+            },
+            5000,
+        )
+        .await
+        .unwrap();
+    assert_eq!(master_task.result(), Some(LpcRef::from(88)));
+}
+
+#[tokio::test]
+async fn recursive_recompilation_fails_without_publication() {
+    let (root, mut vm, admin) = setup("system-upgrade-recursive", &master(""), SIMUL).await;
+    std::fs::write(
+        root.join("secure/master.c"),
+        master("int nested = request_object_recompile(\"both\");"),
+    )
+    .unwrap();
+    let status = run(&mut vm, &admin, "both".into()).await;
+    assert_eq!(status.state, "failed");
+    assert!(
+        status.error.contains("during preparation"),
+        "{}",
+        status.error
+    );
+    assert!(vm.next_op().is_none());
+    assert_eq!(
+        call(&vm, &admin, "named_call", &[]).await.unwrap(),
+        LpcRef::from(10)
+    );
+}
+
+#[tokio::test]
+async fn missing_configuration_and_missing_resident_are_refused() {
+    let root = lib_holding(
+        "system-upgrade-missing-config",
+        &[("secure/master.c", &master(""))],
+    );
+    let mut vm = Vm::new(crate::test_support::temp_lib_config(&root));
+    vm.bootstrap().await.unwrap();
+    let admin = vm
+        .initialize_process_from_code(
+            "/admin.c",
+            "int request(string target) { return request_object_recompile(target); }",
+        )
+        .await
+        .unwrap()
+        .context
+        .process;
+    let error = call(&vm, &admin, "request", &["simul_efun".into()])
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("no simul-efun source"));
+    assert!(vm.next_op().is_none());
+
+    let (_root, mut vm, admin) = setup("system-upgrade-missing-resident", &master(""), SIMUL).await;
+    let queued = request(&mut vm, &admin, "simul_efun".into()).await;
+    vm.initialize_process_from_code(
+        "/destroyer.c",
+        "void create() { destruct(find_object(\"/secure/simul_efuns\")); }",
+    )
+    .await
+    .unwrap();
+    vm.global_state.run_object_update(queued.clone()).await;
+    let status = vm.global_state.updates.get(queued.id).unwrap();
+    assert_eq!(status.state, "failed");
+    assert!(status.error.contains("no simul-efun object"));
 }
