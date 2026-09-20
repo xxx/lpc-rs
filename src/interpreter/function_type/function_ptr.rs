@@ -14,6 +14,7 @@ use ustr::Ustr;
 use crate::interpreter::program::Function;
 use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
+    call_frame::FrameReceiver,
     efun::{CALL_OTHER, EFUN_FUNCTIONS, compose::COMPOSE_RECEIVER_EXECUTOR},
     function_type::function_address::FunctionAddress,
     lpc_ref::{LpcRef, NULL},
@@ -76,6 +77,22 @@ pub struct FunctionPtr {
 }
 
 impl FunctionPtr {
+    pub(crate) fn frame_receiver(
+        &self,
+        process: Arc<Process>,
+        txn: &TxnHandle,
+    ) -> Arc<FrameReceiver> {
+        if let FunctionAddress::Local(_, function) = &self.address
+            && let Some(image) = function.retained_image()
+        {
+            return Arc::new(FrameReceiver {
+                process,
+                image: image.clone(),
+            });
+        }
+        FrameReceiver::new(process, txn)
+    }
+
     /// Get the name of the function being called.
     /// Will return the variable name in those cases.
     #[inline]
@@ -289,8 +306,8 @@ impl FunctionPtr {
                         self
                     )));
                 };
-                function.check_generation(process.image(txn).generation)?;
-                (process, function.function.clone())
+                let resolved = function.resolve(&process.image(txn))?;
+                (process, resolved)
             }
             FunctionAddress::Dynamic(name) => {
                 let receiver = first_arg(&mut args);

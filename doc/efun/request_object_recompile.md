@@ -43,12 +43,24 @@ layout. `create()` does not run again. Initializer effects and writes commit wit
 the upgrade. Errors or execution limits discard the whole preparation, leaving
 the old group active. Conflicting changes retry preparation.
 
-Old local function pointers and anonymous functions become stale after their
-receiver upgrades: invoking them raises `stale function pointer after object
-recompilation`. This includes pointers stored in globals, actions, `input_to`,
-and pending `call_out`s. Scheduled work is retained; stale callbacks fail when
-invoked. Recreate local callbacks after upgrading. Dynamic pointers, efun pointers
-and name-based simul-efun pointers keep their ordinary behavior.
+Existing named function pointers resolve to the corresponding function in the
+updated receiver, retaining their bound arguments. The declaring source, name,
+return and argument types, argument/default counts, reference parameters and
+function flags must remain compatible; a missing or incompatible definition
+raises an explicit error when called. Private and inherited pointers retain their
+original declaration binding.
+
+Anonymous functions keep their original code, captures and global-cell layout.
+Local calls made by that code use its original program; explicit object calls
+resolve the object's current code. Compatible globals share the updated object's
+cells. Removed or type-changed globals remain available to the old closure until
+it is released. Old closures can therefore retain old code and state in memory.
+
+These rules also apply to saved callbacks, actions, `input_to`, and pending or
+repeating `call_out`s, including callbacks prepared before an upgrade. Their
+schedules remain intact, and `create()` need not rerun to restore timers. Dynamic
+pointers, efun pointers and name-based simul-efun pointers retain their ordinary
+behavior.
 
 An inheriting program retains its compiled copy; update inheritors separately.
 Clones left behind by an earlier destruct/load cycle belong to a different group

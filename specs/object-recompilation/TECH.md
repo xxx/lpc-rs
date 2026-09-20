@@ -22,13 +22,19 @@ Relevant modules are `src/interpreter/process/mod.rs`, `program.rs`,
   Local calls share a receiver binding containing identity and image, retaining
   the 64-byte frame and its existing ownership cost. No physical pointer swap can
   bypass STM.
-- Tag local pointers and driver callback entries with their generation, and check
-  it whenever execution starts or retries. Named entries resolve anew per attempt.
+- Resolve named pointers and driver callback entries against the attempt's image,
+  retaining declaration identity and checking interface compatibility across
+  generations. Anonymous pointers retain their original image and captures;
+  nested local execution shares that image, while external calls use the current
+  image. Closures created by retained code inherit its image. Driver-generated
+  composition executors remain independent of user program generations.
 - Extend world tracing to follow current images and their global cells. Retired
-  layouts cease to root their globals after older attempts are released. Keep
-  compiler-only access to initial programs explicit.
+  layouts cease to root their globals once older attempts and reachable closures
+  release them. Keep compiler-only access to initial programs explicit.
   Each process retains its construction image as an immutable fallback until
-  destruction; later retired images are released with their last snapshot or frame.
+  destruction; later retired images are released with their last snapshot, frame
+  or anonymous function. Trace retained images' globals from reachable pointers
+  so removed variables remain usable until the last retaining closure is gone.
 - Compile once per upgrade attempt and build a declaration migration map from
   `global_variable_info`, keyed by declaring source, name, and exact declared type.
   Stage images for every group member, reusing compatible global cell identities,
@@ -40,9 +46,10 @@ Relevant modules are `src/interpreter/process/mod.rs`, `program.rs`,
 - Reuse the existing compilation gate and transactional source reader. Keep
   upgrade authorization explicit and denied by default. Update its reference,
   ulib example and reviewed apply record together.
-- Preserve scheduled work and reject stale local code at dispatch, including
-  callbacks resolved before a concurrent upgrade. Refuse active shadow chains and
-  changes to the construction-time cleanup eligibility in this first version.
+- Preserve scheduled work and repeat intervals, resolving named callback entries
+  again after a concurrent upgrade and retaining anonymous code and captures.
+  Refuse active shadow chains and changes to the construction-time cleanup
+  eligibility in this first version.
 
 ## Testing and validation
 
@@ -54,8 +61,10 @@ Relevant modules are `src/interpreter/process/mod.rs`, `program.rs`,
 - Fail after initializer writes and effects, and verify complete rollback; hold
   an old attempt across publication and verify conflict and refreshed execution;
   race global mutation, cloning and destruction (behavior 7–8).
-- Exercise local and anonymous pointer staleness, dynamic calls, pending callbacks,
-  clone enumeration, repeated upgrades and old program groups (behavior 9–10).
+- Exercise named callback rebinding, private and inherited declaration identity,
+  incompatible definitions, retained closures and their globals after GC,
+  repeating and prepared callbacks, composition, clone enumeration, repeated
+  upgrades and old program groups (behavior 9–10).
 - Check shadow and cleanup refusals, GC after migration, and compilation/runtime
   introspection against the selected image (behavior 11 and runtime invariants).
 - Run workspace tests, all-target clippy, formatting, and warning-free docs;
@@ -129,7 +138,7 @@ writes and compatible cell identities. All views are attempt-local.
 
 Validate identity/state retention, paired publication, repeated upgrades, current
 compiler exports, old-policy code and state, rollback, permissions, requester
-provenance, stale callbacks and conflicts with running work and other upgrades.
+provenance, callback continuity and conflicts with running work and other upgrades.
 
 ### System upgrade validation
 
@@ -168,3 +177,18 @@ arguments, caller provenance, concurrent upgrades, incompatible exports, prepare
 callbacks, recursive-request refusal and missing system objects. The retired
 initializer/GC check now lives alongside bootstrap initialization; destruction
 tests continue to cover delayed callout cancellation.
+
+### Callback continuity validation
+
+With callback preservation, `cargo test --workspace --no-fail-fast` passes 3,735
+tests with two existing ignored tests. Explicit ulib checks, strict all-target
+Clippy, formatting and warning-free rustdoc also pass.
+
+Ten additional scenarios cover repeating timers through multiple upgrades,
+anonymous captures and removed/type-changed globals through GC, lexical versus
+external calls from retained code, closures created by old code, private inherited
+bindings, incompatible interfaces, composition, prepared closures, reclamation
+after cancellation, and registered actions. Existing callback tests now verify
+updated named functions and preserved anonymous behavior, including system objects.
+Ordinary recursive calls retain the existing frame and receiver-sharing path;
+the performance measurements above apply to their explicitly recorded revisions.

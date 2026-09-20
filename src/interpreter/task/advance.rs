@@ -123,11 +123,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(Called::Framed)
             }
             Callee::Inherited {
-                process,
+                receiver,
                 function,
                 args,
             } => {
-                self.push_inherited_frame(process.clone(), function.clone(), args.iter().cloned())?;
+                self.push_inherited_frame(
+                    receiver.clone(),
+                    function.clone(),
+                    args.iter().cloned(),
+                )?;
                 Ok(Called::Framed)
             }
         }

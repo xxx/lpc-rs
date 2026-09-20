@@ -123,7 +123,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     func.clone()
                 };
 
-                FunctionAddress::local(&process, func, &self.context.txn)
+                FunctionAddress::in_image(&process, func, &frame.image)
             }
             FunctionReceiver::Var(receiver_location) => {
                 let receiver_ref =

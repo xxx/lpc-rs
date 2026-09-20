@@ -37,8 +37,9 @@ use crate::interpreter::program::Function;
 use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
     apply::diagnostics,
-    call_frame::CallFrame,
+    call_frame::{CallFrame, FrameReceiver},
     call_stack::CallStack,
+    function_type::function_address::LocalFunction,
     lpc_int::LpcInt,
     lpc_mapping::LpcMapping,
     lpc_ref::{BYTES_STRING_MIX, LpcRef, NULL},
@@ -92,7 +93,7 @@ pub enum SeedEntry {
         function: Function,
         owner: std::sync::Weak<Process>,
         simul: Option<String>,
-        generation: Option<VarId>,
+        local: Option<LocalFunction>,
         name: Option<String>,
     },
 }
@@ -142,13 +143,21 @@ impl TaskSeed {
             )));
         }
 
-        let mut frame = CallFrame::new(
-            process,
-            function,
-            RegisterSize::try_from(self.args.len())?,
-            upvalue_ptrs,
-            txn,
-        );
+        let image = match &self.entry {
+            SeedEntry::Callback {
+                local: Some(local), ..
+            } => local.retained_image(),
+            _ => None,
+        };
+        let receiver = match image {
+            Some(image) => Arc::new(FrameReceiver {
+                process,
+                image: image.clone(),
+            }),
+            None => FrameReceiver::new(process, txn),
+        };
+        let count = RegisterSize::try_from(self.args.len())?;
+        let mut frame = CallFrame::with_receiver(receiver, function, count, count, upvalue_ptrs);
         for (i, arg) in self.args.iter().enumerate() {
             frame.push_arg(txn, i, Self::value_of(arg, txn))?;
         }
@@ -435,7 +444,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 function,
                 owner,
                 simul,
-                generation,
+                local,
                 name,
             } => {
                 if !owner
@@ -463,12 +472,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         return Err(self.runtime_error("callback target is retired"));
                     }
                     let image = seed.process.image(&self.context.txn);
-                    if generation.is_some_and(|generation| image.generation != generation) {
-                        return Err(
-                            self.runtime_error("stale function pointer after object recompilation")
-                        );
-                    }
-                    let function = if let Some(name) = name {
+                    let function = if let Some(local) = local {
+                        local.resolve(&image)?
+                    } else if let Some(name) = name {
                         let Some(function) = image.program.lookup_function(name) else {
                             self.context.result.set(NULL)?;
                             return Ok(());

@@ -8,8 +8,11 @@ use lpc_rs_errors::{Result, span::Span};
 use smallvec::SmallVec;
 
 use crate::interpreter::{
-    call_frame::CollectionCall, function_type::function_ptr::FunctionPtr, lpc_ref::LpcRef,
-    process::Process, stm::TxnHandle,
+    call_frame::{CollectionCall, FrameReceiver},
+    function_type::function_ptr::FunctionPtr,
+    lpc_ref::LpcRef,
+    process::Process,
+    stm::TxnHandle,
 };
 
 /// An efun's callbacks one at a time: the next call, or the answer.
@@ -51,7 +54,7 @@ pub(crate) enum Callee {
     },
     /// An inherited definition on the current object, entered as a local call.
     Inherited {
-        process: Arc<Process>,
+        receiver: Arc<FrameReceiver>,
         function: Function,
         args: SmallVec<[LpcRef; 4]>,
     },

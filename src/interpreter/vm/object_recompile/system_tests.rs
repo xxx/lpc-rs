@@ -46,7 +46,7 @@ const ADMIN: &str = r#"
     int request(mixed target) { return request_object_recompile(target); }
     mapping status(int id) { return query_object_recompile(id); }
     int identity() { return master == find_object("/secure/master") && simul == find_object("/secure/simul_efuns"); }
-    int stale() { return !!catch(local()); }
+    int local_call() { return local(); }
     int named_call() { return named(); }
     int direct() { return version(); }
     int load() { return load_object("/consumer")->value(); }
@@ -174,8 +174,8 @@ async fn paired_upgrade_preserves_identity_state_and_uses_new_exports() {
         LpcRef::from(120)
     );
     assert_eq!(
-        call(&vm, &admin, "stale", &[]).await.unwrap(),
-        LpcRef::from(1)
+        call(&vm, &admin, "local_call", &[]).await.unwrap(),
+        LpcRef::from(120)
     );
     std::fs::write(
         root.join("consumer.c"),
@@ -524,8 +524,9 @@ async fn in_place_upgrade_invalidates_an_attempt_reading_the_old_image() {
 }
 
 #[tokio::test]
-async fn system_callouts_survive_upgrade_and_their_local_pointers_become_stale() {
-    let simul = format!("{SIMUL} void later() {{}} void arm() {{ call_out(later, 3600); }}");
+async fn system_callouts_and_local_pointers_survive_upgrade() {
+    let simul =
+        format!("{SIMUL} void later() {{ count += 2; }} void arm() {{ call_out(later, 3600); }}");
     let (root, mut vm, admin) = setup("system-upgrade-callout", &master(""), &simul).await;
     call(&vm, &admin, "arm", &[]).await.unwrap();
     std::fs::write(
@@ -536,10 +537,15 @@ async fn system_callouts_survive_upgrade_and_their_local_pointers_become_stale()
     let status = run(&mut vm, &admin, "simul_efun".into()).await;
     assert_eq!(status.state, "succeeded", "{}", status.error);
     assert_eq!(vm.global_state.with_call_outs(|calls| calls.len()), 1);
+    let id = vm
+        .global_state
+        .with_call_outs(|calls| calls.queue().iter().next().unwrap().1.id);
+    vm.global_state.prioritize_call_out(id).await.await.unwrap();
     assert_eq!(
-        call(&vm, &admin, "stale", &[]).await.unwrap(),
-        LpcRef::from(1)
+        call(&vm, &admin, "local_call", &[]).await.unwrap(),
+        LpcRef::from(12)
     );
+    assert_eq!(vm.global_state.with_call_outs(|calls| calls.len()), 0);
 }
 
 #[tokio::test]

@@ -69,7 +69,9 @@ const ADMIN: &str = r#"
             && first->created() == 1 && second->created() == 1
             && prototype->defaults() && first->defaults() && second->defaults();
     }
-    int stale() { return !!catch(local()) && !!catch(anonymous()); }
+    int pointers_fail() { return !!catch(local()) || !!catch(anonymous()); }
+    int local_value() { return local(); }
+    int closure_value() { return anonymous(); }
     int dynamic_value() { return dynamic(); }
     int new_clone() { return clone_object("/target")->value(); }
     void abort() { request(); throw("abort request"); }
@@ -176,8 +178,16 @@ async fn upgrades_identity_and_independent_state_with_new_defaults() {
         LpcRef::from(1)
     );
     assert_eq!(
-        call(&vm, &admin, "stale", &[]).await.unwrap(),
-        LpcRef::from(1)
+        call(&vm, &admin, "pointers_fail", &[]).await.unwrap(),
+        LpcRef::from(0)
+    );
+    assert_eq!(
+        call(&vm, &admin, "local_value", &[]).await.unwrap(),
+        LpcRef::from(210)
+    );
+    assert_eq!(
+        call(&vm, &admin, "closure_value", &[]).await.unwrap(),
+        LpcRef::from(21)
     );
     assert_eq!(
         call(&vm, &admin, "dynamic_value", &[]).await.unwrap(),
@@ -223,7 +233,7 @@ async fn compilation_and_initializer_failures_leave_the_whole_group_unchanged() 
             LpcRef::from(64)
         );
         assert_eq!(
-            call(&vm, &admin, "stale", &[]).await.unwrap(),
+            call(&vm, &admin, "pointers_fail", &[]).await.unwrap(),
             LpcRef::from(0)
         );
         assert!(!root.join("leak").exists());
@@ -299,7 +309,7 @@ async fn an_old_attempt_keeps_its_layout_but_conflicts_after_publication() {
 }
 
 #[tokio::test]
-async fn a_prepared_local_callback_becomes_stale_but_a_dynamic_one_rebinds() {
+async fn prepared_named_and_dynamic_callbacks_resolve_the_updated_program() {
     let (root, mut vm, admin) = setup("recompile-callback").await;
     let LpcRef::Function(local) = vm.global_state.committed_global(&admin, 3) else {
         panic!("local pointer");
@@ -319,17 +329,23 @@ async fn a_prepared_local_callback_becomes_stale_but_a_dynamic_one_rebinds() {
         .await
         .unwrap()
         .unwrap();
-    std::fs::write(root.join("target.c"), UPDATED).unwrap();
+    std::fs::write(
+        root.join("target.c"),
+        UPDATED.replace("return health * 10;", "health++; return health * 10;"),
+    )
+    .unwrap();
     assert_eq!(run(&mut vm, &admin).await.state, "succeeded");
-    assert!(
-        local
-            .execute(5000)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("stale function pointer")
+    let first = vm.global_state.object_space.lookup("/target#0").unwrap();
+    local.execute(5000).await.unwrap();
+    assert_eq!(
+        vm.global_state.committed_global(&first, 3),
+        LpcRef::from(22)
     );
     dynamic.execute(5000).await.unwrap();
+    assert_eq!(
+        vm.global_state.committed_global(&first, 3),
+        LpcRef::from(23)
+    );
 }
 
 #[tokio::test]
@@ -536,7 +552,7 @@ async fn old_program_groups_and_inheritors_are_unchanged() {
         LpcRef::from(21)
     );
     assert_eq!(
-        call(&vm, &admin, "stale", &[]).await.unwrap(),
+        call(&vm, &admin, "pointers_fail", &[]).await.unwrap(),
         LpcRef::from(0)
     );
     assert_eq!(
@@ -572,7 +588,7 @@ async fn queued_callouts_survive_publication_and_validate_their_binding_when_fir
         .unwrap();
     assert_eq!(
         call(&vm, &first, "value", &[]).await.unwrap(),
-        LpcRef::from(210)
+        LpcRef::from(550)
     );
     vm.global_state
         .prioritize_call_out(ids[1])

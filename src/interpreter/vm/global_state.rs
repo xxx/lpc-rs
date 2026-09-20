@@ -35,7 +35,7 @@ pub struct PreparedCall {
 }
 
 impl PreparedCall {
-    /// Run the callback, resolving a simul-efun target anew on every attempt.
+    /// Run the callback, resolving named targets anew and retaining anonymous code.
     pub async fn execute(self, timeout_ms: u64) -> Result<()> {
         use crate::interpreter::task::{SeedArg, TaskSeed};
         let seed = TaskSeed {
@@ -230,8 +230,8 @@ impl GlobalState {
                     FunctionAddress::SimulEfun(name) => Some(name.to_string()),
                     _ => None,
                 },
-                generation: match &ptr.address {
-                    FunctionAddress::Local(_, function) => Some(function.generation),
+                local: match &ptr.address {
+                    FunctionAddress::Local(_, function) => Some(function.clone()),
                     _ => None,
                 },
                 name: match &ptr.address {

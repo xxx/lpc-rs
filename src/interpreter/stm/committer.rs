@@ -8,6 +8,7 @@ use tokio::sync::watch;
 use tracing::error;
 
 use crate::interpreter::{
+    function_type::function_address::FunctionAddress,
     lpc_ref::LpcRef,
     stm::{
         CommitOrigin, Conflict, VarId, Version, WorldValue, changeset::Changeset,
@@ -366,6 +367,12 @@ impl Committer {
                         work.push(MarkWork::Var(svar.id));
                     }
                     LpcRef::Function(fun) => {
+                        if let FunctionAddress::Local(_, local) = &fun.address
+                            && let Some(image) = local.retained_image()
+                        {
+                            work.extend(image.world_var_ids().map(MarkWork::Var));
+                        }
+
                         work.extend(
                             fun.partial_args()
                                 .iter()

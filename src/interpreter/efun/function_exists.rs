@@ -25,7 +25,9 @@ pub async fn function_exists<const N: usize>(context: &mut EfunContext<'_, N>) -
     let own = Arc::ptr_eq(&target, context.process());
     let program = target.program(context.txn());
     let function = match name.split_once("::") {
-        Some(_) if own => context.lookup_inherited_function(name),
+        Some(_) if own => context
+            .lookup_inherited_function(name)
+            .map(|(_, function)| function),
         Some((namespace, name)) => program
             .lookup_inherited_function(&program.filename, namespace, name)
             .filter(|function| !function.prototype.flags.private())

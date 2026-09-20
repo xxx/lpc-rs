@@ -139,7 +139,7 @@ int valid_variable_info(object caller, object target, string program) {
  * caller requested it and program defines the request; the active master
  * asks again before compilation, preserving the original command giver.
  * Missing this hook also denies upgrades; return 0 because ulib provides
- * no administration command to rebuild local callbacks after an upgrade.
+ * no privileged administration command for upgrading objects.
  * This hook also controls master and simul-efun upgrades; preparation uses
  * the old policy code and global layouts until the entire update commits.
  */

@@ -149,16 +149,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         Liveness::Dead => return Err(destructed_receiver(ptr)),
                         Liveness::Uninitialized => Resolved::Suspends,
                         Liveness::Ready => {
-                            let generation = self
-                                .stack
-                                .last()
-                                .filter(|frame| Arc::ptr_eq(&frame.process, &process))
-                                .map_or_else(
-                                    || process.image(&self.context.txn).generation,
-                                    |frame| frame.image.generation,
-                                );
-                            function.check_generation(generation)?;
-                            Resolved::Frame(self.resident_frame(process, function, ptr, passed)?)
+                            let resolved = function.resolve(&process.image(&self.context.txn))?;
+                            Resolved::Frame(self.resident_frame(process, &resolved, ptr, passed)?)
                         }
                     }
                 }
@@ -296,7 +288,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let txn = &self.context.txn;
         let num_args = self.checked_register_count(ptr.bound_len(passed.len()), function)?;
         let mut frame = CallFrame::with_receiver(
-            self.receiver_for(process),
+            ptr.frame_receiver(process, txn),
             function.clone(),
             num_args,
             num_args,
@@ -478,12 +470,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         let num_args = self.checked_register_count(args.len(), &function)?;
-        let mut new_frame = CallFrame::new(
-            process,
+        let mut new_frame = CallFrame::with_receiver(
+            ptr.frame_receiver(process, &self.context.txn),
             function.clone(),
             num_args,
+            num_args,
             Some(ptr.upvalue_ptrs.as_slice()),
-            &self.context.txn,
         );
         for (i, arg) in args.into_iter().enumerate() {
             new_frame.push_arg(&self.context.txn, i, arg)?;

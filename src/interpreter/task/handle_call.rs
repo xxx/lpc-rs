@@ -86,7 +86,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// A resolved `call_inherited` with value arguments and local-call history.
     pub(super) fn push_inherited_frame(
         &mut self,
-        process: Arc<Process>,
+        receiver: Arc<FrameReceiver>,
         function: Function,
         args: impl ExactSizeIterator<Item = LpcRef>,
     ) -> lpc_rs_errors::Result<()> {
@@ -106,13 +106,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 num_args
             )));
         }
-        let mut frame = CallFrame::with_receiver(
-            self.receiver_for(process),
-            function,
-            num_args,
-            num_args,
-            None::<&[VarId]>,
-        );
+        let mut frame =
+            CallFrame::with_receiver(receiver, function, num_args, num_args, None::<&[VarId]>);
         for (i, arg) in args.enumerate() {
             let prototype = &frame.function.prototype;
             check_arg_type(
@@ -137,7 +132,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         list: ArgList,
         entry: CallEntry,
     ) -> lpc_rs_errors::Result<()> {
-        let receiver = self.receiver_for(process);
+        let receiver = if entry.external() {
+            FrameReceiver::new(process, &self.context.txn)
+        } else {
+            self.receiver_for(process)
+        };
         self.push_receiver_frame(receiver, func, list, entry)
     }
 

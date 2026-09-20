@@ -18,7 +18,7 @@ use crate::command::{
     registry::{ActorRules, VerbRules},
 };
 use crate::interpreter::{
-    call_frame::CallFrame,
+    call_frame::{CallFrame, FrameReceiver},
     call_stack::CallStack,
     continuation::{Continuation, EfunContinuation, Pending},
     efun::Efun,
@@ -633,15 +633,26 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     /// An accessible inherited definition in the source scope that invoked this efun.
-    pub(crate) fn lookup_inherited_function(&self, name: &str) -> Option<Function> {
+    pub(crate) fn lookup_inherited_function(
+        &self,
+        name: &str,
+    ) -> Option<(Arc<FrameReceiver>, Function)> {
         let (namespace, name) = name.split_once("::").unwrap_or(("", name));
-        let program = self.process().program(self.txn());
+        let receiver = self
+            .caller_frame()
+            .filter(|frame| Arc::ptr_eq(&frame.process, self.process()))
+            .map_or_else(
+                || FrameReceiver::new(self.process().clone(), self.txn()),
+                |frame| frame.receiver.clone(),
+            );
+        let program = &receiver.image.program;
         let scope = self.calling_program_path().unwrap_or(&program.filename);
         let scope = self.config().paths().program_path(scope);
-        program
+        let function = program
             .lookup_inherited_function(&scope, namespace, name)
-            .filter(|function| !function.prototype.flags.private())
-            .cloned()
+            .filter(|function| !function.prototype.flags.private())?
+            .clone();
+        Some((receiver, function))
     }
 
     /// Get a reference to `this_player` from the context

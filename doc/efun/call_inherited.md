@@ -18,10 +18,11 @@ A `void` function returns `0`.
   Local functions, efuns, and simul-efuns are not fallback targets.
 
 Inherited code keeps its own parents and aliases. Closures and pointers to this
-efun use the source scope where they were created. Calls use the current
-object's compiled program without loading or initializing parent objects.
-The inherited function operates on the current object's globals, including
-when that object is a clone.
+efun use the source scope where they were created. Calls use the executing code's
+program without loading or initializing parent objects. An anonymous closure
+retained across recompilation keeps its original inherited definitions and
+global-cell layout. The inherited function operates on the receiver's globals,
+including when that object is a clone.
 
 A direct call to this efun preserves the caller's `previous_object()`, as a
 direct `::foo()` call does. The inherited function sees the calling LPC function
@@ -59,4 +60,4 @@ existence guard; `call_inherited()` provides the optional call.
 
 ## See also
 
-`function_exists`, `call_other`, `inherit_list`, `previous_object`
+`function_exists`, `call_other`, `inherit_list`, `previous_object`, `request_object_recompile`

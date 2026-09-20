@@ -37,11 +37,19 @@ upgrade; failed preparation leaves the entire group unchanged.
 8. Running work observes consistent code and globals. Work invalidated by an
    upgrade retries against the new program. Newly created clones use the new
    program after publication.
-9. Local function pointers and anonymous functions made before the upgrade of
-   their receiver become stale and raise an explicit error when called. Dynamic,
-   efun, and name-based simul-efun pointers retain their normal behavior. Pending
-   callbacks are retained, but a callback holding a stale local pointer fails
-   when invoked; callers must recreate such pointers after upgrading.
+9. Named function pointers and callbacks resolve to their corresponding updated
+   definition while keeping bound arguments and their original declaring source.
+   Return and argument types, argument/default counts, reference parameters and
+   flags must remain compatible; removed or incompatible definitions fail
+   explicitly when invoked. This includes private and inherited definitions.
+   Anonymous functions retain their original code, captures and global layout;
+   their local calls retain that code's program, while explicit object calls use
+   the current program. Compatible globals share cells with the updated object;
+   removed or type-changed globals remain available to retained closures.
+   Pending and repeating callbacks keep their schedules, including work prepared
+   before the upgrade. GC retains the old cells while a closure remains reachable
+   and reclaims them once no longer needed. Dynamic, efun and name-based simul-efun
+   pointers retain their ordinary behavior.
 10. Clone enumeration reports the upgraded group consistently from either the
     prototype or a clone. An old generation still enumerates its own group.
 11. The first version refuses objects participating in a shadow chain and changes
