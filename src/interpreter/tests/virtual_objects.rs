@@ -114,7 +114,10 @@ mod the_apply {
         let instance = resident(&vm, "/inst/17/d/room1");
         assert_eq!(instance.filename(), "/inst/17/d/room1");
         assert!(!instance.is_clone());
-        assert!(Arc::ptr_eq(&instance.program, &blueprint.program));
+        assert!(Arc::ptr_eq(
+            instance.initial_program(),
+            blueprint.initial_program()
+        ));
         assert!(vm.global_state.is_initialized(&instance));
         assert_eq!(
             committed_string(&vm, &master, SEEN_PATH),
@@ -771,8 +774,8 @@ mod in_the_instance {
         assert_eq!(committed_string(&vm, &a, 1), "/d/room2");
         let two = resident(&vm, "/inst/17/d/room2");
         assert!(Arc::ptr_eq(
-            &two.program,
-            &resident(&vm, "/d/room2").program
+            two.initial_program(),
+            resident(&vm, "/d/room2").initial_program()
         ));
     }
 

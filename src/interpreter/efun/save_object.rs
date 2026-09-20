@@ -5,15 +5,14 @@ use crate::interpreter::{
     VALID_WRITE,
     efun::{efun_context::EfunContext, file_access::authorize_save},
     lpc_ref::LpcRef,
-    process::Process,
+    program::Program,
     save_format::write_line,
 };
 
 /// The globals `save_object` writes: every non-static one by name, in slot
 /// order (parents first). A name declared twice keeps its last declaration.
-pub(crate) fn saved_globals(process: &Process) -> Vec<(&str, RegisterSize)> {
-    let mut slots: Vec<(&str, RegisterSize)> = process
-        .program
+pub(crate) fn saved_globals(program: &Program) -> Vec<(&str, RegisterSize)> {
+    let mut slots: Vec<(&str, RegisterSize)> = program
         .global_variables
         .iter()
         .filter(|(_, sym)| !sym.flags.is_static())
@@ -33,12 +32,12 @@ pub(crate) fn saved_globals(process: &Process) -> Vec<(&str, RegisterSize)> {
 pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize_save(context, "save_object", VALID_WRITE, 0).await?;
     let in_game = access.to_string();
-    let process = context.process().clone();
+    let image = context.process().image(context.txn());
     let mut contents = String::new();
-    for (name, reg) in saved_globals(&process) {
+    for (name, reg) in saved_globals(&image.program) {
         let value = context
             .txn()
-            .with(|t| t.read(process.var_id(reg)))
+            .with(|t| t.read(image.var_id(reg)))
             .unwrap_or_else(|| LpcRef::from(0));
         write_line(&mut contents, name, &value, context.txn())
             .map_err(|e| e.with_span(context.call_site_span()))?;

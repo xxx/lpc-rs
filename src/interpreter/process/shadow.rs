@@ -172,7 +172,7 @@ impl Process {
         name: &str,
     ) -> Option<(Arc<Process>, Function)> {
         let defined_on = |object: Arc<Process>| {
-            let function = object.program.unmangled_functions.get(name).cloned()?;
+            let function = object.program(txn).unmangled_functions.get(name).cloned()?;
             Some((object, function))
         };
         match Self::shadow_entry(txn, ob, name, ob) {
@@ -206,7 +206,7 @@ impl Process {
                     continue;
                 }
                 if let Some(function) = shadow
-                    .program
+                    .program(txn)
                     .lookup_function(name)
                     .filter(|function| function.public())
                 {

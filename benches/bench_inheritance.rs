@@ -50,7 +50,11 @@ fn inheritance(c: &mut Criterion) {
                 .context
                 .process;
         for name in ["read_cells", "references", "calls", "qualified", "pointers"] {
-            let function = process.program.lookup_function(name).unwrap().clone();
+            let function = process
+                .initial_program()
+                .lookup_function(name)
+                .unwrap()
+                .clone();
             group.bench_function(BenchmarkId::new(layout, name), |b| {
                 b.to_async(&runtime).iter(|| async {
                     let mut task: Task<64> =

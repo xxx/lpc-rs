@@ -21,6 +21,13 @@ such function, removes the call out, repeating or not; a firing that ran and
 threw leaves a repeating call out repeating. Either error goes to the master's
 `error_handler`.
 
+Recompilation preserves the schedule and repeat interval. A named callback uses
+the corresponding compatible function in the updated receiver; a removed or
+incompatible definition fails when it fires. An anonymous callback keeps its
+original code, captured variables and global-cell layout. Compatible globals
+remain shared with the updated object. See `request_object_recompile` for the
+binding and compatibility rules.
+
 The callback runs in its own transaction with a fresh execution allowance.
 Calling `reset_room()` directly from `create_room()` keeps NPC creation,
 movement, and their callbacks inside the room's creation transaction. Using
@@ -73,4 +80,4 @@ are what you expect!
 
 ### See Also
 
-`remove_call_out`, `query_call_out`, `query_call_outs`, `previous_object`
+`remove_call_out`, `query_call_out`, `query_call_outs`, `previous_object`, `request_object_recompile`

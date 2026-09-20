@@ -114,7 +114,11 @@ pub fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 
     let ptr = FunctionPtrBuilder::default()
         .owner(Arc::downgrade(context.process()))
-        .address(FunctionAddress::local(context.process(), executor.into()))
+        .address(FunctionAddress::local(
+            context.process(),
+            executor.into(),
+            context.txn(),
+        ))
         .partial_args(partial_args)
         .build()
         .unwrap();

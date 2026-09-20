@@ -11,6 +11,7 @@ use crate::{
     interpreter::{
         object_space::ObjectSpace,
         process::Process,
+        program::Program,
         task::{Task, task_template::TaskTemplate},
     },
     util::get_simul_efuns,
@@ -24,7 +25,7 @@ async fn compile_to_process<F, Fut>(
     object_space: &ObjectSpace,
     gate: Option<Arc<dyn CompileGate>>,
     source_reader: Option<Arc<dyn SourceReader>>,
-    simul_efuns: Option<Arc<Process>>,
+    simul_efuns: Option<Arc<Program>>,
     compile: F,
 ) -> Result<(Arc<Process>, Vec<LpcError>)>
 where
@@ -67,7 +68,8 @@ pub(crate) async fn compile_process_from_path(
         object_space,
         gate,
         source_reader,
-        get_simul_efuns(object_space.config(), object_space),
+        get_simul_efuns(object_space.config(), object_space)
+            .map(|process| process.initial_program().clone()),
         |compiler| async move { compiler.compile_in_game_file(path, None).await },
     )
     .await
@@ -91,7 +93,8 @@ where
         object_space,
         gate,
         source_reader,
-        get_simul_efuns(object_space.config(), object_space),
+        get_simul_efuns(object_space.config(), object_space)
+            .map(|process| process.initial_program().clone()),
         |compiler| async move { compiler.compile_string(filename, code).await },
     )
     .await
@@ -105,7 +108,7 @@ pub(crate) async fn compile_process_in_context(
     gate: Arc<dyn CompileGate>,
     source_reader: Arc<dyn SourceReader>,
 ) -> Result<(Arc<Process>, Vec<LpcError>)> {
-    let simul = ctx.simul_efuns();
+    let simul = ctx.simul_efuns().map(|process| process.program(ctx.txn()));
     compile_to_process(
         ctx.object_space(),
         Some(gate),

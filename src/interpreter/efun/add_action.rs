@@ -81,7 +81,8 @@ pub(crate) fn handler_from<const N: usize>(
     match arg {
         LpcRef::String(name) => {
             let this_object = context.process();
-            let Some(function) = this_object.program.unmangled_functions.get(name.to_str()) else {
+            let program = this_object.program(context.txn());
+            let Some(function) = program.unmangled_functions.get(name.to_str()) else {
                 return Err(context.runtime_error(format!(
                     "{efun}: no function `{}` in {}",
                     name.to_str(),
@@ -91,7 +92,11 @@ pub(crate) fn handler_from<const N: usize>(
             let owner = Arc::downgrade(this_object);
             let ptr = FunctionPtrBuilder::default()
                 .owner(owner)
-                .address(FunctionAddress::local(this_object, function.clone()))
+                .address(FunctionAddress::local(
+                    this_object,
+                    function.clone(),
+                    context.txn(),
+                ))
                 .build()
                 .map_err(|e| context.runtime_bug(format!("{efun}: {e}")))?;
             Ok(Arc::new(ptr))

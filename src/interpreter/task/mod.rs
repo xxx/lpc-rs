@@ -1,3 +1,4 @@
+use lpc_rs_core::mangle::Mangle;
 mod advance;
 pub mod apply_function;
 pub mod eval_loop;
@@ -36,8 +37,9 @@ use crate::interpreter::program::Function;
 use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
     apply::diagnostics,
-    call_frame::CallFrame,
+    call_frame::{CallFrame, FrameReceiver},
     call_stack::CallStack,
+    function_type::function_address::LocalFunction,
     lpc_int::LpcInt,
     lpc_mapping::LpcMapping,
     lpc_ref::{BYTES_STRING_MIX, LpcRef, NULL},
@@ -91,6 +93,8 @@ pub enum SeedEntry {
         function: Function,
         owner: std::sync::Weak<Process>,
         simul: Option<String>,
+        local: Option<LocalFunction>,
+        name: Option<String>,
     },
 }
 
@@ -139,12 +143,21 @@ impl TaskSeed {
             )));
         }
 
-        let mut frame = CallFrame::new(
-            process,
-            function,
-            RegisterSize::try_from(self.args.len())?,
-            upvalue_ptrs,
-        );
+        let image = match &self.entry {
+            SeedEntry::Callback {
+                local: Some(local), ..
+            } => local.retained_image(),
+            _ => None,
+        };
+        let receiver = match image {
+            Some(image) => Arc::new(FrameReceiver {
+                process,
+                image: image.clone(),
+            }),
+            None => FrameReceiver::new(process, txn),
+        };
+        let count = RegisterSize::try_from(self.args.len())?;
+        let mut frame = CallFrame::with_receiver(receiver, function, count, count, upvalue_ptrs);
         for (i, arg) in self.args.iter().enumerate() {
             frame.push_arg(txn, i, Self::value_of(arg, txn))?;
         }
@@ -275,7 +288,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     async fn initialize(context: TaskContext, publish: bool) -> Result<Task<STACKSIZE>> {
-        let Some(initializer) = context.process.program.initializer.clone() else {
+        let Some(initializer) = context.process.program(context.txn()).initializer.clone() else {
             let msg = format!(
                 "Init function not found for `{}`. This should never happen.",
                 context.process
@@ -398,9 +411,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(());
                 }
                 let Some(function) = process
-                    .program
+                    .program(&self.context.txn)
                     .unmangled_functions
                     .get(crate::interpreter::CLEAN_UP)
+                    .cloned()
                 else {
                     return Ok(());
                 };
@@ -410,12 +424,28 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 if !seed.process.is_live(&self.context.txn) {
                     return Err(self.runtime_error("attempted to execute a retired object"));
                 }
-                (seed.process.clone(), function.clone())
+                let image = seed.process.image(&self.context.txn);
+                let function = if image.generation != seed.process.initial_image().generation
+                    && !function.is_driver_code()
+                {
+                    image
+                        .program
+                        .function(ustr::ustr(&function.prototype.mangle()))
+                        .cloned()
+                        .ok_or_else(|| {
+                            self.runtime_error("entry function was removed by object recompilation")
+                        })?
+                } else {
+                    function.clone()
+                };
+                (seed.process.clone(), function)
             }
             SeedEntry::Callback {
                 function,
                 owner,
                 simul,
+                local,
+                name,
             } => {
                 if !owner
                     .upgrade()
@@ -428,28 +458,44 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .context
                         .simul_efuns()
                         .ok_or_else(|| self.runtime_error("no simul-efun object is loaded"))?;
-                    let function =
-                        process
-                            .program
-                            .lookup_function(name)
-                            .cloned()
-                            .ok_or_else(|| {
-                                self.runtime_error(format!("unknown simul efun `{name}`"))
-                            })?;
+                    let function = process
+                        .program(&self.context.txn)
+                        .lookup_function(name)
+                        .cloned()
+                        .ok_or_else(|| {
+                            self.runtime_error(format!("unknown simul efun `{name}`"))
+                        })?;
                     self.context.process = process.clone();
                     (process, function)
                 } else {
                     if !seed.process.is_live(&self.context.txn) {
                         return Err(self.runtime_error("callback target is retired"));
                     }
-                    (seed.process.clone(), function.clone())
+                    let image = seed.process.image(&self.context.txn);
+                    let function = if let Some(local) = local {
+                        local.resolve(&image)?
+                    } else if let Some(name) = name {
+                        let Some(function) = image.program.lookup_function(name) else {
+                            self.context.result.set(NULL)?;
+                            return Ok(());
+                        };
+                        function.clone()
+                    } else {
+                        function.clone()
+                    };
+                    (seed.process.clone(), function)
                 }
             }
             SeedEntry::Master(name) => {
                 let Some(master) = self.context.master_object() else {
                     return Ok(());
                 };
-                let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
+                let Some(function) = master
+                    .program(&self.context.txn)
+                    .unmangled_functions
+                    .get(name)
+                    .cloned()
+                else {
                     return Ok(());
                 };
                 self.context.process = master.clone();
@@ -480,8 +526,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     0
                 } else {
                     1 + self.context.txn.with(|txn| {
-                        txn.read_array(process.program.clones.id)
-                            .map_or(0, |clones| clones.len())
+                        {
+                            let image = process.image_in(txn);
+                            txn.read_array(image.program.clones.id)
+                        }
+                        .map_or(0, |clones| clones.len())
                     }) as i64
                 };
                 cleanup_seed = TaskSeed {
@@ -971,7 +1020,7 @@ mod stm_retry_tests {
     ) -> (Result<()>, RetryStats) {
         let process = task.context.process().clone();
         let f = process
-            .program
+            .initial_program()
             .unmangled_functions
             .get("foo")
             .cloned()

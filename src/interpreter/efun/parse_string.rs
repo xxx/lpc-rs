@@ -210,7 +210,13 @@ impl Evaluator<'_> {
     /// result replaces the subtree, anything else — or no such function —
     /// blocks.
     async fn apply(&self, name: &str, values: Vec<LpcRef>) -> Result<Evaluated> {
-        let Some(function) = self.this.program.unmangled_functions.get(name).cloned() else {
+        let Some(function) = self
+            .this
+            .program(self.ctx.txn())
+            .unmangled_functions
+            .get(name)
+            .cloned()
+        else {
             return Ok(None);
         };
         let tree = LpcRef::Array(

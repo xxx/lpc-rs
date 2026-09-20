@@ -71,7 +71,12 @@ mod tests {
             })
             .unwrap();
 
-        let name = result.process.program.global_variables.get("name").unwrap();
+        let name = result
+            .process
+            .initial_program()
+            .global_variables
+            .get("name")
+            .unwrap();
         let RegisterVariant::Global(reg) = name.location.unwrap() else {
             panic!("name is not a global");
         };

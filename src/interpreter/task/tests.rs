@@ -26,7 +26,7 @@ use crate::{
 
 /// Committed global values by name, read through the committer.
 fn committed_globals_by_name(gs: &Arc<GlobalState>, proc: &Process) -> HashMap<String, LpcRef> {
-    proc.program
+    proc.initial_program()
         .global_variables
         .iter()
         .filter_map(|(name, sym)| {
@@ -1893,10 +1893,16 @@ mod test_instructions {
             assert!(context.simul_efuns().is_none());
 
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context);
-            let mut create = (**process.program.lookup_function("create").unwrap()).clone();
+            let mut create =
+                (**process.initial_program().lookup_function("create").unwrap()).clone();
             create.arg_lists.push(vec![]);
-            let mut frame =
-                CallFrame::new(process.clone(), Arc::new(create), 0, None::<ThinVec<VarId>>);
+            let mut frame = CallFrame::new(
+                process.clone(),
+                Arc::new(create),
+                0,
+                None::<ThinVec<VarId>>,
+                &crate::interpreter::stm::TxnHandle::default(),
+            );
             let ptr = FunctionPtrBuilder::default()
                 .owner(Arc::downgrade(&process))
                 .address(FunctionAddress::SimulEfun(ustr("nope")))
@@ -1939,8 +1945,18 @@ mod test_instructions {
             ObjectSpace::insert_process_physical(&global_state.object_space, process.clone());
             let context = TaskTemplate::from(global_state).into_task_context(process.clone());
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context);
-            let create = process.program.lookup_function("create").unwrap().clone();
-            let frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
+            let create = process
+                .initial_program()
+                .lookup_function("create")
+                .unwrap()
+                .clone();
+            let frame = CallFrame::new(
+                process.clone(),
+                create,
+                0,
+                None::<ThinVec<VarId>>,
+                &crate::interpreter::stm::TxnHandle::default(),
+            );
             task.stack.push(frame).unwrap();
 
             let e = task.handle_call(ustr("nope"), ArgList(0)).unwrap_err();
@@ -1973,15 +1989,25 @@ mod test_instructions {
             ObjectSpace::insert_process_physical(&global_state.object_space, process.clone());
             let context = TaskTemplate::from(global_state).into_task_context(process.clone());
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context);
-            let mut create = (**process.program.lookup_function("create").unwrap()).clone();
+            let mut create =
+                (**process.initial_program().lookup_function("create").unwrap()).clone();
             create
                 .arg_lists
                 .push(vec![Arg::Value(Register(1).as_local())]);
-            let mut frame =
-                CallFrame::new(process.clone(), Arc::new(create), 0, None::<ThinVec<VarId>>);
+            let mut frame = CallFrame::new(
+                process.clone(),
+                Arc::new(create),
+                0,
+                None::<ThinVec<VarId>>,
+                &crate::interpreter::stm::TxnHandle::default(),
+            );
             frame.registers[1] = LpcRef::from(1);
             task.stack.push(frame).unwrap();
-            let f = process.program.lookup_function("f").unwrap().clone();
+            let f = process
+                .initial_program()
+                .lookup_function("f")
+                .unwrap()
+                .clone();
 
             let e = task
                 .push_call_frame(process.clone(), f, ArgList(0), CallEntry::Direct)
@@ -2200,8 +2226,18 @@ mod test_instructions {
             ObjectSpace::insert_process_physical(&global_state.object_space, process.clone());
             let context = TaskTemplate::from(global_state).into_task_context(process.clone());
             let mut task = Task::new(context);
-            let create = process.program.lookup_function("create").unwrap().clone();
-            let frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
+            let create = process
+                .initial_program()
+                .lookup_function("create")
+                .unwrap()
+                .clone();
+            let frame = CallFrame::new(
+                process.clone(),
+                create,
+                0,
+                None::<ThinVec<VarId>>,
+                &crate::interpreter::stm::TxnHandle::default(),
+            );
             task.stack.push(frame).unwrap();
             task
         }
@@ -5309,7 +5345,7 @@ mod test_upvalues {
         let f = task
             .context
             .process()
-            .program
+            .initial_program()
             .unmangled_functions
             .get("bump")
             .cloned()

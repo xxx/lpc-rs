@@ -753,10 +753,18 @@ mod tests {
 
         let r = vm.initialize_process_from_code("/foo/bar.c", code).await;
         let proc = r.unwrap().context.process;
-        let func = proc.program.lookup_function("foo").unwrap().clone();
+        let func = proc
+            .initial_program()
+            .lookup_function("foo")
+            .unwrap()
+            .clone();
 
         let ptr = FunctionPtrBuilder::default()
-            .address(FunctionAddress::local(&proc, func.clone()))
+            .address(FunctionAddress::local(
+                &proc,
+                func.clone(),
+                &crate::interpreter::stm::TxnHandle::default(),
+            ))
             .build()
             .unwrap();
 
@@ -806,10 +814,18 @@ mod tests {
             .unwrap()
             .context
             .process;
-        let func = proc.program.lookup_function("heard").unwrap().clone();
+        let func = proc
+            .initial_program()
+            .lookup_function("heard")
+            .unwrap()
+            .clone();
         let ptr = FunctionPtrBuilder::default()
             .owner(Arc::downgrade(&owner))
-            .address(FunctionAddress::local(&proc, func))
+            .address(FunctionAddress::local(
+                &proc,
+                func,
+                &crate::interpreter::stm::TxnHandle::default(),
+            ))
             .build()
             .unwrap();
         let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
@@ -1095,7 +1111,12 @@ mod tests {
                     .owner(Arc::downgrade(&body))
                     .address(FunctionAddress::local(
                         &receiver,
-                        receiver.program.lookup_function("answer").unwrap().clone(),
+                        receiver
+                            .initial_program()
+                            .lookup_function("answer")
+                            .unwrap()
+                            .clone(),
+                        &crate::interpreter::stm::TxnHandle::default(),
                     ))
                     .build()
                     .unwrap();
@@ -1437,9 +1458,17 @@ mod tests {
             let code = "int i = 123;\nvoid foo() { i += 42; }";
             let r = w.vm.initialize_process_from_code("/foo/bar.c", code).await;
             let proc = r.unwrap().context.process;
-            let func = proc.program.lookup_function("foo").unwrap().clone();
+            let func = proc
+                .initial_program()
+                .lookup_function("foo")
+                .unwrap()
+                .clone();
             let ptr = FunctionPtrBuilder::default()
-                .address(FunctionAddress::local(&proc, func))
+                .address(FunctionAddress::local(
+                    &proc,
+                    func,
+                    &crate::interpreter::stm::TxnHandle::default(),
+                ))
                 .build()
                 .unwrap();
             w.connection.set_body(Some(proc.clone()));
@@ -1676,9 +1705,17 @@ mod tests {
                 "string package;\nvoid gmcp(string p, string j) { package = p; }\nvoid line(string s) {}",
             )
             .await;
-            let func = proc.program.lookup_function("line").unwrap().clone();
+            let func = proc
+                .initial_program()
+                .lookup_function("line")
+                .unwrap()
+                .clone();
             let ptr = FunctionPtrBuilder::default()
-                .address(FunctionAddress::local(&proc, func))
+                .address(FunctionAddress::local(
+                    &proc,
+                    func,
+                    &crate::interpreter::stm::TxnHandle::default(),
+                ))
                 .build()
                 .unwrap();
             w.connection

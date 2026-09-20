@@ -8,6 +8,7 @@ use tokio::sync::watch;
 use tracing::error;
 
 use crate::interpreter::{
+    function_type::function_address::FunctionAddress,
     lpc_ref::LpcRef,
     stm::{
         CommitOrigin, Conflict, VarId, Version, WorldValue, changeset::Changeset,
@@ -20,6 +21,7 @@ use crate::interpreter::{
 enum MarkWork {
     Var(VarId),
     Ref(LpcRef),
+    Process(Arc<crate::interpreter::process::Process>),
 }
 
 /// A root for the world sweep: a `Var` is a world slot whose committed
@@ -29,6 +31,7 @@ enum MarkWork {
 pub(crate) enum WorldRoot {
     Var(VarId),
     Ref(LpcRef),
+    Process(Arc<crate::interpreter::process::Process>),
 }
 
 /// Committer's lifetime totals and gauges, read back over the `Stats`
@@ -332,33 +335,44 @@ impl Committer {
         for root in roots {
             match root {
                 WorldRoot::Var(var_id) => {
-                    marked.insert(*var_id);
                     work.push(MarkWork::Var(*var_id));
                 }
                 WorldRoot::Ref(lpc_ref) => work.push(MarkWork::Ref(lpc_ref.clone())),
+                WorldRoot::Process(process) => work.push(MarkWork::Process(process.clone())),
             }
         }
 
         while let Some(item) = work.pop() {
             match item {
                 MarkWork::Var(var_id) => {
+                    if !marked.insert(var_id) {
+                        continue;
+                    }
                     let Some(world_value) = self.snapshot.read(var_id) else {
                         continue;
                     };
                     Self::mark_edges(&world_value, &mut work);
                 }
+                MarkWork::Process(process) => {
+                    work.extend(process.world_var_ids().into_iter().map(MarkWork::Var));
+                    if self.snapshot.peek(process.image_cell.id).is_none() {
+                        work.extend(process.initial_image().world_var_ids().map(MarkWork::Var));
+                    }
+                }
                 MarkWork::Ref(lpc_ref) => match lpc_ref {
                     LpcRef::Array(svar) => {
-                        if marked.insert(svar.id) {
-                            work.push(MarkWork::Var(svar.id));
-                        }
+                        work.push(MarkWork::Var(svar.id));
                     }
                     LpcRef::Mapping(svar) => {
-                        if marked.insert(svar.id) {
-                            work.push(MarkWork::Var(svar.id));
-                        }
+                        work.push(MarkWork::Var(svar.id));
                     }
                     LpcRef::Function(fun) => {
+                        if let FunctionAddress::Local(_, local) = &fun.address
+                            && let Some(image) = local.retained_image()
+                        {
+                            work.extend(image.world_var_ids().map(MarkWork::Var));
+                        }
+
                         work.extend(
                             fun.partial_args()
                                 .iter()
@@ -366,9 +380,7 @@ impl Committer {
                                 .filter_map(Self::mark_ref),
                         );
                         for cell in &fun.upvalue_ptrs {
-                            if marked.insert(*cell) {
-                                work.push(MarkWork::Var(*cell));
-                            }
+                            work.push(MarkWork::Var(*cell));
                         }
                     }
                     LpcRef::Float(_)
@@ -387,7 +399,10 @@ impl Committer {
                 !marked.contains(*var_id)
                     && matches!(
                         world_value,
-                        WorldValue::Ref(_) | WorldValue::Array(_) | WorldValue::Mapping(_)
+                        WorldValue::Ref(_)
+                            | WorldValue::Array(_)
+                            | WorldValue::Mapping(_)
+                            | WorldValue::Image(_)
                     )
             })
             .map(|(var_id, _)| *var_id)
@@ -416,8 +431,9 @@ impl Committer {
                 );
             }
             WorldValue::Process(process) => {
-                work.extend(process.world_var_ids().into_iter().map(MarkWork::Var));
+                work.push(MarkWork::Process(process.clone()));
             }
+            WorldValue::Image(image) => work.extend(image.world_var_ids().map(MarkWork::Var)),
             WorldValue::Connection(maybe_connection) => {
                 if let Some(connection) = maybe_connection
                     && let Some(input_to) = connection.input_to()

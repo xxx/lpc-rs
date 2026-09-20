@@ -9,7 +9,7 @@ use ustr::Ustr;
 
 use crate::interpreter::program::Function;
 use crate::interpreter::{
-    call_frame::CallFrame,
+    call_frame::{CallFrame, FrameReceiver},
     efun::{Efun, call_efun, call_efun_sync, efun_context::EfunContext},
     lpc_ref::{LpcRef, NULL},
     process::Process,
@@ -49,7 +49,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn handle_call(&mut self, name: Ustr, list: ArgList) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         // Codegen emits `Call` only for a name of this program; a miss is a bug.
-        let Some(target) = current_frame.process.program.target(name) else {
+        let Some(target) = current_frame.image.program.target(name) else {
             return Err(self
                 .stack
                 .runtime_bug(format!("call to unknown local function `{name}`")));
@@ -60,9 +60,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         } else {
             CallEntry::Direct
         };
-        let process = current_frame.process.clone();
+        let receiver = current_frame.receiver.clone();
 
-        self.push_call_frame(process, func, list, entry)
+        self.push_receiver_frame(receiver, func, list, entry)
     }
 
     /// `::f()` or `name::f()`: the definition the mangled name itself names.
@@ -73,20 +73,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         list: ArgList,
     ) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
-        let Some(func) = current_frame.process.program.function(name).cloned() else {
+        let Some(func) = current_frame.image.program.function(name).cloned() else {
             return Err(self
                 .stack
                 .runtime_bug(format!("call to unknown local function `{name}`")));
         };
-        let process = current_frame.process.clone();
+        let receiver = current_frame.receiver.clone();
 
-        self.push_call_frame(process, func, list, CallEntry::Direct)
+        self.push_receiver_frame(receiver, func, list, CallEntry::Direct)
     }
 
     /// A resolved `call_inherited` with value arguments and local-call history.
     pub(super) fn push_inherited_frame(
         &mut self,
-        process: Arc<Process>,
+        receiver: Arc<FrameReceiver>,
         function: Function,
         args: impl ExactSizeIterator<Item = LpcRef>,
     ) -> lpc_rs_errors::Result<()> {
@@ -106,7 +106,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 num_args
             )));
         }
-        let mut frame = CallFrame::new(process, function, num_args, None::<&[VarId]>);
+        let mut frame =
+            CallFrame::with_receiver(receiver, function, num_args, num_args, None::<&[VarId]>);
         for (i, arg) in args.enumerate() {
             let prototype = &frame.function.prototype;
             check_arg_type(
@@ -127,6 +128,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn push_call_frame(
         &mut self,
         process: Arc<Process>,
+        func: Function,
+        list: ArgList,
+        entry: CallEntry,
+    ) -> lpc_rs_errors::Result<()> {
+        let receiver = if entry.external() {
+            FrameReceiver::new(process, &self.context.txn)
+        } else {
+            self.receiver_for(process)
+        };
+        self.push_receiver_frame(receiver, func, list, entry)
+    }
+
+    pub(super) fn receiver_for(&self, process: Arc<Process>) -> Arc<FrameReceiver> {
+        self.stack
+            .last()
+            .filter(|frame| Arc::ptr_eq(&frame.process, &process))
+            .map_or_else(
+                || FrameReceiver::new(process, &self.context.txn),
+                |frame| frame.receiver.clone(),
+            )
+    }
+
+    #[inline]
+    fn push_receiver_frame(
+        &mut self,
+        receiver: Arc<FrameReceiver>,
         func: Function,
         list: ArgList,
         entry: CallEntry,
@@ -157,7 +184,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         trace!("pushing new frame; copying arguments: {num_args}");
         self.stack
-            .push_new(process, func, num_args, num_args, None::<&[VarId]>)?;
+            .push_new(receiver, func, num_args, num_args, None::<&[VarId]>)?;
         if entry.external() {
             self.stack.current_frame_mut()?.external = true;
         }
@@ -332,7 +359,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Push the frame an efun fired through a pointer runs in, as `owner`.
     pub(crate) fn push_entry_frame(&mut self, owner: Arc<Process>) -> lpc_rs_errors::Result<()> {
-        self.stack.push(CallFrame::entry(owner))
+        self.stack.push(CallFrame::entry(owner, &self.context.txn))
     }
 
     /// The by-reference parameter no pointer call can satisfy, as the error;
@@ -418,7 +445,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             )));
         };
 
-        let Some(func) = simul_efuns.program.lookup_function(func_name).cloned() else {
+        let Some(func) = simul_efuns
+            .program(&self.context.txn)
+            .lookup_function(func_name)
+            .cloned()
+        else {
             return Err(self.runtime_error(format!("call to unknown simul efun `{func_name}`")));
         };
 

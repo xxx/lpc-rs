@@ -149,7 +149,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         Liveness::Dead => return Err(destructed_receiver(ptr)),
                         Liveness::Uninitialized => Resolved::Suspends,
                         Liveness::Ready => {
-                            Resolved::Frame(self.resident_frame(process, function, ptr, passed)?)
+                            let resolved = function.resolve(&process.image(&self.context.txn))?;
+                            Resolved::Frame(self.resident_frame(process, &resolved, ptr, passed)?)
                         }
                     }
                 }
@@ -159,14 +160,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             "call to simul efun `{name}`: no simul-efun object is loaded"
                         )));
                     };
-                    let Some(function) = simul_efuns.program.lookup_function(name) else {
+                    let Some(function) = simul_efuns
+                        .program(&self.context.txn)
+                        .lookup_function(name)
+                        .cloned()
+                    else {
                         return Err(LpcError::runtime(format!(
                             "call to unknown simul efun `{name}`"
                         )));
                     };
                     Resolved::Frame(self.resident_frame(
                         simul_efuns.clone(),
-                        function,
+                        &function,
                         ptr,
                         passed,
                     )?)
@@ -282,8 +287,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
         let txn = &self.context.txn;
         let num_args = self.checked_register_count(ptr.bound_len(passed.len()), function)?;
-        let mut frame = CallFrame::with_minimum_arg_capacity(
-            process,
+        let mut frame = CallFrame::with_receiver(
+            ptr.frame_receiver(process, txn),
             function.clone(),
             num_args,
             num_args,
@@ -378,14 +383,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let entry = Process::shadow_entry(&self.context.txn, &process, name.as_str(), &caller);
         let (process, function) = match entry {
             ShadowEntry::Unshadowed => {
-                let Some(function) = process.program.lookup_function(name).cloned() else {
+                let Some(function) = process
+                    .program(&self.context.txn)
+                    .lookup_function(name)
+                    .cloned()
+                else {
                     return Ok(Called::Unresolved);
                 };
                 (process, function)
             }
             ShadowEntry::Found(process, function) => (process, function),
             ShadowEntry::Fallback(real) => {
-                let Some(function) = real.program.lookup_function(name).cloned() else {
+                let Some(function) = real
+                    .program(&self.context.txn)
+                    .lookup_function(name)
+                    .cloned()
+                else {
                     return Ok(Called::Unresolved);
                 };
                 (real, function)
@@ -457,9 +470,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         let num_args = self.checked_register_count(args.len(), &function)?;
-        let mut new_frame = CallFrame::new(
-            process,
+        let mut new_frame = CallFrame::with_receiver(
+            ptr.frame_receiver(process, &self.context.txn),
             function.clone(),
+            num_args,
             num_args,
             Some(ptr.upvalue_ptrs.as_slice()),
         );
@@ -534,8 +548,18 @@ mod tests {
         context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         process.claim_init(&context.txn);
         let mut task = Task::new(context);
-        let create = process.program.lookup_function("create").unwrap().clone();
-        let frame = CallFrame::new(process, create, 0, None::<ThinVec<VarId>>);
+        let create = process
+            .initial_program()
+            .lookup_function("create")
+            .unwrap()
+            .clone();
+        let frame = CallFrame::new(
+            process,
+            create,
+            0,
+            None::<ThinVec<VarId>>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         task.stack.push(frame).unwrap();
         for _ in 0..32 {
             let at = task.stack.current_frame().unwrap().instruction();

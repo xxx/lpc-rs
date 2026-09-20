@@ -216,8 +216,8 @@ pub struct TaskContext {
     //       The process in the call frame is more accurate, and this probably should be removed.
     pub process: Arc<Process>,
 
-    /// Private dispatch and lookup view while preparing replacements.
-    pub(crate) system_view: Option<Arc<crate::interpreter::vm::system_reload::SystemView>>,
+    /// System identities and pinned permission code while preparing recompilation.
+    pub(crate) system_view: Option<Arc<crate::interpreter::vm::system_recompile::SystemView>>,
 
     /// The final result of the original function that was called.
     pub result: TaskResult,
@@ -314,12 +314,6 @@ impl TaskContext {
     /// Does not initialize or create (use `load_object` / the site's own
     /// create step for that).
     pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
-        if let Some(view) = &self.system_view {
-            let key = self.object_space().path_key(path.as_ref());
-            if let Some(process) = view.staged.get(&key) {
-                return ObjectLookup::Found(process.clone());
-            }
-        }
         txn_find_object(self.txn(), self.object_space(), path)
     }
 
@@ -388,7 +382,13 @@ impl TaskContext {
             let (process, warnings) =
                 compile_process_in_context(self, path, code, gate, reader).await?;
             drop(compiling);
-            report_warnings(self, loader.callers(), &process.program.filename, warnings).await?;
+            report_warnings(
+                self,
+                loader.callers(),
+                &process.program(self.txn()).filename,
+                warnings,
+            )
+            .await?;
             Ok(process)
         })
     }
@@ -443,14 +443,14 @@ impl TaskContext {
         };
         let blueprint = confine_object_path(self.config(), &blueprint, "/", COMPILE_OBJECT)?;
         let blueprint = self.load_file_process(&blueprint, loader).await?;
-        if blueprint.program.pragmas.no_clone() {
+        if blueprint.program(self.txn()).pragmas.no_clone() {
             return Err(LpcError::runtime(format!(
                 "{COMPILE_OBJECT}: {} has `#pragma no_clone` enabled, and so cannot be instantiated",
-                blueprint.program.filename
+                blueprint.program(self.txn()).filename
             )));
         }
         Ok(Arc::new(Process::new_virtual(
-            blueprint.program.clone(),
+            blueprint.program(self.txn()).clone(),
             key,
         )))
     }
@@ -691,16 +691,11 @@ impl TaskContext {
     }
 
     pub(crate) fn authority_context(&self) -> std::borrow::Cow<'_, Self> {
-        if self.system_view.is_none() {
+        let Some(view) = &self.system_view else {
             return std::borrow::Cow::Borrowed(self);
-        }
+        };
         let mut ctx = self.clone();
-        if let Some(view) = &self.system_view {
-            let mut view = (**view).clone();
-            view.simul = view.authority_simul.clone();
-            view.staged.clear();
-            ctx.system_view = Some(Arc::new(view));
-        }
+        ctx.txn = ctx.txn.with_authority(view.authority.clone());
         std::borrow::Cow::Owned(ctx)
     }
 

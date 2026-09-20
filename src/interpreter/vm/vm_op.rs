@@ -14,8 +14,8 @@ pub enum VmOp {
     /// `shutdown(code)` committed: leave the main loop with this exit code.
     Shutdown(i32),
 
-    /// A system-object reload whose requesting transaction committed.
-    SystemReload(Arc<super::system_reload::ReloadRequest>),
+    /// An object update whose requesting transaction committed.
+    ObjectUpdate(Arc<super::object_update::UpdateRequest>),
 }
 
 impl PartialEq for VmOp {
@@ -24,7 +24,7 @@ impl PartialEq for VmOp {
             (Self::InitiateLogin(a), Self::InitiateLogin(b)) => a.address == b.address,
             (Self::PrioritizeCallOut(a), Self::PrioritizeCallOut(b)) => a == b,
             (Self::Shutdown(a), Self::Shutdown(b)) => a == b,
-            (Self::SystemReload(a), Self::SystemReload(b)) => a.id == b.id,
+            (Self::ObjectUpdate(a), Self::ObjectUpdate(b)) => a.id == b.id,
             _ => false,
         }
     }

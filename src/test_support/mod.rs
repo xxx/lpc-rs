@@ -180,7 +180,7 @@ pub fn function_pointer_ref() -> LpcRef {
 /// `task`'s committed global `name`; panics if there is no such global.
 pub fn committed_global(task: &Task<MAX_CALL_STACK_SIZE>, name: &str) -> LpcRef {
     let process = task.context.process();
-    let Some(sym) = process.program.global_variables.get(name) else {
+    let Some(sym) = process.initial_program().global_variables.get(name) else {
         panic!("no global named `{name}`");
     };
     let Some(RegisterVariant::Global(reg)) = sym.location else {
@@ -206,9 +206,19 @@ pub(crate) async fn task_at(
     context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
     process.claim_init(&context.txn);
     let mut task = Task::new(context);
-    let create = process.program.lookup_function("create").unwrap().clone();
+    let create = process
+        .initial_program()
+        .lookup_function("create")
+        .unwrap()
+        .clone();
     task.stack
-        .push(CallFrame::new(process, create, 0, None::<ThinVec<VarId>>))
+        .push(CallFrame::new(
+            process,
+            create,
+            0,
+            None::<ThinVec<VarId>>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        ))
         .unwrap();
     for _ in 0..64 {
         if task
@@ -252,7 +262,7 @@ pub async fn compile_prog_with_config(
 
     let compiler = CompilerBuilder::default()
         .config(config.clone())
-        .simul_efuns(Some(se_proc.clone()))
+        .simul_efuns(Some(se_proc.initial_program().clone()))
         .build()
         .unwrap();
     let path = LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir);
@@ -494,7 +504,8 @@ pub fn lib_holding(name: &str, files: &[(&str, &str)]) -> TempLib {
 /// The string global `name` of `process`; anything else panics.
 pub fn string_global(vm: &Vm, process: &Arc<Process>, name: &str) -> String {
     // By name: an inherited global may hold register 0.
-    let Some(RegisterVariant::Global(register)) = process.program.global_variables[name].location
+    let Some(RegisterVariant::Global(register)) =
+        process.initial_program().global_variables[name].location
     else {
         panic!("`{name}` is a global");
     };

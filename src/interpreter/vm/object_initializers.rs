@@ -179,3 +179,37 @@ impl Vm {
             .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::test_config;
+
+    #[tokio::test]
+    async fn garbage_collection_cannot_allow_a_retired_initializer_to_republish() {
+        let vm = Vm::new(test_config());
+        let old = vm
+            .initialize_process_from_code("/secure/master.c", "")
+            .await
+            .unwrap()
+            .context
+            .process;
+        let current = vm
+            .initialize_process_from_code("/secure/master.c", "")
+            .await
+            .unwrap()
+            .context
+            .process;
+        vm.global_state.gc().await.unwrap().unwrap();
+        let context = TaskTemplate::from(vm.global_state.clone()).into_task_context(old);
+        assert!(
+            task::Task::<MAX_CALL_STACK_SIZE>::initialize_process(context)
+                .await
+                .is_err()
+        );
+        assert!(Arc::ptr_eq(
+            &current,
+            &vm.global_state.object_space.master_object().unwrap()
+        ));
+    }
+}

@@ -123,11 +123,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(Called::Framed)
             }
             Callee::Inherited {
-                process,
+                receiver,
                 function,
                 args,
             } => {
-                self.push_inherited_frame(process.clone(), function.clone(), args.iter().cloned())?;
+                self.push_inherited_frame(
+                    receiver.clone(),
+                    function.clone(),
+                    args.iter().cloned(),
+                )?;
                 Ok(Called::Framed)
             }
         }
@@ -314,7 +318,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             )));
         }
         let num_args = self.checked_register_count(args.len(), &function)?;
-        let mut frame = CallFrame::new(process, function, num_args, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            process,
+            function,
+            num_args,
+            None::<&[VarId]>,
+            &self.context.txn,
+        );
         for (i, arg) in args.enumerate() {
             frame.push_arg(&self.context.txn, i, arg)?;
         }

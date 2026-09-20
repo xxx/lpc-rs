@@ -52,7 +52,7 @@ fn target_name<const N: usize>(context: &EfunContext<'_, N>, ptr: &FunctionPtr) 
         FunctionAddress::Local(target, _) => target.upgrade()?,
         FunctionAddress::SimulEfun(name) => {
             let target = context.task_context().simul_efuns()?;
-            target.program.lookup_function(name)?;
+            target.program(context.txn()).lookup_function(name)?;
             target.clone()
         }
         FunctionAddress::Efun(_) => ptr.owner.upgrade()?,

@@ -5,11 +5,14 @@ use std::{
 };
 
 use educe::Educe;
-use lpc_rs_core::RegisterSize;
+use lpc_rs_core::{RegisterSize, mangle::Mangle};
 use ustr::Ustr;
 
-use crate::interpreter::process::Process;
 use crate::interpreter::program::Function;
+use crate::interpreter::{
+    process::{Process, ProgramImage},
+    stm::{TxnHandle, VarId},
+};
 
 /// Different ways to store a function address, for handling at runtime.
 #[derive(Educe, Clone)]
@@ -34,12 +37,43 @@ pub struct LocalFunction {
     pub function: Function,
     globals: RegisterSize,
     aliases: Arc<[RegisterSize]>,
+    generation: VarId,
+    symbol: Ustr,
+    retained: Option<Arc<ProgramImage>>,
 }
 
 impl Deref for LocalFunction {
     type Target = Function;
     fn deref(&self) -> &Function {
         &self.function
+    }
+}
+
+impl LocalFunction {
+    pub(crate) fn resolve(&self, image: &ProgramImage) -> lpc_rs_errors::Result<Function> {
+        if self.retained.is_some()
+            || self.function.is_driver_code()
+            || image.generation == self.generation
+        {
+            return Ok(self.function.clone());
+        }
+        // The symbol includes the declaring source, argument/return types and flags.
+        let compatible = image.program.function(self.symbol).filter(|new| {
+            let old = &self.function.prototype;
+            let new = &new.prototype;
+            old.kind == new.kind
+                && old.arity == new.arity
+                && old.ref_params == new.ref_params
+                && old.ref_tail == new.ref_tail
+        });
+        compatible.cloned().ok_or_else(|| lpc_rs_errors::LpcError::runtime(format!(
+            "function pointer target `{}` is missing or incompatible after object recompilation",
+            self.function.name()
+        )))
+    }
+
+    pub(crate) fn retained_image(&self) -> Option<&Arc<ProgramImage>> {
+        self.retained.as_ref()
     }
 }
 
@@ -59,14 +93,26 @@ impl PartialEq for LocalFunction {
 impl Eq for LocalFunction {}
 
 impl FunctionAddress {
-    /// Bind local code without retaining the receiver or its unrelated functions.
-    pub fn local(receiver: &Arc<Process>, function: Function) -> Self {
+    /// Bind a named function for compatible updates or retain a closure's original image.
+    pub(crate) fn local(receiver: &Arc<Process>, function: Function, txn: &TxnHandle) -> Self {
+        let image = receiver.image(txn);
+        Self::in_image(receiver, function, &image)
+    }
+
+    pub(crate) fn in_image(
+        receiver: &Arc<Process>,
+        function: Function,
+        image: &Arc<ProgramImage>,
+    ) -> Self {
         Self::Local(
             Arc::downgrade(receiver),
             LocalFunction {
+                symbol: ustr::ustr(&function.prototype.mangle()),
+                retained: function.is_closure().then(|| image.clone()),
                 function,
-                globals: receiver.program.num_globals,
-                aliases: receiver.program.global_views.clone(),
+                globals: image.program.num_globals,
+                aliases: image.program.global_views.clone(),
+                generation: image.generation,
             },
         )
     }

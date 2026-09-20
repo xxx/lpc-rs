@@ -222,7 +222,7 @@ const NOT_IMPLEMENTED_HINT: &str = concat!(
 /// nor any rule.
 fn default_message(ctx: &TaskContext, actor: &Arc<Process>) -> String {
     let bare = actor
-        .program
+        .program(ctx.txn())
         .unmangled_functions
         .get(PROCESS_INPUT)
         .is_none()

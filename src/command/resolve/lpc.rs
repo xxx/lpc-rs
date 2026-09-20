@@ -86,7 +86,12 @@ impl<'a> LpcVocabulary<'a> {
     ) -> Result<Option<LpcRef>> {
         let (target, function) = match Process::shadow_entry(self.ctx.txn(), target, name, target) {
             ShadowEntry::Unshadowed => {
-                let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
+                let Some(function) = target
+                    .program(self.ctx.txn())
+                    .unmangled_functions
+                    .get(name)
+                    .cloned()
+                else {
                     diagnostics::missing(name, Some(target));
                     return Ok(None);
                 };
@@ -94,7 +99,12 @@ impl<'a> LpcVocabulary<'a> {
             }
             ShadowEntry::Found(process, function) => (process, function),
             ShadowEntry::Fallback(real) => {
-                let Some(function) = real.program.unmangled_functions.get(name).cloned() else {
+                let Some(function) = real
+                    .program(self.ctx.txn())
+                    .unmangled_functions
+                    .get(name)
+                    .cloned()
+                else {
                     diagnostics::missing(name, Some(&real));
                     return Ok(None);
                 };

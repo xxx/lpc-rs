@@ -35,7 +35,7 @@ pub struct PreparedCall {
 }
 
 impl PreparedCall {
-    /// Run the callback, resolving a simul-efun target anew on every attempt.
+    /// Run the callback, resolving named targets anew and retaining anonymous code.
     pub async fn execute(self, timeout_ms: u64) -> Result<()> {
         use crate::interpreter::task::{SeedArg, TaskSeed};
         let seed = TaskSeed {
@@ -80,7 +80,7 @@ pub struct GlobalState {
     /// Every live connection; the loop registers and removes itself.
     pub registry: crate::interpreter::vm::binding::Registry,
 
-    pub(crate) reloads: super::system_reload::Reloads,
+    pub(crate) updates: super::object_update::Updates,
 }
 
 impl GlobalState {
@@ -105,7 +105,7 @@ impl GlobalState {
             attempt_runner,
             booted_at: std::time::SystemTime::now(),
             registry: Default::default(),
-            reloads: Default::default(),
+            updates: Default::default(),
         }
     }
 
@@ -230,6 +230,17 @@ impl GlobalState {
                     FunctionAddress::SimulEfun(name) => Some(name.to_string()),
                     _ => None,
                 },
+                local: match &ptr.address {
+                    FunctionAddress::Local(_, function) => Some(function.clone()),
+                    _ => None,
+                },
+                name: match &ptr.address {
+                    FunctionAddress::Dynamic(_) => Some(resolved.function.name().to_string()),
+                    FunctionAddress::Efun(name) if name.as_str() == "call_other" => {
+                        Some(resolved.function.name().to_string())
+                    }
+                    _ => None,
+                },
             },
             function: resolved.function,
             args: resolved.args,
@@ -253,12 +264,11 @@ impl GlobalState {
             .into_iter()
             .map(WorldRoot::Var)
             .collect();
-        // Bootstrap objects have no committed cell, so their global slots are
-        // rooted directly: `all_cell_ids` alone would wrongly reclaim them.
+        // Bootstrap objects can have no committed path cell.
         self.object_space
-            .all_live_object_slots()
+            .live_processes()
             .into_iter()
-            .for_each(|id| roots.push(WorldRoot::Var(id)));
+            .for_each(|process| roots.push(WorldRoot::Process(process)));
         self.with_call_outs(|co| {
             for (_, call_out) in co.queue() {
                 roots.push(WorldRoot::Ref(call_out.func_ref.clone()));

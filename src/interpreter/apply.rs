@@ -125,15 +125,22 @@ pub(crate) async fn master_apply(
     name: &str,
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
+    let authority = ctx.authority_context();
+    let ctx = authority.as_ref();
     let Some(master) = ctx.master_object() else {
         diagnostics::missing(name, None);
         return Ok(None);
     };
-    let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
+    let Some(function) = master
+        .program(ctx.txn())
+        .unmangled_functions
+        .get(name)
+        .cloned()
+    else {
         diagnostics::missing(name, Some(&master));
         return Ok(None);
     };
-    apply_nested(&ctx.authority_context(), callers, &master, function, args)
+    apply_nested(ctx, callers, &master, function, args)
         .await
         .map(Some)
 }
@@ -211,9 +218,11 @@ pub(crate) async fn report_warnings(
     file: &LpcPath,
     warnings: Vec<LpcError>,
 ) -> Result<()> {
+    let authority = ctx.authority_context();
+    let ctx = authority.as_ref();
     let handler = ctx.master_object().and_then(|master| {
         let function = master
-            .program
+            .program(ctx.txn())
             .unmangled_functions
             .get(WARNING_HANDLER)
             .cloned()?;
@@ -229,14 +238,7 @@ pub(crate) async fn report_warnings(
             continue;
         };
         let mapping = warning_mapping(ctx, file, &warning);
-        apply_nested(
-            &ctx.authority_context(),
-            callers.clone(),
-            master,
-            function.clone(),
-            &[mapping],
-        )
-        .await?;
+        apply_nested(ctx, callers.clone(), master, function.clone(), &[mapping]).await?;
     }
     Ok(())
 }

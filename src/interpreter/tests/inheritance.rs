@@ -29,7 +29,11 @@ mod shared_code {
 
     async fn call(vm: &Vm, process: &Arc<Process>, name: &str) -> LpcRef {
         apply_function(
-            process.program.lookup_function(name).unwrap().clone(),
+            process
+                .initial_program()
+                .lookup_function(name)
+                .unwrap()
+                .clone(),
             &[],
             TaskTemplate::from(vm.global_state.clone()).into_task_context(process.clone()),
             None,
@@ -81,22 +85,22 @@ mod shared_code {
         for name in ["bump", "exercise", "later", "total"] {
             assert!(
                 Arc::ptr_eq(
-                    &a.program.lookup_function(name).unwrap().code,
-                    &b.program.lookup_function(name).unwrap().code
+                    &a.initial_program().lookup_function(name).unwrap().code,
+                    &b.initial_program().lookup_function(name).unwrap().code
                 ),
                 "{name}"
             );
         }
         assert_ne!(
-            a.program.global_variables["left"].location,
-            b.program.global_variables["left"].location
+            a.initial_program().global_variables["left"].location,
+            b.initial_program().global_variables["left"].location
         );
         assert_eq!(call(&vm, &a, "total").await, LpcRef::from(18));
         assert_eq!(call(&vm, &b, "total").await, LpcRef::from(18));
         call(&vm, &a, "exercise").await;
         assert_eq!(call(&vm, &a, "total").await, LpcRef::from(20));
         assert_eq!(call(&vm, &b, "total").await, LpcRef::from(18));
-        assert_ne!(a.program.clones.id, b.program.clones.id);
+        assert_ne!(a.initial_program().clones.id, b.initial_program().clones.id);
         let roots = b.world_var_ids();
         assert_eq!(
             roots.len(),
@@ -122,8 +126,12 @@ mod shared_code {
         let old = load("/old.c").await.unwrap().context.process;
         let equal = load("/equal.c").await.unwrap().context.process;
         assert!(Arc::ptr_eq(
-            &old.program.lookup_function("value").unwrap().code,
-            &equal.program.lookup_function("value").unwrap().code
+            &old.initial_program().lookup_function("value").unwrap().code,
+            &equal
+                .initial_program()
+                .lookup_function("value")
+                .unwrap()
+                .code
         ));
         std::fs::write(root.join("value.h"), "#define VALUE 2\n").unwrap();
         let changed_header = load("/header.c").await.unwrap().context.process;
@@ -133,7 +141,7 @@ mod shared_code {
         assert_eq!(call(&vm, &changed_header, "value").await, LpcRef::from(2));
         assert_eq!(call(&vm, &changed_parent, "value").await, LpcRef::from(3));
         let span = old
-            .program
+            .initial_program()
             .lookup_function("value")
             .unwrap()
             .prototype
@@ -143,7 +151,7 @@ mod shared_code {
         assert_ne!(
             span.file_id(),
             changed_parent
-                .program
+                .initial_program()
                 .lookup_function("value")
                 .unwrap()
                 .prototype

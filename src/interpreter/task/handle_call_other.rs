@@ -198,14 +198,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let entry = Process::shadow_entry(&self.context.txn, &receiver, name, caller);
         Ok(match entry {
             ShadowEntry::Unshadowed => receiver
-                .program
+                .program(&self.context.txn)
                 .lookup_function(name)
                 .filter(|function| function.public())
                 .cloned()
                 .map(|function| (receiver, function)),
             ShadowEntry::Found(process, function) => Some((process, function)),
             ShadowEntry::Fallback(real) => real
-                .program
+                .program(&self.context.txn)
                 .lookup_function(name)
                 .filter(|function| function.public())
                 .cloned()
@@ -869,8 +869,18 @@ mod tests {
             TaskTemplate::from(vm.global_state.clone()).into_task_context(process.clone());
         context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         let mut task = Task::new(context);
-        let create = process.program.lookup_function("create").unwrap().clone();
-        let frame = CallFrame::new(process, create, 0, None::<ThinVec<VarId>>);
+        let create = process
+            .initial_program()
+            .lookup_function("create")
+            .unwrap()
+            .clone();
+        let frame = CallFrame::new(
+            process,
+            create,
+            0,
+            None::<ThinVec<VarId>>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         task.stack.push(frame).unwrap();
         for _ in 0..32 {
             let at = task.stack.current_frame().unwrap().instruction();

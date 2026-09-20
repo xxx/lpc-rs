@@ -38,12 +38,13 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
         return Ok(());
     };
     let process = context.process().clone();
+    let image = process.image(context.txn());
     {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
             let err = |e| access.line_error(context, index + 1, e);
             let (name, value_text) = split_line(line).map_err(err)?;
-            let Some(symbol) = process.program.global_variables.get(name) else {
+            let Some(symbol) = image.program.global_variables.get(name) else {
                 continue;
             };
             if symbol.flags.is_static() {
@@ -55,7 +56,7 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
             let value = read_value(value_text, context.txn(), &resolve).map_err(err)?;
             context
                 .txn()
-                .with(|t| t.write(process.var_id(reg.index()), value));
+                .with(|t| t.write(image.var_id(reg.index()), value));
         }
     }
     context.return_efun_result(LpcRef::from(1));

@@ -7,7 +7,10 @@ use std::sync::Arc;
 use crate::{
     command::registry::RuleList,
     interpreter::{
-        lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
+        lpc_array::LpcArray,
+        lpc_mapping::LpcMapping,
+        lpc_ref::LpcRef,
+        process::{Process, ProgramImage},
     },
     telnet::connection::Connection,
 };
@@ -22,6 +25,8 @@ pub(crate) enum WorldValue {
     /// physical `ObjectSpace` map's timing (the physical map is applied after
     /// commit; this entry is what makes the object resolvable in between).
     Process(Arc<Process>),
+    /// One object's code and global-cell layout, published atomically.
+    Image(Arc<ProgramImage>),
     /// The connection-binding cell on a `Process`: the `Connection` attached
     /// to it, or absent. `Connection` is a socket handle, not an `LpcRef`, so
     /// it is carried here as an identity (as `Process` is) rather than in a
@@ -45,6 +50,7 @@ impl WorldValue {
             Self::Array(_)
             | Self::Mapping(_)
             | Self::Process(_)
+            | Self::Image(_)
             | Self::Connection(_)
             | Self::Rules(_) => {
                 unreachable!("a payload or identity var read through a slot access")

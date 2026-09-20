@@ -14,6 +14,7 @@ use ustr::Ustr;
 use crate::interpreter::program::Function;
 use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
+    call_frame::FrameReceiver,
     efun::{CALL_OTHER, EFUN_FUNCTIONS, compose::COMPOSE_RECEIVER_EXECUTOR},
     function_type::function_address::FunctionAddress,
     lpc_ref::{LpcRef, NULL},
@@ -76,6 +77,22 @@ pub struct FunctionPtr {
 }
 
 impl FunctionPtr {
+    pub(crate) fn frame_receiver(
+        &self,
+        process: Arc<Process>,
+        txn: &TxnHandle,
+    ) -> Arc<FrameReceiver> {
+        if let FunctionAddress::Local(_, function) = &self.address
+            && let Some(image) = function.retained_image()
+        {
+            return Arc::new(FrameReceiver {
+                process,
+                image: image.clone(),
+            });
+        }
+        FrameReceiver::new(process, txn)
+    }
+
     /// Get the name of the function being called.
     /// Will return the variable name in those cases.
     #[inline]
@@ -260,7 +277,7 @@ impl FunctionPtr {
                 )));
             }
         };
-        let Some(function) = process.program.lookup_function(name).cloned() else {
+        let Some(function) = process.program(txn).lookup_function(name).cloned() else {
             return Ok(None);
         };
         Ok(Some((process, function)))
@@ -289,7 +306,8 @@ impl FunctionPtr {
                         self
                     )));
                 };
-                (process, function.function.clone())
+                let resolved = function.resolve(&process.image(txn))?;
+                (process, resolved)
             }
             FunctionAddress::Dynamic(name) => {
                 let receiver = first_arg(&mut args);
@@ -323,12 +341,12 @@ impl FunctionPtr {
                         "call to simul efun `{name}`: no simul-efun object is loaded"
                     )));
                 };
-                let Some(function) = simul_efuns.program.lookup_function(name) else {
+                let Some(function) = simul_efuns.program(txn).lookup_function(name).cloned() else {
                     return Err(LpcError::runtime(format!(
                         "call to unknown simul efun `{name}`"
                     )));
                 };
-                (simul_efuns.clone(), function.clone())
+                (simul_efuns.clone(), function)
             }
         };
 

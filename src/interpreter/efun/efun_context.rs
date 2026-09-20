@@ -18,7 +18,7 @@ use crate::command::{
     registry::{ActorRules, VerbRules},
 };
 use crate::interpreter::{
-    call_frame::CallFrame,
+    call_frame::{CallFrame, FrameReceiver},
     call_stack::CallStack,
     continuation::{Continuation, EfunContinuation, Pending},
     efun::Efun,
@@ -502,8 +502,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             t.drop_var(var_id);
             t.mark_presence_changed();
             if process.is_clone() {
+                let clones = process.image_in(t).program.clones.id;
                 t.merge(
-                    process.program.clones.id,
+                    clones,
                     MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(&process))),
                 );
             }
@@ -632,14 +633,26 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     /// An accessible inherited definition in the source scope that invoked this efun.
-    pub(crate) fn lookup_inherited_function(&self, name: &str) -> Option<&Function> {
+    pub(crate) fn lookup_inherited_function(
+        &self,
+        name: &str,
+    ) -> Option<(Arc<FrameReceiver>, Function)> {
         let (namespace, name) = name.split_once("::").unwrap_or(("", name));
-        let program = &self.process().program;
+        let receiver = self
+            .caller_frame()
+            .filter(|frame| Arc::ptr_eq(&frame.process, self.process()))
+            .map_or_else(
+                || FrameReceiver::new(self.process().clone(), self.txn()),
+                |frame| frame.receiver.clone(),
+            );
+        let program = &receiver.image.program;
         let scope = self.calling_program_path().unwrap_or(&program.filename);
         let scope = self.config().paths().program_path(scope);
-        program
+        let function = program
             .lookup_inherited_function(&scope, namespace, name)
-            .filter(|function| !function.prototype.flags.private())
+            .filter(|function| !function.prototype.flags.private())?
+            .clone();
+        Some((receiver, function))
     }
 
     /// Get a reference to `this_player` from the context
@@ -704,6 +717,7 @@ mod tests {
             Arc::new(function),
             0 as RegisterSize,
             None::<&[crate::interpreter::stm::VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
         );
         let mut stack = CallStack::default();
         stack.push(frame).expect("push entry frame");
@@ -875,8 +889,13 @@ mod tests {
     #[test]
     fn a_fired_efuns_result_lands_in_its_entry_frame() {
         let (task_context, mut stack) = efun_context();
-        let owner = stack.pop().unwrap().process;
-        stack.push(CallFrame::entry(owner.clone())).unwrap();
+        let owner = stack.pop().unwrap().process.clone();
+        stack
+            .push(CallFrame::entry(
+                owner.clone(),
+                &crate::interpreter::stm::TxnHandle::default(),
+            ))
+            .unwrap();
         let mut ctx = EfunContext::fired(
             &mut stack,
             &task_context,
@@ -937,7 +956,7 @@ mod tests {
     #[test]
     fn calling_program_is_zero_without_an_lpc_frame() {
         let (task_context, mut stack) = efun_context();
-        let owner = stack.pop().unwrap().process;
+        let owner = stack.pop().unwrap().process.clone();
         let ctx = EfunContext::fired(
             &mut stack,
             &task_context,
@@ -958,7 +977,12 @@ mod tests {
         let task = run_prog("int x;").await;
         let owner = task.context.process().clone();
         let mut stack = CallStack::<8>::default();
-        stack.push(CallFrame::entry(owner.clone())).unwrap();
+        stack
+            .push(CallFrame::entry(
+                owner.clone(),
+                &crate::interpreter::stm::TxnHandle::default(),
+            ))
+            .unwrap();
         let ctx = EfunContext::fired(
             &mut stack,
             &task.context,

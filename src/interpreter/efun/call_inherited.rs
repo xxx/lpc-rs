@@ -15,12 +15,12 @@ pub fn call_inherited<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
             context.arg(0).type_name()
         )));
     };
-    let Some(function) = context.lookup_inherited_function(name).cloned() else {
+    let Some((receiver, function)) = context.lookup_inherited_function(name) else {
         context.return_efun_result(NULL);
         return Ok(());
     };
     let callee = Callee::Inherited {
-        process: context.process().clone(),
+        receiver,
         function,
         args: (1..context.arg_count())
             .map(|i| context.arg(i).clone())

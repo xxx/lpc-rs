@@ -9,7 +9,7 @@ use lpc_rs_errors::{LpcError, Result, lpc_error};
 
 use crate::interpreter::program::Function;
 use crate::interpreter::{
-    call_frame::{CallFrame, FrameCells},
+    call_frame::{CallFrame, FrameCells, FrameReceiver},
     lpc_ref::{LpcRef, NULL},
     process::Process,
     task_context::{Caller, Callers},
@@ -115,9 +115,9 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// Push a frame for `function`, built in its slot: a frame moved
     /// through memory reloads its narrow stores wide, a stall per call.
     #[inline]
-    pub fn push_new<V>(
+    pub(crate) fn push_new<V>(
         &mut self,
-        process: Arc<Process>,
+        receiver: Arc<FrameReceiver>,
         function: Function,
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
@@ -130,9 +130,9 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             return Err(Self::overflow());
         }
 
-        self.record_activity(&process);
-        self.stack.push(CallFrame::with_minimum_arg_capacity(
-            process,
+        self.record_activity(&receiver.process);
+        self.stack.push(CallFrame::with_receiver(
+            receiver,
             function,
             called_with_num_args,
             arg_capacity,
@@ -289,6 +289,7 @@ mod tests {
             Arc::new(function),
             0 as RegisterSize,
             None::<&[crate::interpreter::stm::VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
         );
         let mut stack = CallStack::default();
         stack.push(frame).unwrap();

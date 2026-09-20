@@ -135,14 +135,15 @@ int valid_variable_info(object caller, object target, string program) {
 }
 
 /**
- * Authorise replacing driver-owned code through request_system_reload().
- * target is "master", "simul_efun" or "both"; caller requested the change
- * and program defines that request; the current master checks it again when
- * the reload is prepared, before the replacement can become active.
- * Return 0 because ulib provides no administration commands; restart from
- * the host to load edits instead of granting guests policy-replacement rights.
+ * Authorise an in-place upgrade of prototype and its current clones.
+ * caller requested it and program defines the request; the active master
+ * asks again before compilation, preserving the original command giver.
+ * Missing this hook also denies upgrades; return 0 because ulib provides
+ * no privileged administration command for upgrading objects.
+ * This hook also controls master and simul-efun upgrades; preparation uses
+ * the old policy code and global layouts until the entire update commits.
  */
-int valid_reload(string target, object caller, string program) {
+int valid_recompile(object prototype, object caller, string program) {
     return 0;
 }
 

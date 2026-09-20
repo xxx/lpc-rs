@@ -165,8 +165,8 @@ pub(crate) enum Effect {
     /// `code`.
     Shutdown { code: i32 },
 
-    /// Start an authorized reload only after the requesting attempt commits.
-    SystemReload(Arc<crate::interpreter::vm::system_reload::ReloadRequest>),
+    /// Start authorized recompilation only after the requesting attempt commits.
+    ObjectUpdate(Arc<crate::interpreter::vm::object_update::UpdateRequest>),
 
     /// `rm`'s unlink, applied once the attempt commits.
     RemoveFile { path: ResolvedPath },
@@ -355,19 +355,19 @@ impl Effect {
                         .await;
                 }
             }
-            Self::SystemReload(request) => {
+            Self::ObjectUpdate(request) => {
                 let id = request.id;
-                global_state.reloads.enqueue(request.clone());
+                global_state.updates.enqueue(request.clone());
                 if global_state
                     .tx
-                    .send(VmOp::SystemReload(request))
+                    .send(VmOp::ObjectUpdate(request))
                     .await
                     .is_err()
                 {
-                    global_state.reloads.finish(
+                    global_state.updates.finish(
                         id,
                         Err(lpc_rs_errors::LpcError::runtime(
-                            "system reload: VM channel closed",
+                            "object update: VM channel closed",
                         )),
                     );
                 }
@@ -489,8 +489,8 @@ impl std::fmt::Debug for Effect {
             Self::WriteBytes { path, .. } => f.debug_tuple("WriteBytes").field(path).finish(),
             Self::ReplaceChars { path, .. } => f.debug_tuple("ReplaceChars").field(path).finish(),
             Self::Shutdown { code } => f.debug_tuple("Shutdown").field(code).finish(),
-            Self::SystemReload(request) => {
-                f.debug_tuple("SystemReload").field(&request.id).finish()
+            Self::ObjectUpdate(request) => {
+                f.debug_tuple("ObjectUpdate").field(&request.id).finish()
             }
             Self::RemoveFile { path, .. } => f.debug_tuple("RemoveFile").field(path).finish(),
             Self::CreateDir { path, .. } => f.debug_tuple("CreateDir").field(path).finish(),

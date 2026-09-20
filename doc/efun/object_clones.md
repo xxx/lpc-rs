@@ -13,6 +13,9 @@ Clones created or destructed during the current task are reflected immediately.
 Reloading a prototype starts a separate group; an older surviving clone
 still returns the clones of its own program version.
 
+`request_object_recompile` upgrades a prototype and this entire group together,
+preserving their identities and membership.
+
 ```c
 object sword = clone_object("/obj/sword");
 object *swords = object_clones(sword);

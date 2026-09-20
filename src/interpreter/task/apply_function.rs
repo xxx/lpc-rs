@@ -179,11 +179,6 @@ where
     S: AsRef<str>,
 {
     let name = name.as_ref();
-    if !proc.ever_in_a_chain() && !proc.program.unmangled_functions.contains_key(name) {
-        diagnostics::missing(name, Some(&proc));
-        return None;
-    }
-
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(template.into_task_context(proc.clone()));
     let seed = TaskSeed {
         process: proc,

@@ -15,6 +15,17 @@ pub struct Function {
 }
 
 impl Function {
+    pub(crate) fn is_driver_code(&self) -> bool {
+        use crate::interpreter::{
+            call_frame::ENTRY,
+            efun::compose::{COMPOSE_EXECUTOR, COMPOSE_RECEIVER_EXECUTOR},
+        };
+        self.prototype.is_efun()
+            || Arc::ptr_eq(&self.code, &ENTRY)
+            || Arc::ptr_eq(&self.code, &COMPOSE_EXECUTOR)
+            || Arc::ptr_eq(&self.code, &COMPOSE_RECEIVER_EXECUTOR)
+    }
+
     pub(crate) fn new(code: Arc<ProgramFunction>, start: u32, count: RegisterSize) -> Self {
         Self {
             code,
@@ -123,12 +134,12 @@ mod tests {
                 .unwrap()
                 .program,
         ));
-        let f = a.program.lookup_function("get").unwrap().clone();
-        let g = b.program.lookup_function("get").unwrap().clone();
+        let f = a.initial_program().lookup_function("get").unwrap().clone();
+        let g = b.initial_program().lookup_function("get").unwrap().clone();
         assert!(Arc::ptr_eq(&f.code, &g.code));
-        let unused = Arc::downgrade(&a.program.lookup_function("unused").unwrap().code);
-        let first = FunctionAddress::local(&a, f);
-        let second = FunctionAddress::local(&b, g);
+        let unused = Arc::downgrade(&a.initial_program().lookup_function("unused").unwrap().code);
+        let first = FunctionAddress::local(&a, f, &crate::interpreter::stm::TxnHandle::default());
+        let second = FunctionAddress::local(&b, g, &crate::interpreter::stm::TxnHandle::default());
         assert_ne!(first, second);
         assert_eq!(first, first.clone());
         drop((a, b));

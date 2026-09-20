@@ -88,7 +88,7 @@ mod tests {
             .expect("task failed");
 
         let process = task.context.process();
-        let sym = &process.program.global_variables["foo"];
+        let sym = &process.initial_program().global_variables["foo"];
         let Some(RegisterVariant::Global(reg)) = sym.location else {
             panic!("`foo` is not a global register");
         };
@@ -101,7 +101,12 @@ mod tests {
         };
 
         assert_eq!(
-            obj.upgrade().unwrap().program.filename.to_str().unwrap(),
+            obj.upgrade()
+                .unwrap()
+                .initial_program()
+                .filename
+                .to_str()
+                .unwrap(),
             "/example"
         );
     }

@@ -6,11 +6,10 @@ use crate::interpreter::{
 };
 
 pub fn inherit_list<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let target = inspection_target(context, "inherit_list")?;
+    let target = inspection_target(context, "inherit_list")?.map(|p| p.program(context.txn()));
     let paths = context.config().paths();
     let parents = target.iter().flat_map(|target| {
         target
-            .program
             .direct_inherits
             .iter()
             .map(|path| LpcRef::from(paths.source_name(path).to_string()))
@@ -21,14 +20,13 @@ pub fn inherit_list<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
 }
 
 pub fn deep_inherit_list<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let target = inspection_target(context, "deep_inherit_list")?;
+    let target = inspection_target(context, "deep_inherit_list")?.map(|p| p.program(context.txn()));
     let paths = context.config().paths();
     let ancestors = target.iter().flat_map(|target| {
         target
-            .program
             .layout
             .iter()
-            .filter(|region| region.filename != target.program.filename)
+            .filter(|region| region.filename != target.filename)
             .map(|region| LpcRef::from(paths.source_name(&region.filename).to_string()))
     });
     let result = context.mint_array(ancestors);
