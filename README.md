@@ -166,6 +166,7 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 | Implement callbacks the driver calls | [Master hooks](doc/apply/master), [object hooks](doc/apply/object), [living hooks](doc/apply/living), [connection hooks](doc/apply/special) |
 | Add player commands | [`add_action`](doc/efun/add_action.md), [`add_rule`](doc/efun/add_rule.md), [`parse_sentence`](doc/efun/parse_sentence.md) |
 | See how the parsing frontends share one engine | [Parser Town](doc/parser-town/README.md) · open [the interactive tour](doc/parser-town/index.html) locally in a browser |
+| Explore garbage collection, roots, and cycles | [Collector Town](doc/collector-town/README.md) · open [the interactive tour](doc/collector-town/index.html) locally in a browser |
 | Save and restore game data | [`save_object`](doc/efun/save_object.md), [`restore_object`](doc/efun/restore_object.md), [save-file format](doc/save-format.md) |
 | Upgrade live objects, clones, or the master and simulated efuns | [`request_object_recompile`](doc/efun/request_object_recompile.md) |
 

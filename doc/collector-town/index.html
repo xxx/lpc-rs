@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f1e8">
+  <meta name="description" content="Explore the lpc-rs garbage collector: snapshot safety, root tracing, closure captures, cycles, and mark-and-sweep in an offline interactive town.">
+  <title>Collector Town · lpc-rs field notes</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <canvas id="stage" aria-label="Isometric collection route with a refusal branch and a repeating reference-tracing loop. Equivalent live state is in the adjacent panel."></canvas>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">↗</span><div><div class="eyebrow">LPC-RS / UNDER THE HOOD</div><h1>Collector Town<span class="subtitle">A field guide to reachability</span></h1></div></div>
+    <div class="header-actions"><button id="btn-about" title="How the model relates to the driver">About &amp; accuracy</button><button id="btn-panel" title="Show or hide the reading panel">Hide notes</button></div>
+  </header>
+  <section id="hud" aria-label="Collection progress">
+    <div class="hud-top"><span class="status-dot"></span><span id="hud-stage">Preparing collection</span><span class="atomic">ONE ATOMIC PASS</span></div>
+    <div class="metrics"><div><span id="count-work">0</span><small>work items</small></div><div><span id="count-marked">0</span><small>cells marked</small></div><div><span id="count-freed">0</span><small>reclaimed</small></div><div><span id="count-world">18</span><small>world cells</small></div></div>
+    <p id="hud-note">Reading-paced tour · pauses are illustrative.</p>
+  </section>
+  <div class="map-tools" aria-label="Map controls"><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="zoom-fit" title="Fit the whole town" aria-label="Fit the whole town">⤢</button></div>
+  <div class="map-key"><span><i class="dot marked"></i>Marked</span><span><i class="dot unmarked"></i>Unmarked</span><span><i class="dot retained"></i>Outside sweep filter</span><span><i class="dot reclaimed"></i>Reclaimed</span></div>
+  <aside id="inspector" aria-label="Field notes and live collector state">
+    <button id="sheet-toggle" aria-expanded="false" title="Expand or collapse field notes">Field notes <span>↑</span></button>
+    <div class="inspector-content">
+      <div class="chapter"><span id="chapter-tag">THE COLLECTION JOURNEY</span><button id="btn-unpin" hidden>Return to live tour</button></div>
+      <h2 id="district-title">Root Registry</h2><p id="district-short" class="dek"></p><p id="district-body"></p>
+      <div class="reading-track" role="progressbar" aria-label="Reading stop remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="reading-fill"></div></div><p id="reading-note" class="fine"></p>
+      <div class="live-event"><div class="eyebrow">LIVE OPERATION</div><p id="live-message" role="status" aria-live="polite"></p></div>
+      <div class="section-heading"><h3>The work stack</h3><span id="stack-count" class="mono"></span></div>
+      <p class="fine">Last in, first out. One cart tile per item.</p><div id="work-stack" aria-label="Pending work stack"></div>
+      <div class="section-heading"><h3>The committed world</h3><span id="world-count" class="mono"></span></div>
+      <p class="fine">Courtyard plinths represent world cells. Numbers match this list.</p><div id="cell-list"></div>
+      <p id="interpretation" class="interpretation"></p>
+      <details class="source-notes"><summary>Follow it in the Rust source</summary><p><a href="../../src/interpreter/vm/global_state.rs">Root gathering &amp; retry helper</a><br><a href="../../src/interpreter/stm/committer.rs">Admission, mark walk &amp; sweep</a></p><p class="fine">Source links need the surrounding repository. The tour itself works standalone.</p></details>
+      <nav id="station-nav" aria-label="Read about a station"></nav>
+    </div>
+  </aside>
+  <footer id="dock">
+    <div class="transport"><button id="btn-play" class="primary" title="Play or pause (Space)" aria-label="Pause tour">Pause</button><button id="btn-step" title="Advance one station (S)">Next stop <span aria-hidden="true">→</span></button><button id="btn-run" title="Start a fresh collection and keep reading history">New run</button><button id="btn-reset" title="Replay the full reading tour (R)" aria-label="Replay the full reading tour">↺ Replay</button>
+      <label class="speed-label" for="speed">Pace <output id="speed-value">1×</output><input id="speed" type="range" min="0.4" max="8" step="0.2" value="1"></label>
+      <div class="view-options"><label><input id="follow" type="checkbox" checked>Follow cart</label><label><input id="labels" type="checkbox" checked>Labels</label></div><button id="btn-settings" title="Open or close experiments" aria-label="Open experiments" aria-expanded="false">⚙</button>
+    </div>
+    <div id="experiments"><div class="experiment-heading"><span class="eyebrow">CHANGE THE WORLD</span><span class="fine">Each change starts a fresh request.</span></div>
+      <div class="experiment-controls"><label class="check-setting"><input id="linked" type="checkbox" checked>Global holds array</label><label for="callback">Callback owner<select id="callback"><option value="none">None</option><option value="callout">Queued call-out</option><option value="input">Input callback</option><option value="rule">Parser rule</option></select></label><label for="pins">Snapshot pins <output id="pins-value">0</output><input id="pins" type="range" min="0" max="3" step="1" value="0"></label><label for="cycles">Unrooted cycles <output id="cycles-value">1</output><input id="cycles" type="range" min="0" max="3" step="1" value="1"></label><p class="experiment-tip">Try cutting the global link.<br>Then give the closure a call-out.</p></div>
+    </div>
+  </footer>
+  <div id="tooltip" hidden></div>
+  <div id="about" class="modal-backdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="about-title" tabindex="-1"><button id="about-close" class="close" title="Close accuracy notes (Escape)" aria-label="Close accuracy notes">×</button><div class="eyebrow">COLLECTOR TOWN / MODEL NOTES</div><h2 id="about-title">How much of it is real</h2>
+      <p>This is a small, executable model of the collector in this checkout of lpc-rs. Trust the graph walk and cell counts; treat the town and its timing as illustrations.</p>
+      <p><strong>Computed.</strong> Live-pin admission; a LIFO work stack with Var, Ref, Process, and Image work; marked-cell and image-generation sets; array edges; mapping keys and values; function captures, partial arguments, and retained images; connection and parser callbacks; the sweep filter; and the reclaimed-cell report. The cart tiles and world plinths show that state.</p>
+      <p><strong>Scaled down.</strong> One process, one closure, two reachable image generations, and 16–22 committed cells replace the driver's full world. The process has only image, connection, and rules fields; each image has one global. Other process fields and clone counters are omitted. JavaScript names replace VarIds and generation IDs.</p>
+      <p><strong>Assumed.</strong> A synthetic object owns an array-to-mapping-to-closure graph. Its partial argument links back to the array; its capture reaches another array. Between 0 and 3 unrooted two-array cycles add garbage. Snapshot pins and callback owners are selected by the reader. Root order is deterministic here; production map iteration need not be. Every world-control change begins a fresh request.</p>
+      <p><strong>Illustrated / omitted.</strong> This does not run the Rust VM, allocate an LPC heap, or simulate worker scheduling, reference-count destruction, history eviction, actual memory usage, or collection latency. The pauses split one atomic committer message for reading only. There is no separate upvalue-bank cull in the current source: captured cells use the same graph walk and sweep. Automatic retries, object cleanup/destruction, and their scheduling are outside this tour. No numerical result is pre-baked.</p>
+      <p><strong>The boundary that matters.</strong> Unmarked Ref, Array, Mapping, and Image cells are removed. Process, Connection, and Rules cells are outside this filter. GcReport counts removed world variables, not bytes or game objects. Refusal does no marking or sweeping.</p>
+      <p class="fine">Projection and pacing adapted from the MIT-licensed Learnscape template. <a href="LICENSE">License</a> · <a href="README.md">Reader and maintainer notes</a></p>
+    </section>
+  </div>
+  <script src="js/iso.js"></script><script src="js/model.js"></script><script src="js/world.js"></script><script src="js/sim.js"></script><script src="js/render.js"></script><script src="js/ui.js"></script><script src="js/main.js"></script>
+</body>
+</html>
