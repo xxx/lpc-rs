@@ -65,8 +65,8 @@ pub(crate) mod mkdir;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod object_clones;
-pub(crate) mod object_recompile;
 pub(crate) mod object_time;
+pub(crate) mod object_update;
 pub(crate) mod papplyv;
 pub(crate) mod parse_add_rule;
 pub(crate) mod parse_add_synonym;
@@ -115,7 +115,6 @@ pub(crate) mod sort_array;
 pub(crate) mod source_cache_stats;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
-pub(crate) mod system_reload;
 pub(crate) mod tell_object;
 pub(crate) mod terminal_colour;
 mod terminal_text;
@@ -1189,10 +1188,10 @@ efuns! {
         arity: 2,
         args: [LpcType::String(false), LpcType::String(false)],
     },
-    request_system_reload [async in system_reload] => {
+    request_system_reload [async in object_update] => {
         returns: LpcType::Int(false), arity: 1, args: [LpcType::String(false)],
     },
-    query_system_reload [in system_reload] => {
+    query_system_reload [in object_update] => {
         returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
     },
     render_markdown => {
@@ -1205,10 +1204,10 @@ efuns! {
         ],
     },
     request_clean_up => { returns: LpcType::Int(false) },
-    request_object_recompile [async in object_recompile] => {
-        returns: LpcType::Int(false), arity: 1, args: [LpcType::Object(false)],
+    request_object_recompile [async in object_update] => {
+        returns: LpcType::Int(false), arity: 1, args: [LpcType::Object(false) | LpcType::String(false)],
     },
-    query_object_recompile [in object_recompile] => {
+    query_object_recompile [in object_update] => {
         returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
     },
 }

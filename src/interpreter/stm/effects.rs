@@ -111,9 +111,7 @@ pub(crate) enum Effect {
     /// A deferred call-out cancellation: a committed call out whose ID
     /// matches this one is removed from the queue at flush. A no-op if it
     /// is already gone (e.g. it already fired and removed itself).
-    CancelCallOut {
-        id: u64,
-    },
+    CancelCallOut { id: u64 },
 
     /// Cancel all work owned by the retired instance, including delayed scheduling.
     CancelProcessCallOuts(Arc<Process>),
@@ -165,28 +163,19 @@ pub(crate) enum Effect {
 
     /// `shutdown(code)` committed: the main loop is told to leave with
     /// `code`.
-    Shutdown {
-        code: i32,
-    },
+    Shutdown { code: i32 },
 
     /// Start an authorized reload only after the requesting attempt commits.
-    SystemReload(Arc<crate::interpreter::vm::system_reload::ReloadRequest>),
-    ObjectRecompile(Arc<crate::interpreter::vm::object_recompile::RecompileRequest>),
+    ObjectUpdate(Arc<crate::interpreter::vm::object_update::UpdateRequest>),
 
     /// `rm`'s unlink, applied once the attempt commits.
-    RemoveFile {
-        path: ResolvedPath,
-    },
+    RemoveFile { path: ResolvedPath },
 
     /// `mkdir`'s directory creation, applied once the attempt commits.
-    CreateDir {
-        path: ResolvedPath,
-    },
+    CreateDir { path: ResolvedPath },
 
     /// `rmdir`'s empty-directory removal, applied once the attempt commits.
-    RemoveDir {
-        path: ResolvedPath,
-    },
+    RemoveDir { path: ResolvedPath },
 
     /// `rename`'s move to `to`, applied once the attempt commits.
     Rename {
@@ -366,36 +355,19 @@ impl Effect {
                         .await;
                 }
             }
-            Self::ObjectRecompile(request) => {
+            Self::ObjectUpdate(request) => {
                 let id = request.id;
-                global_state.recompilations.enqueue(request.clone());
+                global_state.updates.enqueue(request.clone());
                 if global_state
                     .tx
-                    .send(VmOp::ObjectRecompile(request))
+                    .send(VmOp::ObjectUpdate(request))
                     .await
                     .is_err()
                 {
-                    global_state.recompilations.finish(
+                    global_state.updates.finish(
                         id,
                         Err(lpc_rs_errors::LpcError::runtime(
-                            "object recompilation: VM channel closed",
-                        )),
-                    );
-                }
-            }
-            Self::SystemReload(request) => {
-                let id = request.id;
-                global_state.reloads.enqueue(request.clone());
-                if global_state
-                    .tx
-                    .send(VmOp::SystemReload(request))
-                    .await
-                    .is_err()
-                {
-                    global_state.reloads.finish(
-                        id,
-                        Err(lpc_rs_errors::LpcError::runtime(
-                            "system reload: VM channel closed",
+                            "object update: VM channel closed",
                         )),
                     );
                 }
@@ -517,11 +489,8 @@ impl std::fmt::Debug for Effect {
             Self::WriteBytes { path, .. } => f.debug_tuple("WriteBytes").field(path).finish(),
             Self::ReplaceChars { path, .. } => f.debug_tuple("ReplaceChars").field(path).finish(),
             Self::Shutdown { code } => f.debug_tuple("Shutdown").field(code).finish(),
-            Self::ObjectRecompile(request) => {
-                f.debug_tuple("ObjectRecompile").field(&request.id).finish()
-            }
-            Self::SystemReload(request) => {
-                f.debug_tuple("SystemReload").field(&request.id).finish()
+            Self::ObjectUpdate(request) => {
+                f.debug_tuple("ObjectUpdate").field(&request.id).finish()
             }
             Self::RemoveFile { path, .. } => f.debug_tuple("RemoveFile").field(path).finish(),
             Self::CreateDir { path, .. } => f.debug_tuple("CreateDir").field(path).finish(),

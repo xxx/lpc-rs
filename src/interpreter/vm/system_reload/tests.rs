@@ -1,4 +1,13 @@
 use super::*;
+use crate::interpreter::{
+    lpc_ref::LpcRef,
+    stm::{Effect, commit_changeset},
+};
+use crate::interpreter::{
+    stm::{AttemptBody, Transaction, TxnHandle},
+    task::task_template::TaskTemplate,
+    vm::object_update::{UpdateBody, UpdateRequest, UpdateStatus},
+};
 use crate::{
     interpreter::{
         stm::start_txn,
@@ -70,19 +79,19 @@ async fn call(vm: &Vm, user: &Arc<Process>, name: &str, args: &[LpcRef]) -> Resu
     .expect("function exists")
 }
 
-async fn request(vm: &mut Vm, user: &Arc<Process>, target: &str) -> Arc<ReloadRequest> {
+async fn request(vm: &mut Vm, user: &Arc<Process>, target: &str) -> Arc<UpdateRequest> {
     let id = call(vm, user, "request", &[target.into()]).await.unwrap();
-    let Some(VmOp::SystemReload(request)) = vm.next_op() else {
+    let Some(VmOp::ObjectUpdate(request)) = vm.next_op() else {
         panic!("reload queued");
     };
     assert_eq!(id, LpcRef::from(request.id));
     request
 }
 
-async fn run(vm: &mut Vm, user: &Arc<Process>, target: &str) -> ReloadStatus {
+async fn run(vm: &mut Vm, user: &Arc<Process>, target: &str) -> UpdateStatus {
     let request = request(vm, user, target).await;
-    vm.global_state.run_system_reload(request.clone()).await;
-    vm.global_state.reloads.get(request.id).unwrap()
+    vm.global_state.run_object_update(request.clone()).await;
+    vm.global_state.updates.get(request.id).unwrap()
 }
 
 #[tokio::test]
@@ -320,7 +329,7 @@ async fn requests_are_deferred_authorized_again_and_owned_by_the_requester() {
     assert_eq!(vm.next_op(), None);
     let request = request(&mut vm, &user, "master").await;
     assert_eq!(
-        vm.global_state.reloads.get(request.id).unwrap().state,
+        vm.global_state.updates.get(request.id).unwrap().state,
         "queued"
     );
     let stranger = vm
@@ -342,8 +351,8 @@ async fn requests_are_deferred_authorized_again_and_owned_by_the_requester() {
     vm.initialize_process_from_code("/secure/master.c", "int valid_reload() { return 0; }")
         .await
         .unwrap();
-    vm.global_state.run_system_reload(request.clone()).await;
-    let status = vm.global_state.reloads.get(request.id).unwrap();
+    vm.global_state.run_object_update(request.clone()).await;
+    let status = vm.global_state.updates.get(request.id).unwrap();
     assert_eq!(status.state, "failed");
     assert!(status.error.contains("permission denied"));
     assert!(
@@ -389,15 +398,15 @@ async fn concurrent_requests_commit_complete_replacements() {
     let first = request(&mut vm, &user, "master").await;
     let second = request(&mut vm, &user, "master").await;
     tokio::join!(
-        vm.global_state.run_system_reload(first.clone()),
-        vm.global_state.run_system_reload(second.clone())
+        vm.global_state.run_object_update(first.clone()),
+        vm.global_state.run_object_update(second.clone())
     );
     assert_eq!(
-        vm.global_state.reloads.get(first.id).unwrap().state,
+        vm.global_state.updates.get(first.id).unwrap().state,
         "succeeded"
     );
     assert_eq!(
-        vm.global_state.reloads.get(second.id).unwrap().state,
+        vm.global_state.updates.get(second.id).unwrap().state,
         "succeeded"
     );
     assert_eq!(std::fs::read_to_string(root.join("runs")).unwrap(), "xx");
@@ -534,28 +543,6 @@ async fn a_missing_reload_hook_refuses_and_an_unknown_status_is_zero() {
     assert_eq!(vm.next_op(), None);
 }
 
-#[test]
-fn status_history_retains_pending_requests_and_bounds_finished_requests() {
-    let reloads = Reloads::default();
-    for id in 1..=132 {
-        reloads.enqueue(Arc::new(ReloadRequest {
-            id,
-            target: ReloadTarget::Master,
-            caller: Weak::new(),
-            player: None,
-            program: None,
-        }));
-        if id != 1 {
-            reloads.finish(id, Ok(()));
-        }
-    }
-    assert_eq!(reloads.get(1).unwrap().state, "queued");
-    assert!(reloads.get(2).is_none());
-    assert!(reloads.get(4).is_none());
-    assert!(reloads.get(5).is_some());
-    assert_eq!(reloads.entries.lock().len(), 129);
-}
-
 #[tokio::test]
 async fn rejected_preparation_reauthorizes_and_delivers_effects_once() {
     let (root, mut vm, user) = setup("system-reload-retry").await;
@@ -567,14 +554,15 @@ async fn rejected_preparation_reauthorizes_and_delivers_effects_once() {
     let first = request(&mut vm, &user, "master").await;
     let second = request(&mut vm, &user, "master").await;
     let gs = &vm.global_state;
-    let mut body = ReloadBody {
+    let mut body = UpdateBody {
         gs,
         request: &first,
         txn: None,
+        updated: 0,
     };
     let mut original = body.begin_attempt(&gs.committer_tx).await.unwrap().unwrap();
-    gs.run_system_reload(second.clone()).await;
-    assert_eq!(gs.reloads.get(second.id).unwrap().state, "succeeded");
+    gs.run_object_update(second.clone()).await;
+    assert_eq!(gs.updates.get(second.id).unwrap().state, "succeeded");
     original.disarm();
     let (commit, discarded) = body.commit_phase(&gs.committer_tx, original).await.unwrap();
     assert!(commit.is_err());
@@ -611,11 +599,11 @@ async fn deferred_authorization_preserves_caller_program_and_command_giver() {
         .await
         .unwrap()
         .unwrap();
-    let Some(VmOp::SystemReload(request)) = vm.next_op() else {
+    let Some(VmOp::ObjectUpdate(request)) = vm.next_op() else {
         panic!("request queued");
     };
-    vm.global_state.run_system_reload(request.clone()).await;
-    let status = vm.global_state.reloads.get(request.id).unwrap();
+    vm.global_state.run_object_update(request.clone()).await;
+    let status = vm.global_state.updates.get(request.id).unwrap();
     assert_eq!(status.state, "succeeded", "{}", status.error);
 }
 

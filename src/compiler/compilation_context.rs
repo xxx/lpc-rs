@@ -20,8 +20,7 @@ use crate::{
     compiler::semantic::scope_tree::ScopeTree,
     interpreter::{
         efun::EFUN_PROTOTYPES,
-        process::Process,
-        program::{InheritedProgram, Region, code_pool::CodePool},
+        program::{InheritedProgram, Program, Region, code_pool::CodePool},
     },
 };
 
@@ -75,9 +74,7 @@ pub struct CompilationContext {
     /// How deep into an inheritance chain is this context?
     pub inherit_depth: u8,
 
-    /// How many global variables have been declared in inherited-from parents?
-    /// This is how we determine how much space the final [`Process`] needs to
-    /// allocate for global variables.
+    /// Number of global slots contributed by inherited programs.
     pub num_globals: RegisterSize,
 
     /// The blocks of global slots the parents hold, in initialization order.
@@ -86,8 +83,8 @@ pub struct CompilationContext {
     /// The warnings of every program the parents hold, in `layout`'s order.
     pub inherited_warnings: Vec<ProgramWarnings>,
 
-    /// Pointer to the simul efuns
-    pub simul_efuns: Option<Arc<Process>>,
+    /// Simul-efun program selected for this compilation.
+    pub simul_efuns: Option<Arc<Program>>,
 
     /// The master's say over inherits and includes; `None` reads freely.
     pub gate: Option<Arc<dyn CompileGate>>,
@@ -212,7 +209,7 @@ impl CompilationContext {
         if let Some(function) = self
             .simul_efuns
             .as_ref()
-            .and_then(|simul_efuns| simul_efuns.initial_program().lookup_function(name))
+            .and_then(|simul_efuns| simul_efuns.lookup_function(name))
         {
             return Some(Callee::SimulEfun(&function.prototype));
         }
@@ -392,8 +389,7 @@ mod tests {
 
         context.inherit_names.insert("my_named_inherit".into(), 0);
 
-        let proc = Process::new(simul_efuns);
-        context.simul_efuns = Some(proc.into());
+        context.simul_efuns = Some(simul_efuns.into());
         // lookup_function
 
         assert_eq!(

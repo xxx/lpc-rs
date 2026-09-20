@@ -80,8 +80,7 @@ pub struct GlobalState {
     /// Every live connection; the loop registers and removes itself.
     pub registry: crate::interpreter::vm::binding::Registry,
 
-    pub(crate) reloads: super::system_reload::Reloads,
-    pub(crate) recompilations: super::object_recompile::Recompilations,
+    pub(crate) updates: super::object_update::Updates,
 }
 
 impl GlobalState {
@@ -106,8 +105,7 @@ impl GlobalState {
             attempt_runner,
             booted_at: std::time::SystemTime::now(),
             registry: Default::default(),
-            reloads: Default::default(),
-            recompilations: Default::default(),
+            updates: Default::default(),
         }
     }
 

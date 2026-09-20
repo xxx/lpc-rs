@@ -704,6 +704,9 @@ impl TaskContext {
         if let Some(view) = &self.system_view {
             let mut view = (**view).clone();
             view.simul = view.authority_simul.clone();
+            if let Some(authority) = &view.authority {
+                ctx.txn = ctx.txn.with_authority(authority.clone());
+            }
             view.staged.clear();
             ctx.system_view = Some(Arc::new(view));
         }

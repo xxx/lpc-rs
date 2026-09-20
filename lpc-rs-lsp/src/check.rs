@@ -3,10 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use codespan_reporting::diagnostic::{
     Diagnostic as CompilerDiagnostic, Label, LabelStyle, Severity,
 };
-use lpc_rs::{
-    compiler::{Compiler, CompilerBuilder},
-    interpreter::process::Process,
-};
+use lpc_rs::compiler::{Compiler, CompilerBuilder};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{
     LpcError,
@@ -69,7 +66,7 @@ pub async fn check(job: &Check, config: Arc<Config>) -> Reports {
                         record(&mut reports, warning, roots[0].0, &sources.read(), &config);
                     }
                 }
-                builder.simul_efuns(Some(Arc::new(Process::new(compiled.program))));
+                builder.simul_efuns(Some(Arc::new(compiled.program)));
             }
             Err(error) => {
                 let uri = file_uri(path).unwrap_or_else(|| roots[0].0.clone());

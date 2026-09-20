@@ -1,4 +1,9 @@
 use super::*;
+use crate::interpreter::{
+    stm::{AttemptBody, Transaction, TxnHandle},
+    task::task_template::TaskTemplate,
+    vm::object_update::{UpdateBody, UpdateRequest, UpdateStatus},
+};
 use crate::{
     interpreter::{
         CommittedReader,
@@ -119,19 +124,19 @@ async fn call(vm: &Vm, process: &Arc<Process>, name: &str, args: &[LpcRef]) -> R
     .expect("function exists")
 }
 
-async fn request(vm: &mut Vm, admin: &Arc<Process>) -> Arc<RecompileRequest> {
+async fn request(vm: &mut Vm, admin: &Arc<Process>) -> Arc<UpdateRequest> {
     let id = call(vm, admin, "request", &[]).await.unwrap();
-    let Some(VmOp::ObjectRecompile(request)) = vm.next_op() else {
+    let Some(VmOp::ObjectUpdate(request)) = vm.next_op() else {
         panic!("recompilation queued");
     };
     assert_eq!(id, LpcRef::from(request.id));
     request
 }
 
-async fn run(vm: &mut Vm, admin: &Arc<Process>) -> RecompileStatus {
+async fn run(vm: &mut Vm, admin: &Arc<Process>) -> UpdateStatus {
     let request = request(vm, admin).await;
-    vm.global_state.run_object_recompile(request.clone()).await;
-    vm.global_state.recompilations.get(request.id).unwrap()
+    vm.global_state.run_object_update(request.clone()).await;
+    vm.global_state.updates.get(request.id).unwrap()
 }
 
 #[tokio::test]
@@ -234,8 +239,8 @@ async fn permission_is_required_and_rechecked_and_aborted_requests_are_not_queue
     vm.initialize_process_from_code("/secure/master.c", PERMISSIVE_MASTER)
         .await
         .unwrap();
-    vm.global_state.run_object_recompile(queued.clone()).await;
-    let status = vm.global_state.recompilations.get(queued.id).unwrap();
+    vm.global_state.run_object_update(queued.clone()).await;
+    let status = vm.global_state.updates.get(queued.id).unwrap();
     assert_eq!(status.state, "failed");
     assert!(status.error.contains("permission denied"));
     assert!(
@@ -255,9 +260,9 @@ async fn retired_target_cannot_upgrade_a_replacement_under_its_name() {
     vm.initialize_process_from_code("/target.c", ORIGINAL)
         .await
         .unwrap();
-    vm.global_state.run_object_recompile(queued.clone()).await;
+    vm.global_state.run_object_update(queued.clone()).await;
     assert_eq!(
-        vm.global_state.recompilations.get(queued.id).unwrap().state,
+        vm.global_state.updates.get(queued.id).unwrap().state,
         "failed"
     );
 }
@@ -351,24 +356,17 @@ async fn status_is_private_and_duplicate_delivery_does_not_upgrade_twice() {
         call(&vm, &admin, "status", &[(-1).into()]).await.unwrap(),
         NULL
     );
-    vm.global_state.run_object_recompile(queued.clone()).await;
+    vm.global_state.run_object_update(queued.clone()).await;
     let target = vm.global_state.object_space.lookup("/target").unwrap();
     let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
     let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
     let generation = target.image(&txn).generation;
     drop(live);
-    vm.global_state.run_object_recompile(queued.clone()).await;
+    vm.global_state.run_object_update(queued.clone()).await;
     let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
     let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
     assert_eq!(target.image(&txn).generation, generation);
-    assert_eq!(
-        vm.global_state
-            .recompilations
-            .get(queued.id)
-            .unwrap()
-            .updated,
-        3
-    );
+    assert_eq!(vm.global_state.updates.get(queued.id).unwrap().updated, 3);
 }
 
 #[tokio::test]
@@ -377,7 +375,7 @@ async fn concurrent_global_writes_cloning_and_destruction_reject_staged_migratio
         let (root, mut vm, admin) = setup(&format!("recompile-race-{action}")).await;
         std::fs::write(root.join("target.c"), UPDATED).unwrap();
         let queued = request(&mut vm, &admin).await;
-        let mut body = RecompileBody {
+        let mut body = UpdateBody {
             gs: &vm.global_state,
             request: &queued,
             txn: None,
@@ -405,8 +403,8 @@ async fn concurrent_global_writes_cloning_and_destruction_reject_staged_migratio
             .await
             .unwrap();
         assert!(committed.is_err(), "{action} must conflict");
-        vm.global_state.run_object_recompile(queued.clone()).await;
-        let status = vm.global_state.recompilations.get(queued.id).unwrap();
+        vm.global_state.run_object_update(queued.clone()).await;
+        let status = vm.global_state.updates.get(queued.id).unwrap();
         assert_eq!(status.state, "succeeded", "{}", status.error);
         match action {
             "write" => {

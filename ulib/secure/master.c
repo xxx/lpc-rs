@@ -135,10 +135,11 @@ int valid_variable_info(object caller, object target, string program) {
 }
 
 /**
- * Authorise replacing driver-owned code through request_system_reload().
+ * Authorise system updates through request_system_reload() or request_object_recompile().
  * target is "master", "simul_efun" or "both"; caller requested the change
  * and program defines that request; the current master checks it again when
- * the reload is prepared, before the replacement can become active.
+ * the update is prepared, before new policy can become active.
+ * In-place system upgrades also require valid_recompile() for each prototype.
  * Return 0 because ulib provides no administration commands; restart from
  * the host to load edits instead of granting guests policy-replacement rights.
  */
@@ -152,6 +153,8 @@ int valid_reload(string target, object caller, string program) {
  * asks again before compilation, preserving the original command giver.
  * Missing this hook also denies upgrades; return 0 because ulib provides
  * no administration command to rebuild local callbacks after an upgrade.
+ * System targets also need valid_reload(); preparation uses the old policy
+ * code and global layouts until the entire update commits.
  */
 int valid_recompile(object prototype, object caller, string program) {
     return 0;

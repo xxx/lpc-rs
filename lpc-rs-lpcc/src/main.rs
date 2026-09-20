@@ -8,7 +8,7 @@ use std::{
 use clap::Parser;
 use lpc_rs::{
     compiler::{Compiled, CompilerBuilder},
-    interpreter::{process::Process, vm::Vm},
+    interpreter::vm::Vm,
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{Result, lpc_error};
@@ -84,7 +84,7 @@ async fn emit_assembly(config: Arc<Config>, path: &LpcPath) -> Result<()> {
     {
         let compiled = builder.build()?.compile_in_game_file(&sefuns, None).await?;
         emit_warnings(&compiled);
-        builder.simul_efuns(Some(Arc::new(Process::new(compiled.program))));
+        builder.simul_efuns(Some(Arc::new(compiled.program)));
     }
 
     let compiled = builder.build()?.compile_in_game_file(path, None).await?;

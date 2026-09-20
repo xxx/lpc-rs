@@ -12,7 +12,7 @@ effects. `compile_to_process` already separates compilation from placement.
 - Resolve system objects through transactional path lookup; bootstrap initialization
   publishes their cells transactionally. Track a system revision for physical test
   fixtures before their first transactional publication.
-- Supply the attempt's simul-efun process explicitly to in-game compilation.
+- Supply the attempt's selected simul-efun program explicitly to in-game compilation.
   Nested contexts share an optional preparation view that pins the authorizing
   master while exposing newly prepared objects to compilation and initialization.
 - Publish system-object physical projections inside the successful committer
@@ -20,11 +20,13 @@ effects. `compile_to_process` already separates compilation from placement.
 - Give master driver entries and driver-fired simul-efun callbacks symbolic seeds
   resolved on every attempt; callbacks recheck their original owner. Bootstrap
   publication uses an explicit initializer seed that retired callbacks cannot use.
-- Queue an authorized reload as a deferred VM operation. A dedicated AttemptBody
-  compiles, checks compatibility, initializes, retires, and publishes the selected
-  objects in one transaction. Any failure abandons that whole transaction.
+- Queue an authorized reload as a deferred VM operation. The shared object-update AttemptBody
+  delegates compilation, compatibility checks, initialization, retirement and
+  publication to restart preparation in one transaction. Any failure abandons that whole transaction.
 - Expose request status through a bounded history owned by GlobalState. Preserve
-  caller identity without rooting arbitrary LPC payloads in the queue.
+  caller identity without rooting arbitrary LPC payloads in the queue. Recompilation
+  and restart share request IDs, effects, VM delivery, ownership checks and the
+  most recent 128 completed jobs.
 - Validate process identity against its path cell so an old process cannot become
   live again when another process occupies its path.
 

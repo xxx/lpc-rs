@@ -2,7 +2,7 @@
 
 `int request_system_reload(string target)`
 
-Queue a runtime replacement of the configured `"master"`, `"simul_efun"`, or
+Queue an explicit fresh-state restart of the configured `"master"`, `"simul_efun"`, or
 `"both"` objects. Returns a positive request ID. The request starts after the
 calling transaction commits; an aborted transaction queues nothing. Inspect the
 result from a later invocation with `query_system_reload(id)`.
@@ -12,6 +12,10 @@ asks again when the job runs, using the original requesting object and defining
 program and command giver (`this_player()`). A missing hook refuses the request. A retired requester cannot run a
 queued reload. The configured simul-efun source must exist for targets involving
 it, and every target must already be resident.
+
+Use `request_object_recompile(target)` to preserve system object identity and
+compatible globals instead. Recompilation does not call `create()` or cancel
+scheduled work; it accepts these same selectors as well as ordinary prototypes.
 
 The driver compiles and initializes fresh objects in a separate transaction.
 The current master and its current simul-efuns authorize includes, inherits, and
@@ -58,4 +62,4 @@ void show_reload_result() {
 
 ### See also
 
-`query_system_reload`, `valid_reload`
+`query_system_reload`, `valid_reload`, `request_object_recompile`

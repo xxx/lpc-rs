@@ -2767,7 +2767,7 @@ mod tests {
             },
             lexer::LexWrapper,
         },
-        interpreter::{process::Process, program::Program},
+        interpreter::program::Program,
         lpc_parser,
         test_support::factories::*,
     };
@@ -2803,8 +2803,7 @@ mod tests {
             )
             .into(),
         );
-        let process = Process::new(prog);
-        walker.context.simul_efuns = Some(process.into());
+        walker.context.simul_efuns = Some(prog.into());
 
         walker.context.function_prototypes.insert(
             "local_function".into(),

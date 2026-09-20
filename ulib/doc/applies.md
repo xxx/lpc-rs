@@ -63,8 +63,8 @@ from the caller object's name through inheritance or virtual objects.
 | `valid_destruct(object caller, object target, string program)` | Object destruction, including self-destruction. | Only `caller == target`. |
 | `valid_exec(string program, object new_body, object old_body)` | Moving a connection between bodies with `exec()`. Here `program` has no leading slash; the driver's initial attachment after `connect()` does not need this grant. | Deny. |
 | `valid_variable_info(object caller, object target, string program)` | Inspecting another object's globals, including private ones; inspecting self does not ask. | Deny. |
-| `valid_reload(string target, object caller, string program)` | System reload requests for `master`, `simul_efun` or `both`. | Deny. |
-| `valid_recompile(object prototype, object caller, string program)` | In-place upgrades of a prototype and its current clones; checked when requested and before compilation. | Deny. |
+| `valid_reload(string target, object caller, string program)` | System restart and in-place recompile requests for `master`, `simul_efun` or `both`; system recompilation also needs `valid_recompile`. | Deny. |
+| `valid_recompile(object prototype, object caller, string program)` | In-place upgrades of a prototype and its current clones, including system prototypes; checked when requested and before compilation, under old system policy. | Deny. |
 | `valid_shutdown(object caller, string program)` | The LPC shutdown efun, not the host's Ctrl-C or termination signal. | Deny. |
 | `query_allow_shadow(object target)` | Shadowing `target`; `previous_object()` is the would-be shadow. A target's `no_shadow` pragma can also forbid it. | Deny. |
 

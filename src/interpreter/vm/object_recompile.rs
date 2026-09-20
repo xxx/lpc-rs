@@ -1,130 +1,88 @@
-//! In-place publication of a prototype's new program and its clones' state.
+//! In-place publication of new code and compatible state for live object groups.
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::{
-        Arc, Weak,
-        atomic::{AtomicI64, Ordering},
-    },
+use super::{
+    object_update::UpdateRequest,
+    system_reload::{ReloadTarget, SystemView, compatible_exports},
 };
-
-use lpc_rs_core::RegisterSize;
-use lpc_rs_errors::{LpcError, Result};
-use parking_lot::Mutex;
-
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
-        CLEAN_UP, VALID_RECOMPILE,
+        CLEAN_UP, VALID_RECOMPILE, VALID_RELOAD,
         apply::{report_warnings, valid_apply},
         compile_gate::MasterGate,
         file_view::TransactionSourceReader,
         lpc_ref::{LpcRef, NULL},
         process::{Process, ProgramImage},
         program::Program,
-        stm::{
-            AttemptBody, CommitProtocol, Conflict, Effect, LiveSnapshot, Transaction, TxnHandle,
-            commit_changeset, flush_effects, start_txn,
-        },
-        task::{Task, task_template::TaskTemplate},
-        task_context::{Caller, TaskContext},
-        vm::global_state::GlobalState,
+        stm::AuthorityView,
+        task::Task,
+        task_context::{Caller, Callers, TaskContext},
     },
     util::process_builder::compile_process_in_context,
 };
-
-/// A recompilation request whose caller's transaction has committed.
-#[derive(Debug)]
-pub struct RecompileRequest {
-    pub(crate) id: i64,
-    pub(crate) target: Weak<Process>,
-    pub(crate) caller: Weak<Process>,
-    pub(crate) player: Option<Weak<Process>>,
-    pub(crate) program: Option<String>,
-}
-
-impl RecompileRequest {
-    pub(crate) fn args(&self) -> [LpcRef; 3] {
-        [
-            self.target.clone().into(),
-            self.caller.clone().into(),
-            self.program.as_deref().map(LpcRef::from).unwrap_or(NULL),
-        ]
-    }
-}
+use lpc_rs_core::RegisterSize;
+use lpc_rs_errors::{LpcError, Result};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Weak},
+};
 
 #[derive(Debug, Clone)]
-pub(crate) struct RecompileStatus {
-    pub request: Arc<RecompileRequest>,
-    pub state: &'static str,
-    pub error: String,
-    pub updated: usize,
+pub(crate) enum RecompileTarget {
+    Object(Weak<Process>),
+    System(ReloadTarget),
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct Recompilations {
-    next: AtomicI64,
-    entries: Mutex<BTreeMap<i64, RecompileStatus>>,
-}
-
-impl Recompilations {
-    pub(crate) fn mint_id(&self) -> Result<i64> {
-        self.next
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
-            .map(|n| n + 1)
-            .map_err(|_| LpcError::runtime("object recompilation request IDs exhausted"))
-    }
-
-    pub(crate) fn enqueue(&self, request: Arc<RecompileRequest>) {
-        self.entries.lock().insert(
-            request.id,
-            RecompileStatus {
-                request,
-                state: "queued",
-                error: String::new(),
-                updated: 0,
-            },
-        );
-    }
-
-    pub(crate) fn get(&self, id: i64) -> Option<RecompileStatus> {
-        self.entries.lock().get(&id).cloned()
-    }
-
-    fn start(&self, id: i64) -> bool {
-        let mut entries = self.entries.lock();
-        let Some(status) = entries.get_mut(&id) else {
-            return false;
-        };
-        if status.state != "queued" {
-            return false;
+impl RecompileTarget {
+    pub(crate) fn parse(value: &LpcRef, ctx: &TaskContext) -> Result<Self> {
+        if let Some(name) = value.as_str() {
+            return Ok(Self::System(ReloadTarget::parse(name, ctx)?));
         }
-        status.state = "running";
-        true
+        let target = value.live_object(ctx.txn()).ok_or_else(|| {
+            LpcError::runtime(
+                "request_object_recompile: expected a live prototype or system selector",
+            )
+        })?;
+        check_target(ctx, &target)?;
+        Ok(Self::Object(Arc::downgrade(&target)))
     }
 
-    pub(crate) fn finish(&self, id: i64, result: Result<usize>) {
-        let mut entries = self.entries.lock();
-        if let Some(status) = entries.get_mut(&id) {
-            match result {
-                Ok(updated) => {
-                    status.state = "succeeded";
-                    status.updated = updated;
+    pub(crate) fn value(&self, ctx: &TaskContext) -> LpcRef {
+        match self {
+            Self::Object(target) => target
+                .upgrade()
+                .filter(|p| p.is_live(ctx.txn()))
+                .map_or(NULL, |p| Arc::downgrade(&p).into()),
+            Self::System(target) => target.name().into(),
+        }
+    }
+
+    fn resolve(&self, ctx: &TaskContext) -> Result<Vec<Arc<Process>>> {
+        let targets = match self {
+            Self::Object(target) => vec![
+                target
+                    .upgrade()
+                    .ok_or_else(|| LpcError::runtime("object recompilation: target is gone"))?,
+            ],
+            Self::System(target) => {
+                let mut targets = Vec::new();
+                if *target != ReloadTarget::Master {
+                    targets.push(ctx.simul_efuns().ok_or_else(|| {
+                        LpcError::runtime("object recompilation: no simul-efun object is loaded")
+                    })?);
                 }
-                Err(error) => {
-                    status.state = "failed";
-                    status.error = error.diagnostic_string();
+                if *target != ReloadTarget::Simul {
+                    targets.push(ctx.master_object().ok_or_else(|| {
+                        LpcError::runtime("object recompilation: no master is loaded")
+                    })?);
                 }
+                targets
             }
+        };
+        for target in &targets {
+            check_target(ctx, target)?;
         }
-        let finished: Vec<_> = entries
-            .iter()
-            .filter(|(_, s)| matches!(s.state, "succeeded" | "failed"))
-            .map(|(&id, _)| id)
-            .collect();
-        for id in finished.iter().take(finished.len().saturating_sub(128)) {
-            entries.remove(id);
-        }
+        Ok(targets)
     }
 }
 
@@ -134,15 +92,65 @@ pub(crate) fn check_target(ctx: &TaskContext, target: &Arc<Process>) -> Result<(
             "object recompilation: expected a live, initialized prototype",
         ));
     }
-    if ctx
-        .object_space()
-        .is_system_key(&ctx.object_space().process_key(target))
+    Ok(())
+}
+
+pub(crate) async fn authorize(
+    ctx: &TaskContext,
+    request: &UpdateRequest,
+    target: &RecompileTarget,
+    callers: Callers,
+) -> Result<Vec<Arc<Process>>> {
+    let targets = target.resolve(ctx)?;
+    let master = ctx.master_object();
+    let simul = ctx.simul_efuns();
+    if master
+        .as_ref()
+        .zip(simul.as_ref())
+        .is_some_and(|(m, s)| Arc::ptr_eq(m, s))
     {
         return Err(LpcError::runtime(
-            "object recompilation: use request_system_reload for driver-owned objects",
+            "object recompilation: master and simul-efun paths must differ",
         ));
     }
-    Ok(())
+    let contains = |object: &Option<Arc<Process>>| {
+        object
+            .as_ref()
+            .is_some_and(|p| targets.iter().any(|target| Arc::ptr_eq(target, p)))
+    };
+    let system = match (contains(&master), contains(&simul)) {
+        (true, true) => Some(ReloadTarget::Both),
+        (true, false) => Some(ReloadTarget::Master),
+        (false, true) => Some(ReloadTarget::Simul),
+        _ => None,
+    };
+    if let Some(system) = system
+        && !valid_apply(
+            ctx,
+            callers.clone(),
+            VALID_RELOAD,
+            &request.args(system.name().into()),
+        )
+        .await?
+    {
+        return Err(LpcError::runtime(
+            "object recompilation: system update permission denied",
+        ));
+    }
+    for target in &targets {
+        if !valid_apply(
+            ctx,
+            callers.clone(),
+            VALID_RECOMPILE,
+            &request.args(Arc::downgrade(target).into()),
+        )
+        .await?
+        {
+            return Err(LpcError::runtime("object recompilation: permission denied"));
+        }
+        check_target(ctx, target)?;
+    }
+    Ok(targets)
 }
 
 fn check_member(ctx: &TaskContext, member: &Arc<Process>, program: &Program) -> Result<()> {
@@ -183,185 +191,133 @@ fn retained_globals(old: &Program, new: &Program) -> Vec<(RegisterSize, Register
         .collect()
 }
 
-impl GlobalState {
-    /// Run a committed request once, retrying the whole preparation on conflict.
-    pub async fn run_object_recompile(self: &Arc<Self>, request: Arc<RecompileRequest>) {
-        if !self.recompilations.start(request.id) {
-            return;
+pub(crate) async fn prepare(
+    ctx: &mut TaskContext,
+    request: &UpdateRequest,
+    target: &RecompileTarget,
+) -> Result<usize> {
+    let callers = Some(Caller::link(ctx.process.clone(), None));
+    let targets = authorize(ctx, request, target, callers.clone()).await?;
+    let master = ctx.master_object();
+    let simul = ctx.simul_efuns();
+    let selected = |p: &Arc<Process>| targets.iter().any(|target| Arc::ptr_eq(target, p));
+    let mut authority = AuthorityView::default();
+    if let Some(master) = master.filter(|m| selected(m) || simul.as_ref().is_some_and(selected)) {
+        authority.pin(ctx.txn(), &master, selected(&master));
+        if let Some(simul) = &simul {
+            authority.pin(ctx.txn(), simul, selected(simul));
         }
-        let mut body = RecompileBody {
-            gs: self,
-            request: &request,
-            txn: None,
-            updated: 0,
-        };
-        let (result, _) = self.attempt_runner.run(&mut body).await;
-        self.recompilations
-            .finish(request.id, result.map(|()| body.updated));
+        ctx.system_view = Some(Arc::new(SystemView {
+            master,
+            simul: simul.clone(),
+            authority_simul: simul.clone(),
+            authority: Some(Arc::new(authority)),
+            staged: Default::default(),
+        }));
     }
+    let mut updated = Vec::new();
+    for target in targets {
+        let is_simul = simul.as_ref().is_some_and(|s| Arc::ptr_eq(s, &target));
+        updated.extend(recompile_group(ctx, target, is_simul, callers.clone()).await?);
+    }
+    for member in &updated {
+        check_member(ctx, member, &member.program(ctx.txn()))?;
+    }
+    Ok(updated.len())
 }
 
-struct RecompileBody<'a> {
-    gs: &'a Arc<GlobalState>,
-    request: &'a RecompileRequest,
-    txn: Option<TxnHandle>,
-    updated: usize,
-}
-
-impl RecompileBody<'_> {
-    async fn prepare(&mut self, ctx: &TaskContext) -> Result<()> {
-        if !ctx.process.is_live(ctx.txn()) {
-            return Err(LpcError::runtime(
-                "object recompilation: requester is retired",
-            ));
-        }
-        if self.request.player.is_some()
-            && !ctx
-                .this_player
-                .load_full()
-                .is_some_and(|p| p.is_live(ctx.txn()))
-        {
-            return Err(LpcError::runtime(
-                "object recompilation: original command giver is gone",
-            ));
-        }
-        let target = self
-            .request
-            .target
-            .upgrade()
-            .ok_or_else(|| LpcError::runtime("object recompilation: target is gone"))?;
-        check_target(ctx, &target)?;
-        let callers = Some(Caller::link(ctx.process.clone(), None));
-        if !valid_apply(ctx, callers.clone(), VALID_RECOMPILE, &self.request.args()).await? {
-            return Err(LpcError::runtime("object recompilation: permission denied"));
-        }
-        check_target(ctx, &target)?;
-        let old = target.image(ctx.txn());
-        let gate = MasterGate::new(ctx, callers.clone());
-        let reader = Arc::new(TransactionSourceReader(ctx.txn().clone()));
-        let compiling = ctx.txn().time_compilation();
-        let (compiled, warnings) =
-            compile_process_in_context(ctx, &old.program.filename, None, gate, reader).await?;
-        drop(compiling);
-        report_warnings(ctx, callers.clone(), &old.program.filename, warnings).await?;
-        let mut program = compiled.initial_program().as_ref().clone();
-        program.clones = old.program.clones.clone();
-        let program = Arc::new(program);
-        let retained = retained_globals(&old.program, &program);
-        let clones = ctx.txn().with(|t| t.read_array(program.clones.id));
-        let mut members = vec![target];
-        if let Some(clones) = clones {
-            for reference in clones.iter() {
-                if let Some(clone) = reference.live_object(ctx.txn()) {
-                    members.push(clone);
-                }
+async fn recompile_group(
+    ctx: &TaskContext,
+    target: Arc<Process>,
+    is_simul: bool,
+    callers: Callers,
+) -> Result<Vec<Arc<Process>>> {
+    let old = target.image(ctx.txn());
+    let gate = MasterGate::new(ctx, callers.clone());
+    let reader = Arc::new(TransactionSourceReader(ctx.txn().clone()));
+    let compiling = ctx.txn().time_compilation();
+    let (compiled, warnings) =
+        compile_process_in_context(ctx, &old.program.filename, None, gate, reader).await?;
+    drop(compiling);
+    report_warnings(ctx, callers.clone(), &old.program.filename, warnings).await?;
+    if is_simul {
+        compatible_exports(&old.program, compiled.initial_program())?;
+    }
+    let mut program = compiled.initial_program().as_ref().clone();
+    program.clones = old.program.clones.clone();
+    let program = Arc::new(program);
+    let retained = retained_globals(&old.program, &program);
+    let clones = ctx.txn().with(|t| t.read_array(program.clones.id));
+    let mut members = vec![target];
+    if let Some(clones) = clones {
+        for reference in clones.iter() {
+            if let Some(clone) = reference.live_object(ctx.txn()) {
+                members.push(clone);
             }
         }
-        let mut migrations = Vec::with_capacity(members.len());
-        for member in members {
-            check_member(ctx, &member, &program)?;
-            let old_image = member.image(ctx.txn());
-            if !Arc::ptr_eq(&old_image.program, &old.program) {
-                return Err(LpcError::bug("clone group contains a different program"));
-            }
-            let image = Arc::new(ProgramImage::migrate(
-                program.clone(),
-                &old_image,
-                &retained,
-            ));
-            let values = ctx.txn().with(|t| {
-                retained
-                    .iter()
-                    .map(|&(old_slot, new_slot)| {
-                        (
-                            image.var_id(new_slot),
-                            t.read(old_image.var_id(old_slot)).unwrap_or(NULL),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            });
-            migrations.push((member, image, values));
+    }
+    let mut migrations = Vec::with_capacity(members.len());
+    for member in members {
+        check_member(ctx, &member, &program)?;
+        let old_image = member.image(ctx.txn());
+        if !Arc::ptr_eq(&old_image.program, &old.program) {
+            return Err(LpcError::bug("clone group contains a different program"));
         }
-        ctx.txn().with(|t| {
-            for (member, image, _) in &migrations {
-                t.write_image(member, image.clone());
-            }
+        let image = Arc::new(ProgramImage::migrate(
+            program.clone(),
+            &old_image,
+            &retained,
+        ));
+        let values = ctx.txn().with(|t| {
+            retained
+                .iter()
+                .map(|&(old_slot, new_slot)| {
+                    (
+                        image.var_id(new_slot),
+                        t.read(old_image.var_id(old_slot)).unwrap_or(NULL),
+                    )
+                })
+                .collect::<Vec<_>>()
         });
-        for (member, _, _) in &migrations {
-            for region in &program.layout {
-                let function = program.function(region.init).cloned().ok_or_else(|| {
-                    LpcError::bug("global initializer missing from program layout")
-                })?;
-                let nested = ctx.nested(callers.clone(), member.clone())?;
-                let mut task = Task::<MAX_CALL_STACK_SIZE>::new(nested);
-                task.timed_eval(function, &[], ctx.config().max_execution_time)
-                    .await?;
-            }
+        migrations.push((member, image, values));
+    }
+    ctx.txn().with(|t| {
+        for (member, image, _) in &migrations {
+            t.write_image(member, image.clone());
         }
-        for (member, _, values) in &migrations {
-            check_member(ctx, member, &program)?;
-            ctx.txn().with(|t| {
-                for (cell, value) in values {
-                    t.write(*cell, value.clone());
-                }
-            });
+    });
+    for (member, _, _) in &migrations {
+        for region in &program.layout {
+            let function = program
+                .function(region.init)
+                .cloned()
+                .ok_or_else(|| LpcError::bug("global initializer missing from program layout"))?;
+            let nested = ctx.nested(callers.clone(), member.clone())?;
+            let mut task = Task::<MAX_CALL_STACK_SIZE>::new(nested);
+            task.timed_eval(function, &[], ctx.config().max_execution_time)
+                .await?;
         }
-        self.updated = migrations.len();
-        Ok(())
     }
-}
-
-#[async_trait::async_trait]
-impl AttemptBody for RecompileBody<'_> {
-    fn timeout_ms(&self) -> u64 {
-        self.gs.config.max_execution_time
+    for (member, _, values) in &migrations {
+        check_member(ctx, member, &program)?;
+        for (cell, value) in values {
+            let retained = ctx
+                .system_view
+                .as_ref()
+                .and_then(|view| view.authority.as_ref())
+                .and_then(|authority| authority.retained(ctx.txn(), *cell))
+                .unwrap_or_else(|| value.clone());
+            ctx.txn().with(|t| t.write(*cell, retained));
+        }
     }
-
-    fn take_compilation_time(&mut self) -> std::time::Duration {
-        self.txn.as_ref().map_or(std::time::Duration::ZERO, |txn| {
-            txn.with(|t| t.take_compilation_time())
-        })
-    }
-
-    async fn begin_attempt(
-        &mut self,
-        tx: &flume::Sender<CommitProtocol>,
-    ) -> Result<Option<LiveSnapshot>> {
-        let live = start_txn(tx).await?;
-        let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
-        self.txn = Some(txn.clone());
-        self.updated = 0;
-        let caller = self
-            .request
-            .caller
-            .upgrade()
-            .ok_or_else(|| LpcError::runtime("object recompilation: requester is gone"))?;
-        txn.with(|t| {
-            t.set_origin(&caller, "object_recompile");
-            t.reload_preparing = true;
-        });
-        let mut template = TaskTemplate::from(self.gs.clone());
-        template.txn = txn;
-        template.set_this_player(self.request.player.as_ref().and_then(Weak::upgrade));
-        self.prepare(&template.into_task_context(caller)).await?;
-        Ok(Some(live))
-    }
-
-    async fn commit_phase(
-        &mut self,
-        tx: &flume::Sender<CommitProtocol>,
-        _live: LiveSnapshot,
-    ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
-        let txn = self.txn.as_ref().expect("attempt opened");
-        let result = commit_changeset(tx, txn.with(|t| t.take_changeset())).await?;
-        Ok((result, txn.with(|t| t.take_effects())))
-    }
-
-    async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
-        flush_effects(self.gs, effects).await;
-        Ok(())
-    }
+    Ok(migrations
+        .into_iter()
+        .map(|(member, _, _)| member)
+        .collect())
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod system_tests;

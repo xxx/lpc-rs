@@ -262,7 +262,7 @@ pub async fn compile_prog_with_config(
 
     let compiler = CompilerBuilder::default()
         .config(config.clone())
-        .simul_efuns(Some(se_proc.clone()))
+        .simul_efuns(Some(se_proc.initial_program().clone()))
         .build()
         .unwrap();
     let path = LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir);

@@ -41,9 +41,10 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     if let Some(reason) = structural_refusal(&txn, context.task_context(), &caller, &target) {
         return Err(context.runtime_error(refuse(reason)));
     }
-    let master = context.task_context().master_object();
+    let authority = context.task_context().authority_context();
+    let master = authority.master_object();
     let defined = master.as_ref().is_some_and(|m| {
-        m.program(context.txn())
+        m.program(authority.txn())
             .unmangled_functions
             .contains_key(QUERY_ALLOW_SHADOW)
     });
@@ -53,6 +54,7 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
             "Shadowing is disabled: the master defines no query_allow_shadow.".to_string(),
         )));
     }
+    drop(authority);
     let args = [LpcRef::from(Arc::downgrade(&target))];
     let allowed = master_apply(
         context.task_context(),

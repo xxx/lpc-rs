@@ -29,7 +29,7 @@ use ustr::ustr;
 
 use crate::{
     compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
-    interpreter::{process::Process, program::Program},
+    interpreter::program::Program,
     lpc_parser,
 };
 
@@ -61,9 +61,9 @@ pub struct Compiler {
     #[builder(default)]
     inherit_depth: u8,
 
-    /// Pointer to the simul_efuns to be used for this compilation
+    /// Simul-efun program selected for this compilation
     #[builder(default)]
-    simul_efuns: Option<Arc<Process>>,
+    simul_efuns: Option<Arc<Program>>,
 
     /// The master's say over inherits and includes; `None` reads freely.
     #[builder(default)]

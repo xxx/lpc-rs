@@ -16,8 +16,9 @@ upgrade; failed preparation leaves the entire group unchanged.
    denies the operation. Compilation retains the normal include, inherit, source
    access, warning, and execution-limit checks.
 3. The source is the prototype's backing file. A clone, virtual instance,
-   destructed object, uninitialized object, master, or simul-efun object cannot
-   be the target. Missing or invalid source fails without replacing anything.
+   destructed object or uninitialized object cannot be the target. Configured
+   master and simul-efun objects support the same state-preserving upgrade. Missing
+   or invalid source fails without replacing anything.
 4. All upgraded objects keep their references, names, creation times, connections,
    command state, environments, and inventories. State is individual to each
    object; no clone receives another clone's globals.
@@ -50,7 +51,7 @@ upgrade; failed preparation leaves the entire group unchanged.
 
 ## Request interface
 
-12. `request_object_recompile(object prototype)` returns a positive request ID.
+12. `request_object_recompile(object|string target)` returns a positive request ID.
     The job starts after the caller commits; an aborted transaction queues nothing.
     The active master's `valid_recompile(prototype, caller, program)` must allow
     both the request and the job. The original requester and command giver must
@@ -59,6 +60,29 @@ upgrade; failed preparation leaves the entire group unchanged.
 13. `query_object_recompile(int id)` returns 0 for an unknown request or a mapping
     containing `target`, `state`, `error`, and `updated`. States are `queued`,
     `running`, `succeeded`, and `failed`. Only the requesting object may inspect
-    the request. `updated` includes the prototype and is zero unless successful;
-    `error` is empty unless failed. A destructed target appears as zero. The most
-    recent 128 completed requests are retained; aborted IDs may be skipped.
+    the request. `updated` includes all selected prototypes and is zero unless
+    successful; `error` is empty unless failed. A destructed object target appears
+    as zero; system selectors remain strings. The most recent 128 completed jobs
+    across recompilation and restart are retained; aborted IDs may be skipped.
+
+## System objects and shared jobs
+
+14. A target may also be `"master"`, `"simul_efun"`, or `"both"`. Selectors resolve
+    the configured live objects when preparation starts; an object argument binds
+    to that exact identity. A pair upgrades the simul-efun group first, then
+    compiles the master against its new exports, and publishes both atomically.
+15. System upgrades require `valid_reload(selector, caller, program)` as well as
+    `valid_recompile` for each selected prototype, at request and execution time.
+    Missing hooks deny the operation. Old master and simul-efun code and global
+    layouts authorize the whole preparation; initializers cannot install new
+    authorization policy before commit.
+16. Existing simul-efun exports keep their signatures and function flags. New
+    exports are available to newly compiled callers immediately after publication.
+    System objects follow ordinary upgrade rules for identity, globals, clones,
+    callbacks, shadows and cleanup eligibility; they need not be detached daemons.
+17. `request_system_reload` remains an explicit fresh-state restart: new identity,
+    normal `create()`, and cancellation of the retired objects' callouts. Both
+    operations share job IDs, queueing, retries, completion and status retention.
+    Query functions expose only their own operation, and the most recent 128
+    completed jobs across both operations are retained. Recompilation status
+    returns the supplied object or system selector as `target`.

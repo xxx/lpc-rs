@@ -3,7 +3,9 @@
 ## Summary
 
 Administrators can replace the master, simul-efun object, or both while the driver
-continues serving work. Failed reloads preserve the active objects.
+continues serving work. This operation explicitly restarts objects with fresh
+state; `request_object_recompile` upgrades them in place. Failed reloads preserve
+the active objects.
 
 ## Behavior
 
@@ -16,7 +18,8 @@ continues serving work. Failed reloads preserve the active objects.
 3. `query_system_reload(id)` returns a mapping with `target`, `state`, and `error`,
    or 0 for an unknown request. States are `queued`, `running`, `succeeded`, and
    `failed`. Only the requesting object can inspect the request. The most recent
-   128 completed requests are retained; IDs from aborted attempts may be skipped.
+   128 completed jobs across reload and recompilation are retained; IDs from
+   aborted attempts may be skipped.
 4. Reload uses the configured source paths, fresh globals, and normal initializers.
    Targets and replacements must be detached daemons without connections,
    environments, inventory, commands, parser registration, or shadow history.

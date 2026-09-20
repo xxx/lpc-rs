@@ -104,3 +104,47 @@ establish a general performance improvement either.
 Local recursion keeps the existing 64-byte frame and two retained references per
 call (code and receiver). It shares the receiver's pinned image instead of reading
 the transactional image binding or allocating a receiver on every local call.
+
+## System upgrades and common orchestration
+
+Use one update request, registry, committed effect, VM operation and attempt body
+for state-preserving recompilation and fresh-state system restart. Keep their
+preparation rules separate behind this shared runner.
+
+Compiler simul-efun input is an explicitly selected `Arc<Program>`, never a
+construction-time program inferred from a live process. System preparation pins
+old master/simul images in an authority transaction view. For upgraded system
+objects, that view redirects global slots to private cells seeded with the old
+values; new initializers use the staged image and ordinary cells. Permission
+applies share the transaction's reads, writes and effects but use the pinned view.
+Authority writes also reach their original cells; after each group initializes,
+restore its retained globals from the authority cells, preserving old-policy
+writes and compatible cell identities. All views are attempt-local.
+
+Validate identity/state retention, paired publication, repeated upgrades, current
+compiler exports, old-policy code and state, rollback, permissions, requester
+provenance, stale callbacks and conflicts with running work and fresh-state restart.
+
+### System upgrade validation
+
+The system-upgrade extension passes the workspace suite (3,733 tests; two existing
+ignored tests), strict all-target Clippy, formatting, warning-free rustdoc and the
+ulib checks. Eleven additional scenarios cover paired publication, preserved
+identity and clone state, skipped `create`, current compiler exports, repeated
+upgrades, old authorization code and globals, permission-apply counter writes,
+rollback, captured global-cell identity, permissions, conflicting restart, old
+attempt invalidation, callout retention and retirement during a paired initializer.
+
+Repeated `fib(20)` comparisons used the preserved `68ae16dd` release binary and
+this implementation, with no concurrent builds and all threads pinned to one CPU:
+
+| CPU | Runs per version | Warmup / measurement | Before system upgrades | After |
+| --- | --- | --- | --- | --- |
+| Performance core, CPU 4 | 4 | 2 s / 4 s | 1.766 ms | 1.762 ms |
+| Efficiency core, CPU 12 | 2 | 3 s / 5 s | 2.471 ms | 2.503 ms |
+
+Each invocation collected 40 samples; values are medians of invocation means and
+version order was alternated and reversed. The performance-core result is
+unchanged; the efficiency-core difference is 1.3% in this short comparison.
+These runs do not reproduce the earlier 10% recursion regression and are not a
+production throughput guarantee.

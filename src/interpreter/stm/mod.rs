@@ -1,7 +1,7 @@
 //! Software transactional memory implementation
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     marker::PhantomData,
     sync::{Arc, atomic::AtomicU64},
 };
@@ -17,7 +17,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
-        process::Process,
+        process::{Process, ProgramImage},
         task::task_template::TaskTemplate,
         task_context::ObjectLookup,
         vm::global_state::GlobalState,
@@ -110,6 +110,7 @@ pub(crate) struct Transaction {
     compilation: diagnostics::CompilationTiming,
     presence_revision: u64,
     pub(crate) reload_preparing: bool,
+    view: Option<Arc<AuthorityView>>,
 }
 
 #[derive(Debug, Clone)]
@@ -132,6 +133,7 @@ impl Transaction {
             compilation: diagnostics::CompilationTiming::default(),
             presence_revision: 0,
             reload_preparing: false,
+            view: None,
         }
     }
 
@@ -161,6 +163,8 @@ impl Transaction {
 
     /// Borrow two slot values, tracking the snapshot reads that supply them.
     pub(crate) fn read_pair(&mut self, left: VarId, right: VarId) -> [Option<&LpcRef>; 2] {
+        let left = self.slot_in_view(left);
+        let right = self.slot_in_view(right);
         let snapshot = &self.snapshot;
         self.changeset
             .read_pair(left, right, |var_id| snapshot.read(var_id))
@@ -177,12 +181,29 @@ impl Transaction {
     /// snapshot only answers its miss, so a var this attempt removed is
     /// never resurrected from the old value the world holds until commit.
     pub(crate) fn read_value(&mut self, var_id: VarId) -> Option<WorldValue> {
+        if let Some(image) = self.view.as_ref().and_then(|view| view.images.get(&var_id)) {
+            return Some(WorldValue::Image(image.clone()));
+        }
+        let var_id = self.slot_in_view(var_id);
         let snapshot = &self.snapshot;
         self.changeset.read_value(var_id, || snapshot.read(var_id))
     }
 
+    fn slot_in_view(&self, var_id: VarId) -> VarId {
+        self.view
+            .as_ref()
+            .and_then(|view| view.slots.get(&var_id))
+            .copied()
+            .unwrap_or(var_id)
+    }
+
     /// Write a slot value to the changeset.
     pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
+        let saved = self.slot_in_view(var_id);
+        if saved != var_id {
+            self.changeset
+                .write(saved, WorldValue::ref_of(value.clone()));
+        }
         self.changeset.write(var_id, WorldValue::ref_of(value));
     }
 
@@ -240,7 +261,14 @@ impl Transaction {
     /// Record a merge write: the committer applies `op` to the committed
     /// value at commit time. No read is tracked.
     pub(crate) fn merge(&mut self, var_id: VarId, op: MergeOp) {
-        self.changeset.merge(var_id, op);
+        let saved = self.slot_in_view(var_id);
+        self.changeset.merge(saved, op);
+        if saved != var_id {
+            let value = self
+                .read_value(saved)
+                .expect("authority globals are seeded");
+            self.changeset.write(var_id, value);
+        }
     }
 
     /// Whether the cell can take an int merge: it holds an int (or nothing)
@@ -248,6 +276,7 @@ impl Transaction {
     /// would re-buy the read the merge exists to avoid; a stale answer is
     /// caught by the committer's type check.
     pub(crate) fn peek_int(&self, var_id: VarId) -> bool {
+        let var_id = self.slot_in_view(var_id);
         self.changeset.peek_int(var_id).unwrap_or_else(|| {
             !matches!(
                 self.snapshot.peek(var_id),
@@ -495,15 +524,46 @@ impl Transaction {
     }
 }
 
+/// Old system code and private policy globals used while preparing an update.
+#[derive(Debug, Default)]
+pub(crate) struct AuthorityView {
+    images: HashMap<VarId, Arc<ProgramImage>>,
+    slots: HashMap<VarId, VarId>,
+}
+
+impl AuthorityView {
+    pub(crate) fn pin(&mut self, txn: &TxnHandle, process: &Process, isolate_globals: bool) {
+        let image = process.image(txn);
+        if isolate_globals {
+            txn.with(|t| {
+                for index in 0..image.program.num_globals {
+                    let slot = image.var_id(index);
+                    let saved = VarId::new();
+                    let value = t.read(slot).unwrap_or(crate::interpreter::lpc_ref::NULL);
+                    t.write(saved, value);
+                    self.slots.insert(slot, saved);
+                }
+            });
+        }
+        self.images.insert(process.image_cell.id, image);
+    }
+
+    pub(crate) fn retained(&self, txn: &TxnHandle, slot: VarId) -> Option<LpcRef> {
+        self.slots
+            .get(&slot)
+            .map(|saved| txn.with(|t| t.read(*saved).unwrap_or(crate::interpreter::lpc_ref::NULL)))
+    }
+}
+
 /// One top-level task = one transaction. Nested sub-tasks join it by
 /// cloning this handle, so a joiner's reads, writes, effects and call outs
 /// are the parent's attempt's and ride the parent's single commit.
 #[derive(Debug, Clone)]
-pub(crate) struct TxnHandle(Arc<spin::Mutex<Transaction>>);
+pub(crate) struct TxnHandle(Arc<spin::Mutex<Transaction>>, Option<Arc<AuthorityView>>);
 
 impl TxnHandle {
     pub(crate) fn new(txn: Transaction) -> Self {
-        Self(Arc::new(spin::Mutex::new(txn)))
+        Self(Arc::new(spin::Mutex::new(txn)), None)
     }
 
     /// Empty, uncommitted transaction (top-level defaults, fresh
@@ -522,7 +582,18 @@ impl TxnHandle {
         F: FnOnce(&mut Transaction) -> R,
     {
         let mut guard = self.0.lock();
-        f(&mut guard)
+        if let Some(view) = &self.1 {
+            let previous = guard.view.replace(view.clone());
+            let result = f(&mut guard);
+            guard.view = previous;
+            result
+        } else {
+            f(&mut guard)
+        }
+    }
+
+    pub(crate) fn with_authority(&self, view: Arc<AuthorityView>) -> Self {
+        Self(self.0.clone(), Some(view))
     }
 
     /// Whether this handle wraps a live attempt that can be joined by a nested task.
