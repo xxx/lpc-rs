@@ -1,40 +1,122 @@
 name: CI
+
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
 
 jobs:
-  ci:
+  lint:
+    name: Formatting and Clippy
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
-          components: clippy
-      - uses: taiki-e/install-action@nextest
-      - uses: actions/cache@v3
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
       - name: Run Clippy
-        run: cargo clippy --workspace
-      - name: Compile Benches
-        run: cargo bench --workspace --no-run
-      - name: Run Tests
-#        run: cargo test --workspace --verbose
-        run: cargo nextest run --workspace --no-fail-fast
-      - name: Run Doc Tests
-        run: cargo test --workspace --doc --verbose
-      - name: Verify Docs
-        run: RUSTDOCFLAGS="-Dwarnings" cargo doc --workspace
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    name: Tests and documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Install nextest
+        uses: taiki-e/install-action@9114bf4d891761788c546334fd37538eae1bf8b3 # v2.87.16
+        with:
+          tool: cargo-nextest
+
+      - name: Run tests
+        run: cargo nextest run --workspace --locked --no-fail-fast
+
+      - name: Run doctests
+        run: cargo test --workspace --locked --doc
+
+      - name: Verify documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --locked --no-deps
+
+  bench:
+    name: Compile benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Compile benchmarks
+        run: cargo bench --workspace --locked --no-run
+
+  # Branch protection requires this check name.
+  ci:
+    needs: [lint, test, bench]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all checks to pass
+        env:
+          SUCCESS: ${{ needs.lint.result == 'success' && needs.test.result == 'success' && needs.bench.result == 'success' }}
+        run: test "$SUCCESS" = "true"

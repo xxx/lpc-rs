@@ -51,10 +51,15 @@ and `cargo clippy` without `--workspace` from the root target only `lpc-rs`, so
 a change to a public API (e.g. removing a trait the `lpc-rs-lpcc` CLI imports)
 can look green and break the workspace.
 
-CI (`.github/workflows/ci.yml`) runs: `cargo clippy --workspace`,
-`cargo nextest run --workspace --no-fail-fast`, doctests, and
-`RUSTDOCFLAGS="-D warnings" cargo doc --workspace` — doc comments must be warning-free
-(broken intra-doc links fail CI).
+CI (`.github/workflows/ci.yml`) runs formatting and warning-free Clippy across all
+workspace targets, nextest and doctests, warning-free workspace docs (`--no-deps`),
+and benchmark compilation in parallel jobs on stable Rust. Cargo checks use
+`--locked`; broken intra-doc links fail CI. The final `ci` job is the required
+branch-protection check and must fail if any preceding job fails or is skipped.
+
+Rust dependency caches are separate per job and keyed by the toolchain, manifests,
+lockfiles, and build settings; only `master` runs save them, and PRs restore them.
+Dependabot proposes weekly updates for the commit-pinned GitHub Actions.
 
 `.cargo/config` sets `--cfg tokio_unstable` for all builds. Runtime configuration is
 entirely environment variables (`.env` requires driver `-e` or compiler `-c`); see
