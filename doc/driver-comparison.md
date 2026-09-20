@@ -7,11 +7,12 @@ context, return values and side effects can differ.
 
 Start with the overview, then the notes for the driver you are coming from:
 [CD](#cd), [LDMud](#ldmud), [FluffOS](#fluffos) or [DGD](#dgd).
-The linked lpc-rs references give the full contracts.
+The shared [`explode` examples](#explode) cover a string-handling gotcha across
+all four. The linked lpc-rs references give the full contracts.
 
 ## Scope and evidence
 
-Reviewed on **19 September 2026**, against lpc-rs commit `c32c2d6d` and these
+Reviewed on **19 September 2026**, against lpc-rs commit `bccaea9b` and these
 public upstream snapshots. The revisions identify the source examined; they
 are not claims about every release or downstream fork.
 
@@ -28,6 +29,9 @@ were run for this page. **Not checked** means no conclusion has been reached;
 **not implemented** describes a known absence in the reviewed implementation.
 Optional packages, compiler defines and runtime modes can change an upstream
 build's behaviour; relevant conditions are stated alongside the feature.
+Support implemented in a mudlib or optional package counts too, with that
+requirement stated. Disabled by default does not mean unsupported, and a feature
+omitted from a selected inventory should not be read as absent.
 
 FluffOS is compared at its own revision, rather than treated as interchangeable
 with historical MudOS. DGD's separately distributed multicore relative Hydra is
@@ -36,18 +40,20 @@ outside this comparison; the [DGD README][dgd-readme] distinguishes them.
 ## Overview
 
 These cells describe selected capabilities, not complete feature inventories.
-A source link in each upstream cell supports that cell's description.
+A source link supports each reviewed upstream claim. The
+[protocol table](#client-protocols-and-transports) compares individual protocols
+across all five drivers; the broader rows describe differences within each area.
 
 | Area | lpc-rs | CD | LDMud | FluffOS | DGD |
 |---|---|---|---|---|---|
 | Execution | Parallel LPC tasks; snapshot reads, atomic commits and conflict retries. [Runtime](../README.md#how-execution-works). | Tasks evaluated serially by the [backend loop][cd-backend]. | Sequential [backend evaluation][ld-backend]; explicit [coroutines][ld-async]. | Event-driven LPC; [async functions and promises][fl-async], with worker-thread I/O in the async package. | Explicit [atomic functions][dgd-lpc] roll back on errors; multicore acceleration is a separate [Hydra offering][dgd-readme]. |
 | Saving and restarting | [Object and mapping save files](save-format.md); whole-world snapshot/restart is not implemented. | [Object variable saves][cd-save]. | [Object saves][ld-save] with selectable formats and a serialised-string form. | [Object saves][fl-save] with flags, optional compression and a serialised-string form. | Object saves plus [whole-system snapshots][dgd-dump] and [restart from a snapshot][dgd-intro]. |
-| Language features | [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); explicit [reference parameters](lpc/references.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], and [promise values][fl-async]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers require the [CLOSURES build define][dgd-build]. |
-| Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; compatible named pointers follow updated definitions; closures retain their original code and captures. System prototypes also support in-place upgrades, including atomic master/simul-efun pairs. Destruct/load keeps old clones separate. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
-| Commands and grammars | Actions, native patterns, parser-package rules and DGD-style grammars feed a [shared parsing engine](parser-town/README.md). | Object-aware [`parse_command` patterns][cd-parser]. | Object-aware [`parse_command` patterns][ld-parser]. | [`parse_sentence`][fl-parser] runs parser-package rules and handlers. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
-| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md); configurable simul-efuns and automatic inheritance in [default.env](../default.env). | [Master callbacks][cd-master] define driver policy and connection handling. | [Driver hooks][ld-hooks] configure operations including movement, identity and creation. | [Master and object applies][fl-driver], including connection and lifecycle callbacks. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
-| Connections | Telnet, GMCP, MXP and MSSP; optional [TLS listeners](secure-connections.md). See [connection capabilities](efun/query_connection.md). | [Telnet, GMCP and MSSP][cd-network]. | Telnet connections with optional [TLS support][ld-tls]. | [Telnet, WebSocket and TLS][fl-readme]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
-| Build and configuration | [Cargo-installed binaries](../README.md#build-and-install), environment settings and explicit dotenv files; [lpcc](../lpc-rs-lpcc/README.md) and an [LSP server](../lpc-rs-lsp/README.md). | [Make-based build][cd-readme], with settings in [config.h][cd-config]. | [Configure/Make build][ld-install], with [command-line options and argument files][ld-invocation]. | [CMake build][fl-readme] and a [runtime configuration file][fl-config]. | [Make-based build][dgd-build] and a separate [driver configuration file][dgd-config]. |
+| Language features | [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); explicit [reference parameters](lpc/references.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures] and [reference arguments][ld-refs]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs] and [promises][fl-async]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
+| Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
+| Commands and grammars | [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
+| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md); configurable simul-efuns and automatic inheritance in [default.env](../default.env). | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
+| Connection model | [Telnet sessions](efun/query_connection.md) with optional [TLS listeners](secure-connections.md). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
+| Build and configuration | [Cargo build and installation](../README.md#build-and-install), [environment settings and explicit dotenv files](../default.env). | [Make-based build][cd-readme], with settings in [config.h][cd-config]. | [Configure/Make build][ld-install], with [command-line options and argument files][ld-invocation]. | [CMake build][fl-readme] and a [runtime configuration file][fl-config]. | [Make-based build][dgd-build] and a separate [driver configuration file][dgd-config]. |
 
 Async I/O and resumable LPC functions do not by themselves establish parallel
 execution of game-state mutations. The lpc-rs runtime's transaction boundary is
@@ -55,11 +61,103 @@ the owning driver task, including calls it makes into other objects; its
 [transaction diagnostics](transaction-diagnostics.md) describe retries and
 execution allowances. Committed external I/O can still fail after state commits.
 
+LDMud's `parse_command` requires the `use-parse-command` build option, enabled in
+the reviewed [default settings][ld-settings]. FluffOS's `add_action` requires
+`NO_ADD_ACTION` to be unset, as in the reviewed [local options][fl-options];
+`parse_command` belongs to the always-enabled `PACKAGE_OPS`, while
+`parse_sentence` requires `PACKAGE_PARSER`, enabled by default in the reviewed
+[CMake settings][fl-packages].
+
+## Client protocols and transports
+
+**Built in** means the driver handles the protocol's negotiation or framing;
+the mudlib still supplies game-specific messages or data. **Mudlib hook** means
+the driver exposes a documented interface for implementing that protocol in LPC;
+it does not establish that every mudlib implements it. The labels describe where
+the protocol is implemented. Client support and the stated server configuration
+are required in either case.
+
+**Not in Telnet handler** describes the reviewed driver's built-in handler only.
+**Not checked** leaves support unresolved, including mudlibs, extensions and
+proxies that have not been reviewed here.
+
+| Protocol or transport | lpc-rs | CD | LDMud | FluffOS | DGD |
+|---|---|---|---|---|---|
+| Telnet | [Built in](efun/query_connection.md). | [Built in][cd-telnet]. | [Built in][ld-telnet]. | [Built in][fl-config]. | [Built in][dgd-config]. |
+| MXP | [Built in](efun/send_mxp.md). | Not in [Telnet handler][cd-telnet]. | [Mudlib hook][ld-telnet]. | Built in; [`enable mxp`][fl-config] (default `0`). | Not checked; see binary-port note below. |
+| GMCP | [Built in](efun/send_gmcp.md). | [Built in][cd-network]. | [Mudlib hook][ld-telnet]. | Built in; [`enable gmcp`][fl-config] (default `0`). | Not checked; see binary-port note below. |
+| MSSP | [Built in](apply/master/get_mud_stats.md). | [Built in][cd-network]. | [Mudlib hook][ld-telnet]. | Built in; [`enable mssp`][fl-config] (default `1`). | Not checked; see binary-port note below. |
+| MCCP compression | [Not implemented](../lpc-rs-telnet/src/session.rs); MCCP2 is refused. | Not in [Telnet handler][cd-telnet]. | [Built in when compiled with MCCP][ld-mccp]; off in the reviewed [default settings][ld-settings]. | [Built-in MCCP2][fl-telnet] on Telnet; WebSocket connections use transport compression instead. | Not checked. |
+| MSP sound protocol | No negotiation in the [Telnet session](../lpc-rs-telnet/src/session.rs); mudlib use of sound tags not checked. | Not in [Telnet handler][cd-telnet]; mudlib use of sound tags not checked. | [Mudlib hook][ld-telnet]. | Built in; [`enable msp`][fl-config] (default `1`). | Not checked. |
+| TLS | [Built in](secure-connections.md); configure a separate TLS port and certificates. | Not checked. | [Built in when compiled with TLS][ld-tls]; the mudlib calls `tls_init_connection()`. | [Built in][fl-config]; configure `external_port_N_tls` with a certificate and key. | Not checked. |
+| WebSocket | [Not implemented by the listener](../src/telnet/listener.rs). | Not checked. | Not checked. | [Built in][fl-config]; configure a `websocket` port and `websocket http dir`. | Not checked. |
+
+LDMud explicitly names MXP, GMCP, MSSP and MSP in its
+[`H_TELNET_NEG` contract][ld-telnet]. The hook receives negotiations and
+subnegotiations, and [`binary_message`][ld-binary] sends protocol bytes.
+This is a supported mudlib integration path; no particular mudlib's protocol
+implementation was tested for this comparison.
+
+DGD's [binary ports][dgd-config] deliver data to LPC without its built-in Telnet
+processing, allowing a mudlib to handle the wire protocol itself
+([connection implementation][dgd-comm], [`send_message`][dgd-send]). Specific
+MXP, GMCP or MSSP implementations on that path have not been reviewed here;
+the table makes no absence claim about them.
+
 ## Differences when porting
 
 These are selected differences, grouped by source driver. They identify places
 where a mudlib's expectations need review; they are not a claim that all other
 APIs match.
+
+### `explode`
+
+Leading and trailing delimiters, empty input and an empty delimiter can change
+both array lengths and field positions when porting. These results follow from
+the reviewed sources, with the settings described below; they are not
+cross-driver execution-test results.
+
+| Driver / mode | `explode(",a,,b,", ",")` | `explode(",,", ",")` | `explode("", ",")` | `explode("ab", "")` | `explode("", "")` |
+|---|---|---|---|---|---|
+| [lpc-rs](efun/explode.md) | `({ "", "a", "", "b", "" })` | `({ "", "", "" })` | `({ "" })` | `({ "", "a", "b", "" })` | `({ "", "" })` |
+| [CD, reviewed defaults][cd-explode] | `({ "", "a", "", "b" })` | `({ "", "" })` | `({})` | `({ "a", "b" })` | `({})` |
+| [LDMud][ld-explode] | `({ "", "a", "", "b", "" })` | `({ "", "", "" })` | `({ "" })` | `({ "a", "b" })` | `({ "" })` |
+| [FluffOS, reviewed defaults][fl-explode] | `({ "a", "", "b" })` | `({})` | `({})` | `({ "a", "b" })` | `({})` |
+| [FluffOS, reversible mode][fl-explode] | `({ "", "a", "", "b", "" })` | `({ "", "", "" })` | `({})` | `({ "a", "b" })` | `({})` |
+| [DGD][dgd-explode] | `({ "a", "", "b" })` | `({ "" })` | `({})` | `({ "a", "b" })` | `({})` |
+
+CD's reviewed [configuration][cd-config] leaves both `OLD_EXPLODE` and
+`KINGDOMS_EXPLODE` undefined: leading and interior empty fields remain, but the
+final empty field is dropped. `KINGDOMS_EXPLODE` changes trailing-field handling;
+check the source build's defines before assuming these defaults.
+
+FluffOS defaults to [`sane explode string = 1` and
+`reversible explode string = 0`][fl-config]. For input containing non-delimiter
+text, that removes one leading and one trailing empty field while keeping
+interior empties. With `sane explode string = 0`, all leading empty fields are
+removed. `reversible explode string = 1` overrides that trimming; the separate
+[`explode_reversible` efun][fl-explode-entry] selects the same reversible path.
+Even in reversible mode, empty input returns an empty array and an empty
+delimiter adds no boundary fields.
+
+An empty delimiter also exposes different character units: CD and DGD split
+into bytes, [LDMud][ld-explode-source] and lpc-rs split text into Unicode scalar
+values, and [FluffOS][fl-explode] splits into extended grapheme clusters.
+LDMud additionally accepts `bytes` arguments; lpc-rs's `explode` accepts strings
+only. A combining mark can therefore be a separate field in lpc-rs while staying
+with its base character in FluffOS.
+
+Overlapping multi-character delimiters need review too. The
+[FluffOS implementation][fl-explode] processes trailing matches before splitting
+the remaining text: `explode("ab---", "--")` returns `({ "ab-" })`, and
+`explode_reversible("ab---", "--")` returns `({ "ab-", "" })`. lpc-rs consumes
+matches from left to right and returns `({ "ab", "-" })`. Reversible splitting
+does not by itself establish identical field boundaries.
+
+Review code that indexes the first or last field, treats an empty array as
+"no input", counts characters, or relies on split/join round trips. Preserve
+the source driver's intended handling explicitly; filtering every empty field
+would also remove meaningful interior fields.
 
 ### CD
 
@@ -125,6 +223,13 @@ update this page's description of the difference. Record the reviewed revision
 and date when changing an upstream claim; use publicly accessible, pinned
 sources and state any required build options.
 
+Review each named capability across every driver before adding it to a matrix
+row. Credit equivalent support even when its API name or implementation layer
+differs, state optional packages and defaults, and keep the level of detail
+comparable across cells. Use a separate row for each protocol or other feature
+whose omission could imply lack of support. Record gaps as not checked instead
+of leaving an ambiguous blank or treating an unreviewed feature as absent.
+
 A new comparison starts as source-reviewed. Mark behaviour as execution-tested
 only when a reproducible probe has run against the specified builds, and link
 the probe, expected results and relevant configuration. API inventories can
@@ -137,32 +242,52 @@ semantics. Leave unresolved questions explicitly not checked.
 [cd-parser]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/doc/efun/parse_command
 [cd-master]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/master.n
 [cd-network]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/comm1.c
+[cd-telnet]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/telnet.c
+[cd-actions]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/doc/efun/add_action
 [cd-readme]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/README.md
 [cd-config]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/config.h
 [cd-api]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/func_spec.c
 [cd-alarm]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/doc/efun/set_alarm
 [cd-parse-source]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/parse.c
 [cd-regexp]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/regexp.c
+[cd-explode]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/array.c
 [ld-backend]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/src/backend.c
 [ld-async]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/LPC/async
 [ld-save]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/save_object
 [ld-types]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/LPC/types
+[ld-closures]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/LPC/closures
+[ld-actions]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/add_action
+[ld-settings]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/src/settings/default
 [ld-replace]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/replace_program
 [ld-parser]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/parse_command
 [ld-hooks]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/concepts/hooks
+[ld-simul]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/concepts/simul_efun
 [ld-tls]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/concepts/tls
+[ld-telnet]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/hook/telnet_neg
+[ld-binary]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/binary_message
+[ld-mccp]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/concepts/mccp
 [ld-install]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/INSTALL
 [ld-invocation]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/driver/invocation
 [ld-refs]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/LPC/references
 [ld-regex]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/concepts/regexp
 [ld-colour]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/terminal_colour
+[ld-explode]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/explode
+[ld-explode-source]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/src/array.c
 [fl-async]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/concepts/general/async.md
 [fl-save]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/save_object.md
 [fl-strings]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/lpc/types/strings.md
 [fl-buffer]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/lpc/types/buffer.md
+[fl-functions]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/lpc/types/function.md
+[fl-refs]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/lpc/constructs/ref.md
 [fl-reload]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/recompile_object.md
 [fl-parser]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/parsing/parse_sentence.md
+[fl-actions]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/interactive/add_action.md
+[fl-patterns]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/parsing/parse_command.md
+[fl-options]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/local_options
+[fl-packages]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/CMakeLists.txt
+[fl-telnet]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/net/telnet.cc
 [fl-driver]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/concepts/general/fluffos_driver.md
+[fl-simul]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/concepts/general/simul_efun.md
 [fl-readme]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/README.md
 [fl-config]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/driver/config.md
 [fl-children]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/children.md
@@ -170,9 +295,12 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-regexp]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/regexp.cc
 [fl-pcre]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/pcre/pcre_match.md
 [fl-oldcrypt]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/strings/oldcrypt.md
+[fl-explode]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/array.cc
+[fl-explode-entry]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/string.cc
 [dgd-readme]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/README.md
 [dgd-build]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/doc/compiling.md
 [dgd-config]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/mud.dgd
+[dgd-comm]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/comm.cpp
 [dgd-extensions]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/doc/extensions.md
 [dgd-lpc]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/LPC.md
 [dgd-dump]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/kfun/dump_state
@@ -180,3 +308,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [dgd-compile]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/kfun/compile_object
 [dgd-parse]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/kfun/parse_string
 [dgd-save]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/kfun/save_object
+[dgd-send]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/kfun/send_message
+[dgd-explode]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/kfun/extra.cpp
