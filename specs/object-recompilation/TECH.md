@@ -77,7 +77,30 @@ Verified on 2026-09-19:
 - Release benchmarks compared with the baseline commit on the same development
   machine, with compilation stopped: `bench_fib` used 30 samples and
   `bench_inheritance` used 20 samples per case, each with one second of warmup
-  and two seconds of measurement. Criterion reported a 9.6% regression for
-  recursive `fib(20)` (95% interval: 4.7–14.7%). The ten inheritance cases had
+  and two seconds of measurement. The ten inheritance cases had
   no detected regressions; eight improved and two had no significant change.
-  These short, shared-machine measurements are not a production throughput claim.
+  An initial unpinned `fib(20)` comparison suggested a 9.6% regression, but the
+  controlled comparison below did not reproduce it; it is not an established
+  cost of recompilation support.
+
+### Controlled recursion comparison
+
+Compared separate release binaries built from `99fcf61d` and `68ae16dd`, with
+identical build settings, no concurrent compilation, and all benchmark threads
+pinned to the same CPU. Each invocation collected 40 samples; version order was
+alternated and reversed to expose run-to-run variation.
+
+| CPU | Independent runs per version | Warmup / measurement | Baseline | Recompilation |
+| --- | --- | --- | --- | --- |
+| Performance core, CPU 4 | 4 | 1 s / 3 s | 2.015 ms | 2.008 ms |
+| Efficiency core, CPU 12 | 2 | 3 s / 5 s | 2.556 ms | 2.525 ms |
+
+Values are medians of per-invocation mean times. The performance-core baseline
+ranged from 1.965 to 2.334 ms, while the new implementation ranged from 2.001 to
+2.014 ms. The earlier single unpinned comparison understated this variation.
+These results do not support a repeatable 10% recursion regression, and do not
+establish a general performance improvement either.
+
+Local recursion keeps the existing 64-byte frame and two retained references per
+call (code and receiver). It shares the receiver's pinned image instead of reading
+the transactional image binding or allocating a receiver on every local call.
