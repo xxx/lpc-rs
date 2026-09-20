@@ -1,7 +1,6 @@
 # lpc-rs
 
-An LPC compiler, virtual machine and gamedriver for multi-user dungeons (MUDs),
-written in Rust.
+An LPC compiler, virtual machine and gamedriver for multi-user dungeons (MUDs).
 
 LPC is a language for building persistent, multiplayer text worlds. You write
 rooms, creatures, player commands and game rules in LPC; the driver compiles and
