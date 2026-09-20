@@ -260,7 +260,13 @@ impl ReloadBody<'_> {
             let (new, warnings) =
                 compile_process_in_context(ctx, &path, None, gate, reader).await?;
             drop(compiling);
-            report_warnings(ctx, callers.clone(), &new.program.filename, warnings).await?;
+            report_warnings(
+                ctx,
+                callers.clone(),
+                &new.initial_program().filename,
+                warnings,
+            )
+            .await?;
             if is_simul {
                 compatible_exports(&old, &new)?;
                 view.simul = Some(new.clone());
@@ -312,11 +318,11 @@ fn ensure_replaceable(ctx: &TaskContext, process: &Arc<Process>) -> Result<()> {
 }
 
 fn compatible_exports(old: &Process, new: &Process) -> Result<()> {
-    for (name, function) in old.program.unmangled_functions.iter() {
+    for (name, function) in old.initial_program().unmangled_functions.iter() {
         if name == lpc_rs_core::INIT_PROGRAM || name == lpc_rs_core::INIT_GLOBALS {
             continue;
         }
-        let Some(replacement) = new.program.unmangled_functions.get(name) else {
+        let Some(replacement) = new.initial_program().unmangled_functions.get(name) else {
             return Err(LpcError::runtime(format!(
                 "system reload: simul-efun export `{name}` was removed"
             )));

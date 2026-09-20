@@ -43,7 +43,7 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     }
     let master = context.task_context().master_object();
     let defined = master.as_ref().is_some_and(|m| {
-        m.program
+        m.program(context.txn())
             .unmangled_functions
             .contains_key(QUERY_ALLOW_SHADOW)
     });
@@ -112,10 +112,10 @@ fn structural_refusal(
     {
         return Some("Can't shadow the simul-efun object.".into());
     }
-    if target.program.pragmas.no_shadow() {
+    if target.program(txn).pragmas.no_shadow() {
         return Some("Can't shadow a 'no_shadow' program.".into());
     }
-    nomask_clash(&caller.program, &target.program)
+    nomask_clash(&caller.program(txn), &target.program(txn))
         .map(|name| format!("Illegal to shadow 'nomask' function '{name}'."))
 }
 

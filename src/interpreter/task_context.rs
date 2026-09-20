@@ -388,7 +388,13 @@ impl TaskContext {
             let (process, warnings) =
                 compile_process_in_context(self, path, code, gate, reader).await?;
             drop(compiling);
-            report_warnings(self, loader.callers(), &process.program.filename, warnings).await?;
+            report_warnings(
+                self,
+                loader.callers(),
+                &process.program(self.txn()).filename,
+                warnings,
+            )
+            .await?;
             Ok(process)
         })
     }
@@ -443,14 +449,14 @@ impl TaskContext {
         };
         let blueprint = confine_object_path(self.config(), &blueprint, "/", COMPILE_OBJECT)?;
         let blueprint = self.load_file_process(&blueprint, loader).await?;
-        if blueprint.program.pragmas.no_clone() {
+        if blueprint.program(self.txn()).pragmas.no_clone() {
             return Err(LpcError::runtime(format!(
                 "{COMPILE_OBJECT}: {} has `#pragma no_clone` enabled, and so cannot be instantiated",
-                blueprint.program.filename
+                blueprint.program(self.txn()).filename
             )));
         }
         Ok(Arc::new(Process::new_virtual(
-            blueprint.program.clone(),
+            blueprint.program(self.txn()).clone(),
             key,
         )))
     }

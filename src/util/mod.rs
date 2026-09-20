@@ -47,7 +47,7 @@ mod tests {
 
         let simul_efuns = get_simul_efuns(&config, &space_cell).unwrap();
         assert_eq!(
-            simul_efuns.program.filename.to_string(),
+            simul_efuns.initial_program().filename.to_string(),
             "/secure/simul_efuns"
         );
     }

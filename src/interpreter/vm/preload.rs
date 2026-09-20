@@ -32,7 +32,11 @@ impl GlobalState {
             return;
         };
         let noun = if files.len() == 1 { "file" } else { "files" };
-        if !master.program.unmangled_functions.contains_key(PRELOAD) {
+        if !master
+            .initial_program()
+            .unmangled_functions
+            .contains_key(PRELOAD)
+        {
             tracing::warn!(
                 target: "lpc_rs::applies",
                 apply = PRELOAD,

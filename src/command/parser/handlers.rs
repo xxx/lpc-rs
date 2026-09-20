@@ -103,7 +103,7 @@ pub(crate) async fn call(
     args: &[LpcRef],
 ) -> Result<Reply> {
     let (specific, generic) = family.names(rule);
-    let functions = &target.program.unmangled_functions;
+    let functions = &target.program(ctx.txn()).unmangled_functions;
     let (function, args): (_, Vec<LpcRef>) = if let Some(f) = functions.get(specific.as_str()) {
         (f.clone(), args.to_vec())
     } else if let Some(f) = functions.get(generic) {

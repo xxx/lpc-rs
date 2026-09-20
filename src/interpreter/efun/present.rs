@@ -130,7 +130,11 @@ impl Continuation for Present {
             let (process, function) = match Process::shadow_entry(txn, &candidate, "id", &candidate)
             {
                 ShadowEntry::Unshadowed => {
-                    let Some(function) = candidate.program.unmangled_functions.get("id").cloned()
+                    let Some(function) = candidate
+                        .program(txn)
+                        .unmangled_functions
+                        .get("id")
+                        .cloned()
                     else {
                         continue;
                     };
@@ -138,7 +142,8 @@ impl Continuation for Present {
                 }
                 ShadowEntry::Found(process, function) => (process, function),
                 ShadowEntry::Fallback(real) => {
-                    let Some(function) = real.program.unmangled_functions.get("id").cloned() else {
+                    let Some(function) = real.program(txn).unmangled_functions.get("id").cloned()
+                    else {
                         continue;
                     };
                     (real, function)

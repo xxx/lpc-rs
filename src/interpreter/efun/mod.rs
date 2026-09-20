@@ -65,6 +65,7 @@ pub(crate) mod mkdir;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod object_clones;
+pub(crate) mod object_recompile;
 pub(crate) mod object_time;
 pub(crate) mod papplyv;
 pub(crate) mod parse_add_rule;
@@ -1204,6 +1205,12 @@ efuns! {
         ],
     },
     request_clean_up => { returns: LpcType::Int(false) },
+    request_object_recompile [async in object_recompile] => {
+        returns: LpcType::Int(false), arity: 1, args: [LpcType::Object(false)],
+    },
+    query_object_recompile [in object_recompile] => {
+        returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1557,6 +1564,8 @@ mod tests {
                 "query_system_reload",
                 "render_markdown",
                 "request_clean_up",
+                "request_object_recompile",
+                "query_object_recompile",
             ]
         );
     }

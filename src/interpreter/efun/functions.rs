@@ -31,15 +31,14 @@ pub async fn functions<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
 
     let own = Arc::ptr_eq(&target, context.process());
     let paths = context.config().paths();
-    let mut names: Vec<_> = target
-        .program
+    let program = target.program(context.txn());
+    let mut names: Vec<_> = program
         .unmangled_functions
         .values()
         .filter(|function| !matches!(function.name().as_ref(), INIT_GLOBALS | INIT_PROGRAM))
         .filter(|function| own || function.public())
         .filter(|function| {
-            !local_only
-                || paths.program_path(&function.prototype.filename) == *target.program.filename
+            !local_only || paths.program_path(&function.prototype.filename) == *program.filename
         })
         .map(|function| function.name().as_ref())
         .collect();

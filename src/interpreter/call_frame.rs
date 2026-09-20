@@ -2,10 +2,10 @@ use std::{
     borrow::Cow,
     fmt,
     fmt::{Display, Formatter},
+    ops::Deref,
     sync::{Arc, LazyLock},
 };
 
-use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::LpcIntInner;
@@ -77,49 +77,63 @@ impl LocalVariable {
     }
 }
 
-/// A representation of a function call's context.
-#[derive(Educe, Clone, Builder)]
-#[educe(Debug)]
-#[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
-pub struct CallFrame {
-    /// A pointer to the process that owns the function being called
-    #[builder(setter(into))]
+/// An object's identity and the code selected by an executing transaction.
+#[derive(Debug)]
+pub struct FrameReceiver {
     pub process: Arc<Process>,
+    pub(crate) image: Arc<crate::interpreter::process::ProgramImage>,
+}
+
+impl FrameReceiver {
+    pub(crate) fn new(process: Arc<Process>, txn: &TxnHandle) -> Arc<Self> {
+        Arc::new(Self {
+            image: process.image(txn),
+            process,
+        })
+    }
+}
+
+/// A representation of a function call's context.
+#[derive(Educe, Clone)]
+#[educe(Debug)]
+pub struct CallFrame {
+    /// Shared by local calls so pinning an image adds no per-call ownership work.
+    pub(crate) receiver: Arc<FrameReceiver>,
 
     /// The function that this frame is a call to.
-    #[builder(setter(into))]
     pub function: Arc<ProgramFunction>,
 
-    #[builder(default)]
     globals_start: u32,
 
     /// Our registers. By convention, `registers[0]` is for the return value of
     /// the call, and is not otherwise used for storage of locals.
-    #[builder(default)]
     pub registers: RefBank,
 
     /// Track where the program counter is pointing in this frame's function's instructions.
-    #[builder(default, setter(into))]
     pc: usize,
 
     /// How many explicit arguments were passed to the call that created this
     /// frame? This will include partially-applied arguments in the case
     /// that the CallFrame is for a call to a function pointer.
-    #[builder(default)]
     pub called_with_num_args: RegisterSize,
 
     /// The captured cells this call can reach: its creators' first, then its own.
-    #[builder(default, setter(into))]
     pub upvalue_ptrs: FrameCells,
 
     /// The call this frame has in flight, advanced by every `Ret` into it.
-    #[builder(default)]
     pub(crate) pending: Option<Box<Pending>>,
 
     /// Entered through a door — `->`, a pointer call, a simul efun — rather
     /// than a local call: the frame below is what `previous_object` names.
-    #[builder(default)]
     pub external: bool,
+}
+
+impl Deref for CallFrame {
+    type Target = FrameReceiver;
+
+    fn deref(&self) -> &Self::Target {
+        &self.receiver
+    }
 }
 
 #[cfg(target_pointer_width = "64")]
@@ -156,6 +170,7 @@ impl CallFrame {
         function: F,
         called_with_num_args: RegisterSize,
         upvalue_ptrs: Option<V>,
+        txn: &TxnHandle,
     ) -> Self
     where
         P: Into<Arc<Process>>,
@@ -168,12 +183,13 @@ impl CallFrame {
             called_with_num_args,
             called_with_num_args,
             upvalue_ptrs,
+            txn,
         )
     }
 
     /// The frame an efun fired through a pointer runs in, as `process`.
-    pub(crate) fn entry(process: Arc<Process>) -> Self {
-        Self::new(process, ENTRY.clone(), 0, None::<&[VarId]>)
+    pub(crate) fn entry(process: Arc<Process>, txn: &TxnHandle) -> Self {
+        Self::new(process, ENTRY.clone(), 0, None::<&[VarId]>, txn)
     }
 
     /// Whether this frame is an entry frame: the frame below it, if any, is
@@ -211,13 +227,30 @@ impl CallFrame {
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
         upvalue_ptrs: Option<V>,
+        txn: &TxnHandle,
     ) -> Self
     where
         P: Into<Arc<Process>>,
         V: Into<FrameCells>,
         F: Into<Function>,
     {
-        let function = function.into();
+        Self::with_receiver(
+            FrameReceiver::new(process.into(), txn),
+            function.into(),
+            called_with_num_args,
+            arg_capacity,
+            upvalue_ptrs,
+        )
+    }
+
+    #[inline]
+    pub(crate) fn with_receiver<V: Into<FrameCells>>(
+        receiver: Arc<FrameReceiver>,
+        function: Function,
+        called_with_num_args: RegisterSize,
+        arg_capacity: RegisterSize,
+        upvalue_ptrs: Option<V>,
+    ) -> Self {
         let globals_start = function.globals_start();
         let function = function.code;
         let upvalue_ptrs = upvalue_ptrs
@@ -227,7 +260,7 @@ impl CallFrame {
 
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
-            process: process.into(),
+            receiver,
             function,
             globals_start,
             called_with_num_args,
@@ -339,8 +372,8 @@ impl CallFrame {
     /// The world cell behind global `reg`.
     #[inline(always)]
     fn global(&self, reg: Register) -> VarId {
-        self.process
-            .execution_global(self.globals_start as usize + usize::from(reg.index()))
+        self.image
+            .global(self.globals_start as usize + usize::from(reg.index()))
     }
 
     /// The captured cell `reg` names.
@@ -706,7 +739,13 @@ mod tests {
 
         let fs = ProgramFunction::new(prototype, 7);
 
-        let frame = CallFrame::new(process, Arc::new(fs), 4, None::<&[VarId]>);
+        let frame = CallFrame::new(
+            process,
+            Arc::new(fs),
+            4,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -727,7 +766,13 @@ mod tests {
         let mut pf = ProgramFunction::new(prototype, 0);
         pf.num_upvalues = 1;
 
-        let frame = CallFrame::new(Process::new(program), Arc::new(pf), 0, None::<&[VarId]>);
+        let frame = CallFrame::new(
+            Process::new(program),
+            Arc::new(pf),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
 
         assert_eq!(
             frame.slot(Register(2).as_local()).unwrap(),
@@ -763,7 +808,13 @@ mod tests {
     #[test]
     fn a_constant_operand_reads_the_pool() {
         let txn = TxnHandle::empty();
-        let frame = CallFrame::new(Process::default(), pooled_function(), 0, None::<&[VarId]>);
+        let frame = CallFrame::new(
+            Process::default(),
+            pooled_function(),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
 
         assert_eq!(
             frame.slot(Register(0).as_constant()).unwrap(),
@@ -785,7 +836,13 @@ mod tests {
     #[test]
     fn a_constant_past_the_pool_is_a_runtime_bug() {
         let txn = TxnHandle::empty();
-        let frame = CallFrame::new(Process::default(), pooled_function(), 0, None::<&[VarId]>);
+        let frame = CallFrame::new(
+            Process::default(),
+            pooled_function(),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
 
         let err = frame
             .get_location(&txn, Register(2).as_constant())
@@ -797,7 +854,13 @@ mod tests {
     #[test]
     fn a_write_through_a_constant_operand_is_a_runtime_bug() {
         let txn = TxnHandle::empty();
-        let mut frame = CallFrame::new(Process::default(), pooled_function(), 0, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            pooled_function(),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
 
         let err = frame
             .set_location(&txn, Register(0).as_constant(), LpcRef::from(1))
@@ -851,7 +914,13 @@ mod tests {
         let txn = TxnHandle::empty();
         let cell = VarId::new();
         txn.with(|t| t.write(cell, LpcRef::from(41)));
-        let mut frame = CallFrame::new(Process::default(), ref_function(), 1, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            ref_function(),
+            1,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         frame.push_ref(0, cell).unwrap();
         assert_eq!(
             frame.slot(Register(0).as_upvalue()).unwrap(),
@@ -866,7 +935,13 @@ mod tests {
     #[test]
     fn a_value_into_a_ref_parameter_is_a_runtime_error() {
         let txn = TxnHandle::empty();
-        let mut frame = CallFrame::new(Process::default(), ref_function(), 1, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            ref_function(),
+            1,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let err = frame
             .push_arg(&txn, 0, LpcRef::from(1))
             .unwrap_err()
@@ -879,7 +954,13 @@ mod tests {
 
     #[test]
     fn a_ref_into_a_value_parameter_is_a_runtime_error() {
-        let mut frame = CallFrame::new(Process::default(), value_function(), 1, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            value_function(),
+            1,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let err = frame.push_ref(0, VarId::new()).unwrap_err().to_string();
         assert!(
             err.contains("`g` does not take argument 1 by reference"),
@@ -889,7 +970,13 @@ mod tests {
 
     #[test]
     fn a_register_location_is_not_a_cell() {
-        let frame = CallFrame::new(Process::default(), value_function(), 0, None::<&[VarId]>);
+        let frame = CallFrame::new(
+            Process::default(),
+            value_function(),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let err = frame
             .ref_cell(Register(1).as_local())
             .unwrap_err()
@@ -910,6 +997,7 @@ mod tests {
             Arc::new(ProgramFunction::new(prototype, 0)),
             0,
             None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
         );
 
         let err = frame.slot(Register(0).as_upvalue()).unwrap_err();
@@ -919,7 +1007,13 @@ mod tests {
     #[test]
     fn every_door_rejects_an_upvalue_past_the_frame() {
         let txn = TxnHandle::empty();
-        let mut frame = CallFrame::new(Process::default(), value_function(), 0, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            value_function(),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let u0 = Register(0).as_upvalue();
 
         assert!(frame.get_location(&txn, u0).unwrap_err().is_bug());
@@ -939,8 +1033,13 @@ mod tests {
             num_globals: 1,
             ..Program::default()
         };
-        let mut frame =
-            CallFrame::new(Process::new(program), value_function(), 0, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::new(program),
+            value_function(),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let g0 = Register(0).as_global();
 
         assert_eq!(*frame.get_location(&txn, g0).unwrap(), NULL);
@@ -961,6 +1060,7 @@ mod tests {
             pooled_function(),
             0,
             None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
         );
         let (l0, k0, k1, g0) = (
             Register(0).as_local(),
@@ -994,6 +1094,7 @@ mod tests {
             pooled_function(),
             0,
             None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
         );
         let (l0, g0, k0) = (
             Register(0).as_local(),
@@ -1017,7 +1118,13 @@ mod tests {
     #[test]
     fn set_int_replaces_a_register_holding_another_type() {
         let txn = TxnHandle::empty();
-        let mut frame = CallFrame::new(Process::default(), value_function(), 0, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            value_function(),
+            0,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let l0 = Register(0).as_local();
         frame.set_location(&txn, l0, LpcRef::from("s")).unwrap();
 
@@ -1031,7 +1138,13 @@ mod tests {
         use crate::interpreter::efun::callback::mint_array;
 
         let txn = TxnHandle::empty();
-        let mut frame = CallFrame::new(Process::default(), value_function(), 1, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            value_function(),
+            1,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let l0 = Register(0).as_local();
         let array = mint_array(
             &txn,
@@ -1045,7 +1158,13 @@ mod tests {
     #[test]
     fn spread_len_refuses_a_non_array_like_spread_elements() {
         let txn = TxnHandle::empty();
-        let mut frame = CallFrame::new(Process::default(), value_function(), 1, None::<&[VarId]>);
+        let mut frame = CallFrame::new(
+            Process::default(),
+            value_function(),
+            1,
+            None::<&[VarId]>,
+            &crate::interpreter::stm::TxnHandle::default(),
+        );
         let l0 = Register(0).as_local();
         frame.set_location(&txn, l0, LpcRef::from(5)).unwrap();
 
@@ -1081,6 +1200,7 @@ mod tests {
                 4,
                 30,
                 None::<&[VarId]>,
+                &crate::interpreter::stm::TxnHandle::default(),
             );
 
             assert_eq!(frame.registers.len(), 38);
@@ -1101,8 +1221,14 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame =
-                CallFrame::with_minimum_arg_capacity(process, Arc::new(fs), 4, 2, None::<&[VarId]>);
+            let frame = CallFrame::with_minimum_arg_capacity(
+                process,
+                Arc::new(fs),
+                4,
+                2,
+                None::<&[VarId]>,
+                &crate::interpreter::stm::TxnHandle::default(),
+            );
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -1136,7 +1262,13 @@ mod tests {
             });
             pf.local_variables.extend([a, b]);
             pf.num_upvalues = 2;
-            let frame = CallFrame::new(process, Arc::new(pf), 0, None::<&[VarId]>);
+            let frame = CallFrame::new(
+                process,
+                Arc::new(pf),
+                0,
+                None::<&[VarId]>,
+                &crate::interpreter::stm::TxnHandle::default(),
+            );
 
             assert_eq!(frame.upvalue_ptrs.len(), 2);
             assert_ne!(frame.upvalue_ptrs[0], frame.upvalue_ptrs[1]);
@@ -1165,7 +1297,13 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process, Arc::new(pf), 0, None::<&[VarId]>);
+            let frame = CallFrame::new(
+                frame.process.clone(),
+                Arc::new(pf),
+                0,
+                None::<&[VarId]>,
+                &crate::interpreter::stm::TxnHandle::default(),
+            );
             assert_eq!(frame.upvalue_ptrs.len(), 3);
         }
     }

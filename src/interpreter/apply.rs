@@ -129,7 +129,12 @@ pub(crate) async fn master_apply(
         diagnostics::missing(name, None);
         return Ok(None);
     };
-    let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
+    let Some(function) = master
+        .program(ctx.txn())
+        .unmangled_functions
+        .get(name)
+        .cloned()
+    else {
         diagnostics::missing(name, Some(&master));
         return Ok(None);
     };
@@ -213,7 +218,7 @@ pub(crate) async fn report_warnings(
 ) -> Result<()> {
     let handler = ctx.master_object().and_then(|master| {
         let function = master
-            .program
+            .program(ctx.txn())
             .unmangled_functions
             .get(WARNING_HANDLER)
             .cloned()?;

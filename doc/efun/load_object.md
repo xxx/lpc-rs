@@ -26,6 +26,8 @@ including newly written or removed source files, headers, and inherited
 programs. A `write_file` followed by a load can compile the new contents
 before the file is written to disk. An already-loaded object is still reused;
 destruct it and explicitly call `load_object` to load a changed source file.
+Use `request_object_recompile` to preserve the prototype and upgrade its current
+clones in place instead.
 A string-based call does not recreate an object destructed in that transaction.
 This view adds the caller's pending changes to disk contents; it does not make
 external filesystem edits part of the STM snapshot.

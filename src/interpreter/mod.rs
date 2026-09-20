@@ -55,6 +55,7 @@ pub const QUERY_ALLOW_SHADOW: &str = "query_allow_shadow";
 pub const VALID_SHUTDOWN: &str = "valid_shutdown";
 /// Master apply: whether the caller may replace the driver-owned objects.
 pub const VALID_RELOAD: &str = "valid_reload";
+pub const VALID_RECOMPILE: &str = "valid_recompile";
 /// Master apply: whether the calling code may read a lib file (`doc/apply/master/valid_read.md`).
 pub const VALID_READ: &str = "valid_read";
 /// Master apply: whether the calling code may write a lib file (`doc/apply/master/valid_write.md`).

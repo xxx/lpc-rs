@@ -8,8 +8,11 @@ use educe::Educe;
 use lpc_rs_core::RegisterSize;
 use ustr::Ustr;
 
-use crate::interpreter::process::Process;
 use crate::interpreter::program::Function;
+use crate::interpreter::{
+    process::Process,
+    stm::{TxnHandle, VarId},
+};
 
 /// Different ways to store a function address, for handling at runtime.
 #[derive(Educe, Clone)]
@@ -34,12 +37,24 @@ pub struct LocalFunction {
     pub function: Function,
     globals: RegisterSize,
     aliases: Arc<[RegisterSize]>,
+    pub(crate) generation: VarId,
 }
 
 impl Deref for LocalFunction {
     type Target = Function;
     fn deref(&self) -> &Function {
         &self.function
+    }
+}
+
+impl LocalFunction {
+    pub(crate) fn check_generation(&self, generation: VarId) -> lpc_rs_errors::Result<()> {
+        if generation != self.generation {
+            return Err(lpc_rs_errors::LpcError::runtime(
+                "stale function pointer after object recompilation",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -60,13 +75,15 @@ impl Eq for LocalFunction {}
 
 impl FunctionAddress {
     /// Bind local code without retaining the receiver or its unrelated functions.
-    pub fn local(receiver: &Arc<Process>, function: Function) -> Self {
+    pub(crate) fn local(receiver: &Arc<Process>, function: Function, txn: &TxnHandle) -> Self {
+        let image = receiver.image(txn);
         Self::Local(
             Arc::downgrade(receiver),
             LocalFunction {
                 function,
-                globals: receiver.program.num_globals,
-                aliases: receiver.program.global_views.clone(),
+                globals: image.program.num_globals,
+                aliases: image.program.global_views.clone(),
+                generation: image.generation,
             },
         )
     }

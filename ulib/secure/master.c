@@ -147,6 +147,17 @@ int valid_reload(string target, object caller, string program) {
 }
 
 /**
+ * Authorise an in-place upgrade of prototype and its current clones.
+ * caller requested it and program defines the request; the active master
+ * asks again before compilation, preserving the original command giver.
+ * Missing this hook also denies upgrades; return 0 because ulib provides
+ * no administration command to rebuild local callbacks after an upgrade.
+ */
+int valid_recompile(object prototype, object caller, string program) {
+    return 0;
+}
+
+/**
  * Authorise the LPC shutdown efun for caller, whose code is defined by program.
  * Return 0 to refuse in-game shutdown; ulib has no privileged administrator.
  * Host signals such as Ctrl-C do not ask this permission and still perform

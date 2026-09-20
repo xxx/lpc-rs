@@ -565,12 +565,22 @@ pub trait CommittedReader {
 
 impl CommittedReader for Arc<GlobalState> {
     fn global_slot_count(&self, process: &Process) -> usize {
-        process.program.num_globals as usize
+        self.with_committed(|snapshot| match snapshot.read(process.image_cell.id) {
+            Some(WorldValue::Image(image)) => image.program.num_globals as usize,
+            _ => process.initial_program().num_globals as usize,
+        })
     }
 
     fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef {
-        self.committed_value(process.var_id(reg))
-            .map_or(NULL, WorldValue::lpc_ref)
+        self.with_committed(|snapshot| {
+            let image = match snapshot.read(process.image_cell.id) {
+                Some(WorldValue::Image(image)) => image,
+                _ => process.initial_image().clone(),
+            };
+            snapshot
+                .read(image.var_id(reg))
+                .map_or(NULL, WorldValue::lpc_ref)
+        })
     }
 
     fn is_initialized(&self, process: &Process) -> bool {
@@ -650,6 +660,10 @@ impl GlobalState {
     /// snapshot, release); the blocking recv runs on a scoped thread, never
     /// the caller's. `None` = absent.
     fn committed_value(&self, var_id: VarId) -> Option<WorldValue> {
+        self.with_committed(|snapshot| snapshot.read(var_id))
+    }
+
+    fn with_committed<T>(&self, read: impl FnOnce(&super::Snapshot) -> T) -> T {
         std::thread::scope(|s| {
             let (reply_tx, reply_rx) = flume::bounded(1);
             self.committer_tx
@@ -660,7 +674,7 @@ impl GlobalState {
                 .join()
                 .expect("start reply thread panicked")
                 .expect("committer always answers a start");
-            live.inner.read(var_id)
+            read(&live.inner)
         })
     }
 }

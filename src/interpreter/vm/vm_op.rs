@@ -16,6 +16,9 @@ pub enum VmOp {
 
     /// A system-object reload whose requesting transaction committed.
     SystemReload(Arc<super::system_reload::ReloadRequest>),
+
+    /// A prototype recompilation whose requesting transaction committed.
+    ObjectRecompile(Arc<super::object_recompile::RecompileRequest>),
 }
 
 impl PartialEq for VmOp {
@@ -25,6 +28,7 @@ impl PartialEq for VmOp {
             (Self::PrioritizeCallOut(a), Self::PrioritizeCallOut(b)) => a == b,
             (Self::Shutdown(a), Self::Shutdown(b)) => a == b,
             (Self::SystemReload(a), Self::SystemReload(b)) => a.id == b.id,
+            (Self::ObjectRecompile(a), Self::ObjectRecompile(b)) => a.id == b.id,
             _ => false,
         }
     }

@@ -95,7 +95,7 @@ mod tests {
         let query_fn = task
             .context
             .process
-            .program
+            .initial_program()
             .lookup_function("query")
             .expect("no `query` found")
             .clone();
@@ -171,7 +171,7 @@ mod tests {
         let prune = task
             .context
             .process
-            .program
+            .initial_program()
             .lookup_function("prune")
             .unwrap()
             .clone();

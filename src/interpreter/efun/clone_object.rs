@@ -31,10 +31,10 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     debug_assert!(!prototype.is_clone(), "prototype cannot be a clone");
 
     {
-        if prototype.program.pragmas.no_clone() {
+        if prototype.program(context.txn()).pragmas.no_clone() {
             return Err(context.runtime_error(format!(
                 "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
-                prototype.program.filename
+                prototype.program(context.txn()).filename
             )));
         }
     }
@@ -46,7 +46,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         return Err(context.runtime_error("infinite clone recursion detected"));
     }
 
-    let new_prog = prototype.program.clone();
+    let new_prog = prototype.program(context.txn());
     let clone_process = context.object_space().create_clone_process(new_prog);
     debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
     context
@@ -87,7 +87,7 @@ mod tests {
         gs: &Arc<GlobalState>,
         proc: &Process,
     ) -> std::collections::HashMap<String, LpcRef> {
-        proc.program
+        proc.initial_program()
             .global_variables
             .iter()
             .filter_map(|(name, sym)| {

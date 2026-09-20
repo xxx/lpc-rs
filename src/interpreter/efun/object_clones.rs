@@ -19,7 +19,10 @@ pub fn object_clones<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
                 {
                     return None;
                 }
-                t.read_array(object.program.clones.id)
+                {
+                    let image = object.image_in(t);
+                    t.read_array(image.program.clones.id)
+                }
             })
         });
     context.return_array(

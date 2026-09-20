@@ -113,7 +113,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let process = frame.process.clone();
 
                 let func = {
-                    let Some(func) = process.program.lookup_function(func_name) else {
+                    let Some(func) = frame.image.program.lookup_function(func_name) else {
                         return Err(self.runtime_error(format!(
                             "Unable to find function `{}` in local process `{}`.",
                             func_name, process
@@ -123,7 +123,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     func.clone()
                 };
 
-                FunctionAddress::local(&process, func)
+                FunctionAddress::local(&process, func, &self.context.txn)
             }
             FunctionReceiver::Var(receiver_location) => {
                 let receiver_ref =
@@ -191,7 +191,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         process: &Arc<Process>,
         name: Ustr,
     ) -> lpc_rs_errors::Result<FunctionAddress> {
-        let Some(func) = process.program.lookup_function(name) else {
+        let Some(func) = process
+            .program(&self.context.txn)
+            .lookup_function(name)
+            .cloned()
+        else {
             return Err(self.runtime_error(format!(
                 "Unable to find function `{}` in remote process `{}`.",
                 name, process
@@ -206,7 +210,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 process
             )));
         }
-        Ok(FunctionAddress::local(process, func.clone()))
+        Ok(FunctionAddress::local(process, func, &self.context.txn))
     }
 
     fn store_functionptr(

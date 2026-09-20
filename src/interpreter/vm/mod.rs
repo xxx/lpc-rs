@@ -29,6 +29,7 @@ mod prioritize_call_out;
 
 pub mod binding;
 pub mod global_state;
+pub mod object_recompile;
 pub mod system_reload;
 pub mod vm_op;
 
@@ -166,6 +167,10 @@ impl Vm {
                         }
                         VmOp::PrioritizeCallOut(id) => {
                             self.global_state.prioritize_call_out(id).await;
+                        }
+                        VmOp::ObjectRecompile(request) => {
+                            let state = self.global_state.clone();
+                            tokio::spawn(async move { state.run_object_recompile(request).await; });
                         }
                         VmOp::SystemReload(request) => {
                             let state = self.global_state.clone();

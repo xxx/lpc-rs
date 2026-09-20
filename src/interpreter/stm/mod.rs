@@ -212,6 +212,16 @@ impl Transaction {
         self.changeset.write(var_id, WorldValue::Process(process));
     }
 
+    pub(crate) fn write_image(
+        &mut self,
+        process: &Process,
+        image: Arc<crate::interpreter::process::ProgramImage>,
+    ) {
+        self.track_read(process.image_cell.id);
+        self.changeset
+            .write(process.image_cell.id, WorldValue::Image(image));
+    }
+
     /// Record that this attempt removes a var from the world. For an object
     /// cell this is a transactional `destruct`: the cell reads back as absent
     /// to this attempt, and the committer removes it on commit (a concurrent
@@ -593,8 +603,9 @@ pub(crate) fn txn_insert_process(
         t.track_read(var_id);
         t.write_process(var_id, process.clone());
         if process.is_clone() {
+            let clones = process.image_in(t).program.clones.id;
             t.merge(
-                process.program.clones.id,
+                clones,
                 MergeOp::ArrayAppend(vec![LpcRef::from(Arc::downgrade(process))]),
             );
         }
@@ -622,8 +633,9 @@ pub(crate) fn txn_undo_insert(
     txn.with(|t| {
         t.drop_var(var_id);
         if process.is_clone() {
+            let clones = process.image_in(t).program.clones.id;
             t.merge(
-                process.program.clones.id,
+                clones,
                 MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(process))),
             );
         }

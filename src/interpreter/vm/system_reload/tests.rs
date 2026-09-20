@@ -282,7 +282,10 @@ async fn an_existing_task_resolves_simul_and_master_at_attempt_start() {
     .unwrap();
     assert_eq!(run(&mut vm, &user, "both").await.state, "succeeded");
     task.timed_eval(
-        user.program.lookup_function("direct").unwrap().clone(),
+        user.initial_program()
+            .lookup_function("direct")
+            .unwrap()
+            .clone(),
         &[],
         5000,
     )

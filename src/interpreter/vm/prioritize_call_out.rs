@@ -105,9 +105,17 @@ mod tests {
 
         let r = vm.initialize_process_from_code("/foo/bar.c", code).await;
         let proc = r.unwrap().context.process;
-        let func = proc.program.lookup_function("foo").unwrap().clone();
+        let func = proc
+            .initial_program()
+            .lookup_function("foo")
+            .unwrap()
+            .clone();
         let ptr = FunctionPtrBuilder::default()
-            .address(FunctionAddress::local(&proc, func.clone()))
+            .address(FunctionAddress::local(
+                &proc,
+                func.clone(),
+                &crate::interpreter::stm::TxnHandle::default(),
+            ))
             .build()
             .unwrap();
 
@@ -151,7 +159,11 @@ mod tests {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::local(
                     &proc,
-                    proc.program.lookup_function("tick").unwrap().clone(),
+                    proc.initial_program()
+                        .lookup_function("tick")
+                        .unwrap()
+                        .clone(),
+                    &crate::interpreter::stm::TxnHandle::default(),
                 ))
                 .build()
                 .unwrap();

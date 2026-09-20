@@ -1,7 +1,9 @@
 pub(crate) mod cleanup;
+mod image;
 pub(crate) mod shadow;
 pub mod util;
 
+pub(crate) use image::ProgramImage;
 pub use shadow::ShadowLinks;
 
 use std::{
@@ -15,10 +17,7 @@ use std::{
     },
 };
 
-use lpc_rs_core::{
-    RegisterSize,
-    lpc_path::{LibRoot, LpcPath},
-};
+use lpc_rs_core::lpc_path::{LibRoot, LpcPath};
 
 use crate::{
     command::registry::RuleList,
@@ -64,21 +63,19 @@ pub enum ObjectName {
     Virtual(String),
 }
 
-/// A wrapper type to allow the VM to keep the immutable `program` and its
-/// mutable runtime pieces together.
+/// An object's stable identity and transactional runtime bindings.
 #[derive(Debug)]
 pub struct Process {
-    /// The [`Program`] that this process is running.
-    pub program: Arc<Program>,
+    initial_image: Arc<ProgramImage>,
+
+    /// The transaction-visible program and global-cell layout after an upgrade.
+    pub(crate) image_cell: SVar<ProgramImage>,
 
     /// The second this process was constructed: what `object_time` answers.
     pub created: i64,
 
     /// Present only for nonresident programs defining the idle cleanup apply.
     pub(crate) cleanup: Option<Box<cleanup::Cleanup>>,
-
-    /// Canonical global cells followed by view aliases; values live only in the committer's world.
-    globals: Box<[SVar<LpcRef>]>,
 
     /// How this process is named.
     name: ObjectName,
@@ -130,10 +127,10 @@ pub struct Process {
 impl Default for Process {
     fn default() -> Self {
         Self {
-            program: Arc::default(),
+            initial_image: Arc::new(ProgramImage::new(Arc::default())),
+            image_cell: SVar::new(),
             created: 0,
             cleanup: None,
-            globals: Vec::new().into_boxed_slice(),
             name: ObjectName::File,
             connection: SVar::new(),
             initialized: SVar::new(),
@@ -163,20 +160,15 @@ pub(crate) enum Liveness {
 impl Process {
     /// Shared constructor body for `new`, `new_clone` and `new_virtual`.
     fn with_name(program: Arc<Program>, name: ObjectName) -> Self {
-        let num_globals = program.num_globals;
-        let mut globals: Vec<_> = (0..num_globals).map(|_| SVar::new()).collect();
-        for &slot in program.global_views.iter() {
-            globals.push(globals[usize::from(slot)].clone());
-        }
         Self {
             cleanup: (!program.pragmas.resident()
                 && program
                     .unmangled_functions
                     .contains_key(crate::interpreter::CLEAN_UP))
             .then(Box::default),
-            program,
+            initial_image: Arc::new(ProgramImage::new(program)),
+            image_cell: SVar::new(),
             created: chrono::Utc::now().timestamp(),
-            globals: globals.into_boxed_slice(),
             name,
             connection: SVar::new(),
             initialized: SVar::new(),
@@ -209,6 +201,36 @@ impl Process {
     /// `/inst/17/d/room1`: what `compile_object` produces.
     pub fn new_virtual(program: Arc<Program>, name: String) -> Self {
         Self::with_name(program, ObjectName::Virtual(name))
+    }
+
+    /// The construction-time program, for compiler and bootstrap inspection only.
+    pub fn initial_program(&self) -> &Arc<Program> {
+        &self.initial_image.program
+    }
+
+    pub(crate) fn initial_image(&self) -> &Arc<ProgramImage> {
+        &self.initial_image
+    }
+
+    pub(crate) fn image_in(&self, txn: &mut Transaction) -> Arc<ProgramImage> {
+        match txn.read_value(self.image_cell.id) {
+            Some(WorldValue::Image(image)) => image,
+            None => self.initial_image.clone(),
+            _ => unreachable!("a process image cell holds an image"),
+        }
+    }
+
+    pub(crate) fn image(&self, txn: &TxnHandle) -> Arc<ProgramImage> {
+        txn.with(|txn| self.image_in(txn))
+    }
+
+    /// The program selected by this transaction, including a staged upgrade.
+    pub(crate) fn program(&self, txn: &TxnHandle) -> Arc<Program> {
+        self.image(txn).program.clone()
+    }
+
+    pub(crate) fn is_prototype(&self) -> bool {
+        matches!(self.name, ObjectName::File)
     }
 
     /// Returns an iterator over all of `object`'s environments, starting with
@@ -452,14 +474,10 @@ impl Process {
         txn.with(|t| t.read(self.commands_enabled.id).is_some())
     }
 
-    /// The committer-world identity of a global slot.
-    pub(crate) fn var_id(&self, reg: RegisterSize) -> VarId {
-        self.globals[reg as usize].id
-    }
-
-    #[inline(always)]
-    pub(crate) fn execution_global(&self, index: usize) -> VarId {
-        self.globals[index].id
+    /// A construction-time global cell for fixtures that have not upgraded.
+    #[cfg(test)]
+    pub(crate) fn var_id(&self, reg: lpc_rs_core::RegisterSize) -> VarId {
+        self.initial_image.var_id(reg)
     }
 
     /// Resolve structural and global cell names only when emitting a diagnostic.
@@ -486,19 +504,22 @@ impl Process {
                 return Some(format!("{}.{field}", self.filename()));
             }
         }
-        if cell == self.program.clones.id {
-            return Some(format!("{}.clones", self.program.filename));
+        if cell == self.image_cell.id {
+            return Some(format!("{}.program", self.filename()));
         }
-        let index = self.globals[..usize::from(self.program.num_globals)]
-            .iter()
-            .position(|slot| slot.id == cell)?;
+        let program = self.initial_program();
+        if cell == program.clones.id {
+            return Some(format!("{}.clones", program.filename));
+        }
+        let index =
+            (0..program.num_globals).find(|&slot| self.initial_image.var_id(slot) == cell)?;
         let name = self
-            .program
+            .initial_program()
             .global_variables
             .iter()
             .find_map(|(name, symbol)| match symbol.location {
                 Some(lpc_rs_core::register::RegisterVariant::Global(register))
-                    if usize::from(register.index()) == index =>
+                    if register.index() == index =>
                 {
                     Some(name.as_str())
                 }
@@ -513,10 +534,10 @@ impl Process {
     /// The world ids a live object keeps alive, rooted even when the object
     /// has no committed `Process` cell.
     pub(crate) fn world_var_ids(&self) -> Vec<VarId> {
-        self.globals[..usize::from(self.program.num_globals)]
-            .iter()
-            .map(|slot| slot.id)
-            .chain(self.cleanup.as_ref().map(|cleanup| cleanup.disabled.id))
+        self.cleanup
+            .as_ref()
+            .map(|cleanup| cleanup.disabled.id)
+            .into_iter()
             .chain([
                 self.initialized.id,
                 self.commands_enabled.id,
@@ -527,7 +548,7 @@ impl Process {
                 self.connection.id,
                 self.shadow.shadows.id,
                 self.shadow.shadowing.id,
-                self.program.clones.id,
+                self.image_cell.id,
             ])
             .collect()
     }
@@ -536,7 +557,7 @@ impl Process {
     /// present.
     #[inline]
     pub fn filename(&self) -> Cow<'_, str> {
-        let filename: &str = (*self.program.filename).as_ref();
+        let filename: &str = self.initial_program().filename.as_ref().as_ref();
         let name = filename.strip_suffix(".c").unwrap_or(filename);
         match &self.name {
             ObjectName::File => Cow::Borrowed(name),
@@ -556,7 +577,7 @@ impl Process {
                     ObjectName::Clone(id) => Some(id),
                     _ => None,
                 };
-                root.object_name(&self.program.filename.object_file(clone_id))
+                root.object_name(&self.initial_program().filename.object_file(clone_id))
                     .to_string()
             }
         }
@@ -600,7 +621,7 @@ impl Hash for Process {
 impl Display for Process {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let source = self.program.filename.to_string();
+        let source = self.initial_program().filename.to_string();
         let name = source.strip_suffix(".c").unwrap_or(&source);
         match &self.name {
             ObjectName::File => f.write_str(name),
@@ -684,7 +705,7 @@ mod tests {
         let proc = Process::new_virtual(program.clone(), "/inst/17/d/room1".to_owned());
         assert_eq!(proc.filename(), "/inst/17/d/room1");
         assert!(!proc.is_clone());
-        assert!(Arc::ptr_eq(&proc.program, &program));
+        assert!(Arc::ptr_eq(proc.initial_program(), &program));
     }
 
     #[test]

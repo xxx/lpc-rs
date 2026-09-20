@@ -260,7 +260,7 @@ impl FunctionPtr {
                 )));
             }
         };
-        let Some(function) = process.program.lookup_function(name).cloned() else {
+        let Some(function) = process.program(txn).lookup_function(name).cloned() else {
             return Ok(None);
         };
         Ok(Some((process, function)))
@@ -289,6 +289,7 @@ impl FunctionPtr {
                         self
                     )));
                 };
+                function.check_generation(process.image(txn).generation)?;
                 (process, function.function.clone())
             }
             FunctionAddress::Dynamic(name) => {
@@ -323,12 +324,12 @@ impl FunctionPtr {
                         "call to simul efun `{name}`: no simul-efun object is loaded"
                     )));
                 };
-                let Some(function) = simul_efuns.program.lookup_function(name) else {
+                let Some(function) = simul_efuns.program(txn).lookup_function(name).cloned() else {
                     return Err(LpcError::runtime(format!(
                         "call to unknown simul efun `{name}`"
                     )));
                 };
-                (simul_efuns.clone(), function.clone())
+                (simul_efuns.clone(), function)
             }
         };
 

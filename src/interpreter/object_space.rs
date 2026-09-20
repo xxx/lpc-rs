@@ -159,15 +159,11 @@ impl ObjectSpace {
             .collect()
     }
 
-    /// Every global-slot and structural cell of every live object, for the
-    /// world sweep's root set. Complete where [`all_cell_ids`](Self::all_cell_ids)
-    /// is not: bootstrap objects live only in the physical map and have no
-    /// committed `Process` cell, so their globals would otherwise be wrongly
-    /// reclaimed. Destructed objects are safe to skip: not in the physical map.
-    pub(crate) fn all_live_object_slots(&self) -> Vec<VarId> {
+    /// Physical bootstrap objects also root their transaction-visible image during GC.
+    pub(crate) fn live_processes(&self) -> Vec<Arc<Process>> {
         self.processes
             .iter()
-            .flat_map(|process| process.world_var_ids())
+            .map(|process| process.value().clone())
             .collect()
     }
 

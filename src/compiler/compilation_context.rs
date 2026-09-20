@@ -212,7 +212,7 @@ impl CompilationContext {
         if let Some(function) = self
             .simul_efuns
             .as_ref()
-            .and_then(|simul_efuns| simul_efuns.program.lookup_function(name))
+            .and_then(|simul_efuns| simul_efuns.initial_program().lookup_function(name))
         {
             return Some(Callee::SimulEfun(&function.prototype));
         }

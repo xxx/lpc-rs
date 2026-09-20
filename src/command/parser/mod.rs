@@ -142,7 +142,7 @@ async fn report(
         return Ok(silent);
     };
     let Some(function) = master
-        .program
+        .program(ctx.txn())
         .unmangled_functions
         .get(PARSER_ERROR_MESSAGE)
         .cloned()

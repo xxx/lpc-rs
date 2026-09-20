@@ -38,10 +38,11 @@ pub async fn variable_info<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     }
 
     let paths = context.config().paths();
-    let entries = target.program.global_variable_info.iter().map(|variable| {
+    let image = target.image(context.txn());
+    let entries = image.program.global_variable_info.iter().map(|variable| {
         let value = context
             .txn()
-            .with(|t| t.read(target.var_id(variable.slot)))
+            .with(|t| t.read(image.var_id(variable.slot)))
             .unwrap_or(NULL);
         let fields = [
             ("name", variable.name.as_str().into()),

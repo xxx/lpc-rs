@@ -353,6 +353,7 @@ async fn policy_allows_game_objects_and_refuses_privileged_operations() {
             require(!master->valid_exec("obj/probe.c", this_object(), player), "exec must fail");
             require(!master->valid_variable_info(this_object(), player, "/obj/probe.c"), "inspection must fail");
             require(!master->valid_reload("master", this_object(), "/obj/probe.c"), "reload must fail");
+            require(!master->valid_recompile(player, this_object(), "/obj/probe.c"), "recompile must fail");
             require(!master->valid_shutdown(this_object(), "/obj/probe.c"), "shutdown must fail");
             require(!master->query_allow_shadow(player), "shadowing must fail");
             string player_path = file_name(player);

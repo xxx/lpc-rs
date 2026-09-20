@@ -69,7 +69,7 @@ async fn test_inheritance() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let prog = &proc.program;
+    let prog = &proc.initial_program();
 
     assert_eq!(prog.num_globals, 5);
 }
@@ -147,7 +147,7 @@ async fn test_dynamic_receiver() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let prog = &proc.program;
+    let prog = &proc.initial_program();
 
     assert_eq!(prog.num_globals, 0);
 }
@@ -312,7 +312,12 @@ async fn test_inherited_create_called_when_not_overridden() {
         })
         .unwrap();
 
-    let init = child_ctx.process().program.initializer.clone().unwrap();
+    let init = child_ctx
+        .process()
+        .initial_program()
+        .initializer
+        .clone()
+        .unwrap();
 
     // parent2's create is inherited last, so it wins.
     let inst = &init.instructions;
