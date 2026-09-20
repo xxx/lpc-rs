@@ -239,10 +239,6 @@ Tests live alongside the Rust code and in [tests](tests); performance workloads
 live in [benches](benches) and [examples](examples). See [AGENTS.md](AGENTS.md)
 for repository conventions and profiling commands.
 
-Apply changes also update ulib's implementations, examples and source comments;
-see [keeping ulib aligned with applies](doc/maintaining-ulib.md) for the checks
-and review process.
-
 ## Licence
 
 [MIT](LICENSE).
