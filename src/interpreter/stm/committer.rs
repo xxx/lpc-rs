@@ -10,18 +10,19 @@ use tracing::error;
 use crate::interpreter::{
     function_type::function_address::FunctionAddress,
     lpc_ref::LpcRef,
+    process::{Process, ProgramImage},
     stm::{
         CommitOrigin, Conflict, VarId, Version, WorldValue, changeset::Changeset,
         snapshot::Snapshot,
     },
 };
 
-/// A unit of work in the world mark: either a var whose contents to read, or
-/// an `LpcRef` whose payload/function captures to follow.
+/// A reachable world cell, value, object or program image whose edges need tracing.
 enum MarkWork {
     Var(VarId),
     Ref(LpcRef),
-    Process(Arc<crate::interpreter::process::Process>),
+    Process(Arc<Process>),
+    Image(Arc<ProgramImage>),
 }
 
 /// A root for the world sweep: a `Var` is a world slot whose committed
@@ -31,7 +32,7 @@ enum MarkWork {
 pub(crate) enum WorldRoot {
     Var(VarId),
     Ref(LpcRef),
-    Process(Arc<crate::interpreter::process::Process>),
+    Process(Arc<Process>),
 }
 
 /// Committer's lifetime totals and gauges, read back over the `Stats`
@@ -331,6 +332,7 @@ impl Committer {
     #[inline(never)]
     fn mark_world(&mut self, roots: &[WorldRoot]) -> usize {
         let mut marked: BTreeSet<VarId> = BTreeSet::new();
+        let mut images = BTreeSet::new();
         let mut work: Vec<MarkWork> = Vec::with_capacity(roots.len());
         for root in roots {
             match root {
@@ -356,7 +358,12 @@ impl Committer {
                 MarkWork::Process(process) => {
                     work.extend(process.world_var_ids().into_iter().map(MarkWork::Var));
                     if self.snapshot.peek(process.image_cell.id).is_none() {
-                        work.extend(process.initial_image().world_var_ids().map(MarkWork::Var));
+                        work.push(MarkWork::Image(process.initial_image().clone()));
+                    }
+                }
+                MarkWork::Image(image) => {
+                    if images.insert(image.generation) {
+                        work.extend(image.world_var_ids().map(MarkWork::Var));
                     }
                 }
                 MarkWork::Ref(lpc_ref) => match lpc_ref {
@@ -370,7 +377,7 @@ impl Committer {
                         if let FunctionAddress::Local(_, local) = &fun.address
                             && let Some(image) = local.retained_image()
                         {
-                            work.extend(image.world_var_ids().map(MarkWork::Var));
+                            work.push(MarkWork::Image(image.clone()));
                         }
 
                         work.extend(
@@ -433,7 +440,7 @@ impl Committer {
             WorldValue::Process(process) => {
                 work.push(MarkWork::Process(process.clone()));
             }
-            WorldValue::Image(image) => work.extend(image.world_var_ids().map(MarkWork::Var)),
+            WorldValue::Image(image) => work.push(MarkWork::Image(image.clone())),
             WorldValue::Connection(maybe_connection) => {
                 if let Some(connection) = maybe_connection
                     && let Some(input_to) = connection.input_to()
@@ -1607,6 +1614,62 @@ mod tests {
             WorldValue::ref_of(LpcRef::from(9))
         );
     }
+
+    #[test]
+    fn gc_traces_a_shared_closure_image_with_bounded_allocations() {
+        use jemalloc_ctl::thread::allocatedp;
+        use lpc_rs_function_support::{
+            function_prototype::{FunctionKind, FunctionPrototypeBuilder},
+            program_function::ProgramFunction,
+        };
+
+        use crate::interpreter::{process::Process, program::Program};
+
+        const GLOBALS: u16 = 1024;
+        let process = Arc::new(Process::new(Program {
+            num_globals: GLOBALS,
+            ..Program::default()
+        }));
+        let code = Arc::new(ProgramFunction::new(
+            FunctionPrototypeBuilder::default()
+                .name("closure-0")
+                .filename(lpc_rs_core::lpc_path::LpcPath::in_game("/gc.c".into()))
+                .return_type(lpc_rs_core::lpc_type::LpcType::Int(false))
+                .kind(FunctionKind::Closure)
+                .build()
+                .unwrap(),
+            0,
+        ));
+        let pointer = FunctionPtrBuilder::default()
+            .address(FunctionAddress::in_image(
+                &process,
+                code.into(),
+                process.initial_image(),
+            ))
+            .build()
+            .unwrap();
+        let mut committer = Committer::new();
+        let mut seed = Changeset::new(committer.snapshot.version());
+        for slot in 0..GLOBALS {
+            seed.write(
+                process.initial_image().var_id(slot),
+                WorldValue::ref_of(LpcRef::Function(Arc::new(pointer.clone()))),
+            );
+        }
+        committer.commit(seed).unwrap();
+        let roots = [WorldRoot::Var(process.initial_image().var_id(0))];
+        let allocated = allocatedp::read().unwrap();
+        let before = allocated.get();
+        assert_eq!(committer.mark_world(&roots), 0);
+        let bytes = allocated.get() - before;
+        eprintln!("GC allocated {bytes} bytes for {GLOBALS} closure-valued globals");
+        assert!(
+            bytes < 1024 * 1024,
+            "GC allocated {bytes} bytes for {GLOBALS} globals"
+        );
+        assert_eq!(committer.mark_world(&[]), usize::from(GLOBALS));
+    }
+
     #[test]
     fn gc_traces_mapping_keys_partial_arguments_and_cycles() {
         use crate::interpreter::lpc_mapping::LpcMapping;

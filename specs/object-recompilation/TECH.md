@@ -35,6 +35,8 @@ Relevant modules are `src/interpreter/process/mod.rs`, `program.rs`,
   destruction; later retired images are released with their last snapshot, frame
   or anonymous function. Trace retained images' globals from reachable pointers
   so removed variables remain usable until the last retaining closure is gone.
+  Trace each image once per collection to bound the work queue when many globals
+  contain closures retaining the same image.
 - Compile once per upgrade attempt and build a declaration migration map from
   `global_variable_info`, keyed by declaring source, name, and exact declared type.
   Stage images for every group member, reusing compatible global cell identities,
