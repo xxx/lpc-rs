@@ -12,9 +12,9 @@ all four. The linked lpc-rs references give the full contracts.
 
 ## Scope and evidence
 
-Reviewed on **19 September 2026**, against lpc-rs commit `bccaea9b` and these
-public upstream snapshots. The revisions identify the source examined; they
-are not claims about every release or downstream fork.
+The lpc-rs column describes the accompanying code. Upstream sources were reviewed
+on **19 September 2026**, against these public snapshots. The revisions identify
+the source examined; they are not claims about every release or downstream fork.
 
 | Driver | Reviewed revision |
 |---|---|
@@ -119,7 +119,7 @@ cross-driver execution-test results.
 
 | Driver / mode | `explode(",a,,b,", ",")` | `explode(",,", ",")` | `explode("", ",")` | `explode("ab", "")` | `explode("", "")` |
 |---|---|---|---|---|---|
-| [lpc-rs](efun/explode.md) | `({ "", "a", "", "b", "" })` | `({ "", "", "" })` | `({ "" })` | `({ "", "a", "b", "" })` | `({ "", "" })` |
+| [lpc-rs](efun/explode.md) | `({ "", "a", "", "b", "" })` | `({ "", "", "" })` | `({ "" })` | `({ "a", "b" })` | `({})` |
 | [CD, reviewed defaults][cd-explode] | `({ "", "a", "", "b" })` | `({ "", "" })` | `({})` | `({ "a", "b" })` | `({})` |
 | [LDMud][ld-explode] | `({ "", "a", "", "b", "" })` | `({ "", "", "" })` | `({ "" })` | `({ "a", "b" })` | `({ "" })` |
 | [FluffOS, reviewed defaults][fl-explode] | `({ "a", "", "b" })` | `({})` | `({})` | `({ "a", "b" })` | `({})` |
@@ -139,6 +139,10 @@ removed. `reversible explode string = 1` overrides that trimming; the separate
 [`explode_reversible` efun][fl-explode-entry] selects the same reversible path.
 Even in reversible mode, empty input returns an empty array and an empty
 delimiter adds no boundary fields.
+
+With an empty delimiter, lpc-rs also omits boundary fields and returns an empty
+array for empty input. With a nonempty delimiter, lpc-rs retains all empty fields,
+including the single empty field for empty input, as LDMud does.
 
 An empty delimiter also exposes different character units: CD and DGD split
 into bytes, [LDMud][ld-explode-source] and lpc-rs split text into Unicode scalar
