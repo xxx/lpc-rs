@@ -114,7 +114,6 @@ impl CompilationContextBuilder {
 }
 
 impl CompilationContext {
-    /// config's lib_dir (a.k.a. LIB_DIR)
     /// Whether `#pragma strict_types` governs the source at `span`.
     pub fn strict_types_at(&self, span: Span) -> bool {
         self.strict_types_from
@@ -122,6 +121,7 @@ impl CompilationContext {
             .is_some_and(|&from| from <= span.l())
     }
 
+    /// config's lib_dir (a.k.a. LIB_DIR)
     pub fn lib_dir(&self) -> &str {
         &self.config.lib_dir
     }
