@@ -473,11 +473,26 @@ impl TaskContext {
         callers: Callers,
         process: &Arc<Process>,
     ) -> Result<()> {
+        self.insert_and_initialize_with_args(callers, process, &[])
+            .await
+    }
+
+    /// Insert an object and initialize it with arguments for its `create` hook.
+    pub(crate) async fn insert_and_initialize_with_args(
+        &self,
+        callers: Callers,
+        process: &Arc<Process>,
+        args: &[LpcRef],
+    ) -> Result<()> {
         // `nested` is resolved before the insert: a depth refusal here must
         // not leave an inserted, never-initialized object behind.
         let nested = self.nested(callers, process.clone())?;
         self.insert_process_transactional(process);
-        if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(nested)).await {
+        if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process_with_args(
+            nested, args,
+        ))
+        .await
+        {
             txn_undo_insert(self.txn(), self.object_space(), process);
             return Err(e);
         }

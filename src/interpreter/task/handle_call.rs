@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use lpc_rs_asm::instruction::{Arg, ArgList};
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, lpc_type::LpcType};
+use lpc_rs_core::{
+    CREATE_FUNCTION, INIT_PROGRAM, RegisterSize, lpc_path::LpcPath, lpc_type::LpcType,
+};
 use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
@@ -19,19 +21,21 @@ use crate::interpreter::{
 
 /// How a frame is entered: a direct or simul-efun call was compiled against
 /// its callee's parameter list; a virtual call reached a redefinition of
-/// the callee, and a door was compiled against nothing.
+/// the callee, and a door was compiled against nothing. An initializer
+/// forwards constructor arguments whose types are known only at runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CallEntry {
     Direct,
     Virtual,
     SimulEfun,
     Door,
+    Initializer,
 }
 
 impl CallEntry {
     /// Whether the frame counts as entered from outside its program.
     fn external(self) -> bool {
-        !matches!(self, Self::Direct | Self::Virtual)
+        !matches!(self, Self::Direct | Self::Virtual | Self::Initializer)
     }
 
     /// Whether the argument count is held to the callee's parameter list.
@@ -55,11 +59,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .runtime_bug(format!("call to unknown local function `{name}`")));
         };
         let func = target.function.clone();
-        let entry = if target.overridden {
-            CallEntry::Virtual
-        } else {
-            CallEntry::Direct
-        };
+        let entry =
+            if current_frame.function.name() == INIT_PROGRAM && func.name() == CREATE_FUNCTION {
+                CallEntry::Initializer
+            } else if target.overridden {
+                CallEntry::Virtual
+            } else {
+                CallEntry::Direct
+            };
         let receiver = current_frame.receiver.clone();
 
         self.push_receiver_frame(receiver, func, list, entry)
@@ -159,6 +166,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         entry: CallEntry,
     ) -> lpc_rs_errors::Result<()> {
         let num_args = self.checked_register_count(self.expanded_arg_count(list)?, &func)?;
+        if entry == CallEntry::Initializer {
+            for (i, value) in self.arg_values(list)?.iter().enumerate() {
+                self.type_check_call_arg(
+                    value,
+                    func.prototype.arg_types.get(i),
+                    func.prototype.arg_spans.get(i),
+                    func.name(),
+                )?;
+            }
+        }
         // A simul_efun's prototype can change after a cached caller was compiled against it.
         if num_args < func.arity().num_args
             && let Some(i) = func.prototype.first_ref_param()

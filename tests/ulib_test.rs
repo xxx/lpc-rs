@@ -243,6 +243,14 @@ async fn live_objects_and_enabled_examples_cover_every_documented_apply() {
                 );
                 for source in &sources {
                     if let Some(function) = functions[*source].get(name) {
+                        // Constructor parameters are object-defined, but must accept values.
+                        if name == CREATE_FUNCTION {
+                            assert!(
+                                function.prototype.first_ref_param().is_none(),
+                                "{source}: create cannot take reference parameters"
+                            );
+                            continue;
+                        }
                         assert_apply_signature(
                             &function.prototype,
                             expected,

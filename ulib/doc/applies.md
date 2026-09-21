@@ -99,7 +99,7 @@ These belong on the affected game object. Live examples are in
 
 | Apply and arguments | Result and behaviour | Example |
 |---|---|---|
-| `create()` | Initialises a newly created object after its global initialisers; its return value is ignored. Call `::create()` yourself when an inherited initialiser is needed. | Live: room descriptions. |
+| `create(...)` | Initialises an object after all global initialisers; its return value is ignored. Each object chooses its parameters: `clone_object` forwards extra arguments, while prototype loads supply none. Omitted parameters use defaults or `0`; excess arguments require `...` and `argv` to use them. Call `::create(...)` yourself when an inherited constructor is needed. | Live: room descriptions. Optional: box material argument. |
 | `init()` | Offers actions when a living enters an object's presence. `this_player()` is the living receiving them; `previous_object()` is that living too. | Live: register room actions. |
 | `clean_up(int references)` | Idle cleanup hook. Nonzero asks for later checks; `0` stops checks and **does not destruct the object**. Clones receive `0`; a prototype receives `1 + its clone count`, not a general reference count. | Live: keep occupied rooms or prototypes with clones, explicitly destruct other idle rooms. |
 | `id(string phrase)` | Match a name; the grammar parser uses this only when `parse_command_id_list()` is absent. This fallback must handle any adjectives/plurals itself; the master's shared ids do not apply. | Live: a guest's name. |

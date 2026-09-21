@@ -383,7 +383,7 @@ efuns! {
     },
     clone_object [async] => {
         returns: LpcType::Object(false),
-        arity: 1,
+        arity: (1, 0, ellipsis),
         args: [LpcType::String(false)],
     },
     command [async] => {

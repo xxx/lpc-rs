@@ -15,10 +15,10 @@ private string long_description;
 
 /**
  * Initialise a new room after its global variables have been initialised.
- * No arguments or useful return value; these defaults let a derived room
+ * This hook ignores constructor arguments; these defaults let a derived room
  * override either description without leaving the other as an unset string.
  * A derived create() must call ::create() explicitly to run this parent hook;
- * omitting the hook entirely leaves only the global initialisers in effect.
+ * inheriting it without an override uses these descriptions directly.
  */
 void create() {
     short_description = "A room";

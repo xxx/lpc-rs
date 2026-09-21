@@ -3,8 +3,8 @@
 A tiny LPC mudlib for lpc-rs: choose a guest name, enter one room and chat.
 It is a runnable example and a starting point for your own mudlib.
 
-If you have never written LPC, start with the driver's
-[Learn LPC](../doc/lpc/README.md) lessons. They introduce the language, then
+If you have never written LPC, start with the Learn LPC lessons in the driver's
+source distribution at `doc/lpc/README.md`. They introduce the language, then
 use a copy of this mudlib to build objects and player commands.
 
 Names last until disconnect, and a name cannot be used by two connected guests.

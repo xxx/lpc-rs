@@ -287,11 +287,12 @@ impl CodegenWalker {
     /// The function that initializes a new object: each inherited block's
     /// globals in layout order, this program's own, then `create()` if any
     /// program in the chain defines it.
-    async fn build_initializer(&mut self, init_globals: Ustr) -> Result<ProgramFunction> {
+    fn build_initializer(&mut self, init_globals: Ustr) -> Result<ProgramFunction> {
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
             .filename(self.context.source.input().clone())
             .return_type(LpcType::Void)
+            .flags(FunctionFlags::default().with_ellipsis(true))
             .build()
             .expect("Failed to build initializer prototype");
 
@@ -305,28 +306,33 @@ impl CodegenWalker {
             push_instruction!(self, Instruction::Call(init, list), None);
         }
 
-        if self
+        let mut populate_argv_index = None;
+        if let Some((create, takes_args)) = self
             .context
             .lookup_function(CREATE_FUNCTION, &CallNamespace::Local)
-            .is_some()
+            .map(|prototype| {
+                (
+                    ustr(&prototype.mangle()),
+                    prototype.arity.num_args > 0 || prototype.flags.ellipsis(),
+                )
+            })
         {
-            let mut call = CallNode {
-                chain: CallChain::Root {
-                    receiver: None,
-                    name: ustr(CREATE_FUNCTION),
-                    namespace: CallNamespace::Local,
-                },
-                arguments: vec![],
-                span: None,
-                lvalue_temps: Vec::new(),
+            let args = if takes_args {
+                let args = self.register_counter.next().unwrap().as_local();
+                populate_argv_index = Some(self.current_address());
+                push_instruction!(self, Instruction::PopulateArgv(args, 0, 0), None);
+                vec![Arg::Spread(args)]
+            } else {
+                vec![]
             };
-            call.visit(self).await?;
+            let list = self.arg_list(args, None)?;
+            push_instruction!(self, Instruction::Call(create, list), None);
         }
 
         // The initializer's value is `create()`'s, still in register 0.
         push_instruction!(self, Instruction::Ret, None);
 
-        let func = self.finalize_function(None, None)?;
+        let func = self.finalize_function(populate_argv_index, None)?;
         self.register_counter.pop();
 
         Ok(func)
@@ -2260,7 +2266,7 @@ impl TreeWalker for CodegenWalker {
             node.visit(self).await?;
         }
 
-        self.initializer = Some(Arc::new(self.build_initializer(init_globals_name).await?));
+        self.initializer = Some(Arc::new(self.build_initializer(init_globals_name)?));
 
         self.context.scopes.pop();
 

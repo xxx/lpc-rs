@@ -8,6 +8,19 @@
 #pragma strict_types
 
 #if 0
+private string material;
+
+/**
+ * clone_object("/obj/box", "oak") passes "oak" to this constructor.
+ * Loading the prototype or cloning without arguments uses "wooden"; an
+ * explicit 0 is preserved, so the constructor also handles it below.
+ * Globals are initialised first; the return value is ignored, and this hook
+ * shares the caller's transaction and this_player(); previous_object() is the cloner.
+ */
+void create(string wood = "wooden") {
+    material = wood ? wood : "wooden";
+}
+
 /**
  * Supply this object's singular names for grammar noun matching.
  * Return a string array of alternatives; "box" combines with the adjectives
@@ -37,7 +50,7 @@ string *parse_command_plural_id_list() {
  * are separate, and "adjectiv" is the required spelling of this apply.
  */
 string *parse_command_adjectiv_id_list() {
-    return ({ "wooden", "small" });
+    return ({ material, "small" });
 }
 
 /**

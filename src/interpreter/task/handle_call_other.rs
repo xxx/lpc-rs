@@ -130,7 +130,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// The call's arguments as values, each spread expanded; refs were rejected before this.
-    fn arg_values(&self, list: ArgList) -> Result<Vec<LpcRef>> {
+    pub(super) fn arg_values(&self, list: ArgList) -> Result<Vec<LpcRef>> {
         let frame = self.stack.current_frame()?;
         let mut values = Vec::new();
         for arg in self.args_of(list)? {
@@ -142,7 +142,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     values.extend(frame.spread_elements(&self.context.txn, loc)?);
                 }
                 Arg::Ref(_) => {
-                    return Err(self.runtime_bug("a by-reference argument reached call_other"));
+                    return Err(
+                        self.runtime_bug("a by-reference argument reached a value-only call")
+                    );
                 }
             }
         }

@@ -280,14 +280,26 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// The task is returned unevaluated when another transaction already
     /// initialized the process.
     pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
-        Self::initialize(context, false).await
+        Self::initialize(context, false, &[]).await
+    }
+
+    /// Initialize an object with arguments for its `create` hook.
+    pub(crate) async fn initialize_process_with_args(
+        context: TaskContext,
+        args: &[LpcRef],
+    ) -> Result<Task<STACKSIZE>> {
+        Self::initialize(context, false, args).await
     }
 
     pub(crate) async fn bootstrap_system_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
-        Self::initialize(context, true).await
+        Self::initialize(context, true, &[]).await
     }
 
-    async fn initialize(context: TaskContext, publish: bool) -> Result<Task<STACKSIZE>> {
+    async fn initialize(
+        context: TaskContext,
+        publish: bool,
+        args: &[LpcRef],
+    ) -> Result<Task<STACKSIZE>> {
         let Some(initializer) = context.process.program(context.txn()).initializer.clone() else {
             let msg = format!(
                 "Init function not found for `{}`. This should never happen.",
@@ -300,6 +312,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let max_execution_time = context.config().max_execution_time;
         let mut task = Task::new(context);
+        task.checked_register_count(args.len(), &initializer)?;
         let seed = TaskSeed {
             process: task.context.process().clone(),
             entry: if publish {
@@ -307,7 +320,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             } else {
                 SeedEntry::Function(initializer)
             },
-            args: Vec::new(),
+            args: args.iter().cloned().map(SeedArg::Value).collect(),
             initializes: true,
         };
         task.timed_eval_seed(seed, max_execution_time).await?;
@@ -1206,6 +1219,42 @@ mod stm_retry_tests {
         int hits;
         int foo() { int n; sscanf("hits 10", "hits %d", n); hits += n; return hits; }
     "##};
+
+    #[tokio::test]
+    async fn a_retried_task_recreates_its_clone_with_constructor_arguments() {
+        let mut task = run_prog(
+            r#"
+            int value;
+            void create(int start) { value = start; }
+            int query_value() { return value; }
+            int foo() {
+                mixed *args = ({ 42 });
+                object copy = clone_object(file_name(this_object()), args...);
+                return copy->query_value();
+            }
+        "#,
+        )
+        .await;
+        let prototype = task.context.process().clone();
+        let path = prototype.filename().to_string();
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+
+        let (result, stats) = eval_foo(&mut task, &tx).await;
+        tx.send(CommitProtocol::Close).unwrap();
+        drop(tx);
+        handle.join().unwrap();
+
+        result.unwrap();
+        assert_eq!(stats.attempts, 2);
+        assert_eq!(stats.conflicts, 1);
+        assert_eq!(task.result(), Some(LpcRef::from(42)));
+        let objects = task.context.object_space();
+        assert!(objects.lookup(format!("{path}#0")).is_none());
+        assert!(objects.lookup(format!("{path}#1")).is_some());
+    }
 
     /// `n` is the `ref` `sscanf` writes each attempt; a leaked first-attempt
     /// `hits += n` would read 20 instead of 10.

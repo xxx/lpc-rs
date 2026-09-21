@@ -18,6 +18,12 @@ variables. The driver attaches the socket to this clone and calls its `logon()`.
 Returning `1` keeps the connection. `input_to(receive_name)` directs the next
 line to a name-selection function instead of the command system.
 
+Objects can accept constructor arguments: `clone_object("/obj/box", "oak")`
+forwards `"oak"` to the new box's `create` after global initialisation. Its
+prototype receives no arguments when loaded. The disabled
+[box example](../examples/object.c) shows a constructor with a default for that
+case; the live player needs no constructor arguments.
+
 The player validates the name and checks `users()` for a duplicate. `users()`
 includes bodies still choosing names, so their `query_name()` returns `0`.
 After claiming a name, the player calls `enable_commands()`, registers personal
@@ -66,8 +72,8 @@ The policy permits self-destruction for logout and empty-room cleanup. It
 denies LPC file writes, ordinary file reads, connection transfer, inspection
 of another object's globals, object recompilation, LPC-requested shutdown and
 shadows.
-The master and player also use [pragmas](../../doc/lpc/pragmas.md) to forbid
-inheritance and shadowing.
+The master and player also use pragmas to forbid inheritance and shadowing;
+the driver's `doc/lpc/pragmas.md` describes those restrictions.
 
 These checks are specific driver gates, not a general sandbox for arbitrary
 LPC. In particular, `valid_load()` controls loading missing programs, not calls

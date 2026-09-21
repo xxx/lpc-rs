@@ -5,8 +5,8 @@ Start with a working copy of ulib and complete the [first chat](../README.md#sta
 if you have not already done so.
 
 For an introduction to LPC functions, objects, and command handlers, work
-through [Learn LPC](../../doc/lpc/README.md) first. You can continue here in
-the same mudlib copy used by the lantern lesson.
+through Learn LPC (`doc/lpc/README.md` in the driver source) first. You can
+continue here in the same mudlib copy used by the lantern lesson.
 
 ## Register the verb
 
