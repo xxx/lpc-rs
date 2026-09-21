@@ -61,7 +61,7 @@ mod tests {
                             assert!(matches!(arr[1], LpcRef::Function(_)));
                             assert!(matches!(arr[2], LpcRef::Int(_)));
                             assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
-                            assert_eq!(arr[4], LpcRef::from(id as i64));
+                            assert_eq!(arr[4], LpcRef::from(id as i64 + 1));
                         })
                         .unwrap();
                 }
@@ -120,7 +120,7 @@ mod tests {
                             assert!(matches!(arr[1], LpcRef::Function(_)));
                             assert!(matches!(arr[2], LpcRef::Int(_)));
                             assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
-                            assert_eq!(arr[4], LpcRef::from(id as i64));
+                            assert_eq!(arr[4], LpcRef::from(id as i64 + 1));
                         })
                         .unwrap();
                 }
@@ -179,10 +179,10 @@ mod tests {
             .await
             .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
 
-        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(task.result(), Some(LpcRef::from(2)));
         task.context.global_state.with_call_outs(|co| {
             let ids: Vec<_> = co.queue().iter().map(|(_, call_out)| call_out.id).collect();
-            assert_eq!(ids, vec![1]);
+            assert_eq!(ids, vec![2]);
         });
     }
 }

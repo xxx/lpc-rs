@@ -97,9 +97,7 @@ pub struct CallOuts {
     /// A channel to talk to the [`Vm`](crate::interpreter::vm::Vm)
     tx: Sender<VmOp>,
 
-    /// The next explicit call out ID. Per-VM (not process-global) so tests
-    /// running in parallel mint disjoint ID sequences. `u64`, so collisions
-    /// are effectively impossible even across many VMs.
+    /// The next ID in this VM; zero is reserved for unset mudlib handles.
     next_call_out_id: AtomicU64,
 }
 
@@ -109,7 +107,7 @@ impl CallOuts {
         Self {
             queue: StableVec::with_capacity(512),
             tx,
-            next_call_out_id: AtomicU64::new(0),
+            next_call_out_id: AtomicU64::new(1),
         }
     }
 

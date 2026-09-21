@@ -48,7 +48,7 @@ mod tests {
                 assert!(matches!(arr[1], LpcRef::Function(_)));
                 assert_eq!(arr[2], LpcRef::Int(LpcInt(100_000)));
                 assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
-                assert_eq!(arr[4], LpcRef::from(0));
+                assert_eq!(arr[4], LpcRef::from(1));
             })
             .expect("expected an array result");
 
@@ -61,12 +61,14 @@ mod tests {
     #[tokio::test]
     async fn test_query_call_out() {
         let code = r##"
+            int id;
+
             void create() {
-                call_out(call_out_test, 100);
+                id = call_out(call_out_test, 100);
             }
 
             mixed query() {
-                return query_call_out(0);
+                return query_call_out(id);
             }
 
             void call_out_test() {
@@ -99,7 +101,7 @@ mod tests {
                 assert!(matches!(arr[1], LpcRef::Function(_)));
                 assert!(matches!(arr[2], LpcRef::Int(_)));
                 assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
-                assert_eq!(arr[4], LpcRef::from(0));
+                assert_eq!(arr[4], LpcRef::from(1));
             })
             .unwrap();
     }

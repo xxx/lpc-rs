@@ -176,11 +176,49 @@ mod tests {
                 // the remaining time.
                 assert_eq!(arr[2], LpcRef::Int(LpcInt(100_000)));
                 assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
-                assert_eq!(arr[4], LpcRef::from(0));
+                assert_eq!(arr[4], LpcRef::from(1));
             })
             .expect("expected an array result");
 
         // The schedule materialized when the attempt committed.
         global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
+    }
+
+    #[tokio::test]
+    async fn zero_never_queries_or_cancels_the_first_timer() {
+        let code = r#"
+            int id;
+
+            void tick() {}
+
+            int check_zero() {
+                if (!id) throw("timer ID is false");
+                if (query_call_out(0)) throw("zero matched a timer");
+                if (remove_call_out(0) != -1) throw("zero cancelled a timer");
+                if (!query_call_out(id)) throw("timer was lost");
+                return id;
+            }
+
+            int create() {
+                id = call_out(tick, 100);
+                return check_zero();
+            }
+        "#;
+
+        let mut task = run_prog(code).await;
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+
+        let check = task
+            .context
+            .process
+            .initial_program()
+            .lookup_function("check_zero")
+            .unwrap()
+            .clone();
+        task.timed_eval(check, &[], 500).await.unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        task.context
+            .global_state
+            .with_call_outs(|co| assert_eq!(co.len(), 1));
     }
 }

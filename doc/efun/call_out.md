@@ -4,6 +4,11 @@
 
 Call a function after a delay, and possibly repeating on a regular interval.
 
+Returns an integer timer ID, starting at `1` in each VM. Zero is reserved for
+an unset handle; `query_call_out(0)` returns `0` and `remove_call_out(0)` returns
+`-1`. Store the returned ID rather than relying on consecutive values, since
+cancelled or retried transactions can consume IDs.
+
 The call out is scheduled only when the current transaction commits; a failed
 transaction schedules nothing. If `seconds_delay` is 0 or negative, the function
 is prioritized immediately after that commit.

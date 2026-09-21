@@ -56,13 +56,15 @@ mod tests {
     #[tokio::test]
     async fn test_same_attempt_cancel_hides_from_query() {
         let code = r##"
+            int id;
+
             void create() {
-                call_out(call_out_test, 100);
+                id = call_out(call_out_test, 100);
             }
 
             mixed query() {
-                remove_call_out(0);
-                return query_call_out(0);
+                remove_call_out(id);
+                return query_call_out(id);
             }
 
             void call_out_test() {
@@ -79,7 +81,7 @@ mod tests {
             .expect("no `query` found")
             .clone();
 
-        // `create` committed, so call out 0 is in the physical queue.
+        // `create` committed, so the call out is in the physical queue.
         global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
 
         task.timed_eval(query_fn.clone(), &[], 500)
