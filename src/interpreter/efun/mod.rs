@@ -1201,7 +1201,7 @@ efuns! {
     request_object_recompile [async in object_update] => {
         returns: LpcType::Int(false), arity: 1, args: [LpcType::Object(false) | LpcType::String(false)],
     },
-    query_object_recompile [in object_update] => {
+    query_object_recompile [async in object_update] => {
         returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
     },
 }

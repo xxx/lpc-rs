@@ -349,24 +349,23 @@ async fn prepared_named_and_dynamic_callbacks_resolve_the_updated_program() {
 }
 
 #[tokio::test]
-async fn status_is_private_and_duplicate_delivery_does_not_upgrade_twice() {
+async fn authorized_status_queries_and_duplicate_delivery_do_not_upgrade_again() {
     let (_root, mut vm, admin) = setup("recompile-status").await;
     let queued = request(&mut vm, &admin).await;
     let other = vm
         .initialize_process_from_code(
             "/other.c",
-            "mapping status(int id) { return query_object_recompile(id); }",
+            "string status(int id) { return query_object_recompile(id)[\"state\"]; }",
         )
         .await
         .unwrap()
         .context
         .process;
-    assert!(
+    assert_eq!(
         call(&vm, &other, "status", &[queued.id.into()])
             .await
-            .unwrap_err()
-            .to_string()
-            .contains("permission denied")
+            .unwrap(),
+        LpcRef::from("queued")
     );
     assert_eq!(
         call(&vm, &admin, "status", &[(-1).into()]).await.unwrap(),
@@ -383,6 +382,103 @@ async fn status_is_private_and_duplicate_delivery_does_not_upgrade_twice() {
     let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
     assert_eq!(target.image(&txn).generation, generation);
     assert_eq!(vm.global_state.updates.get(queued.id).unwrap().updated, 3);
+    assert_eq!(
+        call(&vm, &other, "status", &[queued.id.into()])
+            .await
+            .unwrap(),
+        LpcRef::from("succeeded")
+    );
+}
+
+#[tokio::test]
+async fn status_requires_permission_except_for_the_requester_and_unknown_ids() {
+    for (policy, error) in [
+        ("int valid_recompile() { return 0; }", "permission denied"),
+        ("", "permission denied"),
+        (
+            "int valid_recompile() { throw(\"query refused\"); }",
+            "query refused",
+        ),
+    ] {
+        let (_root, mut vm, admin) = setup("recompile-status-permission").await;
+        let queued = request(&mut vm, &admin).await;
+        let other = vm
+            .initialize_process_from_code(
+                "/other.c",
+                "mapping status(int id) { return query_object_recompile(id); }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            format!("{PERMISSIVE_MASTER}\n{policy}"),
+        )
+        .await
+        .unwrap();
+        let denied = call(&vm, &other, "status", &[queued.id.into()])
+            .await
+            .unwrap_err();
+        assert!(denied.to_string().contains(error), "{denied}");
+        assert!(matches!(
+            call(&vm, &admin, "status", &[queued.id.into()])
+                .await
+                .unwrap(),
+            LpcRef::Mapping(_)
+        ));
+        assert_eq!(
+            call(&vm, &other, "status", &[(-1).into()]).await.unwrap(),
+            NULL
+        );
+    }
+}
+
+#[tokio::test]
+async fn failed_status_can_be_authorized_after_the_requester_and_target_are_gone() {
+    let (_root, mut vm, admin) = setup("recompile-status-retired").await;
+    let queued = request(&mut vm, &admin).await;
+    call(&vm, &admin, "destroy_target", &[]).await.unwrap();
+    vm.initialize_process_from_code("/target.c", ORIGINAL)
+        .await
+        .unwrap();
+    vm.global_state.run_object_update(queued.clone()).await;
+    let reader = vm
+        .initialize_process_from_code(
+            "/reader.c",
+            r#"
+                void retire() { destruct(find_object("/admin")); }
+                int inspect(int id) {
+                    mapping status = query_object_recompile(id);
+                    return status["state"] == "failed" && !status["target"]
+                        && sizeof(status["error"]) > 0;
+                }
+            "#,
+        )
+        .await
+        .unwrap()
+        .context
+        .process;
+    call(&vm, &reader, "retire", &[]).await.unwrap();
+    drop(admin);
+    vm.initialize_process_from_code(
+        "/secure/master.c",
+        format!(
+            r#"{PERMISSIVE_MASTER}
+            int valid_recompile(object prototype, object caller, string program) {{
+                return prototype == 0 && caller == find_object("/reader")
+                    && program == "/reader.c";
+            }}"#
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        call(&vm, &reader, "inspect", &[queued.id.into()])
+            .await
+            .unwrap(),
+        LpcRef::from(1)
+    );
 }
 
 #[tokio::test]

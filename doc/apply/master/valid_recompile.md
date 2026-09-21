@@ -19,10 +19,23 @@ these system prototypes; authorizing ordinary objects must not accidentally
 grant permission to change driver policy. A retired requester or command giver
 cannot run the queued job.
 
-Permission authorizes compilation of the backing source; `valid_load` is not also
-asked for the top-level source. Includes and inherits retain their ordinary
-`valid_read` and `valid_inherit` checks. The driver separately rejects invalid
-targets and incompatible runtime conditions. Initializers run transactionally
+`query_object_recompile` also asks this hook when the querying object is not the
+original requester. In that case `caller`, `program`, `previous_object()` and
+`this_player()` describe the current query, and the hook runs inside its
+transaction. Nonzero grants access to status, including failure diagnostics;
+zero or a missing hook refuses access, and thrown errors propagate. System
+selectors resolve to their current prototypes, with `"both"` checking simul-efuns
+then master. A destroyed object target or missing system prototype is passed as
+0; an object target never switches to a replacement at the same path. Status
+access does not require an initialized, recompilable target. The original
+requester can read status without this hook, and unknown request IDs return 0
+without authorization.
+
+For upgrades, permission authorizes compilation of the backing source;
+`valid_load` is not also asked for the top-level source. Includes and inherits
+retain their ordinary `valid_read` and `valid_inherit` checks. The driver
+separately rejects invalid targets and incompatible runtime conditions.
+Initializers run transactionally
 under the existing master policy, as each upgraded object, with the requester in
 the caller chain and the original command giver. System recompilation pins the
 old master and simul-efun code and global layouts for permission applies until

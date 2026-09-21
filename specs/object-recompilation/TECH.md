@@ -122,6 +122,14 @@ attempt body for ordinary and system targets. `valid_recompile` authorizes each
 selected prototype at request and execution time. There is no separate system
 restart operation or permission hook.
 
+Status queries preserve direct access for the requesting object and otherwise
+ask `valid_recompile` for each target using the query's caller, program and
+command giver. Resolve system selectors against the querying snapshot; pass 0
+for missing targets and retain exact identity for object targets. Do not apply
+recompilation eligibility checks to status reads. Authorization joins the query's
+transaction, including permission-hook writes and conflict tracking, and never
+queues another job. Unknown IDs return before authorization.
+
 Resolve master and simul-efun objects transactionally, with named driver entries
 and simul callbacks resolving their programs on every attempt. Bootstrap publishes
 object cells transactionally; retired initializers cannot reclaim a replaced path.

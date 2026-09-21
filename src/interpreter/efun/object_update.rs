@@ -3,6 +3,8 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
+    VALID_RECOMPILE,
+    apply::valid_apply,
     efun::efun_context::EfunContext,
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
@@ -37,7 +39,7 @@ pub async fn request_object_recompile<const N: usize>(ctx: &mut EfunContext<'_, 
     Ok(())
 }
 
-pub fn query_object_recompile<const N: usize>(ctx: &mut EfunContext<'_, N>) -> Result<()> {
+pub async fn query_object_recompile<const N: usize>(ctx: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Int(id) = ctx.arg(0) else {
         return Err(ctx.runtime_error("object update: ID must be an int"));
     };
@@ -50,7 +52,21 @@ pub fn query_object_recompile<const N: usize>(ctx: &mut EfunContext<'_, N>) -> R
         .upgrade()
         .is_some_and(|caller| Arc::ptr_eq(&caller, ctx.process()))
     {
-        return Err(ctx.runtime_error("object update status: permission denied"));
+        let caller = LpcRef::from(Arc::downgrade(ctx.process()));
+        let program = ctx.calling_program();
+        let callers = Some(ctx.chain());
+        for prototype in status.request.target.status_prototypes(ctx.task_context()) {
+            if !valid_apply(
+                ctx.task_context(),
+                callers.clone(),
+                VALID_RECOMPILE,
+                &[prototype, caller.clone(), program.clone()],
+            )
+            .await?
+            {
+                return Err(ctx.runtime_error("object update status: permission denied"));
+            }
+        }
     }
     let target = status.request.target.value(ctx.task_context());
     let fields = vec![

@@ -5,7 +5,9 @@
 Queue an in-place upgrade of a loaded prototype and the live clones sharing its
 current compiled program. Returns a positive request ID. Work starts after the
 calling transaction commits; an aborted transaction queues nothing. Inspect the
-result in a later invocation with `query_object_recompile(id)`.
+result in a later invocation with `query_object_recompile(id)`. The requester may
+read its status directly; another tool may read it when `valid_recompile` allows
+that tool for the target, using the querying command giver.
 
 The active master must allow `valid_recompile(prototype, caller, program)`, both
 when requested and when preparation starts. A missing hook denies the operation.

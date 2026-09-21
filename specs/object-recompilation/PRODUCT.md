@@ -67,11 +67,17 @@ upgrade; failed preparation leaves the entire group unchanged.
     at preparation time and serialize through transaction validation.
 13. `query_object_recompile(int id)` returns 0 for an unknown request or a mapping
     containing `target`, `state`, `error`, and `updated`. States are `queued`,
-    `running`, `succeeded`, and `failed`. Only the requesting object may inspect
-    the request. `updated` includes all selected prototypes and is zero unless
-    successful; `error` is empty unless failed. A destructed object target appears
-    as zero; system selectors remain strings. The most recent 128 completed jobs
-    are retained; aborted IDs may be skipped.
+    `running`, `succeeded`, and `failed`. The requesting object may inspect the
+    request directly. Other objects need the active master's `valid_recompile`
+    grant for each target, using the querying caller, program and command giver.
+    System selectors resolve current prototypes, simul-efuns before master for
+    a pair. Missing targets are passed as 0; object targets do not resolve to
+    replacements. Zero or a missing hook denies access; hook errors propagate.
+    Unknown IDs do not call the hook. Reading status does not require a target
+    to remain eligible for recompilation. `updated` includes all selected
+    prototypes and is zero unless successful; `error` is empty unless failed.
+    A destructed object target appears as zero; system selectors remain strings.
+    The most recent 128 completed jobs are retained; aborted IDs may be skipped.
 
 ## System objects
 

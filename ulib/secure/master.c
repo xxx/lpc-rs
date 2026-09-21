@@ -142,6 +142,9 @@ int valid_variable_info(object caller, object target, string program) {
  * no privileged administration command for upgrading objects.
  * This hook also controls master and simul-efun upgrades; preparation uses
  * the old policy code and global layouts until the entire update commits.
+ * Other objects need this grant to query a job's status, using the querying
+ * caller, program and command giver; a missing target is passed as 0.
+ * The original requester can read its own status without this hook.
  */
 int valid_recompile(object prototype, object caller, string program) {
     return 0;

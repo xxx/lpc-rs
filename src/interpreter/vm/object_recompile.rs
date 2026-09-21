@@ -57,6 +57,29 @@ impl RecompileTarget {
         }
     }
 
+    /// Status remains inspectable after a target disappears or becomes ineligible for recompilation.
+    pub(crate) fn status_prototypes(&self, ctx: &TaskContext) -> Vec<LpcRef> {
+        match self {
+            Self::Object(_) => vec![self.value(ctx)],
+            Self::System(target) => {
+                let mut prototypes = Vec::new();
+                if *target != SystemTarget::Master {
+                    prototypes.push(
+                        ctx.simul_efuns()
+                            .map_or(NULL, |p| Arc::downgrade(&p).into()),
+                    );
+                }
+                if *target != SystemTarget::Simul {
+                    prototypes.push(
+                        ctx.master_object()
+                            .map_or(NULL, |p| Arc::downgrade(&p).into()),
+                    );
+                }
+                prototypes
+            }
+        }
+    }
+
     fn resolve(&self, ctx: &TaskContext) -> Result<Vec<Arc<Process>>> {
         let targets = match self {
             Self::Object(target) => vec![

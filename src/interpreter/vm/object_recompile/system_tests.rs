@@ -651,6 +651,137 @@ async fn deferred_authorization_preserves_caller_program_and_command_giver() {
 }
 
 #[tokio::test]
+async fn another_wizard_tool_can_read_a_simul_recompile_result() {
+    let policy = format!(
+        r#"{PERMISSIVE_MASTER}
+        int valid_recompile(object prototype, object caller, string program) {{
+            if (prototype != find_object("/secure/simul_efuns") || previous_object() != caller)
+                return 0;
+            if (caller != find_object("/admin") &&
+                (caller != find_object("/reader") || program != "/reader.c"))
+                return 0;
+            return this_player()->query_wiz_level();
+        }}
+    "#
+    );
+    let (_root, mut vm, admin) = setup("system-status-wizard", &policy, SIMUL).await;
+    let player = vm
+        .initialize_process_from_code("/wizard.c", "int query_wiz_level() { return 50; }")
+        .await
+        .unwrap()
+        .context
+        .process;
+    let reader = vm
+        .initialize_process_from_code(
+            "/reader.c",
+            "string status(int id) { return query_object_recompile(id)[\"state\"]; }",
+        )
+        .await
+        .unwrap()
+        .context
+        .process;
+    let template = TaskTemplate::from(vm.global_state.clone());
+    template.set_this_player(Some(player));
+    apply_function_by_name(
+        "request",
+        &["simul_efun".into()],
+        admin,
+        template.clone(),
+        Some(5000),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let Some(VmOp::ObjectUpdate(request)) = vm.next_op() else {
+        panic!("request queued");
+    };
+    vm.global_state.run_object_update(request.clone()).await;
+    assert_eq!(
+        vm.global_state.updates.get(request.id).unwrap().state,
+        "succeeded"
+    );
+    let result = apply_function_by_name(
+        "status",
+        &[request.id.into()],
+        reader.clone(),
+        template,
+        Some(5000),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(result, LpcRef::from("succeeded"));
+
+    let visitor = vm
+        .initialize_process_from_code("/visitor.c", "int query_wiz_level() { return 0; }")
+        .await
+        .unwrap()
+        .context
+        .process;
+    let template = TaskTemplate::from(vm.global_state.clone());
+    template.set_this_player(Some(visitor));
+    let error =
+        apply_function_by_name("status", &[request.id.into()], reader, template, Some(5000))
+            .await
+            .unwrap()
+            .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("object update status: permission denied"),
+        "{error}"
+    );
+}
+
+#[tokio::test]
+async fn paired_status_requires_permission_for_both_current_system_prototypes() {
+    let (_root, mut vm, admin) = setup("system-status-pair", &master(""), SIMUL).await;
+    let queued = request(&mut vm, &admin, "both".into()).await;
+    let reader = vm
+        .initialize_process_from_code(
+            "/reader.c",
+            "string status(int id) { return query_object_recompile(id)[\"state\"]; }",
+        )
+        .await
+        .unwrap()
+        .context
+        .process;
+    for allowed in ["simul_efuns", "master", "both"] {
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            format!(
+                r#"{PERMISSIVE_MASTER}
+                string seen = "";
+                string calls() {{ return seen; }}
+                int valid_recompile(object prototype, object caller, string program) {{
+                    seen += file_name(prototype) + " ";
+                    return "{allowed}" == "both" || prototype == find_object("/secure/{allowed}");
+                }}"#
+            ),
+        )
+        .await
+        .unwrap();
+        let result = call(&vm, &reader, "status", &[queued.id.into()]).await;
+        if allowed == "both" {
+            assert_eq!(result.unwrap(), LpcRef::from("queued"));
+            let current_master = vm.global_state.object_space.master_object().unwrap();
+            assert_eq!(
+                call(&vm, &current_master, "calls", &[]).await.unwrap(),
+                LpcRef::from("/secure/simul_efuns /secure/master ")
+            );
+        } else {
+            let error = result.unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("object update status: permission denied"),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn callbacks_prepared_before_upgrade_resolve_new_simul_functions() {
     let original = master("int valid_write() { return 1; }");
     let (root, mut vm, admin) = setup("system-upgrade-prepared", &original, SIMUL).await;
