@@ -13,6 +13,9 @@ blueprint's name. Cloning a resident prototype asks nothing.
 
 This function is the primary way of constructing new object instances in LPC.
 
+A blueprint with [`#pragma no_clone`](../lpc/pragmas.md#no_clone) cannot be
+cloned; the call raises a runtime error.
+
 A `create()` that clones again nests one driver task per level; sixty-four levels
 deep, the next `clone_object` is a runtime error. A clone whose `create()`
 throws is not left resident.
