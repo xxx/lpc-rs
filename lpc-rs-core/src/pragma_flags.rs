@@ -5,6 +5,11 @@ pub const NO_INHERIT: &str = "no_inherit";
 pub const NO_SHADOW: &str = "no_shadow";
 pub const RESIDENT: &str = "resident";
 pub const STRICT_TYPES: &str = "strict_types";
+pub const WARNINGS: &str = "warnings";
+pub const NO_WARNINGS: &str = "no_warnings";
+
+/// Function type information is always retained in lpc-rs.
+pub const SAVE_TYPES: &str = "save_types";
 
 /// CD's binary-cache flag: accepted so its sources compile, ignored.
 pub const SAVE_BINARY: &str = "save_binary";

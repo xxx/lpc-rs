@@ -32,8 +32,8 @@ impl DiagnosticSources {
     /// Scoped spans must be resolved through this handle, not [`SOURCE_MAP`].
     pub fn scoped() -> Self {
         Self(Some(Arc::new(RwLock::new(SourceMap {
-            // Scoped IDs cannot accidentally resolve against the global registry.
-            id_offset: 1 << 31,
+            // Bit 30 separates scoped IDs; Span reserves bit 31 for warning policy.
+            id_offset: 1 << 30,
             ..SourceMap::default()
         }))))
     }

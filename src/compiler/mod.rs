@@ -644,6 +644,331 @@ mod tests {
         }
     }
 
+    mod test_pragma_diagnostics {
+        use indoc::indoc;
+        use lpc_rs_core::lpc_type::LpcType;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        use super::*;
+        use crate::test_support::{lib_holding, temp_lib_config, test_config};
+
+        fn messages(compiled: &Compiled) -> Vec<&str> {
+            compiled
+                .warnings
+                .iter()
+                .flat_map(|group| &group.warnings)
+                .map(|warning| warning.message())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn warning_switches_follow_source_positions_including_inside_functions() {
+            let code = indoc! { r#"
+                void f() {
+                    int before;
+                #pragma no_warnings
+                    int hidden;
+                #pragma warnings
+                    int after;
+                #pragma no_warnings
+                }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                ["unused variable `before`", "unused variable `after`"]
+            );
+        }
+
+        #[tokio::test]
+        async fn no_warnings_suppresses_all_compiler_warning_categories() {
+            let code = indoc! { r#"
+                #pragma no_warnings
+                int global;
+                int f() { }
+                void g() { int global; return; g(); }
+                #pragma save_binary
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert!(messages(&compiled).is_empty(), "{:?}", messages(&compiled));
+        }
+
+        #[tokio::test]
+        async fn warning_switches_in_pragma_lists_take_effect_left_to_right() {
+            let code = indoc! { r#"
+                #pragma save_binary, no_warnings, save_binary
+                #pragma warnings, save_binary, no_warnings, save_binary
+                #pragma no_warnings, no_warnings
+                void f() { int hidden; }
+                #pragma warnings, warnings
+                void g() { int visible; }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                [
+                    "pragma `save_binary` has no effect in lpc-rs",
+                    "pragma `save_binary` has no effect in lpc-rs",
+                    "unused variable `visible`"
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn inactive_warning_switches_have_no_effect() {
+            let code = indoc! { r#"
+                #if 0
+                #pragma no_warnings
+                #endif
+                void f() { int visible; }
+                #pragma no_warnings
+                #if 0
+                #pragma warnings
+                #endif
+                void g() { int hidden; }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `visible`"]);
+        }
+
+        #[tokio::test]
+        async fn macro_bodies_and_arguments_use_the_invocation_warning_policy() {
+            let code = indoc! { r#"
+                #define DECL(name) int name;
+                #define BODY int body;
+                void f() {
+                #pragma no_warnings
+                    DECL(hidden)
+                    BODY
+                #define QUIET int visible;
+                #pragma warnings
+                    QUIET
+                }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `visible`"]);
+        }
+
+        #[tokio::test]
+        async fn warning_switches_flow_into_and_out_of_nested_includes() {
+            let root = lib_holding(
+                "pragma-warning-includes",
+                &[
+                    (
+                        "root.c",
+                        "void before() { int before; }\n#include \"quiet.h\"\nvoid after() { int after; }\n",
+                    ),
+                    (
+                        "quiet.h",
+                        "#pragma no_warnings\nvoid quiet() { int hidden; }\n#include \"loud.h\"\nvoid end() { int end; }\n",
+                    ),
+                    (
+                        "loud.h",
+                        "void nested() { int hidden; }\n#pragma warnings\nvoid loud() { int loud; }\n",
+                    ),
+                ],
+            );
+            let compiled = Compiler::new(temp_lib_config(&root))
+                .compile_file("/root.c")
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                [
+                    "unused variable `before`",
+                    "unused variable `loud`",
+                    "unused variable `end`",
+                    "unused variable `after`"
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn repeated_header_occurrences_keep_independent_warning_policies() {
+            let root = lib_holding(
+                "pragma-warning-repeat",
+                &[
+                    (
+                        "root.c",
+                        "void first() {\n#pragma no_warnings\n#include \"local.h\"\n}\nvoid second() {\n#pragma warnings\n#include \"local.h\"\n}\n",
+                    ),
+                    ("local.h", "int unused;\n"),
+                ],
+            );
+            let compiled = Compiler::new(temp_lib_config(&root))
+                .compile_file("/root.c")
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `unused`"]);
+            let warning = &compiled.warnings.last().unwrap().warnings[0];
+            assert!(warning.diagnostic_string().contains("/local.h:1:"));
+        }
+
+        #[tokio::test]
+        async fn an_auto_include_can_disable_warnings_until_the_root_reenables_them() {
+            let root = lib_holding(
+                "pragma-warning-auto",
+                &[("global.h", "#pragma no_warnings\n")],
+            );
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .auto_include_file("/global.h")
+                .build()
+                .unwrap();
+            let compiled = Compiler::new(config)
+                .compile_string(
+                    "/root.c",
+                    "void f() { int hidden; }\n#pragma warnings\nvoid g() { int visible; }\n",
+                )
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `visible`"]);
+        }
+
+        #[tokio::test]
+        async fn warning_switches_do_not_cross_inheritance_or_reused_compilers() {
+            let root = lib_holding(
+                "pragma-warning-inherit",
+                &[
+                    ("loud.c", "void loud() { int parent; }\n"),
+                    (
+                        "quiet.c",
+                        "#pragma no_warnings\nvoid quiet() { int hidden; }\n",
+                    ),
+                ],
+            );
+            let compiler = Compiler::new(temp_lib_config(&root));
+            let compiled = compiler
+                .compile_string(
+                    "/first.c",
+                    "#pragma no_warnings\ninherit \"/loud\";\nvoid f() { int hidden; }",
+                )
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `parent`"]);
+            assert_eq!(compiled.warnings[0].filename.to_string(), "/loud.c");
+            let compiled = compiler
+                .compile_string("/second.c", "inherit \"/quiet\";\nvoid f() { int child; }")
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `child`"]);
+        }
+
+        #[tokio::test]
+        async fn encoding_warnings_use_the_include_site_and_keep_early_root_warnings() {
+            let root = lib_holding("pragma-warning-encoding", &[]);
+            std::fs::write(root.join("root.c"),
+                b"// caf\xe9\n#pragma no_warnings\n#include \"quiet.h\"\n#pragma warnings\n#include \"loud.h\"\n").unwrap();
+            for name in ["quiet.h", "loud.h"] {
+                std::fs::write(root.join(name), b"// caf\xe9\n").unwrap();
+            }
+            let compiled = Compiler::new(temp_lib_config(&root))
+                .compile_file("/root.c")
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                [
+                    "`/root.c` is not UTF-8; read as Latin-1",
+                    "`/loud.h` is not UTF-8; read as Latin-1"
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn disabling_warnings_preserves_preprocessing_parsing_and_type_errors() {
+            let compiler = Compiler::new(test_config());
+            for code in [
+                "#pragma unknown\n",
+                "#pragma no_save_types\n",
+                "int x = ;",
+                "void f() { absent; }",
+                "int x = \"wrong\";",
+                "#pragma strict_types\nf(value) { return value; }",
+            ] {
+                let source = format!("#pragma no_warnings\n{code}");
+                let error = compiler
+                    .compile_string("/error.c", source)
+                    .await
+                    .unwrap_err();
+                assert!(!error.is_warning(), "{code}: {error:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn warning_policy_also_filters_diagnostics_attached_to_errors() {
+            let code = "void f() { int visible;\n#pragma no_warnings\nint hidden; absent; }";
+            let error = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap_err();
+            let diagnostics: Vec<_> = error
+                .to_diagnostics()
+                .into_iter()
+                .map(|d| d.message)
+                .collect();
+            assert_eq!(
+                diagnostics,
+                ["undefined variable `absent`", "unused variable `visible`"]
+            );
+        }
+
+        #[tokio::test]
+        async fn save_types_is_silent_and_does_not_require_explicit_types() {
+            let code = "#pragma save_types, save_types\nint typed(string value) { return sizeof(value); }\nuntyped(value) { return value; }";
+            let compiled = Compiler::new(test_config())
+                .compile_string("/types.c", code)
+                .await
+                .unwrap();
+            assert!(messages(&compiled).is_empty());
+            let typed = compiled.program.lookup_function("typed").unwrap();
+            assert_eq!(typed.prototype.return_type, LpcType::Int(false));
+            assert_eq!(typed.prototype.arg_types, [LpcType::String(false)]);
+            let untyped = compiled.program.lookup_function("untyped").unwrap();
+            assert_eq!(untyped.prototype.return_type, LpcType::Mixed(false));
+            assert_eq!(untyped.prototype.arg_types, [LpcType::Mixed(false)]);
+        }
+
+        #[tokio::test]
+        async fn inherited_calls_are_type_checked_with_or_without_save_types() {
+            for pragma in ["", "#pragma save_types\n"] {
+                let parent = format!("{pragma}int typed(int value) {{ return value; }}");
+                let root = lib_holding("pragma-save-types", &[("parent.c", &parent)]);
+                let compiler = Compiler::new(temp_lib_config(&root));
+                compiler
+                    .compile_string(
+                        "/good.c",
+                        "inherit \"/parent\"; int f() { return typed(1); }",
+                    )
+                    .await
+                    .unwrap();
+                let error = compiler
+                    .compile_string(
+                        "/bad.c",
+                        "inherit \"/parent\"; int f() { return typed(\"bad\"); }",
+                    )
+                    .await
+                    .unwrap_err();
+                assert!(error.message().contains("type"), "{error:?}");
+            }
+        }
+    }
+
     mod test_rendered_diagnostics {
         use indoc::indoc;
 

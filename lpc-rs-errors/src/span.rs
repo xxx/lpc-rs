@@ -7,6 +7,9 @@ use codespan_reporting::files::Files;
 
 use crate::source_map::{FileId, SOURCE_MAP, SourceMap};
 
+const WARNINGS_SUPPRESSED: u32 = 1 << 31;
+const FILE_ID_MASK: u32 = WARNINGS_SUPPRESSED - 1;
+
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l()..span.r()` will return the correct span of
 /// chars. 12 bytes, and the file id's niche lets `Option<Span>` share them.
@@ -14,7 +17,7 @@ use crate::source_map::{FileId, SOURCE_MAP, SourceMap};
 pub struct Span {
     l: u32,
     r: u32,
-    // The diagnostic source id, stored +1 for the niche.
+    // The low 31 bits hold the source id +1; the high bit suppresses warnings.
     file_id: std::num::NonZeroU32,
 }
 
@@ -24,6 +27,7 @@ impl std::fmt::Debug for Span {
             .field("l", &self.l())
             .field("r", &self.r())
             .field("file_id", &self.file_id())
+            .field("warnings_suppressed", &self.warnings_suppressed())
             .finish()
     }
 }
@@ -48,7 +52,7 @@ impl Span {
     /// Create a new [`Span`]
     ///
     /// # Arguments
-    /// `file_id` - The [`FileId`] in this compilation's diagnostic sources.
+    /// `file_id` - The [`FileId`] in this compilation's diagnostic sources, up to 2^31 - 2.
     /// `range` - The start and end byte offsets of the span.
     ///           It's assumed that `l..r` is the correct code span in error
     /// messaging.
@@ -70,7 +74,7 @@ impl Span {
         Self {
             l: clamp(range.start),
             r: clamp(range.end),
-            file_id: std::num::NonZeroU32::MIN.saturating_add(clamp(file_id)),
+            file_id: std::num::NonZeroU32::MIN.saturating_add(clamp(file_id).min(FILE_ID_MASK - 1)),
         }
     }
 
@@ -89,13 +93,28 @@ impl Span {
     /// The file ID in the diagnostic storage used for this compilation.
     #[inline]
     pub fn file_id(&self) -> FileId {
-        (self.file_id.get() - 1) as FileId
+        ((self.file_id.get() & FILE_ID_MASK) - 1) as FileId
+    }
+
+    /// Whether warnings at this source occurrence were disabled during preprocessing.
+    #[inline]
+    pub fn warnings_suppressed(&self) -> bool {
+        self.file_id.get() & WARNINGS_SUPPRESSED != 0
+    }
+
+    /// Carry warning policy with a source occurrence without changing its location.
+    #[inline]
+    pub fn with_warnings_suppressed(mut self, suppressed: bool) -> Self {
+        self.file_id = std::num::NonZeroU32::MIN.saturating_add(
+            self.file_id() as u32 | if suppressed { WARNINGS_SUPPRESSED } else { 0 },
+        );
+        self
     }
 
     /// The span from `left`'s start to `right`'s end; `left` alone when the
-    /// two lie in different files.
+    /// two lie in different files; warning policy comes from `left`.
     pub fn join(left: Span, right: Span) -> Self {
-        if left.file_id != right.file_id {
+        if left.file_id() != right.file_id() {
             return left;
         }
 
@@ -169,7 +188,7 @@ mod tests {
         assert_eq!(span.r(), 9);
 
         let big = Span::new(usize::MAX, usize::MAX..usize::MAX);
-        assert_eq!(big.file_id(), u32::MAX as usize - 1);
+        assert_eq!(big.file_id(), FILE_ID_MASK as usize - 1);
         assert_eq!(big.l(), u32::MAX as usize);
         assert_eq!(big.r(), u32::MAX as usize);
     }
@@ -181,6 +200,40 @@ mod tests {
             .add("/where.c".to_owned(), "int x;\nint y = 42;\n".to_owned());
         assert_eq!(Span::new(file_id, 0..3).to_string(), "/where.c:1:1");
         assert_eq!(Span::new(file_id, 15..17).to_string(), "/where.c:2:9");
+    }
+
+    #[test]
+    fn warning_policy_preserves_source_lookup_and_rendering() {
+        for sources in [
+            crate::source_map::DiagnosticSources::default(),
+            crate::source_map::DiagnosticSources::scoped(),
+        ] {
+            let id = sources.add("/warning.c".into(), "int value;".into());
+            let original = Span::new(id, 4..9);
+            let suppressed = original.with_warnings_suppressed(true);
+            assert!(suppressed.warnings_suppressed());
+            assert_eq!(suppressed.file_id(), id);
+            assert_eq!(
+                suppressed.code_in(&sources.read()).as_deref(),
+                Some("value")
+            );
+            assert_eq!(Range::from(suppressed), 4..9);
+            assert_eq!(suppressed.with_warnings_suppressed(false), original);
+            let diagnostic = crate::lpc_error!(Some(suppressed), "still an error");
+            let rendered = diagnostic.to_diagnostics();
+            assert_eq!(rendered[0].labels[0].file_id, id);
+            assert_eq!(rendered[0].labels[0].range, 4..9);
+        }
+    }
+
+    #[test]
+    fn joining_spans_keeps_the_starting_warning_policy() {
+        let left = Span::new(0, 1..2);
+        let right = Span::new(0, 4..6);
+        let span = Span::join(left.with_warnings_suppressed(true), right);
+        assert_eq!(Range::from(span), 1..6);
+        assert!(span.warnings_suppressed());
+        assert!(!Span::join(left, right.with_warnings_suppressed(true)).warnings_suppressed());
     }
 
     #[test]

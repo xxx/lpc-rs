@@ -4,7 +4,10 @@ use define::{Define, ObjectMacro};
 use lpc_rs_core::{
     LpcIntInner,
     lpc_path::LpcPath,
-    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, SAVE_BINARY, STRICT_TYPES},
+    pragma_flags::{
+        NO_CLONE, NO_INHERIT, NO_SHADOW, NO_WARNINGS, RESIDENT, SAVE_BINARY, SAVE_TYPES,
+        STRICT_TYPES, WARNINGS,
+    },
 };
 use lpc_rs_errors::{
     LpcError, Result, lpc_error, lpc_warning,
@@ -53,6 +56,9 @@ pub struct Preprocessor {
 
     /// The include walk: `#include` traversal state for this compile.
     includes: IncludeWalk,
+
+    /// Warning switches follow textual includes, including changes made inside them.
+    warnings_suppressed: bool,
 }
 
 impl Preprocessor {
@@ -219,6 +225,10 @@ impl Preprocessor {
             while let Some(next) = iter.next() {
                 match next {
                     Ok(token) => {
+                        let span = token
+                            .span()
+                            .with_warnings_suppressed(self.warnings_suppressed);
+                        let token = token.with_span(span);
                         let mut end = token.span().r();
 
                         match &token {
@@ -236,8 +246,14 @@ impl Preprocessor {
                                     .expand_use(st, &mut iter)?;
 
                                     match appends {
-                                        Some(mut expanded) => {
-                                            output.append(&mut expanded.tokens);
+                                        Some(expanded) => {
+                                            // Captured arguments bypass this scan loop's token marking.
+                                            for token in expanded.tokens {
+                                                let span = token.span().with_warnings_suppressed(
+                                                    self.warnings_suppressed,
+                                                );
+                                                output.push(token.with_span(span));
+                                            }
                                             // Anchor placement past the whole use — the Id, or
                                             // through the top-level `)` the capture consumed.
                                             end = expanded.use_span.r();
@@ -714,6 +730,9 @@ impl Preprocessor {
                 NO_INHERIT => self.context.pragmas.set_no_inherit(true),
                 NO_SHADOW => self.context.pragmas.set_no_shadow(true),
                 RESIDENT => self.context.pragmas.set_resident(true),
+                WARNINGS => self.warnings_suppressed = false,
+                NO_WARNINGS => self.warnings_suppressed = true,
+                SAVE_TYPES => {}
                 STRICT_TYPES => {
                     self.context
                         .strict_types_from
@@ -724,7 +743,7 @@ impl Preprocessor {
                     }
                 }
                 SAVE_BINARY => self.context.diagnostics.record(lpc_warning!(
-                    Some(span),
+                    Some(span.with_warnings_suppressed(self.warnings_suppressed)),
                     "pragma `{}` has no effect in lpc-rs",
                     arg
                 )),
