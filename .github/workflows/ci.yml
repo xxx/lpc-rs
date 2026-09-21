@@ -107,7 +107,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Compile benchmarks
-        run: cargo bench --workspace --locked --no-run
+        # Select explicit benches without rebuilding library and binary test harnesses.
+        run: cargo bench --workspace --locked --bench '*' --no-run
 
   # Branch protection requires this check name.
   ci:
