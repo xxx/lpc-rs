@@ -229,8 +229,11 @@ impl Preprocessor {
                             // Handle macro expansion
                             Token::Id(st) => {
                                 if self.conditionals.live() {
-                                    let appends = expand::Expander::new(&self.defines)
-                                        .expand_use(st, &mut iter)?;
+                                    let appends = expand::Expander::new(
+                                        &self.defines,
+                                        &self.context.diagnostic_sources,
+                                    )
+                                    .expand_use(st, &mut iter)?;
 
                                     match appends {
                                         Some(mut expanded) => {
@@ -376,9 +379,7 @@ impl Preprocessor {
         body: String,
         body_span: Span,
     ) -> Result<()> {
-        // Lex the body in place — tokens are born with their true
-        // definition-site spans. A directive line inside a
-        // body has no legal reading (LPC has no `#` operator).
+        // Definition-site spans retain the spelling needed when a later macro stringifies the expansion.
         let lex_body = |body: &str| -> Result<Vec<Token>> {
             let tokens = LexWrapper::new_at(body, body_span.file_id(), body_span.l())
                 .collect::<Result<Vec<_>>>()?;
@@ -392,7 +393,29 @@ impl Preprocessor {
         };
 
         let define = if let Some(args) = params {
-            Define::new_function(lex_body(&body)?, args)
+            let tokens = LexWrapper::macro_body(&body, body_span).collect::<Result<Vec<_>>>()?;
+            let mut cursor = tokens.iter();
+            while let Some(token) = cursor.next() {
+                if matches!(token, Token::DirectiveLine(_)) {
+                    let operand = cursor.next();
+                    if matches!(operand, Some(Token::DirectiveLine(_))) {
+                        return Err(lpc_error!(
+                            Some(token.span()),
+                            "token pasting (`##`) is not supported"
+                        ));
+                    }
+                    if !operand
+                        .and_then(define::parameter_name)
+                        .is_some_and(|name| args.iter().any(|arg| arg == name))
+                    {
+                        return Err(lpc_error!(
+                            Some(token.span()),
+                            "`#` must be followed by a macro parameter"
+                        ));
+                    }
+                }
+            }
+            Define::new_function(tokens, args)
         } else if body.is_empty() {
             // A bare `#define FOO` expands to nothing and is no
             // expression.
@@ -406,7 +429,7 @@ impl Preprocessor {
         };
 
         if let Some(existing) = self.defines.get(&name) {
-            if existing.same_as(&define) {
+            if existing.same_as(&define, &self.context.diagnostic_sources.read()) {
                 return Ok(());
             }
             return Err(
@@ -820,6 +843,157 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stringification_distinguishes_raw_expanded_and_ordinary_arguments() {
+        test_valid(
+            r#"
+                #define STR(x) #x
+                #define EXPAND(x) STR(x)
+                #define BOTH(x) #x x #x
+                #define VALUE 0xCA_FE
+                STR(VALUE) EXPAND(VALUE) BOTH(VALUE)
+                EXPAND(STR(a+b))
+            "#,
+            &["VALUE", "0xCA_FE", "VALUE", "51966", "VALUE", "\"a+b\""],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_preserves_literal_spelling_and_normalizes_separators() {
+        test_valid(
+            r##"
+                #define STR(x) #x
+                STR(  a+b   /* comment */ c
+                       + d  )
+                STR(0xCA_FE 0017 1.20e+03 'x' '\n' "a\n\"b\\" "é")
+                STR(/* empty */)
+                STR("#not_a_directive")
+            "##,
+            &[
+                "a+b c + d",
+                r#"0xCA_FE 0017 1.20e+03 'x' '\n' "a\n\"b\\" "é""#,
+                "",
+                "\"#not_a_directive\"",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_keeps_spacing_across_nested_replacements() {
+        test_valid(
+            r#"
+                #define STR(x) #x
+                #define EXPAND(x) STR(x)
+                #define VALUE 0x10+2
+                #define WRAP(x) STR(left+x)
+                #define EMPTY
+                EXPAND(1+VALUE*3)
+                EXPAND(1 + VALUE * 3)
+                WRAP( VALUE )
+                EXPAND(a EMPTY+b)
+            "#,
+            &["1+0x10+2*3", "1 + 0x10+2 * 3", "left+0x10+2", "a +b"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_does_not_expand_raw_or_unused_arguments() {
+        test_valid(
+            r#"
+                #define ONE(x) x
+                #define STR(x) #x
+                #define IGNORE(x) 7
+                #define KEYWORD(int) #int
+                STR(ONE(1, 2)) IGNORE(ONE(1, 2)) KEYWORD(void)
+            "#,
+            &["ONE(1, 2)", "7", "void"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn invalid_stringification_is_rejected_at_definition() {
+        for body in ["#", "#unknown", "#1", "#\"x\"", "#(x)"] {
+            test_invalid(
+                &format!("#define STR(x) {body}\n"),
+                "`#` must be followed by a macro parameter",
+            )
+            .await;
+        }
+        test_invalid("#define JOIN(x, y) x ## y\n", "token pasting").await;
+        test_valid("#if 0\n#define BAD(x) #unknown\n#endif\n1", &["1"]).await;
+    }
+
+    #[tokio::test]
+    async fn macro_redefinition_preserves_stringifiable_spelling_and_spacing() {
+        for (first, second) in [("0x10", "16"), ("a+b", "a + b"), (r#""\q""#, r#""q""#)] {
+            test_invalid(
+                &format!("#define X {first}\n#define X {second}\n"),
+                "duplicate `#define`",
+            )
+            .await;
+        }
+        test_valid(
+            "#define X a + b\n#define X a\t+ /* comment */ b\n#define STR(x) #x\n#define EXPAND(x) STR(x)\nEXPAND(X)",
+            &["a + b"],
+        ).await;
+    }
+
+    #[tokio::test]
+    async fn stringification_uses_scoped_sources_and_reports_the_use_site() {
+        let mut preprocessor = fixture();
+        preprocessor.context.diagnostic_sources =
+            lpc_rs_errors::source_map::DiagnosticSources::scoped();
+        preprocessor.includes = IncludeWalk::new(preprocessor.context.diagnostic_sources.clone());
+        let tokens = preprocessor
+            .scan("/stringify.c", "#define STR(x) #x\nSTR(0x2A)")
+            .await
+            .unwrap();
+        let Token::StringLiteral(value) = &tokens[0] else {
+            panic!("expected a string")
+        };
+        assert_eq!(value.1, "0x2A");
+        assert_eq!(
+            value
+                .0
+                .code_in(&preprocessor.context.diagnostic_sources.read())
+                .as_deref(),
+            Some("STR(0x2A)")
+        );
+    }
+
+    #[tokio::test]
+    async fn recursive_stringification_hits_the_text_budget() {
+        let mut source =
+            String::from("#define STR(x) #x\n#define EXPAND(x) STR(x)\n#define TEXT0 \"x\"\n");
+        for i in 1..25 {
+            source.push_str(&format!("#define TEXT{i} EXPAND(TEXT{})\n", i - 1));
+        }
+        source.push_str("TEXT24\n");
+        test_invalid(&source, "stringification in `TEXT24` exceeds 1048576 bytes").await;
+    }
+
+    #[tokio::test]
+    async fn lima_module_macros_compile_and_produce_paths() {
+        let values = crate::test_support::strings_of(
+            r#"
+            #define STRRR(y) #y
+            #define STRINGIZE(z) STRRR(z)
+            #define MODULE(x, y) SUBDIR x "/" STRRR(y)
+            #define SUBDIR "/std/combat/"
+            #define DEATH_CORPSES 2
+            string *create() {
+                return ({ MODULE("death", corpse), STRINGIZE(DEATH_CORPSES), STRRR("a\n") });
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(values, ["/std/combat/death/corpse", "2", "\"a\\n\""]);
+    }
+
+    #[tokio::test]
     async fn multiline_directive_comments_can_contain_conditional_directives() {
         let input = "#if 1 /*\n#endif\n*/\nint live;\n#endif /*\n end */\n";
 
@@ -864,6 +1038,28 @@ mod tests {
             ],
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_preserves_header_spelling_and_continued_definitions() {
+        let root = crate::test_support::lib_holding(
+            "stringification-header",
+            &[(
+                "macros.h",
+                "#define STR(x) # \\\n x\n#define EXPAND(x) STR(x)\n#define VALUE 0x2A + \\\n 01\n",
+            )],
+        );
+        let config = crate::test_support::temp_lib_config(&root);
+        let context = CompilationContextBuilder::default()
+            .source(CompilerSource::new("/consumer.c", &config))
+            .config(config)
+            .build()
+            .unwrap();
+        let tokens = Preprocessor::new(context)
+            .scan("/consumer.c", "#include \"macros.h\"\nEXPAND(VALUE)\n")
+            .await
+            .unwrap();
+        assert!(matches!(&tokens[..], [Token::StringLiteral(value)] if value.1 == "0x2A + 01"));
     }
 
     mod test_system_includes {

@@ -34,6 +34,7 @@ so you can concentrate on game code while its existing code handles login.
 | Check a built-in function's arguments | [Efun reference](../efun) |
 | Find a hook the driver calls in your object | [Object hooks](../apply/object), [other apply categories](../../ulib/doc/applies.md) |
 | Control compiler pragmas | [Pragmas](pragmas.md) |
+| Define macros or turn arguments into strings | [Macros](macros.md) |
 | Understand ulib's login and command flow | [How ulib works](../../ulib/doc/how-it-works.md) |
 
 You can return to these references after running the lessons; they are not

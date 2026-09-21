@@ -48,9 +48,17 @@ impl<'input> LexWrapper<'input> {
                 last_slice: String::new(),
                 current_file_id: file_id,
                 base_offset: base,
+                macro_body: false,
             },
         );
         Self { lexer }
+    }
+
+    /// Lex a function macro's replacement list, emitting each `#` separately.
+    pub(in crate::compiler) fn macro_body(prog: &'input str, span: Span) -> Self {
+        let mut lexer = Self::new_at(prog, span.file_id(), span.l());
+        lexer.lexer.extras.macro_body = true;
+        lexer
     }
 
     /// The lalrpop doorstep for direct lexing (tests and doctests):
@@ -362,6 +370,9 @@ pub enum Token {
 }
 
 fn directive_token(lex: &mut Lexer<Token>) -> StringToken {
+    if lex.extras.macro_body {
+        return string_token(lex);
+    }
     let source = lex.remainder();
     let bytes = source.as_bytes();
     let mut end = 0;

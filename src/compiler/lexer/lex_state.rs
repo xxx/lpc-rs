@@ -9,4 +9,6 @@ pub struct LexState {
     /// nonzero when lexing a fragment (a `#define` body, a `#if`
     /// operand), so spans are born in file coordinates.
     pub base_offset: usize,
+    /// In a macro replacement list, `#` is an operator rather than a directive line.
+    pub macro_body: bool,
 }

@@ -45,4 +45,5 @@ notes:
 - `::f()` calls the inherited `f`, `name::f()` the one of the parent inherited as `name` (`inherit "/x" name;`), and `efun::f()` the efun; each looks only there, so a name that program lacks is a compile error
 - a redefinition of an inherited function declares the same number of parameters unless the inherited one is `varargs`; the parent's calls run the redefinition with the arguments they pass, missing ones 0
 - `#include "x.h"` looks beside the including file, then in the system include dirs; `<x.h>` looks only in the system dirs
+- `#define` supports object macros, function macros, and argument stringification with `#`; see [macros](macros.md)
 - a source file that is not UTF-8 is read as Latin-1, with a warning
