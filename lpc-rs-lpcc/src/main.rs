@@ -45,12 +45,19 @@ async fn run() -> Result<()> {
     let args = Args::parse();
 
     let config = ConfigBuilder::default()
-        .load_env(args.config)
+        .load_env(args.config.as_deref())
         .await
         .and_then(ConfigBuilder::build)?;
 
     let config = Arc::new(config);
+    let result = run_with_config(&args, config.clone()).await;
+    if let Some(log) = &config.debug_log {
+        log.flush().await;
+    }
+    result
+}
 
+async fn run_with_config(args: &Args, config: Arc<Config>) -> Result<()> {
     let lpc_path = LpcPath::new_server(&args.filename);
 
     if args.emit_asm {

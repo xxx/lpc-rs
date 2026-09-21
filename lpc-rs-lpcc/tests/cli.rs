@@ -139,6 +139,25 @@ fn assembly_and_check_are_mutually_exclusive() {
 }
 
 #[test]
+fn execution_flushes_all_debug_output_before_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("object.c"),
+        r#"void create() {
+            for (int i = 0; i < 100; i++) {
+                dump("line " + i + "\n");
+            }
+        }"#,
+    )
+    .unwrap();
+
+    let output = lpcc(dir.path()).arg("object.c").output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let expected: String = (0..100).map(|i| format!("line {i}\n")).collect();
+    assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+}
+
+#[test]
 fn execution_runs_create_while_check_skips_it() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(

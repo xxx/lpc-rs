@@ -16,6 +16,9 @@ server, but its LPC dialect and interfaces are still evolving. Existing mudlibs
 may need changes; the language and efun documentation describe the behaviour
 implemented here.
 
+Start with [Learn LPC](doc/lpc/README.md) if you have not written the language
+before: run a small program, then build objects and commands in a live game.
+
 ## What's here
 
 - **LPC compilation and execution:** preprocessing, type checking, multiple
@@ -157,6 +160,7 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 
 | If you want to… | Start here |
 |---|---|
+| Write LPC for the first time | [Learn LPC](doc/lpc/README.md): a first program, then objects and player commands |
 | Run and adapt a tiny mudlib | [ulib guide](ulib/README.md), [add a command](ulib/doc/add-a-command.md), [apply examples](ulib/doc/applies.md) |
 | Compare drivers or assess a mudlib port | [Driver comparison and compatibility notes](doc/driver-comparison.md) |
 | Learn the project's LPC terminology | [Glossary](doc/glossary.md) |
