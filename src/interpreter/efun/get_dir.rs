@@ -204,6 +204,16 @@ mod tests {
         assert_eq!(names, ["a.c"]);
     }
 
+    #[tokio::test]
+    async fn the_mudlib_root_can_be_listed_directly() {
+        let root = TempLib::new("dir-root");
+        std::fs::create_dir(root.join("cmd")).unwrap();
+        std::fs::write(root.join("a.c"), "").unwrap();
+        let vm = allowing_vm(&root).await;
+        let names = names_of(&vm, r#"string *create() { return get_dir("/"); }"#).await;
+        assert_eq!(names, ["a.c", "cmd"]);
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn escapes_match_literal_wildcards_without_shadowing_patterns() {

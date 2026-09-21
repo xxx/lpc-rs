@@ -115,6 +115,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_mudlib_root_is_a_directory_from_a_nested_caller() {
+        let root = TempLib::new("size-root");
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/cmd/sizer.c",
+                r#"int create() { return file_size("/"); }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result().unwrap(), LpcRef::from(-2));
+    }
+
+    #[tokio::test]
     async fn a_refused_read_is_minus_one_not_an_error() {
         let root = TempLib::new("size-denied");
         std::fs::write(root.join("f.txt"), "x").unwrap();
@@ -126,6 +140,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(size_of(&vm, "/f.txt").await, LpcRef::from(-1));
+        assert_eq!(size_of(&vm, "/").await, LpcRef::from(-1));
     }
 
     #[tokio::test]

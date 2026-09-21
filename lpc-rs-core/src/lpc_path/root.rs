@@ -96,7 +96,11 @@ impl ResolvedPath {
             text.push(".o");
             text.into()
         });
-        self.server.as_mut_os_string().push(".o");
+        if self.name.as_str() == "/" {
+            self.server.push(".o");
+        } else {
+            self.server.as_mut_os_string().push(".o");
+        }
         if let Some(name) = &mut self.name.0 {
             name.push_str(".o");
         }
@@ -134,15 +138,7 @@ impl<'a> LibRoot<'a> {
     /// Normalize an LPC input, preserving the legacy empty invalid-path form.
     pub fn in_game(&self, path: impl AsRef<Path>, cwd: impl AsRef<Path>) -> LpcPath {
         let host = self.join(path.as_ref(), cwd.as_ref());
-        let relative = host
-            .strip_prefix(self.root)
-            .unwrap_or_else(|_| Path::new(""));
-        let game = if relative.as_os_str().is_empty() {
-            PathBuf::new()
-        } else {
-            Path::new("/").join(relative)
-        };
-        LpcPath::in_game(game)
+        LpcPath::in_game(self.localize(&host).unwrap_or_default())
     }
 
     /// Resolve LPC text against `cwd` and reject a final location outside the lib.
@@ -290,8 +286,27 @@ mod tests {
                 Path::new(&format!("/home/mud/lib{expected}"))
             );
         }
-        for given in ["/", "/../secret", "../../../../secret"] {
+        for given in ["/../secret", "../../../../secret"] {
             assert!(root.resolve(given, "/").is_err(), "{given}");
+        }
+    }
+
+    #[test]
+    fn root_paths_resolve_to_the_mudlib_directory() {
+        let root = LibRoot::new("/home/mud/lib");
+        for (given, cwd) in [
+            ("/", "/room"),
+            ("//", "/room"),
+            ("/.", "/room"),
+            ("/room/..", "/room"),
+            ("..", "/room"),
+            (".", "/"),
+            ("", "/"),
+        ] {
+            let path = root.resolve(given, cwd).unwrap();
+            assert_eq!(path.name().as_str(), "/");
+            assert_eq!(path.input().as_os_str(), "/");
+            assert_eq!(path.server(), Path::new("/home/mud/lib"));
         }
     }
 
@@ -332,12 +347,17 @@ mod tests {
 
     #[test]
     fn save_suffix_keeps_the_path_pair_together() {
-        let path = LibRoot::new("/home/mud/lib")
-            .resolve("x.o", "/")
-            .unwrap()
-            .save_file();
-        assert_eq!(path.name().as_str(), "/x.o.o");
-        assert_eq!(path.server(), Path::new("/home/mud/lib/x.o.o"));
+        for (given, name, server) in [
+            ("x.o", "/x.o.o", "/home/mud/lib/x.o.o"),
+            ("/", "/.o", "/home/mud/lib/.o"),
+        ] {
+            let path = LibRoot::new("/home/mud/lib")
+                .resolve(given, "/")
+                .unwrap()
+                .save_file();
+            assert_eq!(path.name().as_str(), name);
+            assert_eq!(path.server(), Path::new(server));
+        }
     }
 
     #[test]
