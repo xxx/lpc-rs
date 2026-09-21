@@ -114,7 +114,7 @@ int valid_destruct(object caller, object target, string program) {
 
 /**
  * Authorise exec(new_body, old_body), which transfers a live connection.
- * program identifies the requesting code with .c but without a leading slash;
+ * program identifies the requesting code with .c and a leading slash;
  * new_body receives the connection and old_body currently holds it.
  * Return 0 so exec() refuses; ulib keeps the body originally returned by
  * connect(), whose initial attachment needs no valid_exec() permission.

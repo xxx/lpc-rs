@@ -42,12 +42,8 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             return Err(context.runtime_error("exec: `new` and `old` are the same object"));
         }
 
-        let program = context.calling_program();
-        let program = program
-            .as_str()
-            .map_or(NULL, |name| LpcRef::from(name.trim_start_matches('/')));
         let args = [
-            program,
+            context.calling_program(),
             LpcRef::from(Arc::downgrade(&new_ob)),
             LpcRef::from(Arc::downgrade(&old_ob)),
         ];
@@ -365,7 +361,7 @@ mod tests {
         let vm = Vm::new(test_config());
         let master = indoc! { r#"
             int valid_exec(string program, object new, object old) {
-                return program == "main.c"
+                return program == "/main.c"
                     && file_name(new) == "/b"
                     && file_name(old) == "/a";
             }
@@ -392,7 +388,7 @@ mod tests {
             .initialize_process_from_code(
                 "/secure/master.c",
                 r#"int valid_exec(string name, object to, object from) {
-                    return name == "secure/login.c";
+                    return name == "/secure/login.c";
                 }
                 int valid_destruct(object caller, object target, string program) {
                     return caller == target;
@@ -463,7 +459,7 @@ mod tests {
             let master = format!(
                 r#"{PERMISSIVE_MASTER}
                 int valid_exec(string program, object to, object from) {{
-                    return program == "handoff.c";
+                    return program == "/handoff.c";
                 }}"#
             );
             vm.initialize_process_from_code("/secure/master.c", &master)
@@ -485,7 +481,7 @@ mod tests {
                 vm.global_state
                     .committed_global(&task.context.process, 0u16),
                 LpcRef::from(1),
-                "{call} must be authorized as handoff.c"
+                "{call} must be authorized as /handoff.c"
             );
             assert_eq!(
                 connected.connection.body().map(|body| body.to_string()),

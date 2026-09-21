@@ -3,8 +3,9 @@
 `int valid_exec(string program, object new, object old)`
 
 The driver applies `valid_exec` in the master before every `exec(new, old)`,
-with `program` the file defining the code that called `exec`, including `.c`
-and without a leading slash or clone suffix (for example, `"secure/login.c"`).
+with `program` the file defining the code that called `exec`, as an absolute
+in-game path with a leading slash and `.c`, and no clone suffix (for example,
+`"/secure/login.c"`).
 An inherited function names its defining file; a simul_efun wrapper names
 the simul_efun's file. An efun pointer names the file that created it, or `0`
 when no defining program is available.
@@ -23,7 +24,7 @@ the caller's error.
 
 ```c
 int valid_exec(string program, object new, object old) {
-    return program == "secure/login.c";
+    return program == "/secure/login.c";
 }
 ```
 
