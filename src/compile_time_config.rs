@@ -2,6 +2,9 @@
 
 use lpc_rs_core::RegisterSize;
 
+/// Native driver identity used by LPC's `__VERSION__` and protocol negotiation.
+pub const DRIVER_VERSION: &str = concat!("lpc-rs ", env!("CARGO_PKG_VERSION"));
+
 /// Frames one task may hold — every LPC call, `->` included; past it a call
 /// is a "stack overflow" runtime error. CD's `MAX_TRACE`.
 pub const MAX_CALL_STACK_SIZE: usize = 1024;

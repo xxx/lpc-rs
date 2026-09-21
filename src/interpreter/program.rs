@@ -85,9 +85,13 @@ pub struct Target {
 /// functions first, in inherit order, the program's own last.
 pub fn dispatch_table(
     functions: &IndexMap<Ustr, Function, ahash::RandomState>,
+    frozen: &HashMap<Ustr, Ustr>,
 ) -> IndexMap<Ustr, Target, ahash::RandomState> {
     let mut latest: HashMap<&str, &Function> = HashMap::new();
-    for function in functions.values().filter(|f| !f.is_closure()) {
+    for function in functions
+        .values()
+        .filter(|f| !f.is_closure() && !f.hidden())
+    {
         latest.insert(function.prototype.name.as_ref(), function);
     }
     functions
@@ -98,7 +102,16 @@ pub fn dispatch_table(
                 || function.prototype.flags.private()
                 || name == INIT_GLOBALS
                 || name == INIT_PROGRAM;
-            let target = if own { function } else { latest[name] };
+            let target = if function.hidden() {
+                frozen
+                    .get(&mangled)
+                    .and_then(|name| functions.get(name))
+                    .unwrap_or(function)
+            } else if own {
+                function
+            } else {
+                latest[name]
+            };
             (
                 mangled,
                 Target {
@@ -379,7 +392,7 @@ mod tests {
             functions.insert(ustr(&f.mangle()), Arc::clone(f).into());
         }
 
-        let dispatch = dispatch_table(&functions);
+        let dispatch = dispatch_table(&functions, &Default::default());
 
         let target = |f: &Arc<ProgramFunction>| &dispatch[&ustr(&f.mangle())];
         assert!(Arc::ptr_eq(&target(&parents_g).function.code, &childs_g));

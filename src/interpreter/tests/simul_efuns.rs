@@ -342,6 +342,10 @@ const V2_DROPS: &str = "string other() { return \"v2\"; }\n";
 /// the file as it and load it again through a `->` in its own task; then ask
 /// `"/user"->later()` from a fresh task: its answer, or the error.
 async fn later_after(lib: &str, reload: Option<&str>) -> Result<String, String> {
+    later_after_user(lib, reload, "string later() { return gone(); }").await
+}
+
+async fn later_after_user(lib: &str, reload: Option<&str>, user: &str) -> Result<String, String> {
     let root = lib_holding(lib, &[("secure/simul_efuns.c", V1)]);
     let config = ConfigBuilder::default()
         .lib_dir(root.to_str().unwrap())
@@ -355,7 +359,7 @@ async fn later_after(lib: &str, reload: Option<&str>) -> Result<String, String> 
         .expect("configured")
         .expect("compiles");
     permissive_master(&vm.global_state.object_space).await;
-    vm.initialize_process_from_code("/user.c", "string later() { return gone(); }")
+    vm.initialize_process_from_code("/user.c", user)
         .await
         .unwrap();
     vm.initialize_process_from_code(
@@ -463,4 +467,98 @@ async fn a_simul_efun_named_like_an_efun_shadows_it() {
     )
     .await;
     assert_eq!(got, "stub");
+}
+
+#[tokio::test]
+async fn private_inheritance_keeps_helpers_out_of_the_simul_efun_api() {
+    for modifier in ["private", "protected"] {
+        let simul =
+            format!("{modifier} inherit \"/helper\"; string exported() {{ return helper(); }}");
+        let root = lib_holding(
+            "simul-inheritance-visibility",
+            &[
+                ("helper.c", "string helper() { return \"helper\"; }"),
+                ("secure/simul_efuns.c", &simul),
+            ],
+        );
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .simul_efun_file("/secure/simul_efuns")
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        vm.global_state
+            .initialize_simul_efuns()
+            .await
+            .unwrap()
+            .unwrap();
+        let task = vm
+            .initialize_process_from_code("/caller.c", "string create() { return exported(); }")
+            .await
+            .unwrap();
+        assert_eq!(task.result().unwrap().as_str(), Some("helper"));
+        for call in ["helper()", "&helper()"] {
+            let error = vm
+                .initialize_process_from_code(
+                    "/hidden.c",
+                    format!("mixed create() {{ return {call}; }}"),
+                )
+                .await
+                .unwrap_err();
+            let diagnostic = error.diagnostic_string();
+            assert!(
+                diagnostic.contains("unknown") && diagnostic.contains("`helper`"),
+                "{diagnostic}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn hidden_simul_efun_helpers_do_not_override_driver_efuns() {
+    assert_eq!(
+        got_from_user(
+            "simul-private-driver-name",
+            "/secure/simul_efuns",
+            &[
+                (
+                    "helper.c",
+                    "string file_name(object target) { return \"hidden\"; }"
+                ),
+                ("secure/simul_efuns.c", "private inherit \"/helper\";"),
+            ],
+            "string got; void create() { got = file_name(this_object()); }",
+        )
+        .await,
+        "/user"
+    );
+}
+
+#[tokio::test]
+async fn cached_simul_efun_calls_recheck_public_visibility_after_reload() {
+    for modifier in ["private", "protected"] {
+        let replacement = format!("{modifier} string gone() {{ return \"hidden\"; }}");
+        assert_eq!(
+            later_after("simul-reloaded-private", Some(&replacement)).await,
+            Err("runtime error: call to unknown simul efun `gone`".into()),
+        );
+    }
+}
+
+#[tokio::test]
+async fn cached_simul_efun_pointers_recheck_visibility_after_reload() {
+    for user in [
+        "function callback = &gone(); string later() { return callback(); }",
+        "function callback = &gone(); string later() { return map(({0}), callback)[0]; }",
+    ] {
+        assert_eq!(
+            later_after_user(
+                "simul-pointer-private",
+                Some("private string gone() { return \"hidden\"; }"),
+                user
+            )
+            .await,
+            Err("runtime error: call to unknown simul efun `gone`".into()),
+        );
+    }
 }

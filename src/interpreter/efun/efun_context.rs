@@ -649,8 +649,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let scope = self.calling_program_path().unwrap_or(&program.filename);
         let scope = self.config().paths().program_path(scope);
         let function = program
-            .lookup_inherited_function(&scope, namespace, name)
-            .filter(|function| !function.prototype.flags.private())?
+            .lookup_inherited_function(&scope, namespace, name)?
             .clone();
         Some((receiver, function))
     }

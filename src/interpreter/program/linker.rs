@@ -6,6 +6,7 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 use lpc_rs_core::{
     RegisterSize,
     register::{Register, RegisterVariant},
+    visibility::Visibility,
 };
 use lpc_rs_errors::{LpcError, Result, lpc_error, span::Span};
 use lpc_rs_function_support::symbol::Symbol;
@@ -15,6 +16,7 @@ use super::{Function, GlobalVariable, Program, Region};
 /// A parent with global metadata projected into the child being compiled.
 #[derive(Debug, Clone)]
 pub struct InheritedProgram {
+    pub visibility: Visibility,
     pub global_variables: Box<HashMap<String, Symbol>>,
     pub global_variable_info: Box<[GlobalVariable]>,
     program: Program,
@@ -31,6 +33,7 @@ impl Deref for InheritedProgram {
 impl From<Program> for InheritedProgram {
     fn from(mut program: Program) -> Self {
         Self {
+            visibility: Visibility::Public,
             global_variables: std::mem::take(&mut program.global_variables),
             global_variable_info: std::mem::take(&mut program.global_variable_info),
             slots: (0..program.num_globals).collect(),
@@ -89,10 +92,7 @@ impl InheritedProgram {
                     views.insert(key, start);
                     start
                 };
-                Ok((
-                    name,
-                    Function::new(function.code.clone(), start, function.global_count()),
-                ))
+                Ok((name, function.inherited(start, self.visibility)))
             })
             .collect()
     }

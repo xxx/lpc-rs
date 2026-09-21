@@ -30,12 +30,11 @@ pub async fn function_exists<const N: usize>(context: &mut EfunContext<'_, N>) -
             .map(|(_, function)| function),
         Some((namespace, name)) => program
             .lookup_inherited_function(&program.filename, namespace, name)
-            .filter(|function| !function.prototype.flags.private())
             .cloned(),
         None => program.lookup_function(name).cloned(),
     };
     let result = function
-        .filter(|function| own || function.prototype.flags.public())
+        .filter(|function| own || function.public())
         .map_or(NULL, |function| {
             let file = function.prototype.filename.with_extension("");
             LpcRef::from(context.config().paths().source_name(&file).to_string())

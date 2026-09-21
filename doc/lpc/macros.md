@@ -22,6 +22,46 @@ are permitted. Ordinary parameter uses are macro-expanded before substitution;
 unused arguments are not expanded. A macro cannot keep expanding itself on the
 same expansion path.
 
+## Predefined macros
+
+These reserved names expand to string literals:
+
+| Name | Value |
+|---|---|
+| `__FILE__` | The current source's absolute in-game filename, including its extension. |
+| `__DIR__` | That file's in-game directory, including the trailing `/`; a file at the mudlib root yields `/`. |
+| `__VERSION__` | `lpc-rs ` followed by the compiler package version, for example `lpc-rs 0.1.0`. |
+
+For `/areas/example/room.c`:
+
+```c
+inherit __DIR__ "base"; // Inherits /areas/example/base.c.
+
+string source_file() { return __FILE__; } // "/areas/example/room.c"
+string driver_version() { return __VERSION__; }
+```
+
+`__FILE__` and `__DIR__` follow the source currently being preprocessed.
+Inside an included header they name the header; after it ends they again name
+the including file. A macro defined in a header evaluates these names at its
+invocation site, even through aliases and nested macro calls. Inherited code
+keeps the values from its own compilation.
+
+Paths use the same normalized in-game names as compiler diagnostics. For a
+host-facing compile outside the configured mudlib, both path macros yield the
+opaque label `<outside mudlib>`.
+
+All three names are defined from the start, including in auto-includes.
+`#ifdef`, `#ifndef`, and `defined(NAME)` recognize them. Redefining or undefining
+them in active source is a compile error. In `#if` and `#elif`, they follow the
+existing string-expression rules: truthy in boolean positions, with no integer
+arithmetic or string comparison support.
+
+They expand in LPC source and macro replacements, excluding quoted literals,
+comments, and inactive conditional branches. `#include` still requires a
+literal quoted or angle-bracket path. `__VERSION__` identifies the
+native driver build; mudlibs must assess required driver features separately.
+
 ## Stringification
 
 Inside a function macro's replacement, `#parameter` converts that argument's
@@ -40,6 +80,8 @@ string expression = STR(a + b);    // "a + b"
 The wrapper expands `VALUE` before passing it to `STR`. Direct `STR(VALUE)`
 preserves the name. A parameter used both normally and with `#` supplies its
 expanded tokens to the ordinary use and its original text to the string use.
+The same rule applies to predefined macros: `STR(__FILE__)` produces
+`"__FILE__"`, while `STRINGIZE(__FILE__)` produces the quoted filename as text.
 
 Leading and trailing whitespace is removed. Internal whitespace and comments
 between tokens become a single space; adjacent tokens remain adjacent.

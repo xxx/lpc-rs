@@ -1,30 +1,35 @@
 use std::{collections::HashMap, sync::Arc};
 
 use indexmap::IndexMap;
-use lpc_rs_core::EFUN;
-use ustr::Ustr;
+use lpc_rs_core::{EFUN, mangle::Mangle};
+use ustr::{Ustr, ustr};
 
 use super::Function;
 
 /// Function names and inherit aliases as seen by one defining program.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct FunctionScope {
-    functions: HashMap<String, Ustr>,
+    // A private entry stops lookup without exposing the inherited definition.
+    functions: HashMap<String, Option<Ustr>>,
     inherits: Box<[Arc<FunctionScope>]>,
     inherit_names: HashMap<String, usize>,
 }
 
 impl FunctionScope {
     pub(crate) fn new(
-        functions: &IndexMap<Ustr, Function, ahash::RandomState>,
+        functions: &IndexMap<String, Function, ahash::RandomState>,
         inherits: Vec<Arc<Self>>,
         inherit_names: HashMap<String, usize>,
     ) -> Self {
         Self {
             functions: functions
                 .iter()
-                .filter(|(_, function)| !function.is_closure())
-                .map(|(&mangled, function)| (function.name().to_string(), mangled))
+                .map(|(name, function)| {
+                    (
+                        name.clone(),
+                        (!function.private()).then(|| ustr(&function.mangle())),
+                    )
+                })
                 .collect(),
             inherits: inherits.into_boxed_slice(),
             inherit_names,
@@ -37,13 +42,15 @@ impl FunctionScope {
                 .inherits
                 .iter()
                 .rev()
-                .find_map(|parent| parent.functions.get(name).copied()),
+                .find_map(|parent| parent.functions.get(name).copied())
+                .flatten(),
             EFUN => None,
             alias => self
                 .inherit_names
                 .get(alias)
                 .and_then(|&index| self.inherits.get(index))
-                .and_then(|parent| parent.functions.get(name).copied()),
+                .and_then(|parent| parent.functions.get(name).copied())
+                .flatten(),
         }
     }
 }

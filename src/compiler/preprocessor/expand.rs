@@ -12,7 +12,10 @@ use lpc_rs_errors::{
 
 use crate::compiler::{
     lexer::{Token, logos_token::StringToken},
-    preprocessor::define::{Define, FunctionMacro, parameter_name},
+    preprocessor::{
+        define::{Define, FunctionMacro, parameter_name},
+        predefined::Predefined,
+    },
 };
 
 /// Hard cap on tokens one top-level expansion may emit: the hide set
@@ -70,6 +73,12 @@ impl<'a> Expander<'a> {
     where
         T: Iterator<Item = Result<Token>>,
     {
+        if let Some(predefined) = Predefined::from_name(&token.1) {
+            return Ok(Some(Expanded {
+                tokens: vec![predefined.expand(token.0, self.sources)?],
+                use_span: token.0,
+            }));
+        }
         let Some((name, define)) = self.defines.get_key_value(&token.1) else {
             return Ok(None);
         };
@@ -299,10 +308,23 @@ impl<'a> Expansion<'a> {
             } else if let Token::StringLiteral(value) = &item.token {
                 append(&mut text, "\"")?;
                 for ch in value.1.chars() {
-                    if matches!(ch, '\\' | '"') {
-                        append(&mut text, "\\")?;
+                    let escape = match ch {
+                        '\\' => Some("\\\\"),
+                        '"' => Some("\\\""),
+                        '\n' => Some("\\n"),
+                        '\r' => Some("\\r"),
+                        '\t' => Some("\\t"),
+                        '\x0B' => Some("\\v"),
+                        '\x0C' => Some("\\f"),
+                        '\x07' => Some("\\a"),
+                        '\x08' => Some("\\b"),
+                        _ => None,
+                    };
+                    if let Some(escape) = escape {
+                        append(&mut text, escape)?;
+                    } else {
+                        append(&mut text, ch.encode_utf8(&mut [0; 4]))?;
                     }
-                    append(&mut text, ch.encode_utf8(&mut [0; 4]))?;
                 }
                 append(&mut text, "\"")?;
             } else {
@@ -328,6 +350,12 @@ impl<'a> Expansion<'a> {
                 self.emit(token, out)?;
                 continue;
             };
+            if let Some(predefined) = Predefined::from_name(&st.1) {
+                token.token = predefined.expand(st.0, self.sources)?;
+                token.origin = None;
+                self.emit(token, out)?;
+                continue;
+            }
             match self.defines.get_key_value(&st.1) {
                 None => self.emit(token, out)?,
                 Some((name, _)) if self.hide.contains(&name.as_str()) => {

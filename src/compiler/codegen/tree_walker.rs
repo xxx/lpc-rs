@@ -1115,6 +1115,7 @@ mod tests {
         async fn program_visits_inherits_then_body() {
             let mut node = ProgramNode {
                 inherits: vec![InheritNode {
+                    visibility: Default::default(),
                     path: ustr("/p"),
                     namespace: None,
                     span: None,

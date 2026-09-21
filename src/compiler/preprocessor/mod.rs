@@ -30,12 +30,14 @@ use crate::{
 use conditional::Conditionals;
 use directive::{Directive, DirectiveKind};
 use include::{IncludeSource, IncludeWalk, ONCE};
+use predefined::Predefined;
 
 mod conditional;
 pub mod define;
 pub mod directive;
 mod expand;
 mod include;
+mod predefined;
 pub mod preprocessor_node;
 
 /// Recursion budget for evaluating one `#if`: tree levels and macro levels
@@ -346,6 +348,12 @@ impl Preprocessor {
                 body_span,
             } => self.handle_define(token.0, name, params, body, body_span),
             Directive::Undef { name } => {
+                if Predefined::from_name(&name).is_some() {
+                    return Err(lpc_error!(
+                        Some(token.0),
+                        "cannot undefine predefined macro `{name}`"
+                    ));
+                }
                 self.defines.remove(&name);
                 Ok(())
             }
@@ -356,12 +364,12 @@ impl Preprocessor {
                 Ok(())
             }
             Directive::IfDef { name } => {
-                let taken = self.defines.contains_key(&name);
+                let taken = self.is_defined(&name);
                 self.conditionals.enter(token.0, taken);
                 Ok(())
             }
             Directive::IfNDef { name } => {
-                let taken = !self.defines.contains_key(&name);
+                let taken = !self.is_defined(&name);
                 self.conditionals.enter(token.0, taken);
                 Ok(())
             }
@@ -395,6 +403,12 @@ impl Preprocessor {
         body: String,
         body_span: Span,
     ) -> Result<()> {
+        if Predefined::from_name(&name).is_some() {
+            return Err(lpc_error!(
+                Some(span),
+                "cannot redefine predefined macro `{name}`"
+            ));
+        }
         // Definition-site spans retain the spelling needed when a later macro stringifies the expansion.
         let lex_body = |body: &str| -> Result<Vec<Token>> {
             let tokens = LexWrapper::new_at(body, body_span.file_id(), body_span.l())
@@ -473,6 +487,10 @@ impl Preprocessor {
         let taken = self.eval_expr_for_skipping(&expr, Some(span), &mut Vec::new(), 1)?;
         self.conditionals.take_elif(taken);
         Ok(())
+    }
+
+    fn is_defined(&self, name: &str) -> bool {
+        Predefined::from_name(name).is_some() || self.defines.contains_key(name)
     }
 
     fn not_an_expression(name: &str, span: Option<Span>) -> LpcError {
@@ -561,6 +579,9 @@ impl Preprocessor {
         }
         match expr {
             PreprocessorNode::Var(x) => {
+                if Predefined::from_name(x).is_some() {
+                    return Ok(true);
+                }
                 if hide.contains(&x.as_str()) {
                     return Ok(false); // hidden name reads as undefined
                 }
@@ -584,7 +605,7 @@ impl Preprocessor {
             }
             PreprocessorNode::Int(i) => Ok(i != &0),
             PreprocessorNode::String(_) => Ok(true),
-            PreprocessorNode::Defined(x, negated) => Ok(self.defines.contains_key(x) != *negated),
+            PreprocessorNode::Defined(x, negated) => Ok(self.is_defined(x) != *negated),
             PreprocessorNode::BinaryOp(op, l, r) => match op {
                 // Short-circuit at bool level, so `#if 0 && 1/0` is fine (C's rule).
                 BinaryOperation::AndAnd => {
@@ -658,7 +679,7 @@ impl Preprocessor {
             }
             PreprocessorNode::Int(i) => Ok(*i),
             PreprocessorNode::Defined(x, negated) => {
-                Ok((self.defines.contains_key(x) != *negated) as LpcIntInner)
+                Ok((self.is_defined(x) != *negated) as LpcIntInner)
             }
             PreprocessorNode::BinaryOp(op, l, r) => {
                 let li = self.resolve_int(l, span, hide, depth + 1)?;

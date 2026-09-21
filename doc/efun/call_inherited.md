@@ -13,7 +13,9 @@ A `void` function returns `0`.
   `parent` is an inherit alias declared in the calling source program.
 - Later inherits take precedence, including definitions they inherited.
 - Public and protected (`static`) functions are callable. Private inherited
-  functions return `0`, without falling back to an earlier inherit.
+  functions return `0`, without falling back to an earlier inherit. Functions
+  imported by `private inherit` are accessible from the source containing that
+  statement, but hidden from its descendants. [Inheritance](../lpc/inheritance.md).
 - Unknown aliases, malformed names, and missing functions return `0`.
   Local functions, efuns, and simul-efuns are not fallback targets.
 

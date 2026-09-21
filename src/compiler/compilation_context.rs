@@ -20,7 +20,7 @@ use crate::{
     compiler::semantic::scope_tree::ScopeTree,
     interpreter::{
         efun::EFUN_PROTOTYPES,
-        program::{InheritedProgram, Program, Region, code_pool::CodePool},
+        program::{Function, InheritedProgram, Program, Region, code_pool::CodePool},
     },
 };
 
@@ -157,26 +157,44 @@ impl CompilationContext {
     {
         let r = name.as_ref();
 
-        let find_in_inherit = || {
-            // look up in reverse, so later declarations override earlier ones
-            self.inherits
+        match namespace {
+            CallNamespace::Local => self.function_prototypes.get(r).or_else(|| {
+                self.lookup_inherited_function(r, namespace)
+                    .map(|f| &f.prototype)
+            }),
+            CallNamespace::Named(ns) if ns.as_str() == EFUN => EFUN_PROTOTYPES.get(r),
+            _ => self
+                .lookup_inherited_function(r, namespace)
+                .map(|f| &f.prototype),
+        }
+    }
+
+    fn lookup_inherited_function(
+        &self,
+        name: &str,
+        namespace: &CallNamespace,
+    ) -> Option<&Function> {
+        match namespace {
+            CallNamespace::Local | CallNamespace::Parent => self
+                .inherits
                 .iter()
                 .rev()
-                .find_map(|inherit| inherit.lookup_function(r).map(|f| &f.prototype))
-        };
-
-        match namespace {
-            CallNamespace::Local => self.function_prototypes.get(r).or_else(find_in_inherit),
-            CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => match ns.as_str() {
-                EFUN => EFUN_PROTOTYPES.get(r),
-                ns => self.inherit_names.get(ns).and_then(|i| {
-                    self.inherits
-                        .get(*i)
-                        .and_then(|p| p.lookup_function(name).map(|f| &f.prototype))
-                }),
-            },
+                .find_map(|parent| parent.lookup_function(name)),
+            CallNamespace::Named(ns) => self
+                .inherit_names
+                .get(ns.as_str())
+                .and_then(|&index| self.inherits.get(index))
+                .and_then(|parent| parent.lookup_function(name)),
         }
+    }
+
+    /// Whether this source may use the resolved local or inherited declaration.
+    pub fn function_accessible(&self, name: &str, namespace: &CallNamespace) -> bool {
+        if namespace == &CallNamespace::Local && self.function_prototypes.contains_key(name) {
+            return true;
+        }
+        self.lookup_inherited_function(name, namespace)
+            .is_none_or(|f| !f.private())
     }
 
     /// Resolve a call by name the way a call site does: own and inherited
@@ -210,6 +228,7 @@ impl CompilationContext {
             .simul_efuns
             .as_ref()
             .and_then(|simul_efuns| simul_efuns.lookup_function(name))
+            .filter(|function| function.public())
         {
             return Some(Callee::SimulEfun(&function.prototype));
         }

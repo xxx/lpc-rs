@@ -465,6 +465,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let Some(func) = simul_efuns
             .program(&self.context.txn)
             .lookup_function(func_name)
+            .filter(|function| function.public())
             .cloned()
         else {
             return Err(self.runtime_error(format!("call to unknown simul efun `{func_name}`")));

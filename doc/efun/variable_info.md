@@ -15,9 +15,10 @@ Each entry has these fields:
 | `name` | string | Declared variable name |
 | `program` | string | Declaring program's source path, including `.c` |
 | `type` | string | Declared LPC type, such as `int` or `mixed *` |
-| `flags` | string | Visibility, followed by `static` and `nomask` when present |
+| `flags` | string | Declared visibility, followed by `static` and `nomask` when present |
 | `value` | mixed | Value read through the caller's transaction |
 
+Inheritance restrictions do not rewrite the declaring source's flags.
 Pending writes in the same transaction are visible. The returned array and
 entry mappings are new containers: replacing an entry's `value` does not assign
 the original global. Values retain normal LPC sharing, however. Mutating an

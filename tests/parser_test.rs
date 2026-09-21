@@ -83,6 +83,7 @@ fn inherit_constant_string_expressions() {
             assert_eq!(
                 node.inherits,
                 vec![InheritNode {
+                    visibility: Default::default(),
                     path: ustr("/armour/base"),
                     namespace: namespace.map(ustr),
                     span: Some(Span::new(0, 0..code.len())),
@@ -1127,4 +1128,52 @@ async fn a_cast_to_void_is_rejected() {
         .await
         .unwrap_err();
     assert_eq!(err.to_string(), "cannot cast to `void`");
+}
+
+#[test]
+fn inheritance_visibility_keeps_aliases_and_statement_spans() {
+    use lpc_rs_core::visibility::Visibility;
+
+    for (modifier, visibility) in [
+        ("private", Visibility::Private),
+        ("protected", Visibility::Protected),
+        ("public", Visibility::Public),
+    ] {
+        let code = format!("{modifier}\n inherit \"/base\" base; int value;");
+        let node = lpc_parser::ProgramParser::new()
+            .parse(
+                &mut CompilationContext::default(),
+                LexWrapper::new(&code, 0).triples(),
+            )
+            .unwrap();
+        let inherit = &node.inherits[0];
+        assert_eq!(inherit.visibility, visibility);
+        assert_eq!(inherit.namespace, Some(ustr("base")));
+        assert_eq!(
+            inherit.span,
+            Some(Span::new(0, 0..code.find(';').unwrap() + 1))
+        );
+    }
+}
+
+#[test]
+fn inheritance_rejects_multiple_or_unsupported_modifiers() {
+    for modifiers in [
+        "private public",
+        "private private",
+        "static",
+        "nomask",
+        "varargs",
+    ] {
+        let code = format!("{modifiers} inherit \"/base\";");
+        assert!(
+            lpc_parser::ProgramParser::new()
+                .parse(
+                    &mut CompilationContext::default(),
+                    LexWrapper::new(&code, 0).triples()
+                )
+                .is_err(),
+            "{code}"
+        );
+    }
 }

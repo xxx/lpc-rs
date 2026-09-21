@@ -343,6 +343,7 @@ impl Compiler {
             let lpc_dir = LpcPath::new_in_game(dir.as_str(), "/", &*self.config.lib_dir);
             if lpc_dir.source_file() != context.source.input().source_file() {
                 let node = InheritNode {
+                    visibility: Default::default(),
                     path: ustr(dir),
                     namespace: None,
                     span: None,
@@ -641,6 +642,78 @@ mod tests {
             let compiled = compile_root("strict-below", &[("root.c", &source)]).await;
 
             assert!(compiled.is_ok(), "{:?}", compiled.err());
+        }
+    }
+
+    mod test_predefined_macros {
+        use super::*;
+        use crate::{
+            compile_time_config::MAX_CALL_STACK_SIZE,
+            interpreter::vm::Vm,
+            test_support::{initialize_program, lib_holding, temp_lib_config},
+        };
+
+        #[tokio::test]
+        async fn directory_macros_resolve_inherits_and_parent_code_keeps_its_source() {
+            let root = lib_holding(
+                "predefined-inherit",
+                &[
+                    ("zone/parent.c", "string parent_file() { return __FILE__; }"),
+                    (
+                        "zone/child.c",
+                        "inherit __DIR__ \"parent\";\nstring create() { return parent_file() + \"|\" + __FILE__ + \"|\" + __DIR__; }",
+                    ),
+                ],
+            );
+            let config: Arc<Config> = temp_lib_config(&root).into();
+            let compiler = Compiler::new(config.clone());
+            for path in [
+                LpcPath::from("/zone/child.c"),
+                LpcPath::new_server(root.join("zone/child.c")),
+            ] {
+                let compiled = compiler.compile_file(path).await.unwrap();
+                let vm = Vm::new(config.clone());
+                let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                    compiled.program,
+                    vm.global_state.clone(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    task.result().unwrap().to_string(),
+                    "/zone/parent.c|/zone/child.c|/zone/"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn a_reused_compiler_evaluates_predefined_values_for_each_new_source() {
+            let root = lib_holding("predefined-recompile", &[]);
+            let config: Arc<Config> = temp_lib_config(&root).into();
+            let compiler = CompilerBuilder::default()
+                .config(config.clone())
+                .diagnostic_sources(DiagnosticSources::scoped())
+                .build()
+                .unwrap();
+            for (path, code, expected) in [
+                ("/a.c", "string create() { return __FILE__; }", "/a.c"),
+                (
+                    "/zone/b.c",
+                    "string create() { return __FILE__; }",
+                    "/zone/b.c",
+                ),
+                ("/a.c", "string create() { return __DIR__; }", "/"),
+            ] {
+                let compiled = compiler.compile_string(path, code).await.unwrap();
+                let vm = Vm::new(config.clone());
+                let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                    compiled.program,
+                    vm.global_state.clone(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(task.result().unwrap().to_string(), expected);
+            }
         }
     }
 

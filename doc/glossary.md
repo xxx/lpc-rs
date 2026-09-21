@@ -157,6 +157,10 @@ Short for "simulated efun". These are functions that are defined in LPC, but are
 callable from anywhere, just like an efun. The driver can be configured at runtime
 to not include them, in which case there won't be any available.
 
+Only public functions are exported, including inherited public functions.
+Private and protected helpers stay local to the simul-efun object;
+[inheritance visibility](lpc/inheritance.md) can restrict an entire import.
+
 A call by bare name resolves the object's own and inherited functions first,
 then the simul efuns, then the efuns, so a simul efun shadows an efun of the
 same name and an object's own function shadows a simul efun. A simul efun runs

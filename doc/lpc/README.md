@@ -33,6 +33,8 @@ so you can concentrate on game code while its existing code handles login.
 | Understand a word such as *efun*, *apply*, or *prototype* | [Glossary](../glossary.md) |
 | Check a built-in function's arguments | [Efun reference](../efun) |
 | Find a hook the driver calls in your object | [Object hooks](../apply/object), [other apply categories](../../ulib/doc/applies.md) |
+| Import parent programs or restrict inherited visibility | [Inheritance](inheritance.md) |
+| Use source-path and driver-version macros | [Predefined macros](macros.md#predefined-macros) |
 | Control compiler pragmas and warnings | [Pragmas](pragmas.md) |
 | Define macros or turn arguments into strings | [Macros](macros.md) |
 | Understand ulib's login and command flow | [How ulib works](../../ulib/doc/how-it-works.md) |

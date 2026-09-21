@@ -163,6 +163,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let Some(function) = simul_efuns
                         .program(&self.context.txn)
                         .lookup_function(name)
+                        .filter(|function| function.public())
                         .cloned()
                     else {
                         return Err(LpcError::runtime(format!(

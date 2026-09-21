@@ -369,13 +369,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let Some(callee) = proto_opt {
             let prototype = callee.as_ref();
-            if prototype.flags.private()
-                && !self
-                    .context
-                    .function_prototypes
-                    .values()
-                    .any(|val| val == prototype)
-            {
+            if !self.context.function_accessible(name, namespace) {
                 let e = LpcError::new(format!("call to private function `{}`", name))
                     .with_span(node.span)
                     .with_label("defined here", prototype.span);
@@ -660,12 +654,9 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let Some(callee) = proto_opt {
             let prototype = callee.as_ref();
-            if prototype.flags.private()
-                && !self
-                    .context
-                    .function_prototypes
-                    .values()
-                    .any(|val| val == prototype)
+            if !self
+                .context
+                .function_accessible(node.name.as_str(), &CallNamespace::Local)
             {
                 let e = LpcError::new(format!(
                     "attempt to point to private function `{}`",

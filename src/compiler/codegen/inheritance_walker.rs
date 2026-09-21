@@ -211,13 +211,14 @@ impl TreeWalker for InheritanceWalker {
                         .insert(namespace.to_owned(), self.context.inherits.len());
                 }
 
-                let program = InheritedProgram::place(
+                let mut program = InheritedProgram::place(
                     program,
                     &mut self.context.layout,
                     &mut self.context.num_globals,
                     node.span,
                 )
                 .map_err(|e| self.context.diagnostics.fail(e))?;
+                program.visibility = node.visibility;
                 self.check_nomask_variables(&program, node.span)?;
                 self.context.inherits.push(program);
 
@@ -316,6 +317,7 @@ mod tests {
             let mut walker = walker();
 
             let mut node = InheritNode {
+                visibility: Default::default(),
                 path: ustr("/grandparent.c"),
                 namespace: None,
                 span: None,
@@ -333,6 +335,7 @@ mod tests {
 
             for path in ["/warns_left.c", "/warns_right.c"] {
                 let mut node = InheritNode {
+                    visibility: Default::default(),
                     path: ustr(path),
                     namespace: None,
                     span: None,
@@ -367,6 +370,7 @@ mod tests {
                 .insert("grandparent".to_string(), 0);
 
             let mut node = InheritNode {
+                visibility: Default::default(),
                 path: ustr("/grandparent.c"),
                 namespace: Some(ustr("grandparent")),
                 span: None,
@@ -385,6 +389,7 @@ mod tests {
             let mut walker = walker();
 
             let mut node = InheritNode {
+                visibility: Default::default(),
                 path: ustr("/no_inherit.c"),
                 namespace: None,
                 span: None,
@@ -403,6 +408,7 @@ mod tests {
             let mut walker = walker();
 
             let mut node = InheritNode {
+                visibility: Default::default(),
                 path: ustr("/grandparent.c"),
                 namespace: Some(ustr("efun")),
                 span: None,

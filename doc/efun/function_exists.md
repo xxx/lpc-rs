@@ -25,8 +25,10 @@ keeps its own parents and aliases even when a child reuses an alias. Closures
 and pointers to this efun keep the source scope where they were created.
 When inspecting another object, names use that object's top-level program.
 
-Private inherited functions return `0`; protected functions are visible only
-when inspecting the calling object. If the selected definition is private,
+Private declarations inherited from a parent return `0`; functions imported
+by `private inherit` remain visible to the source containing that statement,
+but are hidden from its descendants. Protected functions are visible only
+when inspecting the calling object. If the selected definition is inaccessible,
 lookup does not fall back to an earlier inherit. Missing functions, unknown
 aliases, and malformed qualifications return `0`. Efuns and simul-efuns are
 excluded, including names such as `"efun::write"`.

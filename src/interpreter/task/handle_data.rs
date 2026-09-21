@@ -205,7 +205,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if !func.public() && !Arc::ptr_eq(process, &self.stack.current_frame()?.process) {
             return Err(self.runtime_error(format!(
                 "cannot take a pointer to {} function `{}` of `{}`",
-                func.prototype.flags.visibility(),
+                func.visibility(),
                 name,
                 process
             )));

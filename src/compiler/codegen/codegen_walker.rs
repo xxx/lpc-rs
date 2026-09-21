@@ -380,6 +380,7 @@ impl CodegenWalker {
         let mut inherited_function_scopes = HashMap::new();
         let mut linker = ProgramLinker::new(num_globals);
         let mut functions: IndexMap<ustr::Ustr, Function, ahash::RandomState> = IndexMap::default();
+        let mut frozen_dispatch = HashMap::new();
         let mut global_variable_info = Vec::new();
         let mut global_variables: HashMap<String, Symbol> = HashMap::new();
         for parent in inherits {
@@ -392,8 +393,20 @@ impl CodegenWalker {
             inherited_function_scopes
                 .insert(parent.filename.clone(), parent.function_scope.clone());
             functions.extend(parent.functions(&mut linker)?);
+            for (&name, function) in parent.functions.iter() {
+                if function.private() || function.hidden() {
+                    if let Some(target) = parent.target(name) {
+                        frozen_dispatch.insert(name, ustr(&target.function.mangle()));
+                    }
+                } else {
+                    frozen_dispatch.remove(&name);
+                }
+            }
             global_variable_info.extend(parent.global_variable_info.into_vec());
-            for (name, symbol) in *parent.global_variables {
+            for (name, mut symbol) in *parent.global_variables {
+                symbol
+                    .flags
+                    .set_visibility(symbol.flags.visibility().restricted_by(parent.visibility));
                 if symbol.visible_to_children()
                     || !global_variables
                         .get(&name)
@@ -431,9 +444,9 @@ impl CodegenWalker {
             .filter(|f| !f.is_closure())
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _, ahash::RandomState>>();
-        let dispatch = dispatch_table(&functions);
+        let dispatch = dispatch_table(&functions, &frozen_dispatch);
         let function_scope = Arc::new(FunctionScope::new(
-            &functions,
+            &unmangled_functions,
             parent_scopes,
             std::mem::take(&mut self.context.inherit_names),
         ));

@@ -23,6 +23,7 @@ use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
     command::command_task::run_command_line,
+    compile_time_config::DRIVER_VERSION,
     interpreter::{
         GET_MUD_STATS, GMCP, NET_DEAD, WINDOW_SIZE, WRITE_PROMPT,
         lpc_ref::{LpcRef, NULL},
@@ -497,10 +498,7 @@ impl Telnet {
             config.tls.as_ref().map_or(config.port, |tls| tls.port)
         };
         vars.insert("PORT".into(), vec![port.to_string()]);
-        vars.insert(
-            "CODEBASE".into(),
-            vec![format!("lpc-rs {}", env!("CARGO_PKG_VERSION"))],
-        );
+        vars.insert("CODEBASE".into(), vec![DRIVER_VERSION.to_owned()]);
 
         if mud_stats.is_none() && !shutting_down {
             let mut overrides = IndexMap::new();

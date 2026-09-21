@@ -23,7 +23,9 @@ should explicitly control access to the master and simul-efun prototypes.
 With `"both"`, the simul-efun group is prepared first and
 the new master compiles against its exports; publication is atomic for both groups.
 Existing simul-efun exports must retain return and argument types, argument/default
-counts, reference parameters and function flags. New exports are allowed.
+counts, reference parameters and function flags, and must remain public even
+when visibility changes through inheritance. Private and protected helpers are
+not exports. New exports are allowed.
 
 Preparation uses the old master and simul-efun code for authorization. Their old
 global layouts and values remain available to permission applies while new global

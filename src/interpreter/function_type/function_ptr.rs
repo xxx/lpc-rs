@@ -341,7 +341,12 @@ impl FunctionPtr {
                         "call to simul efun `{name}`: no simul-efun object is loaded"
                     )));
                 };
-                let Some(function) = simul_efuns.program(txn).lookup_function(name).cloned() else {
+                let Some(function) = simul_efuns
+                    .program(txn)
+                    .lookup_function(name)
+                    .filter(|function| function.public())
+                    .cloned()
+                else {
                     return Err(LpcError::runtime(format!(
                         "call to unknown simul efun `{name}`"
                     )));

@@ -166,8 +166,8 @@ pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> =>? {
 };
 
 Inherit: InheritNode = {
-    <l:"inherit"> <path_node:Expression> <namespace:"ID"?> <r:";"> =>? {
-        let span = Span::join(l, r);
+    <modifier:InheritVisibility?> <l:"inherit"> <path_node:Expression> <namespace:"ID"?> <r:";"> =>? {
+        let span = Span::join(modifier.map_or(l, |(span, _)| span), r);
 
         let ExpressionNode::String(StringNode { value: path, .. }) = path_node else {
             let error = lpc_error!(Some(span), "inherit path must be a constant string expression");
@@ -179,10 +179,17 @@ Inherit: InheritNode = {
             InheritNode {
                 path: ustr(&path),
                 namespace: namespace.map(|ns| ustr(&ns.1)),
+                visibility: modifier.map(|(_, visibility)| visibility).unwrap_or_default(),
                 span: Some(span),
             }
         )
     }
+};
+
+InheritVisibility: (Span, lpc_rs_core::visibility::Visibility) = {
+    "public" => (<>, lpc_rs_core::visibility::Visibility::Public),
+    "private" => (<>, lpc_rs_core::visibility::Visibility::Private),
+    "protected" => (<>, lpc_rs_core::visibility::Visibility::Protected),
 };
 
 Def: AstNode = {
