@@ -34,7 +34,6 @@ pragma warnings or errors.
 | [`no_shadow`](#no_shadow) | Reject attaching a shadow to this program's objects. | The compiled program and programs that inherit it. |
 | [`resident`](#resident) | Exclude this program's objects from automatic cleanup. | The compiled program, including its clones; not propagated to inheriting programs. |
 | [`save_binary`](#save_binary) | Accepted with a warning; no effect. | Compatibility spelling only. |
-| [`no_include`](#no_include) | Accepted with a warning; no effect. | Compatibility spelling only. |
 
 `no_clone`, `no_inherit`, `no_shadow`, and `resident` apply to the whole
 compiled program, regardless of where the directive appears. Declaring one
@@ -213,24 +212,10 @@ saving a compiled program to disk. Each occurrence emits:
 pragma `save_binary` has no effect in lpc-rs
 ```
 
-## no_include
-
-```lpc
-#pragma no_include
-```
-
-Accepted for source compatibility, but has no effect. It does not prevent
-the file from being included or prevent it from including other files.
-Each occurrence emits:
-
-```text
-pragma `no_include` has no effect in lpc-rs
-```
-
 ## Errors
 
 In active source, an unrecognized name is a compile error, reported as
-``unknown pragma `name` ``. Only the eight names listed above are accepted;
+``unknown pragma `name` ``. Only the seven names listed above are accepted;
 alternative spellings and pragmas from other drivers are not silently ignored.
 
 A bare `#pragma`, a trailing comma, space-separated names without a comma,

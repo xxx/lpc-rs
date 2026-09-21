@@ -4,9 +4,7 @@ use define::{Define, ObjectMacro};
 use lpc_rs_core::{
     LpcIntInner,
     lpc_path::LpcPath,
-    pragma_flags::{
-        NO_CLONE, NO_INCLUDE, NO_INHERIT, NO_SHADOW, RESIDENT, SAVE_BINARY, STRICT_TYPES,
-    },
+    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, SAVE_BINARY, STRICT_TYPES},
 };
 use lpc_rs_errors::{
     LpcError, Result, lpc_error, lpc_warning,
@@ -702,7 +700,7 @@ impl Preprocessor {
                         self.context.pragmas.set_strict_types(true);
                     }
                 }
-                SAVE_BINARY | NO_INCLUDE => self.context.diagnostics.record(lpc_warning!(
+                SAVE_BINARY => self.context.diagnostics.record(lpc_warning!(
                     Some(span),
                     "pragma `{}` has no effect in lpc-rs",
                     arg
@@ -2684,19 +2682,15 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn cd_pragmas_are_accepted_and_warned_about() {
+        async fn save_binary_is_accepted_and_warned_about() {
             let prog = indoc! { r##"
-                #pragma save_binary
-                #pragma no_include, strict_types
+                #pragma save_binary, strict_types
                 int x;
             "## };
             test_valid(prog, &["int", "x", ";"]).await;
             assert_eq!(
                 warnings_of(prog).await,
-                [
-                    "pragma `save_binary` has no effect in lpc-rs",
-                    "pragma `no_include` has no effect in lpc-rs",
-                ]
+                ["pragma `save_binary` has no effect in lpc-rs"]
             );
             let mut preprocessor = fixture();
             preprocessor.scan("/test.c", prog).await.unwrap();
@@ -2706,6 +2700,11 @@ mod tests {
         #[tokio::test]
         async fn an_unknown_pragma_is_still_an_error() {
             test_invalid("#pragma frobnicate\n", "unknown pragma `frobnicate`").await;
+        }
+
+        #[tokio::test]
+        async fn no_include_is_an_unknown_pragma() {
+            test_invalid("#pragma no_include\n", "unknown pragma `no_include`").await;
         }
     }
 
