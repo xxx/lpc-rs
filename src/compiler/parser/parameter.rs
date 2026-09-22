@@ -1,3 +1,4 @@
+use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::{Result, lpc_error, span::Span};
 
 use crate::compiler::ast::{parsed_type::ParsedType, var_init_node::VarInitNode};
@@ -37,8 +38,8 @@ impl Parameter {
             Some("a named variadic parameter cannot be `ref`")
         } else if has_default {
             Some("a named variadic parameter cannot have a default value")
-        } else if !type_.is_array() {
-            Some("a named variadic parameter must have an array type")
+        } else if !type_.is_array() && type_ != LpcType::Mixed(false) {
+            Some("a named variadic parameter must have type `mixed` or an array type")
         } else {
             None
         };

@@ -40,7 +40,7 @@ notes:
 - `nosave` or `static` on a global excludes it from object save/restore without changing visibility; see [non-persistent globals](nosave.md)
 - a parameter declared `ref` is the caller's variable; see [references](references.md)
 - `f(a, xs...)` passes each element of `xs` as its own argument; see [argument spreading](argument_spreading.md)
-- a final parameter such as `mixed *args...` collects the remaining arguments into an array; see [variadic parameters](variadic_parameters.md)
+- a final parameter such as `mixed args...` or `mixed *args...` collects the remaining arguments into an array; see [variadic parameters](variadic_parameters.md)
 - a function declared without a return type is `mixed`, and so is a parameter declared without a type (`start_mail(qroom)`); [`#pragma strict_types`](pragmas.md#strict_types) makes either an error from its line to the end of the file that declares it, and an `#include`d file is outside it unless it declares the pragma itself
 - a call by name from any of the object's code, inherited code included, reaches the object's last definition of that name: a redefinition in the child intercepts the parent's own calls (`private` or `static` on the redefinition included), a `private` function is never intercepted, and of two inherited definitions the later inherit's wins
 - `::f()` calls the inherited `f`, `name::f()` the one of the parent inherited as `name` (`inherit "/x" name;`), and `efun::f()` the efun; each looks only there, so a name that program lacks is a compile error
@@ -69,7 +69,7 @@ A prototype alone does not make a function callable, and its signature is not
 checked against the definition.
 
 An unnamed parameter must have an explicit type. Arrays keep their `*`, and a
-variadic collector still requires an array type even when its name is omitted.
+variadic collector requires `mixed` or an array type even when its name is omitted.
 Parameter defaults require a name. `f(void)` and `f()` both specify an empty
 parameter list.
 

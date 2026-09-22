@@ -887,6 +887,8 @@ async fn named_and_unnamed_prototype_parameters_can_mix() {
         "int, ...",
         "int, mixed *rest...",
         "int first, mixed *...",
+        "int first, mixed...",
+        "int, mixed rest...",
     ] {
         let code = format!("#pragma strict_types\nvoid f({parameters});");
         assert_ok!(parse_prog(&code).await);
@@ -925,6 +927,7 @@ async fn definitions_require_names_for_every_parameter() {
         "int first, string",
         "int, string second",
         "mixed *...",
+        "mixed...",
         "int first, mixed *...",
     ] {
         let code = format!("void f({parameters}) {{}}");
@@ -939,7 +942,13 @@ async fn definitions_require_names_for_every_parameter() {
 
 #[tokio::test]
 async fn closures_require_names_for_every_declared_parameter() {
-    for parameters in ["int", "int n, string *", "int ref", "mixed *..."] {
+    for parameters in [
+        "int",
+        "int n, string *",
+        "int ref",
+        "mixed *...",
+        "mixed...",
+    ] {
         let code = format!("function f = (: [{parameters}] 1 :);");
         let error = parse_prog(&code).await.unwrap_err();
         assert_eq!(
@@ -954,8 +963,8 @@ async fn closures_require_names_for_every_declared_parameter() {
 async fn unnamed_prototypes_preserve_variadic_constraints() {
     for (parameter, message) in [
         (
-            "mixed...",
-            "a named variadic parameter must have an array type",
+            "int...",
+            "a named variadic parameter must have type `mixed` or an array type",
         ),
         ("int ref *...", "a named variadic parameter cannot be `ref`"),
         (

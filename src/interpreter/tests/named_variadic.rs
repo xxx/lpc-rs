@@ -19,6 +19,191 @@ async fn compile_error(code: &str) -> String {
 }
 
 #[tokio::test]
+async fn mixed_collectors_pack_empty_single_and_heterogeneous_tails() {
+    assert_eq!(
+        values(
+            r#"
+            #pragma strict_types
+            mixed collect(mixed args...) { return args; }
+            mixed *create() {
+                return ({ sizeof(collect()), sizeof(collect(0)) }) + collect(1, "two", 3);
+            }
+        "#
+        )
+        .await,
+        vec![
+            LpcRef::from(0),
+            LpcRef::from(1),
+            LpcRef::from(1),
+            s("two"),
+            LpcRef::from(3)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn mixed_collectors_are_fresh_arrays_with_shared_nested_values() {
+    assert_eq!(
+        values(
+            r#"
+            mixed collect(mixed args...) { return args; }
+            mixed *create() {
+                int *item = ({ 1 });
+                mixed *input = ({ item, 2 });
+                mixed a = collect(input...);
+                mixed b = collect(input...);
+                a[1] = 9;
+                a[0][0] = 7;
+                return ({ a == b, collect() == collect(), input[1], b[1],
+                          item[0], b[0][0], sizeof(collect(input)), collect(input)[0] == input });
+            }
+        "#
+        )
+        .await,
+        vec![
+            LpcRef::from(0),
+            LpcRef::from(0),
+            LpcRef::from(2),
+            LpcRef::from(2),
+            LpcRef::from(7),
+            LpcRef::from(7),
+            LpcRef::from(1),
+            LpcRef::from(1)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn mixed_collectors_keep_mixed_assignment_reference_and_capture_semantics() {
+    assert_eq!(
+        values(
+            r#"
+            void replace(mixed ref value) { value = "changed"; }
+            mixed *inspect(mixed args...) {
+                function live = (: args :);
+                function saved = (: $(args) :);
+                args = 17;
+                int number = live();
+                replace(ref args);
+                return ({ number, live(), sizeof(saved()) });
+            }
+            mixed *create() { return inspect(1, 2); }
+        "#
+        )
+        .await,
+        vec![LpcRef::from(17), s("changed"), LpcRef::from(2)]
+    );
+}
+
+#[tokio::test]
+async fn mixed_collector_closures_support_defaults_and_nested_captures() {
+    assert_eq!(
+        values(
+            r#"
+            #pragma strict_types
+            mixed *create() {
+                function factory = (: [int prefix = 7, mixed args...]
+                    (: [mixed more...] ({ prefix }) + args + more :) :);
+                function empty = factory();
+                function saved = factory(1, 2, "three");
+                return empty() + saved(4);
+            }
+        "#
+        )
+        .await,
+        vec![
+            LpcRef::from(7),
+            LpcRef::from(1),
+            LpcRef::from(2),
+            s("three"),
+            LpcRef::from(4)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn mixed_collectors_keep_default_and_varargs_prefix_behavior() {
+    assert_eq!(
+        values(
+            r#"
+            mixed *defaults(int n = 7, mixed args...) { return ({ n, sizeof(args) }) + args; }
+            varargs mixed *optional(int n, mixed args...) { return ({ n, sizeof(args) }) + args; }
+            mixed *create() { return defaults() + defaults(0, 1) + optional() + optional(3, 4); }
+        "#
+        )
+        .await,
+        vec![
+            LpcRef::from(7),
+            LpcRef::from(0),
+            LpcRef::from(0),
+            LpcRef::from(1),
+            LpcRef::from(1),
+            LpcRef::from(0),
+            LpcRef::from(0),
+            LpcRef::from(3),
+            LpcRef::from(1),
+            LpcRef::from(4)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn mixed_collectors_work_through_external_calls_and_bound_spread_pointers() {
+    assert_eq!(
+        run(
+            "",
+            &[(
+                "/target.c",
+                "mixed collect(int n, mixed args...) { return ({ n }) + args; }"
+            )],
+            r#"
+            mixed local(mixed args...) { return args; }
+            mixed *create() {
+                function external = &("/target")->collect(1, 2);
+                function bound = &local(3);
+                return "/target"->collect(4, "five") + external(({ 6, 7 })...) + bound(8);
+            }
+        "#
+        )
+        .await,
+        vec![
+            LpcRef::from(4),
+            s("five"),
+            LpcRef::from(1),
+            LpcRef::from(2),
+            LpcRef::from(6),
+            LpcRef::from(7),
+            LpcRef::from(3),
+            LpcRef::from(8)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn implicitly_mixed_collectors_follow_strict_types() {
+    assert_eq!(
+        values(
+            r#"
+            mixed collect(args...) { return args; }
+            mixed *create() {
+                function forward = (: [args...] collect(args...) :);
+                return forward(1, "two");
+            }
+        "#
+        )
+        .await,
+        vec![LpcRef::from(1), s("two")]
+    );
+    for code in [
+        "void collect(args...) {}",
+        "function make() { return (: [args...] 0 :); }",
+    ] {
+        let error = compile_error(&format!("#pragma strict_types\n{code}")).await;
+        assert!(error.contains("Missing type for argument"), "{error}");
+    }
+}
+
+#[tokio::test]
 async fn collects_zero_one_and_many_arguments_in_order() {
     assert_eq!(
         values(
@@ -457,34 +642,39 @@ async fn named_collectors_do_not_define_implicit_argv() {
 
 #[tokio::test]
 async fn named_tails_do_not_relax_required_prefix_count_or_types() {
-    for (call, expected) in [
-        ("collect()", "argument count"),
-        ("collect(\"bad\")", "argument type"),
-    ] {
-        let error = compile_error(&format!(
-            "int collect(int n, mixed *args...) {{ return n; }} int create() {{ return {call}; }}"
-        ))
+    for type_ in ["mixed", "mixed *"] {
+        for (call, expected) in [
+            ("collect()", "argument count"),
+            ("collect(\"bad\")", "argument type"),
+        ] {
+            let error = compile_error(&format!(
+                "int collect(int n, {type_} args...) {{ return n; }} int create() {{ return {call}; }}"
+            ))
+            .await;
+            assert!(error.contains(expected), "{error}");
+        }
+        let error = fails(
+            "",
+            &[],
+            &format!(
+                "int collect(int n, {type_} args...) {{ return n; }}
+                 int create() {{ return collect(({{}})...); }}"
+            ),
+        )
         .await;
-        assert!(error.contains(expected), "{error}");
+        assert!(error.contains("argument count"), "{error}");
     }
-    let error = fails(
-        "",
-        &[],
-        r#"
-        int collect(int n, mixed *args...) { return n; }
-        int create() { return collect(({})...); }
-    "#,
-    )
-    .await;
-    assert!(error.contains("argument count"), "{error}");
 }
 
 #[tokio::test]
-async fn rejects_non_array_reference_and_defaulted_collectors() {
+async fn rejects_invalid_collector_types_references_and_defaults() {
     for (parameter, expected) in [
-        ("mixed args...", "array type"),
+        ("int args...", "array type"),
         ("string args...", "array type"),
+        ("class Record args...", "array type"),
+        ("mixed ref args...", "cannot be `ref`"),
         ("mixed ref *args...", "cannot be `ref`"),
+        ("mixed args = 0...", "cannot have a default"),
         ("mixed *args = ({})...", "cannot have a default"),
     ] {
         for code in [

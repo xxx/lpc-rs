@@ -1,7 +1,7 @@
 # Variadic parameters
 
-A final array parameter followed by `...` collects the arguments after the
-fixed parameters into a new array:
+A final `mixed` or array parameter followed by `...` collects the arguments
+after the fixed parameters into a new array:
 
 ```c
 mixed *collect(int first, mixed *rest...) {
@@ -24,15 +24,30 @@ void create(mixed *args...) {
 
 ## Declarations and types
 
-The collector must be last, have an array type, and have neither `ref` nor a
-default value. `string *names...`, `int *numbers...`, and other array types
-are supported. `*args...` means `mixed *args...` unless
-[`strict_types`](pragmas.md#strict_types) requires an explicit type.
+The collector must be last, have type `mixed` or an array type, and have neither
+`ref` nor a default value. `mixed args...`, `mixed *args...`, `string *names...`,
+`int *numbers...`, and other array types are supported. Other scalar types, such
+as `int args...`, are rejected.
+
+`mixed args...` receives the same collected array as `mixed *args...`, but keeps
+its declared `mixed` type inside the function. Like any other `mixed` local, it
+can later hold a scalar:
+
+```c
+int count(mixed args...) {
+    args = sizeof(args);
+    return args;
+}
+```
+
+Without [`strict_types`](pragmas.md#strict_types), `args...` means
+`mixed args...`, and `*args...` means `mixed *args...`. With the pragma, both
+forms require an explicit type.
 
 The declared type governs uses of the collector inside the function. As with
 other array values, collected elements are not individually type-checked:
-`string *names...` does not reject an integer in the tail. Use `mixed *` for
-heterogeneous arguments, and validate elements when necessary.
+`string *names...` does not reject an integer in the tail. Use `mixed` or
+`mixed *` for heterogeneous arguments, and validate elements when necessary.
 
 The collector is an ordinary local variable: it can be reassigned, captured by
 a closure, or passed to another function using `ref`. Each call creates a fresh
@@ -71,7 +86,8 @@ Each nested callable determines its own reservation of `argv`.
 
 ## FluffOS porting
 
-FluffOS also supports named collectors. In lpc-rs the collector must explicitly
-be an array, and a named tail alone does not make the fixed prefix optional on
-direct calls. Add `varargs` or defaults where needed. See the pinned
-[driver comparison](../driver-comparison.md#fluffos) for the reviewed differences.
+FluffOS also supports named collectors, including `mixed args...`. In lpc-rs,
+other non-array collector types are errors, and a named tail alone does not make
+the fixed prefix optional on direct calls. Add `varargs` or defaults where
+needed. See the pinned [driver comparison](../driver-comparison.md#fluffos) for
+the reviewed differences.
