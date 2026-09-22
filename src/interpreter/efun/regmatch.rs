@@ -71,23 +71,23 @@ pub fn regmatch<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
     let result = if flags & RE_MATCH_SUBS == 0 {
         re.find_at(text, byte_start)
             .filter(|m| !anchored || m.start() == byte_start)
-            .map_or_else(|| LpcRef::from(0), |m| LpcRef::from(m.as_str()))
+            .map_or_else(|| context.txn().nil(), |m| LpcRef::from(m.as_str()))
     } else if let Some(captures) = re.captures_at(text, byte_start) {
         let matched = captures
             .get(0)
             .ok_or_else(|| context.runtime_bug("regmatch: missing full match"))?;
         if anchored && matched.start() != byte_start {
-            LpcRef::from(0)
+            context.txn().nil()
         } else {
             let next = text[..matched.end()].chars().count() + usize::from(matched.is_empty());
             let items = captures
                 .iter()
-                .map(|m| m.map_or_else(|| LpcRef::from(0), |m| LpcRef::from(m.as_str())))
+                .map(|m| m.map_or_else(|| context.txn().nil(), |m| LpcRef::from(m.as_str())))
                 .chain(std::iter::once(LpcRef::from(next as i64)));
             context.mint_array(items)
         }
     } else {
-        LpcRef::from(0)
+        context.txn().nil()
     };
     context.return_efun_result(result);
     Ok(())

@@ -352,7 +352,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .find(|definition| definition.id == *id)
                     .ok_or_else(|| LpcError::bug("missing constructor class definition"))?
                     .clone();
-                let instance = crate::interpreter::lpc_class::LpcClass::new(definition);
+                let instance = crate::interpreter::lpc_class::LpcClass::with_null_mode(
+                    definition,
+                    self.context.txn.null_mode(),
+                );
                 let value = LpcRef::Class(self.context.txn.with(|txn| txn.mint_class(instance)));
                 set_location(&mut self.stack, &self.context.txn, dest, value)?;
             }
@@ -735,6 +738,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             }
                         }
                         LpcRef::Float(_)
+                        | LpcRef::Nil
                         | LpcRef::Int(_)
                         | LpcRef::Class(_)
                         | LpcRef::Mapping(_)

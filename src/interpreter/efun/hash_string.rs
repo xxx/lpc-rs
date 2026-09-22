@@ -3,16 +3,13 @@ use md5::Md5;
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `hash_string(str, algorithm)`: an unsalted, lowercase hexadecimal digest.
 pub fn hash_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let input = match context.arg(0) {
         LpcRef::Int(_) => {
-            context.return_efun_result(NULL);
+            context.return_efun_result(context.txn().nil());
             return Ok(());
         }
         LpcRef::String(s) => s.to_str(),

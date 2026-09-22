@@ -19,7 +19,7 @@ pub fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
     let rule_filter = context
         .try_arg(2)
-        .filter(|r| !r.is_null())
+        .filter(|r| !r.is_null_in(context.txn()))
         .map(|r| match r {
             LpcRef::String(s) => Ok(s.to_str()),
             _ => Err(context.runtime_error("parse_add_synonym: the rule must be a string")),

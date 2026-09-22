@@ -16,10 +16,13 @@ the path to the clone's hook. Other driver loads, including loading the
 prototype before cloning it, supply no arguments. Constructors must therefore
 also handle omitted parameters.
 
-Omitted parameters receive their declared defaults or `0`. Extra arguments
+Omitted parameters receive their declared defaults or the type-aware
+[default value](../../lpc/null.md): zero in zero mode; in distinct mode,
+`0` for int, `0.0` for float and `nil` otherwise. Extra arguments
 are ignored unless the hook declares `...`, which collects them in `argv`.
 Supplied arguments are checked against the declared types at runtime; `0` is
-accepted for every type. Reference parameters are not supported. These rules
+accepted for every type only in zero mode. Distinct nil fits reference types
+and mixed, but not int or float. Reference parameters are not supported. These rules
 apply to driver construction; explicit LPC calls to `create` follow ordinary
 function-call rules.
 
@@ -40,7 +43,7 @@ even if the caller catches the error; catching does not roll back other state
 changes made before the error. In a clone's hook, `this_object()` is the clone,
 `previous_object()` is the object that called `clone_object`, and `this_player()`
 is inherited from that task. Loads without a calling object or player report
-`0` for the corresponding context.
+the selected null value for the corresponding context.
 
 Your mudlib may define more specific creator functions for your objects, which
 you should override instead when they exist. (Typically `create` will be defined

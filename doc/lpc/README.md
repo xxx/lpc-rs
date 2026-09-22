@@ -28,6 +28,7 @@ so you can concentrate on game code while its existing code handles login.
 
 | When you need to… | Read |
 |---|---|
+| Distinguish absence from numeric zero | [Null values and `nil`](null.md) |
 | Store a list of items or a lookup table | [Types](types.md), especially arrays and mappings |
 | Copy nested collections or class records | [`deep_copy`](../efun/deep_copy.md), [`copy_class`](../efun/copy_class.md) |
 | Handle errors from an expression or a block | [`catch`](../efun/catch.md), [`throw`](../efun/throw.md) |

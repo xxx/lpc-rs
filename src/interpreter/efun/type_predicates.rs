@@ -9,7 +9,13 @@ fn type_predicate<const N: usize>(
     context: &mut EfunContext<'_, N>,
     is: fn(&LpcRef) -> bool,
 ) -> Result<()> {
-    let result = is(context.arg(0));
+    let value = context.arg(0);
+    let result = if matches!(value, LpcRef::Object(_)) && value.live_object(context.txn()).is_none()
+    {
+        is(&context.txn().nil())
+    } else {
+        is(value)
+    };
     context.return_efun_result(LpcRef::from(result));
     Ok(())
 }

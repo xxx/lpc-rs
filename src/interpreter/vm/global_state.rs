@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use lpc_rs_errors::{Result, lpc_error};
@@ -98,7 +99,7 @@ impl GlobalState {
         C: Into<Arc<Config>>,
     {
         let conf = config.into();
-        let (committer_tx, commit_watch, committer_handle) = Self::spawn_committer();
+        let (committer_tx, commit_watch, committer_handle) = Self::spawn_committer(conf.null_mode);
 
         let attempt_runner = Arc::new(stm::AttemptRunner::new(
             committer_tx.clone(),
@@ -120,14 +121,16 @@ impl GlobalState {
 
     /// Spawn a committer thread; return its sender, watermark subscription,
     /// and join handle.
-    fn spawn_committer() -> (
+    fn spawn_committer(
+        mode: NullMode,
+    ) -> (
         flume::Sender<CommitProtocol>,
         tokio::sync::watch::Receiver<stm::Version>,
         JoinHandle<Snapshot>,
     ) {
         let (tx, rx) = flume::unbounded();
         let committer_tx = tx.clone();
-        let committer = Committer::new();
+        let committer = Committer::with_null_mode(mode);
         let commit_watch = committer.commit_watch();
         let handle = std::thread::Builder::new()
             .name("stm-committer".into())
@@ -146,7 +149,7 @@ impl GlobalState {
         }
         let (committer_tx, rx) = flume::unbounded();
         let loop_tx = committer_tx.clone();
-        let committer = Committer::new();
+        let committer = Committer::with_null_mode(state.config.null_mode);
         state.attempt_runner = Arc::new(stm::AttemptRunner::new(
             committer_tx.clone(),
             Some(committer.commit_watch()),

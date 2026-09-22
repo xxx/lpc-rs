@@ -59,7 +59,7 @@ impl CompileGate for MasterGate {
             &[
                 LpcRef::from(path),
                 LpcRef::from("include"),
-                LpcRef::from(0),
+                self.ctx.txn().nil(),
                 LpcRef::from(from),
             ],
         )

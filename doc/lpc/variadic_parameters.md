@@ -1,5 +1,9 @@
 # Variadic parameters
 
+Defaults described as zero below use `NULL_MODE=zero`. In distinct mode,
+defaults are `0` for int, `0.0` for float, and `nil` for other values; see
+[null values](null.md).
+
 A final `mixed` or array parameter followed by `...` collects the arguments
 after the fixed parameters into a new array:
 

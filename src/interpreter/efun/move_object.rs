@@ -19,7 +19,8 @@ use crate::{
 pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.arg(0);
     let destination = match arg_ref {
-        LpcRef::Float(_)
+        LpcRef::Nil
+        | LpcRef::Float(_)
         | LpcRef::Int(_)
         | LpcRef::Array(_)
         | LpcRef::Mapping(_)

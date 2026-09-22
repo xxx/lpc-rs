@@ -10,7 +10,7 @@ use crate::interpreter::program::Function;
 use crate::interpreter::{
     call_frame::CollectionCall,
     continuation::Pending,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::{Liveness, Process, shadow::ShadowEntry},
     task::{Task, advance::Advance, get_location, handle_call::CallEntry},
     task_context::{Loader, ObjectLookup, TaskContext},
@@ -67,7 +67,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                 self.push_call_frame(process, function, list, CallEntry::Door)?;
             }
-            None => self.stack.current_frame_mut()?.registers[0] = NULL,
+            None => self.stack.current_frame_mut()?.registers[0] = self.context.txn.nil(),
         }
         Ok(true)
     }
@@ -99,7 +99,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     })
                     .await?;
                 let Some(receiver) = resolved else {
-                    self.stack.current_frame_mut()?.registers[0] = NULL;
+                    self.stack.current_frame_mut()?.registers[0] = self.context.txn.nil();
                     return Ok(());
                 };
                 match self.door_callee(receiver, function_name)? {
@@ -109,7 +109,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         self.push_call_frame(receiver, function, list, CallEntry::Door)?;
                         return Ok(());
                     }
-                    None => NULL,
+                    None => self.context.txn.nil(),
                 }
             }
             // A collection never reaches this door: `call_other_resident`
@@ -220,9 +220,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(Loader {
             func: "call_other".to_string(),
             chain: self.chain()?,
-            program: self
-                .stack
-                .calling_program(self.context.config().lib_dir.as_str()),
+            program: self.stack.calling_program(
+                self.context.config().lib_dir.as_str(),
+                self.context.txn.null_mode(),
+            ),
         })
     }
 

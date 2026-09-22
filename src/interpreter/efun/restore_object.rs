@@ -8,7 +8,7 @@ use crate::interpreter::{
     efun::{efun_context::EfunContext, file_access::authorize_save},
     lpc_ref::LpcRef,
     process::Process,
-    save_format::{read_value, split_line},
+    save_format::{read_value_counted, split_line},
     task_context::ObjectLookup,
 };
 
@@ -32,6 +32,7 @@ pub(crate) fn resolve_object<'a, const N: usize>(
 /// file keep their values. 1 on success, 0 when the file cannot be read,
 /// an error on a corrupt line (earlier lines stay applied).
 pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    let mut collapsed = 0;
     let access = authorize_save(context, "restore_object", VALID_READ, 0).await?;
     let Some(text) = access.read_save(context).await else {
         context.return_efun_result(LpcRef::from(0));
@@ -39,7 +40,7 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
     };
     let process = context.process().clone();
     let image = process.image(context.txn());
-    {
+    let restored = (|| -> Result<()> {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
             let err = |e| access.line_error(context, index + 1, e);
@@ -53,12 +54,21 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
             let Some(RegisterVariant::Global(reg)) = symbol.location else {
                 continue;
             };
-            let value = read_value(value_text, context.txn(), &resolve).map_err(err)?;
+            let (value, count) =
+                read_value_counted(value_text, context.txn(), &resolve).map_err(err)?;
+            collapsed += count;
             context
                 .txn()
                 .with(|t| t.write(image.var_id(reg.index()), value));
         }
+        Ok(())
+    })();
+    if collapsed != 0 {
+        context.record_effect(crate::interpreter::stm::Effect::Warning(format!(
+            "restore_object: {access}: converted {collapsed} nil value(s) to 0 (NULL_MODE=zero)"
+        )));
     }
+    restored?;
     context.return_efun_result(LpcRef::from(1));
     Ok(())
 }

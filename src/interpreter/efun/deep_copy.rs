@@ -20,7 +20,8 @@ fn container_id(value: &LpcRef) -> Option<VarId> {
         LpcRef::Array(cell) => Some(cell.id),
         LpcRef::Mapping(cell) => Some(cell.id),
         LpcRef::Class(cell) => Some(cell.id),
-        LpcRef::Int(_)
+        LpcRef::Nil
+        | LpcRef::Int(_)
         | LpcRef::Float(_)
         | LpcRef::String(_)
         | LpcRef::Bytes(_)

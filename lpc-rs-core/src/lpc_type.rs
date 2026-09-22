@@ -9,6 +9,7 @@ use crate::{class::ClassId, lpc_type_union::LpcTypeUnion, mangle::Mangle};
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Hash)]
 pub enum LpcType {
     Void,
+    Nil,
     Int(bool),
     Float(bool),
     Object(bool),
@@ -24,11 +25,23 @@ pub enum LpcType {
 }
 
 impl LpcType {
+    /// Whether this type can hold a distinct nil value.
+    pub fn accepts_nil(self) -> bool {
+        match self {
+            Self::Void | Self::Int(false) | Self::Float(false) => false,
+            Self::Union(types) => types.types().into_iter().any(Self::accepts_nil),
+            _ => true,
+        }
+    }
+
     /// See if I match another type. Handles unions seamlessly.
     /// This is the main type-checking routine.
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
     pub fn matches_type(self, other: LpcType) -> bool {
+        if other == Self::Nil {
+            return self.accepts_nil();
+        }
         // A value that may be any member is only taken when every member is.
         if let LpcType::Union(other_union) = other {
             other_union
@@ -59,7 +72,7 @@ impl LpcType {
     /// Return if we're an array or not
     pub fn is_array(self) -> bool {
         match self {
-            LpcType::Void => false,
+            LpcType::Void | LpcType::Nil => false,
             LpcType::Int(arr)
             | LpcType::String(arr)
             | LpcType::Bytes(arr)
@@ -85,7 +98,7 @@ impl LpcType {
             LpcType::Object(_) => LpcType::Object(arr),
             LpcType::Function(_) => LpcType::Function(arr),
             LpcType::Class(id, _) => LpcType::Class(id, arr),
-            LpcType::Void => self,
+            LpcType::Void | LpcType::Nil => self,
             LpcType::Union(_) => self,
         }
     }
@@ -94,6 +107,7 @@ impl LpcType {
 impl Mangle for LpcType {
     fn mangle(&self) -> String {
         match self {
+            LpcType::Nil => String::from("n"),
             LpcType::Void => String::from("v"),
             LpcType::Int(a) => {
                 if *a {
@@ -183,6 +197,7 @@ impl Display for LpcType {
         let to_star = |array: &bool| -> &str { if *array { " *" } else { "" } };
 
         let type_ = match self {
+            LpcType::Nil => "nil".to_string(),
             LpcType::Void => String::from("void"),
             LpcType::Int(array) => format!("int{}", to_star(array)),
             LpcType::Float(array) => format!("float{}", to_star(array)),

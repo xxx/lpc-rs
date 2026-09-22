@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 
 use super::{global_state::GlobalState, object_recompile::RecompileTarget};
 use crate::interpreter::{
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     stm::{
         AttemptBody, CommitProtocol, Conflict, Effect, LiveSnapshot, Transaction, TxnHandle,
@@ -33,11 +33,14 @@ pub struct UpdateRequest {
 }
 
 impl UpdateRequest {
-    pub(crate) fn args(&self, target: LpcRef) -> [LpcRef; 3] {
+    pub(crate) fn args(&self, target: LpcRef, txn: &TxnHandle) -> [LpcRef; 3] {
         [
             target,
             self.caller.clone().into(),
-            self.program.as_deref().map(LpcRef::from).unwrap_or(NULL),
+            self.program
+                .as_deref()
+                .map(LpcRef::from)
+                .unwrap_or_else(|| txn.nil()),
         ]
     }
 }

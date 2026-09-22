@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     ops::{Index, IndexMut, RangeFrom},
     sync::Arc,
@@ -10,7 +11,7 @@ use lpc_rs_errors::{LpcError, Result, lpc_error};
 use crate::interpreter::program::Function;
 use crate::interpreter::{
     call_frame::{CallFrame, FrameCells, FrameReceiver},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     task_context::{Caller, Callers},
 };
@@ -182,15 +183,15 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     }
 
     /// The defining file of the top frame's code, as an in-game path with
-    /// its extension (`/secure/master.c`); `NULL` on an empty stack. The
+    /// its extension (`/secure/master.c`); the selected null on an empty stack. The
     /// `calling_program` efun answers the caller's file, not this one.
-    pub fn calling_program(&self, lib_dir: &str) -> LpcRef {
+    pub fn calling_program(&self, lib_dir: &str, mode: NullMode) -> LpcRef {
         match self.last() {
             Some(frame) => {
                 let path = &frame.function.prototype.filename;
                 LpcRef::from(LibRoot::new(lib_dir).source_name(path).to_string())
             }
-            None => NULL,
+            None => LpcRef::nil(mode),
         }
     }
 

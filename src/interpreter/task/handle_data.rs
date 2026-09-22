@@ -398,9 +398,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let key = lpc_ref.mapping_key(&self.context.txn);
                 let var = container_ref
                     .with_mapping(&self.context.txn, |map| {
-                        map.get(&key).cloned().unwrap_or(NULL)
+                        map.get(&key)
+                            .cloned()
+                            .unwrap_or_else(|| self.context.txn.nil())
                     })
-                    .unwrap_or(NULL);
+                    .unwrap_or_else(|_| self.context.txn.nil());
 
                 set_location(&mut self.stack, &self.context.txn, destination, var)?;
 
@@ -438,10 +440,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             if let Some((key, _)) = map.get_index(index as usize) {
                                 key.clone()
                             } else {
-                                NULL
+                                self.context.txn.nil()
                             }
                         })
-                        .unwrap_or(NULL)
+                        .unwrap_or_else(|_| self.context.txn.nil())
                 }
                 x => {
                     return Err(

@@ -179,7 +179,7 @@ async fn try_rules(
         let Some(result) = apply_pointer(ctx, actor, pointer, &args).await? else {
             continue;
         };
-        if !matches!(result, LpcRef::Int(LpcInt(0))) {
+        if !matches!(result, LpcRef::Nil | LpcRef::Int(LpcInt(0))) {
             return Ok(true);
         }
     }

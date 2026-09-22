@@ -2,12 +2,14 @@
 
 Named [classes](classes.md) support shared instances, named construction,
 guarded member access, shallow copying with `copy_class()`, and native persistence.
+[Null values and `nil`](null.md) describes the configurable null representation;
+examples on this page use the default `NULL_MODE=zero` unless stated otherwise.
 
 * `int`
   - Run-of-the-mill signed integers, 64 bits by default. This size is ostensibly
     changeable in `lpc-rs-core`, but no testing is done on different sizes. 
-  - `0` doubles as the null value for LPC, meaning it's always valid to assign it to a variable,
-    and it's returned by functions with non-`int` return types to indicate the absence of a value.
+  - In the default zero mode, `0` doubles as null and fits any value type.
+    Distinct mode uses `nil` for absence and treats `0` as an ordinary integer.
   - `1` and `0` are very commonly used as boolean values in the language.
   - `int`s are value types in LPC, meaning they are copied when assigned, or passed to
     functions.

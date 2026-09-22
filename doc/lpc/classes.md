@@ -1,5 +1,9 @@
 # Classes
 
+Defaults described as zero below use `NULL_MODE=zero`. In distinct mode,
+defaults are `0` for int, `0.0` for float, and `nil` for other values; see
+[null values](null.md).
+
 Classes are shared, nominally typed records. They support declarations,
 construction with named initializers, member reads and writes, shallow copying,
 field evolution across compiled definitions, and native persistence. General

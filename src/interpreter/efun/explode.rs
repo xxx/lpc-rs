@@ -9,7 +9,7 @@ pub fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     };
 
     let delimiter_ref = context.arg(1);
-    let delimiter = if delimiter_ref.is_null() {
+    let delimiter = if delimiter_ref.is_null_in(context.txn()) {
         " "
     } else if let Some(delimiter) = delimiter_ref.as_str() {
         delimiter

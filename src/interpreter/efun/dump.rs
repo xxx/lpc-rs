@@ -64,6 +64,7 @@ pub(super) fn format_ref<const N: usize>(
     recursion_too_deep(recurse_level, context)?;
 
     match lpc_ref {
+        LpcRef::Nil => Ok(format!("{:width$}nil", "", width = indent)),
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Int(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::String(_) => lpc_ref.with_string(|s| {
@@ -79,12 +80,12 @@ pub(super) fn format_ref<const N: usize>(
             lpc_bytes::literal(b),
             width = indent
         )),
-        LpcRef::Object(x) => {
-            let val = x.upgrade();
+        LpcRef::Object(_) => {
+            let val = lpc_ref.live_object(txn);
             if let Some(proc) = val {
                 Ok(format!("{:width$}{}", "", proc, width = indent))
             } else {
-                Ok(format!("{:width$}{}", "", "0", width = indent))
+                Ok(format!("{:width$}{}", "", txn.nil(), width = indent))
             }
         }
         LpcRef::Class(_) => Ok(format!("{:width$}{lpc_ref}", "", width = indent)),

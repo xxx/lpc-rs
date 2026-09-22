@@ -9,7 +9,9 @@ Parse JSON `text` into a value.
 - A string becomes a string, escapes resolved.
 - A number written without a fraction or exponent becomes an int; any other
   number, and an integer too large for an int, becomes a float.
-- `true` becomes 1; `false` and `null` become 0.
+- `true` becomes 1; `false` becomes 0.
+- `null` becomes the selected [null value](../lpc/null.md): `0` in zero mode,
+  `nil` in distinct mode.
 
 Malformed text is an error naming the line and column, as is nesting deeper
 than 128 levels.

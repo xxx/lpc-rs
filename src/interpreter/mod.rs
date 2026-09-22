@@ -119,3 +119,6 @@ pub const SHUTDOWN: &str = "shutdown";
 pub const WINDOW_SIZE: &str = "window_size";
 /// Body apply: the prompt after a command (`doc/apply/special/write_prompt.md`).
 pub const WRITE_PROMPT: &str = "write_prompt";
+
+#[cfg(test)]
+mod null_mode_tests;

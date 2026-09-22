@@ -58,7 +58,7 @@ const MAX_SCOPE_DEPTH: usize = 20;
 /// Register 3: `None` when absent or `NULL`; an array's live objects, with
 /// nested arrays flattened; anything else is an error.
 fn scope_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Option<Vec<Arc<Process>>>> {
-    let Some(value) = context.try_arg(2).filter(|r| !r.is_null()) else {
+    let Some(value) = context.try_arg(2).filter(|r| !r.is_null_in(context.txn())) else {
         return Ok(None);
     };
     match value {
@@ -98,7 +98,7 @@ fn flatten_objects<const N: usize>(
 /// Register 4: empty when absent or `NULL`; a mapping's `(string, object)`
 /// entries as nicknames, other entries skipped; anything else is an error.
 fn nicknames_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Vec<Nickname>> {
-    let Some(value) = context.try_arg(3).filter(|r| !r.is_null()) else {
+    let Some(value) = context.try_arg(3).filter(|r| !r.is_null_in(context.txn())) else {
         return Ok(Vec::new());
     };
     let txn = context.txn();

@@ -8,7 +8,7 @@ use crate::interpreter::{
     },
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
-    save_format::{read_value, split_line},
+    save_format::{read_value_counted, split_line},
 };
 
 /// `restore_map(file)`: the `name value` lines of `<file>.o` as a mapping,
@@ -16,6 +16,7 @@ use crate::interpreter::{
 /// path. A file that cannot be read is an empty mapping; a corrupt line is
 /// an error.
 pub async fn restore_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    let mut collapsed = 0;
     let access = authorize_save(context, "restore_map", VALID_READ, 0).await?;
     let mut entries: IndexMap<LpcRef, LpcRef> = IndexMap::new();
     if let Some(text) = access.read_save(context).await {
@@ -23,9 +24,16 @@ pub async fn restore_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         for (index, line) in text.lines().enumerate() {
             let err = |e| access.line_error(context, index + 1, e);
             let (name, value_text) = split_line(line).map_err(err)?;
-            let value = read_value(value_text, context.txn(), &resolve).map_err(err)?;
+            let (value, count) =
+                read_value_counted(value_text, context.txn(), &resolve).map_err(err)?;
+            collapsed += count;
             entries.insert(LpcRef::from(name), value);
         }
+    }
+    if collapsed != 0 {
+        context.record_effect(crate::interpreter::stm::Effect::Warning(format!(
+            "restore_map: {access}: converted {collapsed} nil value(s) to 0 (NULL_MODE=zero)"
+        )));
     }
     context.return_mapping(LpcMapping::new(entries));
     Ok(())

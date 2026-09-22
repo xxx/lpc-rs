@@ -27,6 +27,10 @@ const DEFAULT_MAX_IDLE_TIME: u64 = 0;
 )]
 #[readonly::make]
 pub struct Config {
+    /// Representation of absent LPC values, fixed for this VM's lifetime.
+    #[builder(default)]
+    pub null_mode: lpc_rs_core::null_mode::NullMode,
+
     #[builder(setter(into, strip_option), default = "None")]
     pub auto_include_file: Option<Ustr>,
 
@@ -188,6 +192,10 @@ impl ConfigBuilder {
         let lib_dir_str = lib_dir.map(|d| d.to_string()).unwrap_or_default();
 
         Ok(Self {
+            null_mode: crate::tls::setting(&env, "NULL_MODE")
+                .map(|value| value.parse().map_err(|error| lpc_error!("{}", error)))
+                .transpose()?
+                .or(self.null_mode),
             log_filter: crate::tls::setting(&env, "RUST_LOG")
                 .map(|value| Some(value.to_owned()))
                 .or(self.log_filter),
@@ -400,6 +408,33 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn null_mode_is_loaded_from_the_config_file() {
+        use lpc_rs_core::null_mode::NullMode;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mud.env");
+        for (text, expected) in [
+            ("NULL_MODE=distinct\n", NullMode::Distinct),
+            ("LPC_NULL_MODE=zero\n", NullMode::Zero),
+        ] {
+            fs::write(&path, text).unwrap();
+            let config = ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .unwrap()
+                .build()
+                .unwrap();
+            assert_eq!(config.null_mode, expected);
+        }
+        fs::write(&path, "NULL_MODE=other\n").unwrap();
+        let error = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("NULL_MODE"));
+    }
 
     #[tokio::test]
     async fn explicit_config_files_fail_closed() {

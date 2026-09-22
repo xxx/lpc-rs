@@ -2,6 +2,10 @@
 
 `string parser_error_message(int kind, object ob, mixed arg, int flag)`
 
+Absent `ob` and absent `arg` values described as `0` below use the selected
+[null value](../../lpc/null.md): `nil` in distinct mode. Numeric counts,
+kind codes, and flags remain integers.
+
 Applied in the master when a `parse_add_rule` rule's parse fails and the
 failure has something worth describing. A string result becomes what
 `parse_sentence` returns, or — on the dispatcher path — what is delivered to

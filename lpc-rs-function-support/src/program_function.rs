@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -34,6 +35,9 @@ use crate::{
 #[derive(Debug, Clone, Eq, PartialEq, Builder)]
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct ProgramFunction {
+    /// Null semantics used when compiling this code.
+    #[builder(default)]
+    pub null_mode: NullMode,
     /// My prototype from compilation
     pub prototype: FunctionPrototype,
 
@@ -111,6 +115,7 @@ impl ProgramFunction {
 
     pub fn new(prototype: FunctionPrototype, num_locals: RegisterSize) -> Self {
         Self {
+            null_mode: Default::default(),
             prototype,
             class_scope: Arc::default(),
             types: vec![],

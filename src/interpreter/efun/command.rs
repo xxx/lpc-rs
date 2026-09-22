@@ -11,10 +11,10 @@ pub async fn command<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     let LpcRef::String(line) = context.arg(0).clone() else {
         return Err(context.runtime_error("command: the command must be a string"));
     };
-    // An omitted default argument arrives as a NULL-filled register, not an absent one.
+    // An omitted reference argument arrives as the selected null value.
     let actor = match context.try_arg(1) {
         None => Some(context.process().clone()),
-        Some(given) if given.is_null() => Some(context.process().clone()),
+        Some(given) if given.is_null_in(context.txn()) => Some(context.process().clone()),
         Some(given @ LpcRef::Object(_)) => given.live_object(context.txn()),
         Some(_) => return Err(context.runtime_error("command: the actor must be an object")),
     };

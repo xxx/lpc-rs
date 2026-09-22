@@ -52,7 +52,7 @@ impl RecompileTarget {
             Self::Object(target) => target
                 .upgrade()
                 .filter(|p| p.is_live(ctx.txn()))
-                .map_or(NULL, |p| Arc::downgrade(&p).into()),
+                .map_or_else(|| ctx.txn().nil(), |p| Arc::downgrade(&p).into()),
             Self::System(target) => target.name().into(),
         }
     }
@@ -66,13 +66,13 @@ impl RecompileTarget {
                 if *target != SystemTarget::Master {
                     prototypes.push(
                         ctx.simul_efuns()
-                            .map_or(NULL, |p| Arc::downgrade(&p).into()),
+                            .map_or_else(|| ctx.txn().nil(), |p| Arc::downgrade(&p).into()),
                     );
                 }
                 if *target != SystemTarget::Simul {
                     prototypes.push(
                         ctx.master_object()
-                            .map_or(NULL, |p| Arc::downgrade(&p).into()),
+                            .map_or_else(|| ctx.txn().nil(), |p| Arc::downgrade(&p).into()),
                     );
                 }
                 prototypes
@@ -141,7 +141,7 @@ pub(crate) async fn authorize(
             ctx,
             callers.clone(),
             VALID_RECOMPILE,
-            &request.args(Arc::downgrade(target).into()),
+            &request.args(Arc::downgrade(target).into(), ctx.txn()),
         )
         .await?
         {

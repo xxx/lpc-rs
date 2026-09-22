@@ -80,6 +80,8 @@ static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 pub(crate) enum Effect {
     /// A line for the in-game debug log (where unreceived `write`s go).
     DebugLog(String),
+    /// A warning emitted only by the committed attempt.
+    Warning(String),
 
     /// A socket operation, with the channel it must be sent on. The op is
     /// `Clone`, so this is a copy of what the efun would have sent directly.
@@ -258,6 +260,13 @@ impl Effect {
     pub(crate) async fn flush(self, global_state: &GlobalState) {
         match self {
             Self::DebugLog(msg) => global_state.config.debug_log(msg).await,
+            Self::Warning(msg) => {
+                tracing::warn!("{msg}");
+                global_state
+                    .config
+                    .debug_log(format!("warning: {msg}"))
+                    .await;
+            }
             Self::Socket { op, tx } => {
                 let _ = tx.send(op);
             }
@@ -471,6 +480,7 @@ impl std::fmt::Debug for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DebugLog(msg) => f.debug_tuple("DebugLog").field(msg).finish(),
+            Self::Warning(msg) => f.debug_tuple("Warning").field(msg).finish(),
             Self::Socket { op, .. } => f.debug_tuple("Socket").field(op).finish(),
             Self::InsertObject { key, .. } => f.debug_tuple("InsertObject").field(key).finish(),
             Self::RemoveObject { key, .. } => f.debug_tuple("RemoveObject").field(key).finish(),

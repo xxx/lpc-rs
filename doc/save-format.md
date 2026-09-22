@@ -24,6 +24,14 @@ key with any of those is refused before anything is written.
 | object | `$` creation time `@` object name `$` | `$1788811132@/std/player#12$` |
 | class | versioned identity, typed slots and views | `c(1,"/record.h","record",({}),({({}),}))` (empty class) |
 | zero | `0` | `0` |
+| nil | `nil` | `nil` |
+
+Saved `0` always reads as numeric zero. Saved `nil` remains nil in
+`NULL_MODE=distinct`; in zero mode it becomes `0`. `restore_object` and
+`restore_map` warn once per call, naming the file and counting converted nil
+values, including nested values and keys. The warning is delivered at commit;
+a caught partial `restore_object` also warns for the earlier lines it applied.
+See [null values](lpc/null.md) for mode selection and mapping-key collisions.
 
 Reading is strict: a missing trailing comma, a space inside a container, a
 tab or double space after the name, a line with no space at all, or a
@@ -41,9 +49,9 @@ A float that is not finite (infinity or NaN) cannot be saved: the writer
 raises a runtime error instead of writing it.
 
 An object reference restores as the live object of that name when it
-exists and was created in the same second, else as 0. A function pointer
+exists and was created in the same second, else as the selected null value. A function pointer
 is never written: a variable holding one is left out of the file, and one
-inside an array, mapping or class field is written as `0`.
+inside an array, mapping or class field is written as the selected null value.
 
 Repeated occurrences of the same array, mapping or class restore as independent
 instances. References between occurrences are not preserved. Cycles cannot be
@@ -91,8 +99,9 @@ name with different declared types across views.
 Restoration rejects unknown versions and field kinds, invalid flags or identities,
 duplicate slot keys, duplicate views, duplicate field names within a view,
 out-of-range indexes, slots unused by every view, and incompatible field values.
-At least one view is required; an empty class has an empty view. Integer zero is
-valid for any field type, and array checks remain shallow. Metadata integers
+At least one view is required; an empty class has an empty view. In zero mode,
+integer zero is valid for any field type. In distinct mode, nil fits reference
+fields and mixed, while zero remains an integer. Array checks remain shallow. Metadata integers
 must be nonnegative and representable; they do not use value-integer clamping.
 Metadata arrays describe schemas and do not count as nested LPC values.
 

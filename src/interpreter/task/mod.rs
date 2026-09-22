@@ -1,4 +1,5 @@
 use lpc_rs_core::mangle::Mangle;
+use lpc_rs_core::null_mode::NullMode;
 mod advance;
 pub mod apply_function;
 pub mod eval_loop;
@@ -144,6 +145,11 @@ impl TaskSeed {
         txn: &TxnHandle,
         upvalue_ptrs: Option<&[VarId]>,
     ) -> Result<CallFrame> {
+        if !function.is_driver_code() && function.null_mode != txn.null_mode() {
+            return Err(LpcError::runtime(
+                "compiled function and VM use different NULL_MODE settings",
+            ));
+        }
         if let Some(i) = function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
                 "argument {} of `{}` must be passed by reference",
@@ -165,8 +171,23 @@ impl TaskSeed {
             }),
             None => FrameReceiver::new(process, txn),
         };
+        if matches!(
+            function.name().as_ref(),
+            lpc_rs_core::INIT_PROGRAM | lpc_rs_core::INIT_GLOBALS
+        ) && txn.null_mode() == NullMode::Distinct
+        {
+            txn.with(|t| {
+                for variable in receiver.image.program.global_variable_info.iter() {
+                    let cell = receiver.image.var_id(variable.slot);
+                    if t.read(cell).is_none() {
+                        t.write(cell, LpcRef::default_for(variable.type_, txn.null_mode()));
+                    }
+                }
+            });
+        }
         let count = RegisterSize::try_from(self.args.len())?;
         let mut frame = CallFrame::with_receiver(receiver, function, count, count, upvalue_ptrs);
+        frame.initialize_parameters(txn);
         frame.origin = self.entry.origin();
         for (i, arg) in self.args.iter().enumerate() {
             frame.push_arg(txn, i, Self::value_of(arg, txn))?;
@@ -500,7 +521,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         local.resolve(&image)?
                     } else if let Some(name) = name {
                         let Some(function) = image.program.lookup_function(name) else {
-                            self.context.result.set(NULL)?;
+                            self.context.result.set(self.context.txn.nil())?;
                             return Ok(());
                         };
                         function.clone()

@@ -1,5 +1,6 @@
 //! Keep the distributed learning material aligned with the compiler and apply API.
 
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -374,4 +375,37 @@ async fn policy_allows_game_objects_and_refuses_privileged_operations() {
     .await
     .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
     assert!(vm.global_state.object_space.lookup("/obj/probe").is_none());
+}
+
+#[tokio::test]
+async fn ulib_compiles_with_distinct_nil() {
+    let config = Arc::new(
+        ConfigBuilder::default()
+            .lib_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/ulib"))
+            .system_include_dirs(vec!["/include"])
+            .null_mode(NullMode::Distinct)
+            .build()
+            .unwrap(),
+    );
+    let root = Path::new(config.lib_dir.as_str());
+    let compiler = CompilerBuilder::default()
+        .config(config.clone())
+        .build()
+        .unwrap();
+    for path in files_below(root) {
+        if path.extension().is_none_or(|ext| ext != "c") {
+            continue;
+        }
+        let relative = path.strip_prefix(root).unwrap().to_str().unwrap();
+        let code = fs::read_to_string(&path)
+            .unwrap()
+            .replace("#if 0\n", "#if 1\n");
+        compiler
+            .compile_string(
+                LpcPath::new_in_game(relative, "/", config.lib_dir.as_str()),
+                code,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("{relative}: {}", e.diagnostic_string()));
+    }
 }

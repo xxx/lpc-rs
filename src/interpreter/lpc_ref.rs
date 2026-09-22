@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     cmp::Ordering,
     fmt,
@@ -67,6 +68,7 @@ fn test_mapping_ref(txn: &TxnHandle, mapping: LpcMapping) -> LpcRef {
 /// This type is intended to be cheap to clone.
 #[derive(Clone)]
 pub enum LpcRef {
+    Nil,
     Float(LpcFloat),
     Int(LpcInt),
 
@@ -151,9 +153,34 @@ fn gone_error(kind: &str) -> LpcError {
 }
 
 impl LpcRef {
+    /// The configured absence value.
+    pub fn nil(mode: NullMode) -> Self {
+        match mode {
+            NullMode::Zero => NULL,
+            NullMode::Distinct => Self::Nil,
+        }
+    }
+
+    /// An uninitialized declaration's value in this mode.
+    pub fn default_for(type_: LpcType, mode: NullMode) -> Self {
+        if mode == NullMode::Zero {
+            return NULL;
+        }
+        match type_ {
+            LpcType::Int(false) => 0.into(),
+            LpcType::Float(false) => 0.0.into(),
+            _ => Self::Nil,
+        }
+    }
+
+    pub(crate) fn is_null_in(&self, txn: &TxnHandle) -> bool {
+        self == &txn.nil() || self.is_dead_object(txn)
+    }
+
     /// Get the type name of the underlying data of this var.
     pub fn type_name(&self) -> &str {
         match self {
+            LpcRef::Nil => "nil",
             LpcRef::Float(_) => "float",
             LpcRef::Int(_) => "int",
             LpcRef::String(_) => "string",
@@ -166,9 +193,9 @@ impl LpcRef {
         }
     }
 
-    /// Is this a null ref?
+    /// Whether this is either null representation, without selecting a VM mode.
     pub fn is_null(&self) -> bool {
-        matches!(self, LpcRef::Int(LpcInt(0)))
+        matches!(self, LpcRef::Nil | LpcRef::Int(LpcInt(0)))
     }
 
     /// The process behind an object ref, `None` once it is dropped;
@@ -192,19 +219,19 @@ impl LpcRef {
         matches!(self, LpcRef::Object(_)) && self.live_object(txn).is_none()
     }
 
-    /// This value as a mapping key: a destructed object is `0`.
+    /// This value as a mapping key: a destructed object uses the selected null value.
     pub(crate) fn mapping_key(&self, txn: &TxnHandle) -> LpcRef {
         if self.is_dead_object(txn) {
-            NULL
+            txn.nil()
         } else {
             self.clone()
         }
     }
 
-    /// The value as a condition sees it: `0`, `0.0` and a destructed object
-    /// are false.
+    /// The value as a condition sees it: `nil`, `0`, `0.0` and destructed objects are false.
     pub(crate) fn is_truthy(&self, txn: &TxnHandle) -> bool {
         match self {
+            LpcRef::Nil => false,
             LpcRef::Int(x) => x.0 != 0,
             LpcRef::Float(_) => self != &LpcRef::Float(Total::from(0.0).into()),
             LpcRef::Object(_) => self.live_object(txn).is_some(),
@@ -212,13 +239,13 @@ impl LpcRef {
         }
     }
 
-    /// `==` as LPC sees it: a destructed object compares as `0`.
+    /// `==` as LPC sees it: a destructed object compares as the selected null value.
     pub(crate) fn eq_in(&self, other: &Self, txn: &TxnHandle) -> bool {
         match (self.is_dead_object(txn), other.is_dead_object(txn)) {
             (false, false) => self == other,
             (true, true) => true,
-            (true, false) => other.is_null(),
-            (false, true) => self.is_null(),
+            (true, false) => other == &txn.nil(),
+            (false, true) => self == &txn.nil(),
         }
     }
 
@@ -307,6 +334,7 @@ impl LpcRef {
 
     pub(crate) fn as_lpc_type(&self, txn: &TxnHandle) -> LpcType {
         match self {
+            LpcRef::Nil => LpcType::Nil,
             LpcRef::Float(_) => LpcType::Float(false),
             LpcRef::Int(_) => LpcType::Int(false),
             LpcRef::String(_) => LpcType::String(false),
@@ -316,17 +344,18 @@ impl LpcRef {
             LpcRef::Class(cell) => txn
                 .with(|t| t.read_class(cell.id))
                 .map_or(LpcType::Void, |instance| LpcType::Class(instance.id, false)),
-            LpcRef::Object(x) if x.strong_count() == 0 => LpcType::Int(false),
+            LpcRef::Object(_) if self.is_dead_object(txn) => txn.nil().as_lpc_type(txn),
             LpcRef::Object(_) => LpcType::Object(false),
             LpcRef::Function(_) => LpcType::Function(false),
         }
     }
 
-    /// Whether a cast to `target` admits this value: 0 passes every cast, a
-    /// destructed object passes like 0, anything else must already be of the
-    /// type (an array is checked as a container, not by element).
+    /// Whether this value fits `target` under the selected null rules; arrays are shallow.
     pub(crate) fn passes_cast(&self, target: LpcType, txn: &TxnHandle) -> bool {
-        self.is_null() || self.is_dead_object(txn) || target.matches_type(self.as_lpc_type(txn))
+        if txn.null_mode() == NullMode::Zero && self.is_null_in(txn) {
+            return true;
+        }
+        target.matches_type(self.as_lpc_type(txn))
     }
 
     pub fn with_string<F, R>(&self, f: F) -> Result<R>
@@ -614,20 +643,10 @@ impl LpcRef {
         self.int_binop(rhs, BinaryOperation::Shr, int_shr)
     }
 
-    /// Logical not (the unary `!` operator): 1 for `0`, `0.0` and a
+    /// Logical not (the unary `!` operator): 1 for `nil`, `0`, `0.0` and a
     /// destructed object, else 0.
     pub(crate) fn not(&self, txn: &TxnHandle) -> Self {
-        match self {
-            LpcRef::Int(x) => LpcRef::Int(LpcInt((*x == 0) as LpcIntInner)),
-            LpcRef::Float(x) => LpcRef::Int(LpcInt((*x == 0.0) as LpcIntInner)),
-            LpcRef::Object(_) => LpcRef::from(self.live_object(txn).is_none()),
-            LpcRef::String(_)
-            | LpcRef::Bytes(_)
-            | LpcRef::Array(_)
-            | LpcRef::Class(_)
-            | LpcRef::Mapping(_)
-            | LpcRef::Function(_) => NULL,
-        }
+        Self::from(!self.is_truthy(txn))
     }
 
     /// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
@@ -694,6 +713,7 @@ impl From<&LpcConstant> for LpcRef {
     #[inline]
     fn from(constant: &LpcConstant) -> Self {
         match constant {
+            LpcConstant::Nil => LpcRef::Nil,
             LpcConstant::Int(x) => LpcRef::Int(LpcInt(*x)),
             LpcConstant::Float(x) => LpcRef::Float(LpcFloat(*x)),
             LpcConstant::String(x) => LpcRef::String(x.clone()),
@@ -749,6 +769,7 @@ impl Hash for LpcRef {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
+            LpcRef::Nil => std::mem::discriminant(self).hash(state),
             LpcRef::Float(x) => x.hash(state),
             LpcRef::Int(x) => x.hash(state),
             LpcRef::String(s) => s.hash(state),
@@ -766,6 +787,7 @@ impl PartialEq for LpcRef {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (LpcRef::Nil, LpcRef::Nil) => true,
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
             (LpcRef::String(a), LpcRef::String(b)) => a == b,
@@ -816,6 +838,7 @@ impl PartialOrd for LpcRef {
 impl Display for LpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            LpcRef::Nil => f.write_str("nil"),
             LpcRef::Float(x) => write!(f, "{x}"),
             LpcRef::Int(x) => write!(f, "{x}"),
             LpcRef::String(s) => write!(f, "{s}"),
@@ -837,6 +860,7 @@ impl Display for LpcRef {
 impl Debug for LpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            LpcRef::Nil => f.write_str("nil"),
             LpcRef::Float(x) => write!(f, "{x:?}"),
             LpcRef::Int(x) => write!(f, "{x:?}"),
             LpcRef::String(s) => write!(f, "{s:?}"),

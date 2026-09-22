@@ -144,6 +144,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 }
             }
             ExpressionNode::Float(_)
+            | ExpressionNode::Nil(_)
             | ExpressionNode::Int(_)
             | ExpressionNode::String(_)
             | ExpressionNode::Var(_)

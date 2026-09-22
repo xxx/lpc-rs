@@ -125,6 +125,7 @@ where
 /// A type to make it easier to set up test expectations for register contents
 #[derive(Debug, Eq, Clone)]
 enum BareVal {
+    Nil,
     String(String),
     Bytes(Vec<u8>),
     Int(LpcIntInner),
@@ -139,6 +140,7 @@ enum BareVal {
 impl BareVal {
     pub fn from_lpc_ref(gs: &Arc<GlobalState>, lpc_ref: &LpcRef) -> Self {
         match lpc_ref {
+            LpcRef::Nil => BareVal::Nil,
             LpcRef::Float(x) => BareVal::Float(x.0),
             LpcRef::Int(x) => BareVal::Int(x.0),
             LpcRef::String(x) => BareVal::String(x.to_string()),
@@ -209,6 +211,7 @@ impl BareVal {
 impl Hash for BareVal {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
+            BareVal::Nil => std::mem::discriminant(self).hash(state),
             BareVal::Float(x) => x.hash(state),
             BareVal::Int(x) => x.hash(state),
             BareVal::String(x) => x.hash(state),
@@ -229,6 +232,7 @@ impl Hash for BareVal {
 impl PartialEq for BareVal {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (BareVal::Nil, BareVal::Nil) => true,
             (BareVal::Float(x), BareVal::Float(y)) => x == y,
             (BareVal::Int(x), BareVal::Int(y)) => x == y,
             (BareVal::String(x), BareVal::String(y)) => x == y,
@@ -246,6 +250,7 @@ impl PartialEq for BareVal {
 impl Display for BareVal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            BareVal::Nil => write!(f, "nil"),
             BareVal::Float(x) => write!(f, "{x}"),
             BareVal::Int(x) => write!(f, "{x}"),
             BareVal::String(x) => write!(f, "\"{x}\""),
@@ -4544,6 +4549,7 @@ mod test_instructions {
                 .build()
                 .unwrap();
             let initializer = ProgramFunction {
+                null_mode: Default::default(),
                 prototype,
                 class_scope: Arc::default(),
                 types: vec![],

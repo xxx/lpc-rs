@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     borrow::Cow,
     fmt,
@@ -238,13 +239,15 @@ impl CallFrame {
         V: Into<FrameCells>,
         F: Into<Function>,
     {
-        Self::with_receiver(
+        let frame = Self::with_receiver(
             FrameReceiver::new(process.into(), txn),
             function.into(),
             called_with_num_args,
             arg_capacity,
             upvalue_ptrs,
-        )
+        );
+        frame.initialize_parameters(txn);
+        frame
     }
 
     #[inline]
@@ -273,6 +276,22 @@ impl CallFrame {
             pending: None,
             external: false,
             origin: CallOrigin::Local,
+        }
+    }
+
+    /// Seed the new cells of captured parameters before binding supplied arguments.
+    pub(crate) fn initialize_parameters(&self, txn: &TxnHandle) {
+        if self.function.null_mode == NullMode::Distinct {
+            for (index, location) in self.function.arg_locations.iter().enumerate() {
+                if let RegisterVariant::Upvalue(reg) = location {
+                    let cell = self.upvalue_ptrs[usize::from(reg.index())];
+                    let value = LpcRef::default_for(
+                        self.function.prototype.arg_types[index],
+                        self.function.null_mode,
+                    );
+                    txn.with(|t| t.write(cell, value));
+                }
+            }
         }
     }
 

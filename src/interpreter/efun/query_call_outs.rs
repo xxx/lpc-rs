@@ -1,11 +1,11 @@
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 pub fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let owner = match context.arg(0) {
         LpcRef::Object(process) => process.upgrade(),
-        LpcRef::Int(LpcInt(0)) => Some(context.process().clone()),
+        value if value == &context.txn().nil() => Some(context.process().clone()),
         _ => return Err(context.runtime_error("non-object sent to `query_call_outs`")),
     };
 
@@ -25,6 +25,7 @@ pub fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::lpc_int::LpcInt;
 
     use super::*;
     use crate::test_support::run_prog;

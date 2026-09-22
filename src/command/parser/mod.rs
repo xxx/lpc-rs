@@ -150,14 +150,15 @@ async fn report(
         return Ok(silent);
     };
     let arg = match failure.arg {
-        Arg::None => LpcRef::from(0),
+        Arg::None => ctx.txn().nil(),
         Arg::Text(text) => LpcRef::from(text.as_str()),
         Arg::Count(n) => LpcRef::from(n),
         Arg::Objects(candidates) => ask.objects(&candidates),
     };
-    let object = failure.object.map_or(LpcRef::from(0), |target| {
-        LpcRef::from(Arc::downgrade(ask.process(target)))
-    });
+    let object = failure.object.map_or_else(
+        || ctx.txn().nil(),
+        |target| LpcRef::from(Arc::downgrade(ask.process(target))),
+    );
     let args = [
         LpcRef::from(failure.kind as i64),
         object,

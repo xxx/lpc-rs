@@ -19,6 +19,10 @@ or a master that does not define the apply, is the runtime error
 A file that is not UTF-8 is read as Latin-1. The format is described in
 [`doc/save-format.md`](../save-format.md).
 
+Saved `0` remains numeric zero. Saved `nil` is preserved in distinct mode;
+zero mode converts it to `0` and emits one commit-time warning with the path
+and conversion count. See [null values](../lpc/null.md).
+
 ### Examples
 
 ```c

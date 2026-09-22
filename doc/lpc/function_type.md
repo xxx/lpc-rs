@@ -194,3 +194,7 @@ the bare function name; [`function_description`](../efun/function_description.md
 includes the receiver and masked argument positions for display.
 Bare local and efun pointers use their owner as the receiver;
 an unbound dynamic pointer has no receiver until one is supplied.
+
+Unfilled partial-application holes supply the selected [null value](null.md),
+including distinct nil in distinct mode. A hole is a supplied argument, so it
+does not trigger a declared parameter default.

@@ -13,7 +13,7 @@ private string material;
 /**
  * clone_object("/obj/box", "oak") passes "oak" to this constructor.
  * Loading the prototype or cloning without arguments uses "wooden"; an
- * explicit 0 is preserved, so the constructor also handles it below.
+ * explicit nil is preserved, so the constructor also handles it below.
  * Globals are initialised first; the return value is ignored, and this hook
  * shares the caller's transaction and this_player(); previous_object() is the cloner.
  */

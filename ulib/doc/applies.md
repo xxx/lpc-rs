@@ -23,7 +23,11 @@ Every source function has adjacent documentation describing its role, inputs
 and result. Apply comments also explain omission defaults and why ulib makes
 its particular choice; parser examples identify which object owns each hook.
 
-`0` is also the absent value for LPC strings, objects and arrays. Unless an
+The default `NULL_MODE=zero` uses `0` as the absent value for LPC strings,
+objects and arrays. With `NULL_MODE=distinct`, absence uses `nil`; omitted
+parameters use `0` for int, `0.0` for float and `nil` otherwise. The zero
+absence descriptions below assume the default mode; numeric status codes
+and parser flags stay numeric in both modes. Unless an
 entry says otherwise, an optional missing hook performs no mudlib action.
 
 ## Master applies

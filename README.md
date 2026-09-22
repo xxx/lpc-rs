@@ -128,6 +128,10 @@ your configuration when starting the driver from another directory.
 See [default.env](default.env) for configuration options, including include
 paths, simulated efuns, execution limits and logging.
 
+`NULL_MODE=zero` preserves zero-as-null behavior; `NULL_MODE=distinct` enables
+a separate `nil` value. See [null values](doc/lpc/null.md) for defaults, type
+checks, and save-file behavior. Examples assume zero mode unless stated otherwise.
+
 For TLS certificate issuance and renewal, install the optional certificate helper
 from the repository checkout:
 

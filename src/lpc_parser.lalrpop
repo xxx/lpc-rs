@@ -26,6 +26,7 @@ use crate::compiler::ast::function_def_node::FunctionDefNode;
 use crate::compiler::ast::if_node::IfNode;
 use crate::compiler::ast::inherit_node::InheritNode;
 use crate::compiler::ast::int_node::IntNode;
+use crate::compiler::ast::nil_node::NilNode;
 use crate::compiler::ast::labeled_statement_node::LabeledStatementNode;
 use crate::compiler::ast::label_node::LabelNode;
 use crate::compiler::ast::mapping_node::MappingNode;
@@ -159,6 +160,7 @@ extern {
         ".." => Token::Range(<Span>),
 
         "StringLiteral" => Token::StringLiteral(<StringToken>),
+        "nil" => Token::Nil(<Span>),
         "IntLiteral" => Token::IntLiteral(<IntToken>),
         "MinIntMagnitude" => Token::MinIntMagnitude(<Span>),
         "FloatLiteral" => Token::FloatLiteral(<FloatToken>),
@@ -1282,6 +1284,7 @@ Var: ExpressionNode = {
 };
 
 Int: ExpressionNode = {
+    <span:"nil"> => ExpressionNode::Nil(NilNode::new(Some(span))),
     <i:"IntLiteral"> =>? {
         Ok(ExpressionNode::Int(
             IntNode {

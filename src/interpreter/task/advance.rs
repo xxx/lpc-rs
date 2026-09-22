@@ -12,7 +12,7 @@ use crate::interpreter::{
     continuation::{Callee, Next, Pending},
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     stm::VarId,
     task::{
@@ -90,7 +90,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     self.restore_pending(owner, pending)?;
                                     return Ok(Advance::Suspends);
                                 }
-                                Called::Unresolved => result = Some(NULL),
+                                Called::Unresolved => result = Some(self.context.txn.nil()),
                                 Called::Suspends => {
                                     cont.suspended = Some(callee);
                                     self.restore_pending(owner, pending)?;
@@ -189,10 +189,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             )?;
                             return Ok(Collected::Framed);
                         }
-                        None => call.results.push(NULL),
+                        None => call.results.push(self.context.txn.nil()),
                     }
                 }
-                Standing::Dead | Standing::Removed(_) => call.results.push(NULL),
+                Standing::Dead | Standing::Removed(_) => call.results.push(self.context.txn.nil()),
                 Standing::Uncreated(_) | Standing::Uninitialized(_) => {
                     call.remaining.push(receiver);
                     return Ok(Collected::Suspends);
@@ -265,7 +265,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             Resolved::Framed
                         }
                         None => {
-                            call.results.push(NULL);
+                            call.results.push(self.context.txn.nil());
                             Resolved::Continue { answered: false }
                         }
                     }
@@ -284,7 +284,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     {
                         Called::Framed => Resolved::Framed,
                         Called::Unresolved => {
-                            self.stack.current_frame_mut()?.registers[0] = NULL;
+                            self.stack.current_frame_mut()?.registers[0] = self.context.txn.nil();
                             Resolved::Continue { answered: true }
                         }
                         Called::Suspends | Called::Pending => {

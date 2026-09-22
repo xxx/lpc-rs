@@ -53,7 +53,7 @@ pub struct EfunContext<'task, const N: usize> {
     /// The efun being called.
     efun: Efun,
 
-    /// The argument values in call order, padded with `NULL` to the
+    /// The argument values in call order, padded with type-aware defaults to the
     /// prototype's arity; a by-reference argument is its cell's value at
     /// the call.
     args: SmallVec<[LpcRef; 4]>,
@@ -119,7 +119,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                         )));
                     }
                     let cell = caller.ref_cell(location)?;
-                    txn.with(|t| t.read(cell).unwrap_or(NULL))
+                    txn.with(|t| t.read(cell).unwrap_or_else(|| txn.nil()))
                 }
                 Arg::Spread(location) => {
                     for (offset, value) in caller
@@ -185,11 +185,21 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let mut args = args;
         let declared = usize::from(efun.prototype().arity.num_args);
         if args.len() < declared {
-            args.resize(declared, NULL);
+            args.extend((args.len()..declared).map(|i| {
+                LpcRef::default_for(
+                    efun.prototype()
+                        .arg_types
+                        .get(i)
+                        .copied()
+                        .unwrap_or(lpc_rs_core::lpc_type::LpcType::Mixed(false)),
+                    task_context.txn().null_mode(),
+                )
+            }));
         }
-        // An efun that answers 0 by leaving the result slot alone relies on this.
+        // Omitted results use the efun's declared return type.
         if let Some(frame) = stack.last_mut() {
-            frame.registers[0] = NULL;
+            frame.registers[0] =
+                LpcRef::default_for(efun.prototype().return_type, task_context.txn().null_mode());
         }
         Self {
             stack,
@@ -623,9 +633,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// caller's file, not this one.
     pub(crate) fn calling_program(&self) -> LpcRef {
         let root = self.config().paths();
-        self.calling_program_path().map_or(NULL, |path| {
-            LpcRef::from(root.source_name(path).to_string())
-        })
+        self.calling_program_path().map_or_else(
+            || self.txn().nil(),
+            |path| LpcRef::from(root.source_name(path).to_string()),
+        )
     }
 
     /// The source identity behind [`Self::calling_program`], before display formatting.

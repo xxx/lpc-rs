@@ -1,11 +1,13 @@
 //! Immutable view of world state at a single [`Version`].
 
 use imbl::HashMap;
+use lpc_rs_core::null_mode::NullMode;
 
 use crate::interpreter::stm::{VarId, Version, WorldValue, changeset::Changeset};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Snapshot {
+    pub(crate) null_mode: NullMode,
     version: Version,
     // HAMT: O(1) structurally-shared clones, hash-probed lookups.
     state: HashMap<VarId, WorldValue>,
@@ -13,7 +15,11 @@ pub(crate) struct Snapshot {
 
 impl Snapshot {
     pub(crate) fn new(version: Version, state: HashMap<VarId, WorldValue>) -> Self {
-        Self { version, state }
+        Self {
+            version,
+            state,
+            null_mode: Default::default(),
+        }
     }
 
     pub(crate) fn read(&self, var_id: VarId) -> Option<WorldValue> {
@@ -49,7 +55,11 @@ impl Snapshot {
                 None => state.remove(&var_id),
             };
         }
-        Self::new(version, state)
+        Self {
+            version,
+            state,
+            null_mode: self.null_mode,
+        }
     }
 }
 

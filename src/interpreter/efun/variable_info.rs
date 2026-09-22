@@ -7,7 +7,7 @@ use crate::interpreter::{
     apply::valid_apply,
     efun::{efun_context::EfunContext, inspection_target},
     lpc_mapping::LpcMapping,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
 };
 
 pub async fn variable_info<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -43,7 +43,7 @@ pub async fn variable_info<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         let value = context
             .txn()
             .with(|t| t.read(image.var_id(variable.slot)))
-            .unwrap_or(NULL);
+            .unwrap_or(context.txn().nil());
         let fields = [
             ("name", variable.name.as_str().into()),
             (

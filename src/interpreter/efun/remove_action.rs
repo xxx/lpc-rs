@@ -17,9 +17,9 @@ pub fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     };
     let this_object = context.process().clone();
 
-    // An omitted default arg is still a live register, filled with NULL
+    // An omitted reference argument arrives as the selected null value.
     // rather than left absent.
-    let second = context.try_arg(1).filter(|r| !r.is_null());
+    let second = context.try_arg(1).filter(|r| !r.is_null_in(context.txn()));
     let (verb, function_name, target): (String, Option<String>, Arc<Process>) = match second {
         None => (first.to_str().to_owned(), None, player(context)?),
         Some(LpcRef::String(verb)) => (

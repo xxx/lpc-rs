@@ -1,5 +1,6 @@
 //! Transactional class instances and guarded access through compiled definitions.
 
+use lpc_rs_core::null_mode::NullMode;
 use std::{collections::HashSet, sync::Arc};
 
 use lpc_rs_core::class::{ClassDefinition, ClassField, ClassId, ClassScope};
@@ -7,7 +8,7 @@ use lpc_rs_errors::{LpcError, Result};
 use ustr::Ustr;
 
 use crate::interpreter::{
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     stm::{SVar, TxnHandle},
 };
 
@@ -26,14 +27,21 @@ struct View {
 /// A shared instance whose retained views reuse storage by field name and type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LpcClass {
+    null_mode: NullMode,
     pub(crate) id: ClassId,
     slots: Vec<Slot>,
     views: Vec<View>,
 }
 
 impl LpcClass {
+    #[cfg(test)]
     pub(crate) fn new(definition: Arc<ClassDefinition>) -> Self {
+        Self::with_null_mode(definition, Default::default())
+    }
+
+    pub(crate) fn with_null_mode(definition: Arc<ClassDefinition>, null_mode: NullMode) -> Self {
         let mut instance = Self {
+            null_mode,
             id: definition.id,
             slots: Vec::new(),
             views: Vec::new(),
@@ -122,6 +130,7 @@ impl LpcClass {
             return Err(invalid("class slot is not used by any view"));
         }
         Ok(Self {
+            null_mode: txn.null_mode(),
             id,
             slots: fields
                 .into_iter()
@@ -155,7 +164,7 @@ impl LpcClass {
                     .unwrap_or_else(|| {
                         self.slots.push(Slot {
                             field: field.clone(),
-                            value: NULL,
+                            value: LpcRef::default_for(field.type_, self.null_mode),
                         });
                         self.slots.len() - 1
                     })
@@ -259,6 +268,7 @@ pub(crate) fn write_member(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interpreter::lpc_ref::NULL;
     use crate::{
         compiler::Compiler,
         test_support::{run_prog, try_run_prog},

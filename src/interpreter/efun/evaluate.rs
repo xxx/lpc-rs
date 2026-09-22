@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     continuation::{Callee, Continuation, Next},
     efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     stm::TxnHandle,
 };
 
@@ -30,10 +30,10 @@ pub fn evaluate<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
 struct Evaluate(Option<Callee>);
 
 impl Continuation for Evaluate {
-    fn advance(&mut self, result: Option<LpcRef>, _txn: &TxnHandle) -> Result<Next> {
+    fn advance(&mut self, result: Option<LpcRef>, txn: &TxnHandle) -> Result<Next> {
         Ok(match self.0.take() {
             Some(callee) => Next::Call(callee),
-            None => Next::Done(result.unwrap_or(NULL)),
+            None => Next::Done(result.unwrap_or(txn.nil())),
         })
     }
 

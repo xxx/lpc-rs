@@ -26,7 +26,8 @@ pub(crate) fn size_of(lpc_ref: &LpcRef, txn: &TxnHandle) -> Result<LpcRef> {
             LpcRef::Int(LpcInt(l as LpcIntInner))
         }
         LpcRef::Bytes(b) => LpcRef::Int(LpcInt(b.len() as LpcIntInner)),
-        LpcRef::Float(_)
+        LpcRef::Nil
+        | LpcRef::Float(_)
         | LpcRef::Int(_)
         | LpcRef::Object(_)
         | LpcRef::Class(_)

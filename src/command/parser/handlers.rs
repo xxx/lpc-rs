@@ -72,7 +72,7 @@ impl From<&LpcRef> for Reply {
     /// Read a handler's return value.
     fn from(value: &LpcRef) -> Self {
         match value {
-            LpcRef::Int(LpcInt(0)) => Reply::No,
+            LpcRef::Nil | LpcRef::Int(LpcInt(0)) => Reply::No,
             LpcRef::String(_) => {
                 let text = value.as_str().unwrap_or_default();
                 match text.strip_prefix('#') {

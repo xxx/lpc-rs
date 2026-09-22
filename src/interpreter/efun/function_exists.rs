@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::{arg_or_this_object, efun_context::EfunContext},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
 };
 
 /// `function_exists(name [, ob])`: the file defining `name` in `ob` (the
@@ -19,7 +19,7 @@ pub async fn function_exists<const N: usize>(context: &mut EfunContext<'_, N>) -
         )));
     };
     let Some(target) = arg_or_this_object(context.arg(1), context).await? else {
-        context.return_efun_result(NULL);
+        context.return_efun_result(context.txn().nil());
         return Ok(());
     };
     let own = Arc::ptr_eq(&target, context.process());
@@ -33,12 +33,13 @@ pub async fn function_exists<const N: usize>(context: &mut EfunContext<'_, N>) -
             .cloned(),
         None => program.lookup_function(name).cloned(),
     };
-    let result = function
-        .filter(|function| own || function.public())
-        .map_or(NULL, |function| {
+    let result = function.filter(|function| own || function.public()).map_or(
+        context.txn().nil(),
+        |function| {
             let file = function.prototype.filename.with_extension("");
             LpcRef::from(context.config().paths().source_name(&file).to_string())
-        });
+        },
+    );
     context.return_efun_result(result);
     Ok(())
 }

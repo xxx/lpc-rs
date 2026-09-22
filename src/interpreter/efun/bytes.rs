@@ -55,7 +55,7 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     let size = all.len() as u64;
     let from = offset(start, size);
     let result = if from >= size {
-        LpcRef::from(0)
+        context.txn().nil()
     } else {
         let to = length.map_or(size, |n| from.saturating_add(n).min(size));
         let bytes = all[from as usize..to as usize].to_vec();

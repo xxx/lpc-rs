@@ -26,7 +26,7 @@ use crate::{
     compile_time_config::DRIVER_VERSION,
     interpreter::{
         GET_MUD_STATS, GMCP, NET_DEAD, WINDOW_SIZE, WRITE_PROMPT,
-        lpc_ref::{LpcRef, NULL},
+        lpc_ref::LpcRef,
         process::Process,
         task::{
             apply_function::{applied_in_master, apply_function_by_name, report_runtime_error},
@@ -399,8 +399,9 @@ impl Telnet {
         {
             Some(Ok(value)) => Some(value),
             Some(Err(e)) => {
+                let nil = LpcRef::nil(template.global_state.config.null_mode);
                 report_runtime_error(&e, Some(body), template).await;
-                Some(NULL)
+                Some(nil)
             }
             None => None,
         }

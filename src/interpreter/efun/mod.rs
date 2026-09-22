@@ -159,7 +159,6 @@ use tracing::trace;
 use crate::{
     interpreter::{
         efun::efun_context::EfunContext,
-        lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
         stm::{Effect, TxnHandle},
@@ -1301,7 +1300,7 @@ async fn arg_or_this_object<const N: usize>(
     context: &EfunContext<'_, N>,
 ) -> Result<Option<Arc<Process>>> {
     Ok(match arg_ref {
-        LpcRef::Int(LpcInt(0)) => Some(context.process().clone()),
+        value if value == &context.txn().nil() => Some(context.process().clone()),
         LpcRef::String(path) => Some(context.load_object(path.to_str()).await?),
         _ => arg_ref.live_object(context.txn()),
     })
@@ -1313,7 +1312,7 @@ fn inspection_target<const N: usize>(
     name: &str,
 ) -> Result<Option<Arc<Process>>> {
     match context.arg(0) {
-        LpcRef::Int(LpcInt(0)) => Ok(None),
+        value if value == &context.txn().nil() => Ok(None),
         value @ LpcRef::Object(_) => Ok(value.live_object(context.txn())),
         _ => Err(context.runtime_error(format!("{name}: expected an object"))),
     }
@@ -1332,7 +1331,7 @@ pub(crate) fn in_game_name<const N: usize>(
 /// argument is absent or 0 — or `None` when there is none.
 fn connection_of<const N: usize>(context: &EfunContext<'_, N>) -> Option<Arc<Connection>> {
     let target = match context.arg(0) {
-        LpcRef::Int(LpcInt(0)) => context.this_player().load_full(),
+        value if value == &context.txn().nil() => context.this_player().load_full(),
         arg => arg.live_object(context.txn()),
     };
     target.and_then(|proc| {

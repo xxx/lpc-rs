@@ -31,6 +31,7 @@ pub struct LpcTypeUnion {
     pub mixed_array: bool,
     pub function: bool,
     pub function_array: bool,
+    pub nil: bool,
 }
 
 impl LpcTypeUnion {
@@ -38,6 +39,7 @@ impl LpcTypeUnion {
     pub fn insert(&mut self, type_: LpcType) -> Result<(), ClassId> {
         match type_ {
             LpcType::Class(id, _) => return Err(id),
+            LpcType::Nil => self.set_nil(true),
             LpcType::Void => self.set_void(true),
             LpcType::Int(array) => {
                 if array {
@@ -111,6 +113,7 @@ impl LpcTypeUnion {
         }
 
         match other {
+            LpcType::Nil => self.nil(),
             LpcType::Void => self.void(),
             LpcType::Int(array) => {
                 if array {
@@ -182,6 +185,7 @@ impl LpcTypeUnion {
     /// The member types, in declaration order.
     pub fn types(self) -> Vec<LpcType> {
         let members = [
+            (self.nil(), LpcType::Nil),
             (self.void(), LpcType::Void),
             (self.int(), LpcType::Int(false)),
             (self.int_array(), LpcType::Int(true)),
@@ -237,6 +241,9 @@ impl Mangle for LpcTypeUnion {
     fn mangle(&self) -> String {
         let mut vec = vec![];
 
+        if self.nil() {
+            vec.push(LpcType::Nil.mangle());
+        }
         if self.void() {
             vec.push(LpcType::Void.mangle())
         }

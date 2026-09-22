@@ -1,5 +1,6 @@
 //! Utility functions for doing various semantic checks.
 
+use lpc_rs_core::null_mode::NullMode;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use phf::phf_set;
@@ -46,6 +47,7 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "int",
     "mapping",
     "mixed",
+    "nil",
     "nomask",
     "nosave",
     "object",
@@ -318,17 +320,17 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
 
 /// An assignment's value is its right side, though `node_type` gives it the
 /// left side's type.
-fn is_literal_zero(expression: &ExpressionNode) -> bool {
+fn is_null_literal(expression: &ExpressionNode, context: &CompilationContext) -> bool {
     match expression {
-        ExpressionNode::Int(IntNode { value: 0, .. }) => true,
-        ExpressionNode::Assignment(AssignmentNode { rhs, .. }) => is_literal_zero(rhs),
+        ExpressionNode::Nil(_) => true,
+        ExpressionNode::Int(IntNode { value: 0, .. }) => context.config.null_mode == NullMode::Zero,
+        ExpressionNode::Assignment(AssignmentNode { rhs, .. }) => is_null_literal(rhs, context),
         _ => false,
     }
 }
 
-/// The expression's type when `expected` does not take it: a literal `0` is
-/// taken by any type, `void` takes nothing, and `mixed` on either side takes
-/// the other.
+/// The expression's type when `expected` does not take it under the configured
+/// null rules; `void` takes nothing, and `mixed` on either side takes the other.
 ///
 /// # Arguments
 /// * `expected` - The declared type at the site.
@@ -339,7 +341,9 @@ pub fn mismatch(
     expression: &ExpressionNode,
     context: &CompilationContext,
 ) -> Result<Option<LpcType>> {
-    if is_literal_zero(expression) {
+    if is_null_literal(expression, context)
+        && (context.config.null_mode == NullMode::Zero || expected.accepts_nil())
+    {
         return Ok(None);
     }
 
@@ -365,10 +369,11 @@ pub fn cast_possible(source: LpcType, target: LpcType) -> bool {
     }
 }
 
-/// The source type of a cast that can never hold, if this is one. A literal
-/// 0 is every type.
+/// The source type of a cast that can never hold under the configured null rules.
 pub fn impossible_cast(node: &CastNode, context: &CompilationContext) -> Result<Option<LpcType>> {
-    if is_literal_zero(&node.expr) {
+    if is_null_literal(&node.expr, context)
+        && (context.config.null_mode == NullMode::Zero || node.type_.resolved()?.accepts_nil())
+    {
         return Ok(None);
     }
 
@@ -492,6 +497,11 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             }
         }
         ExpressionNode::Float(_) => Ok(LpcType::Float(false)),
+        ExpressionNode::Nil(_) => Ok(if context.config.null_mode == NullMode::Distinct {
+            LpcType::Nil
+        } else {
+            LpcType::Int(false)
+        }),
         ExpressionNode::Int(_) => Ok(LpcType::Int(false)),
         ExpressionNode::Range(_) => Ok(LpcType::Int(false)),
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
@@ -551,8 +561,10 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             _ => node_type(expr, context),
         },
         ExpressionNode::Array(node) => {
-            // A literal 0 is taken by any type.
-            let typed = node.value.iter().filter(|i| !is_literal_zero(i));
+            // Only legacy zero can be ignored for every element type.
+            let typed = node.value.iter().filter(|i| {
+                context.config.null_mode != NullMode::Zero || !is_null_literal(i, context)
+            });
             let res: Result<Vec<_>> = typed.map(|i| node_type(i, context)).collect();
 
             let value_types = res?;
@@ -563,8 +575,12 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
 
             if value_types.iter().any(|ty| ty.is_array()) {
                 Ok(LpcType::Mixed(true))
-            } else if value_types.windows(2).all(|w| w[0] == w[1]) {
-                Ok(value_types[0].as_array(true))
+            } else if let Some(type_) = value_types.iter().copied().find(|ty| *ty != LpcType::Nil)
+                && value_types
+                    .iter()
+                    .all(|ty| *ty == type_ || (*ty == LpcType::Nil && type_.accepts_nil()))
+            {
+                Ok(type_.as_array(true))
             } else {
                 Ok(LpcType::Mixed(true))
             }
@@ -572,11 +588,17 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Ternary(TernaryNode {
             body, else_clause, ..
         }) => {
-            if is_literal_zero(body) {
+            if is_null_literal(body, context)
+                && (context.config.null_mode == NullMode::Zero
+                    || node_type(else_clause, context)?.accepts_nil())
+            {
                 return node_type(else_clause, context);
             }
 
-            if is_literal_zero(else_clause) {
+            if is_null_literal(else_clause, context)
+                && (context.config.null_mode == NullMode::Zero
+                    || node_type(body, context)?.accepts_nil())
+            {
                 return node_type(body, context);
             }
 

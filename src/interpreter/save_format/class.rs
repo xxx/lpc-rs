@@ -64,7 +64,7 @@ fn write_type(out: &mut String, type_: LpcType) -> Result<()> {
         LpcType::Function(_) => "function",
         LpcType::Mixed(_) => "mixed",
         LpcType::Class(_, _) => "class",
-        LpcType::Void | LpcType::Union(_) => {
+        LpcType::Nil | LpcType::Void | LpcType::Union(_) => {
             return Err(LpcError::runtime("save file: unsupported class field type"));
         }
     };

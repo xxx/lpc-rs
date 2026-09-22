@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     VALID_READ,
     efun::{efun_context::EfunContext, file_access::authorize},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
 };
 
 /// `read_file(path [, start [, lines]])`: the file as a string, once the
@@ -23,7 +23,7 @@ pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         contents
     };
     let result = if start > 1 && contents.is_empty() {
-        NULL
+        context.txn().nil()
     } else {
         LpcRef::from(contents)
     };

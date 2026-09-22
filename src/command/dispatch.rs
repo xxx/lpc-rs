@@ -142,7 +142,7 @@ async fn process_input(
         {
             None => Some(line.to_owned()),
             Some(LpcRef::String(replacement)) => Some(replacement.to_string()),
-            Some(LpcRef::Int(LpcInt(0))) => Some(line.to_owned()),
+            Some(LpcRef::Nil | LpcRef::Int(LpcInt(0))) => Some(line.to_owned()),
             Some(_) => None,
         },
     )

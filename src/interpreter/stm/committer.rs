@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Deref,
@@ -227,6 +228,12 @@ impl Committer {
         }
     }
 
+    pub(crate) fn with_null_mode(mode: NullMode) -> Self {
+        let mut committer = Self::new();
+        committer.snapshot.null_mode = mode;
+        committer
+    }
+
     /// Subscribe to the per-commit watermark bump.
     pub(crate) fn commit_watch(&self) -> watch::Receiver<Version> {
         self.commit_watch.subscribe()
@@ -394,6 +401,7 @@ impl Committer {
                         }
                     }
                     LpcRef::Float(_)
+                    | LpcRef::Nil
                     | LpcRef::Int(_)
                     | LpcRef::String(_)
                     | LpcRef::Bytes(_)
@@ -472,6 +480,7 @@ impl Committer {
                 Some(MarkWork::Ref(value.clone()))
             }
             LpcRef::Float(_)
+            | LpcRef::Nil
             | LpcRef::Int(_)
             | LpcRef::String(_)
             | LpcRef::Bytes(_)

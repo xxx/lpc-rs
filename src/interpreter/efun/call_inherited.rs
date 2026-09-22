@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     continuation::{Callee, Continuation, Next},
     efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     stm::TxnHandle,
 };
 
@@ -16,7 +16,7 @@ pub fn call_inherited<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         )));
     };
     let Some((receiver, function)) = context.lookup_inherited_function(name) else {
-        context.return_efun_result(NULL);
+        context.return_efun_result(context.txn().nil());
         return Ok(());
     };
     let callee = Callee::Inherited {
@@ -34,10 +34,10 @@ pub fn call_inherited<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 struct CallInherited(Option<Callee>);
 
 impl Continuation for CallInherited {
-    fn advance(&mut self, result: Option<LpcRef>, _txn: &TxnHandle) -> Result<Next> {
+    fn advance(&mut self, result: Option<LpcRef>, txn: &TxnHandle) -> Result<Next> {
         Ok(match self.0.take() {
             Some(callee) => Next::Call(callee),
-            None => Next::Done(result.unwrap_or(NULL)),
+            None => Next::Done(result.unwrap_or(txn.nil())),
         })
     }
 

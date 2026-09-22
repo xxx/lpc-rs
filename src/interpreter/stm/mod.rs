@@ -1,5 +1,6 @@
 //! Software transactional memory implementation
 
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     collections::{HashMap, HashSet},
     marker::PhantomData,
@@ -590,11 +591,24 @@ impl AuthorityView {
 /// cloning this handle, so a joiner's reads, writes, effects and call outs
 /// are the parent's attempt's and ride the parent's single commit.
 #[derive(Debug, Clone)]
-pub(crate) struct TxnHandle(Arc<spin::Mutex<Transaction>>, Option<Arc<AuthorityView>>);
+pub(crate) struct TxnHandle(
+    Arc<spin::Mutex<Transaction>>,
+    Option<Arc<AuthorityView>>,
+    NullMode,
+);
 
 impl TxnHandle {
+    pub(crate) fn null_mode(&self) -> NullMode {
+        self.2
+    }
+
+    pub(crate) fn nil(&self) -> LpcRef {
+        LpcRef::nil(self.2)
+    }
+
     pub(crate) fn new(txn: Transaction) -> Self {
-        Self(Arc::new(spin::Mutex::new(txn)), None)
+        let mode = txn.snapshot.null_mode;
+        Self(Arc::new(spin::Mutex::new(txn)), None, mode)
     }
 
     /// Empty, uncommitted transaction (top-level defaults, fresh
@@ -624,7 +638,7 @@ impl TxnHandle {
     }
 
     pub(crate) fn with_authority(&self, view: Arc<AuthorityView>) -> Self {
-        Self(self.0.clone(), Some(view))
+        Self(self.0.clone(), Some(view), self.2)
     }
 
     /// Whether this handle wraps a live attempt that can be joined by a nested task.

@@ -6,7 +6,8 @@
  * Name matching also needs vocabulary or id(), as in object.c and ../obj/player.c.
  *
  * In the examples below, item_words and recipient_words are the noun phrases
- * as typed; item and recipient hold resolved objects or 0 while unresolved.
+ * as typed; item and recipient hold resolved objects or nil while unresolved.
+ * Nil is 0 in the default mode; distinct mode keeps it separate from numeric 0.
  * The specific handler name wins over its generic fallback when both exist.
  * These samples refuse gifts and do not implement transfer or ownership.
  * See ../doc/applies.md, "Grammar handler families", for other rule shapes.

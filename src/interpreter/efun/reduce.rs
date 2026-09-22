@@ -12,7 +12,7 @@ use crate::interpreter::{
         efun_context::EfunContext,
     },
     function_type::function_ptr::FunctionPtr,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     stm::TxnHandle,
 };
 
@@ -23,7 +23,7 @@ pub fn reduce<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let initial = if context.arg_count() > 2 {
         context.arg(2).clone()
     } else {
-        items.next().unwrap_or(NULL)
+        items.next().unwrap_or(context.txn().nil())
     };
 
     if items.len() == 0 {

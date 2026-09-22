@@ -29,6 +29,9 @@ the base verb, then the rule text exactly as `parse_add_rule` received it
 
 ### Arguments
 
+Unchosen values described as `0` below use the selected [null value](../../lpc/null.md):
+`0` in zero mode, `nil` in distinct mode.
+
 One argument per token, in rule order:
 
 - `WRD`/`STR` — the matched text, as a string.
@@ -58,7 +61,8 @@ every slot filled.
 
 ### Returns
 
-`1`, or anything that is neither `0` nor a string, means yes. `0` means no.
+`1`, or anything that is neither `0`, distinct `nil`, nor a string, means yes.
+`0` and distinct `nil` mean no.
 A string is a *reason*: it fails the same as `0`, but the text (its leading
 `#`, if any, stripped) becomes `arg` of `parser_error_message`'s kind 6
 (`ERR_ALLOCATED`). A leading `#` marks the reason *soft* — when several

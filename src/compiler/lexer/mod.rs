@@ -256,6 +256,8 @@ pub enum Token {
     Mapping(Span),
     #[token("mixed", track_slice)]
     Mixed(Span),
+    #[token("nil", track_slice)]
+    Nil(Span),
     #[token("void", track_slice)]
     Void(Span),
     #[token("return", track_slice)]
@@ -546,6 +548,7 @@ impl HasSpan for Token {
             | Token::Object(x)
             | Token::Mapping(x)
             | Token::Mixed(x)
+            | Token::Nil(x)
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
@@ -648,6 +651,7 @@ impl Token {
             | Token::Object(x)
             | Token::Mapping(x)
             | Token::Mixed(x)
+            | Token::Nil(x)
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
@@ -716,6 +720,7 @@ impl Token {
             Token::Object(_) => "object",
             Token::Mapping(_) => "mapping",
             Token::Mixed(_) => "mixed",
+            Token::Nil(_) => "nil",
             Token::Void(_) => "void",
             Token::Return(_) => "return",
             Token::Static(_) => "static",
@@ -827,6 +832,7 @@ impl Display for Token {
             | Token::Object(_)
             | Token::Mapping(_)
             | Token::Mixed(_)
+            | Token::Nil(_)
             | Token::Void(_)
             | Token::Return(_)
             | Token::Static(_)

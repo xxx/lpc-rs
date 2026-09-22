@@ -79,7 +79,7 @@ impl<'a> Lpc<'a> {
     fn value(&mut self, slot: &Slot) -> LpcRef {
         match slot {
             Slot::Text(text) => LpcRef::from(text.as_str()),
-            Slot::Empty => LpcRef::from(0),
+            Slot::Empty => self.ctx.txn().nil(),
             Slot::Object(c) => self.object(*c),
             Slot::Objects(index, cs) => self.slot_array(*index, cs),
             Slot::Mixed(cs, reasons) => {

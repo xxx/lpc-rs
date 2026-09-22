@@ -29,6 +29,7 @@ use crate::compiler::{
         label_node::LabelNode,
         labeled_statement_node::LabeledStatementNode,
         mapping_node::MappingNode,
+        nil_node::NilNode,
         operator_node::OperatorNode,
         program_node::ProgramNode,
         range_node::RangeNode,
@@ -753,6 +754,10 @@ pub trait TreeWalker {
     }
 
     /// Visit an int (literal) node
+    async fn visit_nil(&mut self, _node: &mut NilNode) -> Result<()> {
+        Ok(())
+    }
+
     async fn visit_int(&mut self, _node: &mut IntNode) -> Result<()> {
         Ok(())
     }

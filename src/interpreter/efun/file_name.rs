@@ -2,7 +2,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::{efun_context::EfunContext, in_game_name},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
 };
 
 /// `file_name(ob)`: the object's file as an in-game path without its
@@ -11,7 +11,9 @@ pub fn file_name<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()>
     let arg_ref = context.arg(0);
     let result = arg_ref
         .live_object(context.txn())
-        .map_or(NULL, |proc| LpcRef::from(in_game_name(context, &proc)));
+        .map_or(context.txn().nil(), |proc| {
+            LpcRef::from(in_game_name(context, &proc))
+        });
 
     context.return_efun_result(result);
 

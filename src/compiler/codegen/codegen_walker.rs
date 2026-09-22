@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -150,6 +151,7 @@ fn as_comparison(
 /// `-0.0` are two entries.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum ConstantKey {
+    Nil,
     Int(LpcIntInner),
     Float(u64),
     String(Ustr),
@@ -158,6 +160,7 @@ enum ConstantKey {
 impl From<&LpcConstant> for ConstantKey {
     fn from(constant: &LpcConstant) -> Self {
         match constant {
+            LpcConstant::Nil => Self::Nil,
             LpcConstant::Int(x) => Self::Int(*x),
             LpcConstant::Float(x) => Self::Float(x.into_inner().to_bits()),
             LpcConstant::String(x) => Self::String(ustr(x.to_str())),
@@ -869,10 +872,11 @@ impl CodegenWalker {
         Ok(Register(index).as_constant())
     }
 
-    /// Store 0 in register 0, which otherwise still holds the last callee's
-    /// result.
-    fn zero_result(&mut self, span: Option<Span>) -> Result<()> {
-        let zero = self.constant(LpcConstant::Int(0), span)?;
+    /// Replace the last callee's result with this function's default return value.
+    fn default_result(&mut self, span: Option<Span>) -> Result<()> {
+        let type_ = self.function_stack.last().unwrap().return_type();
+        let value = LpcConstant::default_for(type_, self.context.config.null_mode);
+        let zero = self.constant(value, span)?;
         push_instruction!(self, Instruction::Copy(zero, Register(0).as_local()), span);
         Ok(())
     }
@@ -1209,6 +1213,7 @@ impl CodegenWalker {
     ) -> Result<ProgramFunction> {
         let backpatch_map = self.backpatch_maps.pop().unwrap();
         let mut func = self.function_stack.pop().unwrap();
+        func.null_mode = self.context.config.null_mode;
         func.class_scope = self.context.class_scope.clone();
         self.constant_keys.truncate(self.function_stack.len());
         Self::backpatch(&backpatch_map, &mut func)?;
@@ -2019,7 +2024,7 @@ impl TreeWalker for CodegenWalker {
             let target = Register(0).as_local();
             // A skipped explicit return has no expression result to copy.
             if self.function_stack.last().unwrap().instructions.last() == Some(&Instruction::Ret) {
-                self.zero_result(node.span)?;
+                self.default_result(node.span)?;
             } else if self.current_result != target {
                 push_instruction!(
                     self,
@@ -2328,10 +2333,11 @@ impl TreeWalker for CodegenWalker {
             if sym.return_type() != LpcType::Void {
                 self.context.diagnostics.record(lpc_warning!(
                     node.span,
-                    "non-void function does not return a value. defaulting to 0."
+                    "non-void function does not return a value. defaulting to {}.",
+                    LpcConstant::default_for(sym.return_type(), self.context.config.null_mode)
                 ));
             }
-            self.zero_result(node.span)?;
+            self.default_result(node.span)?;
             push_instruction!(self, Instruction::Ret, node.span);
         }
 
@@ -2451,6 +2457,20 @@ impl TreeWalker for CodegenWalker {
             self.insert_label(end_label, addr);
         }
 
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn visit_nil(
+        &mut self,
+        node: &mut crate::compiler::ast::nil_node::NilNode,
+    ) -> Result<()> {
+        let value = if self.context.config.null_mode == NullMode::Distinct {
+            LpcConstant::Nil
+        } else {
+            LpcConstant::Int(0)
+        };
+        self.current_result = self.constant(value, node.span)?;
         Ok(())
     }
 
@@ -2593,7 +2613,7 @@ impl TreeWalker for CodegenWalker {
             let copy = Instruction::Copy(self.current_result, Register(0).as_local());
             push_instruction!(self, copy, expression.span());
         } else {
-            self.zero_result(node.span)?;
+            self.default_result(node.span)?;
         }
 
         self.leave_catches(0, node.span);
@@ -2950,6 +2970,14 @@ impl TreeWalker for CodegenWalker {
             push_instruction!(self, Instruction::NewUpvalue(cell), node.span());
         }
 
+        if node.value.is_some() && self.context.config.null_mode == NullMode::Distinct {
+            let location = self.assign_sym_location(&node.name)?;
+            let value =
+                LpcConstant::default_for(node.type_.resolved()?, self.context.config.null_mode);
+            let default = self.constant(value, node.span())?;
+            push_instruction!(self, Instruction::Copy(default, location), node.span());
+        }
+
         let current_register = if let Some(expression) = &mut node.value {
             expression.visit(self).await?;
             self.guard_class(self.current_result, node.type_.resolved()?, node.span)?;
@@ -3006,8 +3034,12 @@ impl TreeWalker for CodegenWalker {
         } else {
             let location = self.assign_sym_location(&node.name)?;
             // Only the first run of a declaration gets the frame's NULL fill.
-            if !global && !upvalue && self.inside_a_loop() {
-                let zero = self.constant(LpcConstant::Int(0), node.span())?;
+            if self.context.config.null_mode == NullMode::Distinct
+                || (!global && !upvalue && self.inside_a_loop())
+            {
+                let value =
+                    LpcConstant::default_for(node.type_.resolved()?, self.context.config.null_mode);
+                let zero = self.constant(value, node.span())?;
                 push_instruction!(self, Instruction::Copy(zero, location), node.span());
             }
             location

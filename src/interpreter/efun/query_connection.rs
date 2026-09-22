@@ -18,7 +18,7 @@ pub fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     let snapshot = connection.snapshot();
     let charset = match &snapshot.charset {
         Some(charset) => LpcString::from(charset.as_str()).into(),
-        None => LpcRef::from(0),
+        None => context.txn().nil(),
     };
     let terminal = &snapshot.terminal;
     let entries: [(&str, LpcRef); 14] = [

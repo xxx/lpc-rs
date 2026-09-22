@@ -6,11 +6,7 @@ use lpc_rs_core::lpc_path::LibRoot;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
-    process::Process,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
 
 /// The object of the calling frame, including local calls; `-1` returns all callers.
 pub fn calling_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -19,15 +15,18 @@ pub fn calling_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         if process.is_live(&txn) {
             LpcRef::from(Arc::downgrade(process))
         } else {
-            NULL
+            txn.nil()
         }
     })
 }
 
 /// The calling function's name, including local calls; 0 for a driver frame.
 pub fn calling_function<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    let nil = context.txn().nil();
     answer(context, "calling_function", |_, function| {
-        function.map_or(NULL, |function| LpcRef::from(function.name().as_ref()))
+        function.map_or(nil.clone(), |function| {
+            LpcRef::from(function.name().as_ref())
+        })
     })
 }
 
@@ -36,8 +35,9 @@ pub fn calling_function<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
 /// (`/secure/master.c`); 0 where the driver fired the call.
 pub fn calling_program<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lib_dir = context.config().lib_dir;
+    let nil = context.txn().nil();
     answer(context, "calling_program", |_, function| {
-        function.map_or(NULL, |function| {
+        function.map_or(nil.clone(), |function| {
             let path = LibRoot::new(lib_dir.as_str()).source_name(&function.prototype.filename);
             LpcRef::from(path.to_string())
         })
@@ -62,7 +62,10 @@ fn answer<const N: usize>(
         n if n >= 0 => usize::try_from(n)
             .ok()
             .and_then(|n| context.calling_frames().nth(n))
-            .map_or(NULL, |(object, function)| name(object, function)),
+            .map_or_else(
+                || context.txn().nil(),
+                |(object, function)| name(object, function),
+            ),
         n => {
             return Err(
                 context.runtime_error(format!("{efun}: expected a step back or -1, got {n}"))

@@ -3,9 +3,7 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
-    task_context::ObjectLookup,
+    efun::efun_context::EfunContext, lpc_ref::LpcRef, task_context::ObjectLookup,
 };
 
 /// Find an existing object by path without loading or initializing it.
@@ -20,9 +18,9 @@ pub fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
     let result = match path {
         Some(path) => match context.find_object(&path) {
             ObjectLookup::Found(proc) => LpcRef::from(Arc::downgrade(&proc)),
-            ObjectLookup::Removed | ObjectLookup::NotCreated => NULL,
+            ObjectLookup::Removed | ObjectLookup::NotCreated => context.txn().nil(),
         },
-        None => NULL,
+        None => context.txn().nil(),
     };
 
     context.return_efun_result(result);
@@ -32,6 +30,7 @@ pub fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::lpc_ref::NULL;
     use std::{path::Path, sync::Arc};
 
     use indoc::indoc;

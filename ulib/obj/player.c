@@ -10,7 +10,7 @@
 #pragma strict_types, no_inherit, no_shadow
 #include <ulib.h>
 
-// An uninitialised LPC string is 0; after login this holds a lowercase ASCII name.
+// An uninitialised LPC string is nil (0 in the default mode); after login this holds a lowercase ASCII name.
 private string name;
 
 /**
@@ -91,7 +91,7 @@ private void receive_name(string input) {
  * sent, so the name-selection code must write its own "Name: " prompt.
  */
 string write_prompt() {
-    return name ? name + "> " : 0;
+    return name ? name + "> " : nil;
 }
 
 /**

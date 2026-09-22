@@ -70,7 +70,7 @@ private int do_look(string argument) {
 /**
  * Mudlib helper sending an already formatted message to connected occupants.
  * message should include any desired newline; exclude is an object to skip,
- * or 0 to include everyone; there is no return value.
+ * or nil to include everyone; there is no return value.
  * Name and connection checks exclude unfinished or disconnected players,
  * and tell_object() reaches each recipient's catch_tell() delivery hook.
  * Callers validate user text before passing it here, as the chat actions do.
@@ -131,7 +131,7 @@ private int do_say(string text) {
  */
 private int do_emote(string text) {
     if (valid_text(text)) {
-        announce(capitalize(this_player()->query_name()) + " " + text + "\n", 0);
+        announce(capitalize(this_player()->query_name()) + " " + text + "\n", nil);
     }
     return 1;
 }

@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::sync::Arc;
 
 use lpc_rs_asm::instruction::{Arg, ArgList};
@@ -116,6 +117,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
         let mut frame =
             CallFrame::with_receiver(receiver, function, num_args, num_args, None::<&[VarId]>);
+        frame.initialize_parameters(&self.context.txn);
         for (i, arg) in args.enumerate() {
             let prototype = &frame.function.prototype;
             check_arg_type(
@@ -214,6 +216,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.stack
             .push_new(receiver, func, num_args, num_args, None::<&[VarId]>)?;
         let frame = self.stack.current_frame_mut()?;
+        frame.initialize_parameters(&self.context.txn);
         frame.external = entry.external();
         frame.origin = origin;
         if let Err(e) = self.populate_arguments(list) {
@@ -257,8 +260,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn checked_register_count(
         &self,
         count: usize,
-        function: &ProgramFunction,
+        function: &Function,
     ) -> lpc_rs_errors::Result<RegisterSize> {
+        if !function.is_driver_code() && function.null_mode != self.context.config().null_mode {
+            return Err(
+                self.runtime_error("compiled function and VM use different NULL_MODE settings")
+            );
+        }
         let num_locals = usize::from(function.num_locals);
         if count + num_locals + 1 > usize::from(RegisterSize::MAX) {
             let limit = usize::from(RegisterSize::MAX).saturating_sub(num_locals + 1);
@@ -501,7 +509,7 @@ pub(crate) fn check_arg_type(
     arg_def_span: Option<&Span>,
     function_name: &str,
 ) -> lpc_rs_errors::Result<()> {
-    if lpc_ref.eq_in(&NULL, txn) {
+    if txn.null_mode() == NullMode::Zero && lpc_ref.eq_in(&NULL, txn) {
         return Ok(());
     }
     let Some(arg_type) = arg_type else {

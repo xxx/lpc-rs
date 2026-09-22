@@ -38,7 +38,12 @@ pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         let value = context
             .txn()
             .with(|t| t.read(image.var_id(reg)))
-            .unwrap_or_else(|| LpcRef::from(0));
+            .unwrap_or_else(|| {
+                LpcRef::default_for(
+                    image.program.global_variables[name].type_,
+                    context.txn().null_mode(),
+                )
+            });
         write_line(&mut contents, name, &value, context.txn())
             .map_err(|e| e.with_span(context.call_site_span()))?;
     }

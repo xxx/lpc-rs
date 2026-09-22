@@ -51,7 +51,7 @@ pub fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 
     // An omitted default arg is still a live register, filled with NULL
     // rather than left absent.
-    let flag_ref = context.try_arg(2).filter(|r| !r.is_null());
+    let flag_ref = context.try_arg(2).filter(|r| !r.is_null_in(context.txn()));
     let flag = match flag_ref {
         None => 0,
         Some(LpcRef::Int(i)) => i.0,
