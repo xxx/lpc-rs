@@ -24,6 +24,7 @@ pub(crate) mod copy_class;
 pub(crate) mod crypt;
 pub(crate) mod ctime;
 pub(crate) mod debug;
+pub(crate) mod deep_copy;
 pub(crate) mod deep_inventory;
 pub(crate) mod destruct;
 pub(crate) mod disable_commands;
@@ -1208,6 +1209,9 @@ efuns! {
     copy_class => {
         returns: LpcType::Mixed(false), arity: 1, args: [LpcType::Mixed(false)],
     },
+    deep_copy => {
+        returns: LpcType::Mixed(false), arity: 1, args: [LpcType::Mixed(false)],
+    },
     classp [in type_predicates] => {
         returns: LpcType::Int(false), arity: 1, args: [LpcType::Mixed(false)],
     },
@@ -1565,6 +1569,7 @@ mod tests {
                 "request_object_recompile",
                 "query_object_recompile",
                 "copy_class",
+                "deep_copy",
                 "classp",
             ]
         );

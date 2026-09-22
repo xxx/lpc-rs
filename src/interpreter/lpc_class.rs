@@ -56,6 +56,17 @@ impl LpcClass {
         self.slots.iter().map(|slot| &slot.value)
     }
 
+    /// Transform all retained values without acquiring views; callers must preserve field types.
+    pub(crate) fn try_map_values(
+        &mut self,
+        mut transform: impl FnMut(&LpcRef) -> Result<LpcRef>,
+    ) -> Result<()> {
+        for slot in &mut self.slots {
+            slot.value = transform(&slot.value)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn stored_views(&self) -> impl Iterator<Item = &[usize]> {
         self.views.iter().map(|view| view.slots.as_ref())
     }

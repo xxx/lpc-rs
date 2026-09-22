@@ -150,6 +150,12 @@ preserving their nominal identity. `copy_class(0)` is an error; `classp(0)` is
 false. Ordinary arrays carry no class identity and cannot be converted back
 into a class by this helper.
 
+[`deep_copy(value)`](../efun/deep_copy.md) also copies nested arrays, mappings
+(both keys and values), and classes in every retained field. It preserves shared
+references and cycles within the copied graph, while objects and functions keep
+their identities. Like `copy_class`, it preserves all materialized views without
+requiring a visible definition or acquiring a new view.
+
 ## Saving and restoring
 
 `save_object`, `restore_object`, `save_map` and `restore_map` support class

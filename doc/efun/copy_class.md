@@ -26,8 +26,11 @@ objects, functions, and nested class instances remain shared references. A field
 pointing to the original instance still points to the original after copying.
 Cycles are therefore supported without recursive copying.
 
+Use [`deep_copy`](deep_copy.md) to copy nested mutable containers too, preserving
+shared references and cycles within the copied graph.
+
 Copying reads the source's values in the current transaction, including pending
 writes. The allocation commits or aborts with that transaction; a concurrent
 source change can cause a conflict and retry.
 
-See also: [classp](classp.md), [classes](../lpc/classes.md).
+See also: [deep_copy](deep_copy.md), [classp](classp.md), [classes](../lpc/classes.md).

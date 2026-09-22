@@ -29,6 +29,7 @@ so you can concentrate on game code while its existing code handles login.
 | When you need to… | Read |
 |---|---|
 | Store a list of items or a lookup table | [Types](types.md), especially arrays and mappings |
+| Copy nested collections or class records | [`deep_copy`](../efun/deep_copy.md), [`copy_class`](../efun/copy_class.md) |
 | Handle errors from an expression or a block | [`catch`](../efun/catch.md), [`throw`](../efun/throw.md) |
 | Iterate over a collection | [`foreach`](foreach.md) |
 | Exclude a cache or temporary global from object saves | [`nosave` globals](nosave.md) |
