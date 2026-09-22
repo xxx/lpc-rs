@@ -857,6 +857,147 @@ async fn warning_on_prototype() {
 }
 
 #[tokio::test]
+async fn unnamed_prototype_parameters_accept_value_types_and_qualifiers() {
+    for type_ in [
+        "int",
+        "float",
+        "string",
+        "bytes",
+        "object",
+        "mapping",
+        "mixed",
+        "function",
+        "class Record",
+    ] {
+        for qualifier in ["", " *", " ref", " ref *"] {
+            let code = format!("void f({type_}{qualifier});");
+            let program = parse_prog(&code).await.unwrap();
+            assert!(matches!(&program.body[..], [AstNode::NoOp]), "{code}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn named_and_unnamed_prototype_parameters_can_mix() {
+    for parameters in [
+        "int, string label, object",
+        "int first, int, int last",
+        "class Record, class Record *records, int ref",
+        "int, mixed value = 0",
+        "int, ...",
+        "int, mixed *rest...",
+        "int first, mixed *...",
+    ] {
+        let code = format!("#pragma strict_types\nvoid f({parameters});");
+        assert_ok!(parse_prog(&code).await);
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_follow_warning_pragmas() {
+    let code = "#pragma no_warnings\nvoid f(int);\n#pragma warnings\nvoid g(string *);";
+    let (tokens, preprocessor) = Compiler::default()
+        .preprocess_string("foo/bar.c", code)
+        .await
+        .unwrap();
+    let mut context = preprocessor.into_context();
+    lpc_parser::ProgramParser::new()
+        .parse(&mut context, TokenTriples::new(&tokens))
+        .unwrap();
+    let warnings = context.diagnostics.errors();
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(
+        warnings[0].to_string(),
+        "function prototypes are ignored; the definition declares the function"
+    );
+    let start = code.find("void g").unwrap();
+    let span = warnings[0].span().unwrap();
+    assert_eq!(span.l()..span.r(), start..code.len());
+}
+
+#[tokio::test]
+async fn definitions_require_names_for_every_parameter() {
+    for parameters in [
+        "int",
+        "string *",
+        "int ref",
+        "class Record",
+        "int first, string",
+        "int, string second",
+        "mixed *...",
+        "int first, mixed *...",
+    ] {
+        let code = format!("void f({parameters}) {{}}");
+        let error = parse_prog(&code).await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "a parameter name is required in a function definition or closure",
+            "{code}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn closures_require_names_for_every_declared_parameter() {
+    for parameters in ["int", "int n, string *", "int ref", "mixed *..."] {
+        let code = format!("function f = (: [{parameters}] 1 :);");
+        let error = parse_prog(&code).await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "a parameter name is required in a function definition or closure",
+            "{code}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_variadic_constraints() {
+    for (parameter, message) in [
+        (
+            "mixed...",
+            "a named variadic parameter must have an array type",
+        ),
+        ("int ref *...", "a named variadic parameter cannot be `ref`"),
+        (
+            "int, mixed *args = ({})...",
+            "a named variadic parameter cannot have a default value",
+        ),
+    ] {
+        let error = parse_prog(&format!("void f({parameter});"))
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_string(), message);
+    }
+}
+
+#[tokio::test]
+async fn malformed_unnamed_prototype_parameters_are_rejected() {
+    for parameters in [
+        "void, int",
+        "int, void",
+        "void *",
+        "void ref",
+        "int = 1",
+        "ref",
+        "*",
+        "int,",
+    ] {
+        let code = format!("void f({parameters});");
+        assert!(parse_prog(&code).await.is_err(), "{code}");
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototype_support_preserves_empty_parameter_lists() {
+    for parameters in ["", "void", "..."] {
+        let code = format!(
+            "void f({parameters}); void f({parameters}) {{}} function g = (: [{parameters}] 1 :);"
+        );
+        assert_ok!(parse_prog(&code).await);
+    }
+}
+
+#[tokio::test]
 async fn test_closure_bodies() {
     let prog = indoc! { r#"
         function f = (: :);

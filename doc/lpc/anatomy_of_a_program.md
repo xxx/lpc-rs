@@ -34,7 +34,6 @@ at compile time; runtime variables and function calls are rejected.
 
 notes:
 
-- no prototypes necessary
 - decls can be anywhere in the body (globals are hoisted for codegen, but not for semantic analysis)
 - globals are 'global' only to the program, and cannot be accessed from other programs. they just outlive function invocations.
 - globals are initialized when the object is created, prior to calling `create`, (which happens automatically)
@@ -49,3 +48,34 @@ notes:
 - `#include "x.h"` looks beside the including file, then in the system include dirs; `<x.h>` looks only in the system dirs
 - `#define` supports object macros, function macros, and argument stringification with `#`; see [macros](macros.md)
 - a source file that is not UTF-8 is read as Latin-1, with a warning
+
+## Function prototypes
+
+Functions can be called before their definition, so prototypes are unnecessary.
+For source compatibility, the compiler accepts prototypes with named or unnamed
+parameters, including a mixture of both:
+
+```c
+void start_shell(int);
+int search(string, string text, int);
+void update(int ref, object *);
+void collect(int, mixed *...);
+```
+
+Each prototype produces a warning that it is ignored, unless warnings are
+disabled. The actual function definition supplies the return type, parameter
+types, argument count, defaults, and reference requirements used to check calls.
+A prototype alone does not make a function callable, and its signature is not
+checked against the definition.
+
+An unnamed parameter must have an explicit type. Arrays keep their `*`, and a
+variadic collector still requires an array type even when its name is omitted.
+Parameter defaults require a name. `f(void)` and `f()` both specify an empty
+parameter list.
+
+Function definitions and declared closure parameters require names:
+
+```c
+void start_shell(int mode) { }
+function callback = (: [int mode] start_shell(mode) :);
+```

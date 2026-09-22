@@ -49,6 +49,7 @@ use lpc_rs_core::EFUN;
 use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
 use crate::compiler::parser::collapse_unary_op::{collapse_unary_op, demote_statement_post_op};
 use crate::compiler::parser::nesting::{contains_capture, guard};
+use crate::compiler::parser::parameter::Parameter;
 use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::{LpcError, lpc_error, lpc_bug, lpc_warning};
@@ -260,7 +261,7 @@ FunctionPrototype: (
     Option<(Span, ParsedType)>,
     Option<Span>,
     StringToken,
-    (Vec<VarInitNode>, bool, Option<Box<VarInitNode>>)
+    (Vec<Parameter>, bool, Option<Box<Parameter>>)
 ) = {
     <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> =>? {
         if let Some((span, _)) = flags.iter().find(|(_, flag)| *flag == "nosave") {
@@ -277,6 +278,8 @@ FunctionDef: FunctionDefNode = {
         let (flags, r_type, star, name, parameter_tuple) = proto;
         let array = star.is_some();
         let (parameters, ellipsis, variadic) = parameter_tuple;
+        let parameters = parameters.into_iter().map(Parameter::into_named).collect::<lpc_rs_errors::Result<Vec<_>>>()?;
+        let variadic = variadic.map(|param| param.into_named().map(Box::new)).transpose()?;
 
         let lead = flags
             .first()
@@ -340,9 +343,13 @@ Closure: ExpressionNode = {
      <l:"("> ":" <params:ClosureParameters?> <body:ClosureBody?> ":" <r:")"> =>? {
         let span = Span::join(l, r);
 
-        let (parameters, ellipsis, variadic) = params.map(|tuple| {
-            (Some(tuple.0), tuple.1, tuple.2)
-        }).unwrap_or((None, false, None));
+        let (parameters, ellipsis, variadic) = if let Some((parameters, ellipsis, variadic)) = params {
+            let parameters = parameters.into_iter().map(Parameter::into_named).collect::<lpc_rs_errors::Result<Vec<_>>>()?;
+            let variadic = variadic.map(|param| param.into_named().map(Box::new)).transpose()?;
+            (Some(parameters), ellipsis, variadic)
+        } else {
+            (None, false, None)
+        };
 
         // closures are private to ensure they can't be called directly via the actual `call_other` efun
         let flags = FunctionFlags::from(&["private"][..]).with_ellipsis(ellipsis);
@@ -364,7 +371,7 @@ Closure: ExpressionNode = {
     },
 }
 
-DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool, Option<Box<VarInitNode>>) = {
+DelimitedParameters<L_DELIM, R_DELIM>: (Vec<Parameter>, bool, Option<Box<Parameter>>) = {
     L_DELIM "void" R_DELIM => {
         (vec![], false, None)
     },
@@ -378,31 +385,31 @@ DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool, Option<Box<VarIn
         let collector = params.pop().ok_or_else(|| ParseError::User {
             error: lpc_error!(None, "a named variadic parameter is required")
         })?;
-        let problem = if collector.by_ref {
-            Some("a named variadic parameter cannot be `ref`")
-        } else if collector.value.is_some() {
-            Some("a named variadic parameter cannot have a default value")
-        } else if !collector.type_.is_array() {
-            Some("a named variadic parameter must have an array type")
-        } else {
-            None
-        };
-        if let Some(message) = problem {
-            return Err(ParseError::User { error: lpc_error!(collector.span, "{}", message) });
-        }
+        collector.validate_variadic()?;
         Ok((params, true, Some(Box::new(collector))))
     }
 }
 Parameters = DelimitedParameters<"(", ")">;
 ClosureParameters = DelimitedParameters<"[", "]">;
 
-ParameterList: Vec<VarInitNode> = {
-    <list:(<ParameterList> ",")?> <name:ArgName> => {
+ParameterList: Vec<Parameter> = {
+    <list:(<ParameterList> ",")?> <name:Parameter> => {
         let mut v = list.unwrap_or(vec![]);
         v.push(name);
         v
     }
 }
+
+Parameter: Parameter = {
+    <ArgName> => Parameter::Named(Box::new(<>)),
+    <var_type:ValueType> <by_ref:"ref"?> <array:"*"?> => {
+        Parameter::Unnamed {
+            type_: var_type.1.as_array(array.is_some()),
+            by_ref: by_ref.is_some(),
+            span: Span::join(var_type.0, array.or(by_ref).unwrap_or(var_type.0)),
+        }
+    },
+};
 
 ArgName: VarInitNode = {
     <var_type:Type> <by_ref:"ref"?> <mut init:VarInit> => {
@@ -427,7 +434,13 @@ ArgName: VarInitNode = {
     },
 };
 
+#[inline]
 Type: (Span, ParsedType) = {
+    <ValueType>,
+    "void" => (<>, LpcType::from("void").into()),
+};
+
+ValueType: (Span, ParsedType) = {
     <l:"class"> <name:"ID"> => (Span::join(l, name.0), ParsedType::Class { name: ustr(&name.1), array: false, span: name.0 }),
     "int" => (<>, LpcType::from("int").into()),
     "float" => (<>, LpcType::from("float").into()),
@@ -437,7 +450,6 @@ Type: (Span, ParsedType) = {
     "mapping" => (<>, LpcType::from("mapping").into()),
     "object" => (<>, LpcType::from("object").into()),
     "function" => (<>, LpcType::from("function").into()),
-    "void" => (<>, LpcType::from("void").into()),
 };
 
 GlobalFlag: (Span, &'static str) = {

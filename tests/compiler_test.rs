@@ -25,6 +25,116 @@ fn default_compiler() -> Compiler {
 }
 
 #[tokio::test]
+async fn unnamed_prototypes_allow_forward_calls_to_named_definitions() {
+    let code = indoc! { r#"
+        #pragma strict_types
+        class Record { int value; }
+        void increment(int ref);
+        int add(int, int);
+        int total(int, int *...);
+        int read(class Record);
+
+        int create() {
+            int n = 2;
+            increment(ref n);
+            return add(n) + total(1, 2, 3) + read(new(class Record, value: 7));
+        }
+
+        void increment(int ref value) { value++; }
+        int add(int left, int right = 4) { return left + right; }
+        int total(int first, int *rest...) { return first + rest[0] + rest[1]; }
+        int read(class Record record) { return record.value; }
+    "# };
+    let task = run_prog(code).await;
+    assert_eq!(task.context.result().unwrap(), LpcRef::from(20));
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_do_not_declare_missing_functions() {
+    let error = default_compiler()
+        .compile_string("foo.c", "void missing(int); void create() { missing(1); }")
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("unknown function `missing`"));
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_definition_argument_counts() {
+    for call in ["f()", "f(1, 2)"] {
+        let code = format!("void f(int); void create() {{ {call}; }} void f(int n) {{}}");
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("incorrect argument count in call to `f`"),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_definition_argument_types() {
+    for (prototype, definition, argument) in [
+        ("int", "int n", r#""wrong""#),
+        ("int *", "int *values", "1"),
+        ("class Record", "class Record record", "new(class Other)"),
+        ("int, string", "int n", r#""wrong""#),
+    ] {
+        let code = format!(
+            "class Record {{ int n; }} class Other {{ int n; }}
+             void f({prototype}); void create() {{ f({argument}); }} void f({definition}) {{}}"
+        );
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("unexpected argument type to `f`"),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_definition_reference_requirements() {
+    for (prototype, definition, argument, message) in [
+        ("int ref", "int ref n", "n", "must be passed by reference"),
+        (
+            "int",
+            "int n",
+            "ref n",
+            "does not take argument 1 by reference",
+        ),
+        ("int", "int ref n", "n", "must be passed by reference"),
+    ] {
+        let code = format!(
+            "void f({prototype}); void create() {{ int n = 1; f({argument}); }} void f({definition}) {{}}"
+        );
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains(message), "{error}");
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototype_signatures_do_not_override_definitions() {
+    let code = indoc! { r#"
+        string f(string, object);
+        int create() { return f(5); }
+        int f(int value) { return value + 1; }
+    "# };
+    let task = run_prog(code).await;
+    assert_eq!(task.context.result().unwrap(), LpcRef::from(6));
+}
+
+#[tokio::test]
 async fn minimum_int_macro_compiles_and_runs() {
     for minus in ["-", "−"] {
         let code = format!(
