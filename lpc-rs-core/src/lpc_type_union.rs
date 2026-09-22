@@ -7,7 +7,7 @@ use std::{
 
 use modular_bitfield::prelude::*;
 
-use crate::{lpc_type::LpcType, mangle::Mangle};
+use crate::{class::ClassId, lpc_type::LpcType, mangle::Mangle};
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
@@ -35,8 +35,9 @@ pub struct LpcTypeUnion {
 
 impl LpcTypeUnion {
     /// Insert a new type into the union
-    pub fn insert(&mut self, type_: LpcType) {
+    pub fn insert(&mut self, type_: LpcType) -> Result<(), ClassId> {
         match type_ {
+            LpcType::Class(id, _) => return Err(id),
             LpcType::Void => self.set_void(true),
             LpcType::Int(array) => {
                 if array {
@@ -96,6 +97,7 @@ impl LpcTypeUnion {
             }
             LpcType::Union(other) => *self = *self | other,
         }
+        Ok(())
     }
 
     /// Do we match against another type?
@@ -172,6 +174,7 @@ impl LpcTypeUnion {
                     self.function()
                 }
             }
+            LpcType::Class(_, _) => false,
             LpcType::Union(other_union) => self.into_bytes() == other_union.into_bytes(),
         }
     }
@@ -355,7 +358,7 @@ mod tests {
         let mut union = LpcTypeUnion::new();
         union.set_string(true);
 
-        union.insert(LpcType::Union(other));
+        union.insert(LpcType::Union(other)).unwrap();
 
         assert!(union.string());
         assert!(union.function());

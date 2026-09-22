@@ -337,7 +337,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(Step::Await(call));
                 }
             }
-            Instruction::Cast(r1, target, r2) => {
+            Instruction::Cast(r1, index, r2) => {
+                let target = *self
+                    .stack
+                    .last()
+                    .ok_or_else(|| lpc_rs_errors::lpc_bug!("cast without a frame"))?
+                    .function
+                    .types
+                    .get(usize::from(index.0))
+                    .ok_or_else(|| lpc_rs_errors::lpc_bug!("invalid cast type index"))?;
                 self.unary_operation(r1, r2, |value, txn| {
                     if value.passes_cast(target, txn) {
                         Ok(value.clone())

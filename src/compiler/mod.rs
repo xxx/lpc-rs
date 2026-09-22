@@ -2,6 +2,7 @@ use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 
 use ast::program_node::ProgramNode;
 use codegen::{
+    class_walker::ClassWalker,
     codegen_walker::CodegenWalker,
     function_prototype_walker::FunctionPrototypeWalker,
     inheritance_walker::InheritanceWalker,
@@ -354,6 +355,9 @@ impl Compiler {
         }
 
         let context = apply::<InheritanceWalker>(&mut program_node, context, true)
+            .await?
+            .into_context();
+        let context = apply::<ClassWalker>(&mut program_node, context, true)
             .await?
             .into_context();
         let context = apply::<FunctionPrototypeWalker>(&mut program_node, context, false)

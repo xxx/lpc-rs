@@ -1,5 +1,8 @@
 # lpc-rs supported types
 
+Named [class declarations and types](classes.md) are supported by the compiler;
+runtime class instances are not implemented yet.
+
 * `int`
   - Run-of-the-mill signed integers, 64 bits by default. This size is ostensibly
     changeable in `lpc-rs-core`, but no testing is done on different sizes. 

@@ -3,9 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::{
-    RegisterSize, function_receiver::FunctionReceiver, lpc_type::LpcType, register::RegisterVariant,
-};
+use lpc_rs_core::{RegisterSize, function_receiver::FunctionReceiver, register::RegisterVariant};
 use lpc_rs_errors::{Result, lpc_bug};
 use ustr::Ustr;
 
@@ -75,6 +73,16 @@ impl Display for Arg {
             Self::Ref(r) => write!(f, "ref {r}"),
             Self::Spread(r) => write!(f, "{r}..."),
         }
+    }
+}
+
+/// The index of a runtime type assertion in its function's `types` table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TypeIndex(pub u16);
+
+impl Display for TypeIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "t{}", self.0)
     }
 }
 
@@ -177,7 +185,7 @@ pub enum Instruction {
     CallOther(RegisterVariant, RegisterVariant, ArgList),
 
     /// x.2 = x.0, which must be 0 or of type x.1.
-    Cast(RegisterVariant, LpcType, RegisterVariant),
+    Cast(RegisterVariant, TypeIndex, RegisterVariant),
 
     /// Finish a block of instructions that can catch errors and continue
     /// execution.
@@ -947,7 +955,7 @@ mod tests {
             CallSimulEfun(ustr("f"), ArgList(0)),
             CallFp(r(), ArgList(0)),
             CallOther(r(), r(), ArgList(0)),
-            Cast(r(), LpcType::Int(false), r()),
+            Cast(r(), TypeIndex(0), r()),
             CatchEnd,
             CatchStart(r(), Address(0)),
             Cmp(Comparison::Lt, r(), r(), r()),
@@ -1021,7 +1029,7 @@ mod tests {
         assert_eq!(AConst(d).dest_register(), Some(d));
         assert_eq!(Add(r(), r(), d).dest_register(), Some(d));
         assert_eq!(BitwiseNot(r(), d).dest_register(), Some(d));
-        assert_eq!(Cast(r(), LpcType::Int(false), d).dest_register(), Some(d));
+        assert_eq!(Cast(r(), TypeIndex(0), d).dest_register(), Some(d));
         assert_eq!(Copy(r(), d).dest_register(), Some(d));
         assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
         assert_eq!(IndexFromEnd(r(), r(), d).dest_register(), Some(d));

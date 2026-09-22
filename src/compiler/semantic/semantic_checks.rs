@@ -373,7 +373,7 @@ pub fn impossible_cast(node: &CastNode, context: &CompilationContext) -> Result<
 
     let source = node_type(&node.expr, context)?;
 
-    Ok((!cast_possible(source, node.type_)).then_some(source))
+    Ok((!cast_possible(source, node.type_.resolved()?)).then_some(source))
 }
 
 /// The efun that converts to `target`, for the note on an impossible cast.
@@ -473,7 +473,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             }
         }
         ExpressionNode::Closure(_) => Ok(LpcType::Function(false)),
-        ExpressionNode::Cast(CastNode { type_, .. }) => Ok(*type_),
+        ExpressionNode::Cast(CastNode { type_, .. }) => type_.resolved(),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();
@@ -582,7 +582,12 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             } else if body_type == LpcType::Mixed(false) || else_type == LpcType::Mixed(false) {
                 LpcType::Mixed(false)
             } else {
-                body_type | else_type
+                body_type.try_union(else_type).map_err(|_| {
+                    lpc_error!(
+                        node.span(),
+                        "cannot combine `{body_type}` and `{else_type}` in a type union"
+                    )
+                })?
             })
         }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
@@ -2470,7 +2475,7 @@ mod tests {
                 let node = ExpressionNode::Closure(ClosureNode {
                     variadic: None,
                     name: "closure-123".into(),
-                    return_type: LpcType::Mapping(true),
+                    return_type: LpcType::Mapping(true).into(),
                     parameters: None,
                     flags: Default::default(),
                     body: vec![],

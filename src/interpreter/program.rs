@@ -18,8 +18,8 @@ use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
-    INIT_GLOBALS, INIT_PROGRAM, RegisterSize, global_var_flags::GlobalVarFlags, lpc_path::LpcPath,
-    lpc_type::LpcType, pragma_flags::PragmaFlags,
+    INIT_GLOBALS, INIT_PROGRAM, RegisterSize, class::ClassScope, global_var_flags::GlobalVarFlags,
+    lpc_path::LpcPath, lpc_type::LpcType, pragma_flags::PragmaFlags,
 };
 use lpc_rs_function_support::symbol::Symbol;
 use path_dedot::*;
@@ -148,6 +148,8 @@ pub struct Program {
 
     /// Function lookup in this program's own source scope.
     pub function_scope: Arc<FunctionScope>,
+    /// Class definitions visible in this program's own source scope.
+    pub class_scope: Arc<ClassScope>,
 
     /// Source scopes retained for qualified lookup by inherited code.
     pub inherited_function_scopes: Box<HashMap<Arc<LpcPath>, Arc<FunctionScope>>>,

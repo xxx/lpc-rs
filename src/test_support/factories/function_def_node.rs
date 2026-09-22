@@ -9,7 +9,7 @@ factori!(FunctionDefNode, {
     default {
         variadic = None,
         name = ustr(&format!("function-{}", (0..100000).fake::<usize>())),
-        return_type = LpcType::Mixed(false),
+        return_type = LpcType::Mixed(false).into(),
         parameters = vec![],
         flags = FunctionFlags::default(),
         body = vec![],

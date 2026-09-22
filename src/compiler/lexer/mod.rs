@@ -262,6 +262,9 @@ pub enum Token {
     Return(Span),
     #[token("static", track_slice)]
     Static(Span),
+    #[token("class", track_slice)]
+    Class(Span),
+
     #[token("nosave", track_slice)]
     Nosave(Span),
     #[token("varargs", track_slice)]
@@ -541,6 +544,7 @@ impl HasSpan for Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Class(x)
             | Token::Nosave(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
@@ -640,6 +644,7 @@ impl Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Class(x)
             | Token::Nosave(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
@@ -705,6 +710,7 @@ impl Token {
             Token::Void(_) => "void",
             Token::Return(_) => "return",
             Token::Static(_) => "static",
+            Token::Class(_) => "class",
             Token::Nosave(_) => "nosave",
             Token::Varargs(_) => "varargs",
             Token::Nomask(_) => "nomask",
@@ -813,6 +819,7 @@ impl Display for Token {
             | Token::Void(_)
             | Token::Return(_)
             | Token::Static(_)
+            | Token::Class(_)
             | Token::Nosave(_)
             | Token::Varargs(_)
             | Token::Nomask(_)

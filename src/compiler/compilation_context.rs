@@ -6,7 +6,8 @@ use crate::compiler::{
 };
 use derive_builder::Builder;
 use lpc_rs_core::{
-    EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
+    EFUN, RegisterSize, call_namespace::CallNamespace, class::ClassScope, lpc_path::LpcPath,
+    pragma_flags::PragmaFlags,
 };
 use lpc_rs_errors::{
     source_map::{DiagnosticSources, FileId},
@@ -38,6 +39,7 @@ use crate::{
 pub struct CompilationContext {
     /// Completed code shared by this compilation and its recursive parent compilers.
     pub code_pool: Arc<CodePool>,
+    pub class_scope: Arc<ClassScope>,
     /// The identity of the main file being compiled.
     #[builder(setter(into))]
     pub source: Arc<CompilerSource>,
@@ -318,6 +320,7 @@ impl Default for CompilationContext {
         let config = Arc::new(Config::default());
         Self {
             code_pool: Arc::default(),
+            class_scope: Arc::default(),
             source: Arc::new(CompilerSource::new(LpcPath::default(), &config)),
             config,
             diagnostics: Diagnostics::default(),

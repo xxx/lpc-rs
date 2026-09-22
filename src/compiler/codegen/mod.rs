@@ -1,4 +1,5 @@
 mod case_collector;
+pub mod class_walker;
 pub mod codegen_walker;
 pub mod function_prototype_walker;
 pub mod inheritance_walker;

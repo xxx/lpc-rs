@@ -140,6 +140,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
             | ExpressionNode::Ref(_) => {}
         },
         Child::Stmt(s) => match s {
+            AstNode::ClassDef(_) => {}
             AstNode::Block(n) => push_children(Child::Block(n), out),
             AstNode::Call(n) => push_children(Child::Call(n), out),
             AstNode::Decl(n) => push_children(Child::Decl(n), out),

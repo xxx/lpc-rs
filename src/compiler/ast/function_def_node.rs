@@ -5,9 +5,11 @@ use std::{
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
+
+use super::parsed_type::ParsedType;
 
 use crate::compiler::{
     ast::{
@@ -24,7 +26,7 @@ pub const ARGV: &str = "argv";
 /// A node representation a function definition
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub struct FunctionDefNode {
-    pub return_type: LpcType,
+    pub return_type: ParsedType,
     pub name: Ustr,
     pub parameters: Vec<VarInitNode>,
     /// The named collector, excluded from the fixed `parameters` and call arity.

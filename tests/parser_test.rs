@@ -1,5 +1,6 @@
 use claims::assert_ok;
 use indoc::indoc;
+use lpc_rs::compiler::ast::parsed_type::ParsedType;
 use lpc_rs::{
     compiler::{
         Compiler,
@@ -135,9 +136,9 @@ fn program_global_vars() {
         inherits: vec![],
         body: vec![
             AstNode::from(DeclNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 initializations: vec![VarInitNode {
-                    type_: LpcType::Int(false),
+                    type_: LpcType::Int(false).into(),
                     name: ustr("i"),
                     value: Some(ExpressionNode::Int(IntNode {
                         value: 123,
@@ -151,9 +152,9 @@ fn program_global_vars() {
                 }],
             }),
             AstNode::from(DeclNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 initializations: vec![VarInitNode {
-                    type_: LpcType::Int(false),
+                    type_: LpcType::Int(false).into(),
                     name: ustr("j"),
                     value: Some(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(VarNode {
@@ -177,9 +178,9 @@ fn program_global_vars() {
                 }],
             }),
             AstNode::from(DeclNode {
-                type_: LpcType::String(true),
+                type_: LpcType::String(true).into(),
                 initializations: vec![VarInitNode {
-                    type_: LpcType::String(true),
+                    type_: LpcType::String(true).into(),
                     name: ustr("k"),
                     value: None,
                     array: true,
@@ -475,7 +476,7 @@ fn typeless_functions_are_mixed() {
         node,
         AstNode::FunctionDef(FunctionDefNode {
             variadic: None,
-            return_type: LpcType::Mixed(false),
+            return_type: ParsedType::Resolved(LpcType::Mixed(false)),
             ..
         })
     ));
@@ -586,7 +587,7 @@ async fn partial_application_argument_lists() {
 
     let get_args = |node: &AstNode| -> Option<Vec<Option<LpcIntInner>>> {
         if let AstNode::Decl(DeclNode {
-            type_: LpcType::Function(false),
+            type_: ParsedType::Resolved(LpcType::Function(false)),
             initializations,
         }) = node
             && let Some(ExpressionNode::FunctionPtr(FunctionPtrNode { arguments, .. })) =

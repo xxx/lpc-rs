@@ -5,8 +5,9 @@ use std::{
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::Result;
+
+use super::parsed_type::ParsedType;
 
 use crate::compiler::{
     ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
@@ -17,7 +18,7 @@ use crate::compiler::{
 #[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct DeclNode {
     /// The declared type
-    pub type_: LpcType,
+    pub type_: ParsedType,
     /// The list of variables, with their optional initializations
     pub initializations: Vec<VarInitNode>,
 }

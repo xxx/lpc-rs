@@ -458,6 +458,7 @@ impl CodegenWalker {
             initializer,
             unmangled_functions: Box::new(unmangled_functions),
             function_scope,
+            class_scope: self.context.class_scope.clone(),
             inherited_function_scopes: Box::new(inherited_function_scopes),
             global_variables: Box::new(global_variables),
             global_variable_info: global_variable_info.into_boxed_slice(),
@@ -1155,6 +1156,7 @@ impl CodegenWalker {
     ) -> Result<ProgramFunction> {
         let backpatch_map = self.backpatch_maps.pop().unwrap();
         let mut func = self.function_stack.pop().unwrap();
+        func.class_scope = self.context.class_scope.clone();
         self.constant_keys.truncate(self.function_stack.len());
         Self::backpatch(&backpatch_map, &mut func)?;
         super::peephole::peephole(&mut func);
@@ -2532,7 +2534,19 @@ impl TreeWalker for CodegenWalker {
         let location = self.current_result;
 
         let reg_result = self.register_counter.next().unwrap().as_local();
-        let instruction = Instruction::Cast(location, node.type_, reg_result);
+        let target = node.type_.resolved()?;
+        let function = self
+            .function_stack
+            .last_mut()
+            .ok_or_else(|| lpc_bug!(node.span, "cast outside a function"))?;
+        let index = if let Some(index) = function.types.iter().position(|type_| *type_ == target) {
+            index
+        } else {
+            function.types.push(target);
+            function.types.len() - 1
+        };
+        let index = lpc_rs_asm::instruction::TypeIndex(u16::try_from(index)?);
+        let instruction = Instruction::Cast(location, index, reg_result);
         push_instruction!(self, instruction, node.span);
 
         self.current_result = reg_result;
@@ -4644,7 +4658,7 @@ mod tests {
 
             let mut node = ForNode {
                 initializer: Box::new(Some(AstNode::VarInit(VarInitNode {
-                    type_: LpcType::Int(false),
+                    type_: LpcType::Int(false).into(),
                     name: ustr("i"),
                     value: Some(ExpressionNode::from(10)),
                     array: false,
@@ -6412,17 +6426,17 @@ mod tests {
                     global: false,
                     function_name: false,
                 })),
-                type_: LpcType::String(true),
+                type_: LpcType::String(true).into(),
                 span: None,
             };
             walker.visit_cast(&mut node).await.unwrap();
 
+            let types = walker.function_stack.last().unwrap().types.clone();
             let instructions = walker_init_instructions(&mut walker);
-            let Some(Instruction::Cast(source, LpcType::String(true), dest)) =
-                instructions.last().copied()
-            else {
+            let Some(Instruction::Cast(source, index, dest)) = instructions.last().copied() else {
                 panic!("expected a cast, got {instructions:?}");
             };
+            assert_eq!(types[usize::from(index.0)], LpcType::String(true));
             assert_eq!(source, RegisterVariant::Local(Register(9)));
             assert_eq!(dest, walker.current_result);
             assert_ne!(source, dest);
@@ -7032,7 +7046,7 @@ mod tests {
             insert_symbol(walker, sym);
 
             let mut node = VarInitNode {
-                type_,
+                type_: type_.into(),
                 name: ustr("muffins"),
                 value: Some(ExpressionNode::Var(VarNode::new("marf"))),
                 array: false,
@@ -7042,7 +7056,7 @@ mod tests {
                 by_ref: false,
             };
 
-            let mut new_sym = Symbol::from(&mut node.clone());
+            let mut new_sym = Symbol::try_from(&mut node.clone()).unwrap();
             new_sym.scope_id = scope_id;
             insert_symbol(walker, new_sym);
 
@@ -7051,7 +7065,7 @@ mod tests {
 
         async fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker) {
             let mut node = VarInitNode {
-                type_,
+                type_: type_.into(),
                 name: ustr("muffins"),
                 value: Some(value),
                 array: false,
@@ -7061,7 +7075,7 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(walker, Symbol::from(&mut node));
+            insert_symbol(walker, Symbol::try_from(&mut node).unwrap());
 
             let _ = walker.visit_var_init(&mut node).await;
         }
@@ -7238,7 +7252,7 @@ mod tests {
             let mut walker = setup();
 
             let mut node = VarInitNode {
-                type_: LpcType::Object(false),
+                type_: LpcType::Object(false).into(),
                 name: ustr("muffins"),
                 value: Some(ExpressionNode::Call(CallNode {
                     chain: create!(CallChain, name: ustr("clone_object")),
@@ -7253,7 +7267,7 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+            insert_symbol(&mut walker, Symbol::try_from(&mut node.clone()).unwrap());
 
             let _ = walker.visit_var_init(&mut node).await;
 
@@ -7276,7 +7290,7 @@ mod tests {
             let mut walker = CodegenWalker::new(context);
 
             let mut node = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("arr"),
                 value: Some(ExpressionNode::from(vec![
                     ExpressionNode::from(12),
@@ -7295,10 +7309,10 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+            insert_symbol(&mut walker, Symbol::try_from(&mut node.clone()).unwrap());
 
             let mut node2 = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("str"),
                 value: Some(ExpressionNode::from("sup")),
                 array: false,
@@ -7308,8 +7322,8 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
-            insert_symbol(&mut walker, Symbol::from(&mut node2.clone()));
+            insert_symbol(&mut walker, Symbol::try_from(&mut node.clone()).unwrap());
+            insert_symbol(&mut walker, Symbol::try_from(&mut node2.clone()).unwrap());
 
             let _ = walker.visit_var_init(&mut node).await;
             let _ = walker.visit_var_init(&mut node2).await;
@@ -7353,7 +7367,7 @@ mod tests {
                 value: Some(ExpressionNode::from(create!(VarNode, name: ustr(existing_name)))),
             );
 
-            let mut sym = Symbol::from(&mut node.clone());
+            let mut sym = Symbol::try_from(&mut node.clone()).unwrap();
             sym.upvalue = true;
             sym.location = Some(RegisterVariant::Upvalue(Register(3)));
 
@@ -7390,7 +7404,7 @@ mod tests {
                 value: Some(ExpressionNode::from(666))
             );
 
-            let mut sym = Symbol::from(&mut node.clone());
+            let mut sym = Symbol::try_from(&mut node.clone()).unwrap();
             sym.upvalue = true;
             sym.location = Some(RegisterVariant::Upvalue(Register(3)));
 

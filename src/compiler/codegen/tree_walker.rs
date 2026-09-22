@@ -511,6 +511,13 @@ where
 /// A trait for types that can walk abstract syntax trees
 #[async_trait]
 pub trait TreeWalker {
+    async fn visit_class_def(
+        &mut self,
+        _node: &mut crate::compiler::ast::class_def_node::ClassDefNode,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     /// Called by the node dispatch layer before visiting a node that owns a
     /// scope (block, closure, do_while, for, foreach, if, while), with the
     /// node's `scope_id`: the scope walker writes a fresh id through it, and
@@ -981,7 +988,7 @@ mod tests {
             let mut node = ClosureNode {
                 variadic: None,
                 name: "closure-0".into(),
-                return_type: LpcType::Mixed(false),
+                return_type: LpcType::Mixed(false).into(),
                 flags: FunctionFlags::default(),
                 parameters: Some(vec![init("p")]),
                 body: vec![stmt("b1"), stmt("b2")],
@@ -1007,7 +1014,7 @@ mod tests {
         #[tokio::test]
         async fn decl_visits_initializations_in_order() {
             let mut node = DeclNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 initializations: vec![init("x"), init("y")],
             };
             let mut walker = spy();
@@ -1051,7 +1058,7 @@ mod tests {
             let mut node = ForEachNode::new(
                 ForEachInit::Mapping {
                     key: init("k"),
-                    value: init("v"),
+                    value: Box::new(init("v")),
                 },
                 var("l"),
                 stmt("b"),
@@ -1066,7 +1073,7 @@ mod tests {
         async fn function_def_visits_parameters_then_body() {
             let mut node = FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("f"),
                 parameters: vec![init("p")],
                 flags: FunctionFlags::default(),
@@ -1230,7 +1237,7 @@ mod tests {
         async fn function_def_propagates_a_parameter_error_and_stops() {
             let mut node = FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("f"),
                 parameters: vec![init("p")],
                 flags: FunctionFlags::default(),
@@ -1338,7 +1345,7 @@ mod scope_hook_tests {
         let mut node = ExpressionNode::Closure(ClosureNode {
             variadic: None,
             name: "closure-0".into(),
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             flags: FunctionFlags::default(),
             parameters: Some(vec![init("p")]),
             body: vec![stmt("b1")],

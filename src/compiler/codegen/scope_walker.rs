@@ -652,7 +652,7 @@ impl TreeWalker for ScopeWalker {
         }
 
         // Inserted first, so a closure in the initializer can capture the variable.
-        let mut symbol = Symbol::from(&mut *node);
+        let mut symbol = Symbol::try_from(&mut *node)?;
         symbol.by_ref = node.by_ref;
         if node.by_ref {
             // A `ref` parameter's cell is the caller's variable, for its
@@ -800,7 +800,7 @@ mod tests {
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("marf"),
                 flags: FunctionFlags::default().with_ellipsis(true),
                 parameters: vec![],
@@ -834,7 +834,7 @@ mod tests {
         fn setup() -> (ScopeWalker, VarInitNode) {
             let mut walker = ScopeWalker::default();
             let node = VarInitNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 name: ustr("foo"),
                 value: None,
                 array: false,

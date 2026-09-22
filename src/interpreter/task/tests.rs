@@ -4540,6 +4540,8 @@ mod test_instructions {
                 .unwrap();
             let initializer = ProgramFunction {
                 prototype,
+                class_scope: Arc::default(),
+                types: vec![],
                 num_locals: 1,
                 num_upvalues: 0,
                 instructions: vec![

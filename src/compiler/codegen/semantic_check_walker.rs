@@ -612,7 +612,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let ForEachInit::Array(init) = &node.initializer
             && let Some(element) = element_type(collection_type)
-            && !init.type_.matches_type(element)
+            && !init.type_.resolved()?.matches_type(element)
         {
             let e = lpc_error!(
                 init.span,
@@ -809,9 +809,11 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let Some(function_def) = &self.current_function {
             if let Some(expression) = &node.value {
-                if let Some(return_type) =
-                    mismatch(function_def.return_type, expression, &self.context)?
-                {
+                if let Some(return_type) = mismatch(
+                    function_def.return_type.resolved()?,
+                    expression,
+                    &self.context,
+                )? {
                     let error = LpcError::new(format!(
                         "invalid return type {}. Expected {}.",
                         return_type, function_def.return_type
@@ -822,7 +824,7 @@ impl TreeWalker for SemanticCheckWalker {
                     self.context.diagnostics.record(error);
                 }
             } else if !matches!(
-                function_def.return_type,
+                function_def.return_type.resolved()?,
                 LpcType::Void | LpcType::Mixed(false)
             ) {
                 // CD and LDMud take a bare `return` in a `mixed` function
@@ -900,7 +902,7 @@ impl TreeWalker for SemanticCheckWalker {
                 source,
                 node.type_
             );
-            if let Some(efun) = conversion_efun(node.type_) {
+            if let Some(efun) = conversion_efun(node.type_.resolved()?) {
                 e = e.with_note(format!("a cast converts nothing; `{efun}` does"));
             }
             self.context.diagnostics.record(e);
@@ -951,7 +953,7 @@ impl TreeWalker for SemanticCheckWalker {
         walk_var_init(self, node).await?;
 
         if let Some(expression) = &node.value
-            && let Some(expr_type) = mismatch(node.type_, expression, &self.context)?
+            && let Some(expr_type) = mismatch(node.type_.resolved()?, expression, &self.context)?
         {
             let e = lpc_error!(
                 node.span,
@@ -1117,7 +1119,7 @@ mod tests {
         #[tokio::test]
         async fn allows_mixed() {
             let mut init_node = VarInitNode {
-                type_: LpcType::Mixed(false),
+                type_: LpcType::Mixed(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
@@ -1157,7 +1159,7 @@ mod tests {
         #[tokio::test]
         async fn allows_array_items() {
             let mut init_node = VarInitNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
@@ -1202,7 +1204,7 @@ mod tests {
         #[tokio::test]
         async fn allows_array_ranges() {
             let mut init_node = VarInitNode {
-                type_: LpcType::Int(true),
+                type_: LpcType::Int(true).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(vec![324])),
                 array: false,
@@ -2554,7 +2556,7 @@ mod tests {
         #[tokio::test]
         async fn handles_scopes() {
             let _global = VarInitNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 name: ustr("a"),
                 value: Some(ExpressionNode::from(1)),
                 array: false,
@@ -2565,7 +2567,7 @@ mod tests {
             };
 
             let param1 = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("a"),
                 value: Some(ExpressionNode::from("foo")),
                 array: false,
@@ -2576,7 +2578,7 @@ mod tests {
             };
 
             let param2 = VarInitNode {
-                type_: LpcType::Int(true),
+                type_: LpcType::Int(true).into(),
                 name: ustr("a"),
                 value: Some(ExpressionNode::from(vec![1, 2, 3, 4])),
                 array: true,
@@ -2588,7 +2590,7 @@ mod tests {
 
             let mut function_def1 = FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("foo"),
                 parameters: vec![param1],
                 flags: FunctionFlags::default(),
@@ -2608,7 +2610,7 @@ mod tests {
 
             let mut function_def2 = FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("snuh"),
                 parameters: vec![param2],
                 flags: FunctionFlags::default(),
@@ -2634,7 +2636,7 @@ mod tests {
         async fn disallows_keyword_name() {
             let mut node = FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("while"),
                 parameters: vec![],
                 flags: FunctionFlags::default(),
@@ -2897,7 +2899,7 @@ mod tests {
             let mut node = ProgramNode {
                 inherits: vec![],
                 body: vec![AstNode::from(VarInitNode {
-                    type_: LpcType::String(false),
+                    type_: LpcType::String(false).into(),
                     by_ref: false,
                     name: ustr("mapping"),
                     value: None,
@@ -3030,13 +3032,13 @@ mod tests {
 
             let void_function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("foo")
             );
 
             let int_function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Int(false),
+                return_type: LpcType::Int(false).into(),
                 name: ustr("snuh")
             );
 
@@ -3082,7 +3084,7 @@ mod tests {
 
             let void_function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("foo")
             );
 
@@ -3111,7 +3113,7 @@ mod tests {
 
             let function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Mixed(false),
+                return_type: LpcType::Mixed(false).into(),
                 name: ustr("foo"),
             );
 
@@ -3128,7 +3130,7 @@ mod tests {
         async fn allows_return_of_differing_type_within_closure() {
             let function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Float(false),
+                return_type: LpcType::Float(false).into(),
                 name: ustr("foo"),
             );
 
@@ -3459,7 +3461,7 @@ mod tests {
         async fn validates_both_sides() {
             let mut node = VarInitNode {
                 name: ustr("foo"),
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 global: false,
@@ -3478,7 +3480,7 @@ mod tests {
         #[tokio::test]
         async fn always_allows_0() {
             let mut node = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(0)),
                 array: false,
@@ -3498,7 +3500,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_differing_types() {
             let mut node = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
@@ -3524,7 +3526,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_keyword_name() {
             let mut node = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("switch"),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
@@ -3548,7 +3550,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_argv_in_ellipsis_function() {
             let mut node = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("argv"),
                 value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
                 array: false,
@@ -3565,7 +3567,7 @@ mod tests {
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("moop"),
                 parameters: vec![],
                 flags: FunctionFlags::default().with_ellipsis(true),
@@ -3588,7 +3590,7 @@ mod tests {
         #[tokio::test]
         async fn allows_argv_in_non_ellipsis_function() {
             let mut node = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("argv"),
                 value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
                 array: false,
@@ -3604,7 +3606,7 @@ mod tests {
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
                 variadic: None,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("moop"),
                 parameters: vec![],
                 flags: FunctionFlags::default(),

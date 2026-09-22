@@ -36,4 +36,6 @@ pub mod var_init_node;
 pub mod var_node;
 pub mod while_node;
 
+pub mod class_def_node;
 pub mod labeled_statement_node;
+pub mod parsed_type;

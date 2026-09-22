@@ -7,7 +7,7 @@ use crate::compiler::ast::var_init_node::VarInitNode;
 
 factori!(VarInitNode, {
     default {
-        type_ = LpcType::Int(false),
+        type_ = LpcType::Int(false).into(),
         name = ustr(&format!("var-{}", (0..100000).fake::<usize>())),
         value = None,
         array = false,

@@ -40,6 +40,8 @@ use crate::compiler::ast::var_node::VarNode;
 use crate::compiler::ast::var_init_node::VarInitNode;
 use crate::compiler::ast::while_node::WhileNode;
 use lpc_rs_core::lpc_type::LpcType;
+use crate::compiler::ast::parsed_type::ParsedType;
+use crate::compiler::ast::class_def_node::{ClassDefNode, ClassFieldNode};
 use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_core::EFUN;
 use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
@@ -127,6 +129,7 @@ extern {
         "protected" => Token::Protected(<Span>),
         "static" => Token::Static(<Span>),
         "nosave" => Token::Nosave(<Span>),
+        "class" => Token::Class(<Span>),
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
         "ref" => Token::Ref(<Span>),
@@ -193,7 +196,24 @@ InheritVisibility: (Span, lpc_rs_core::visibility::Visibility) = {
     "protected" => (<>, lpc_rs_core::visibility::Visibility::Protected),
 };
 
+ClassDef: ClassDefNode = {
+    <l:"class"> <name:"ID"> "{" <fields:ClassFields*> <r:"}"> ";"? => {
+        ClassDefNode { name: ustr(&name.1), fields: fields.into_iter().flatten().collect(), span: Span::join(l, r) }
+    }
+};
+
+ClassFields: Vec<ClassFieldNode> = {
+    <type_:Type> <first:ClassFieldName> <rest:("," <ClassFieldName>)*> ";" => {
+        std::iter::once(first).chain(rest).map(|(name, array)| ClassFieldNode {
+            name: ustr(&name.1), type_: type_.1.as_array(array), span: Span::join(type_.0, name.0)
+        }).collect()
+    }
+};
+
+ClassFieldName: (StringToken, bool) = <star:"*"?> <name:"ID"> => (name, star.is_some());
+
 Def: AstNode = {
+    <ClassDef> => AstNode::ClassDef(<>),
     <FunctionDef> => AstNode::from(<>),
     <proto:FunctionPrototype> <r:";"> => {
         let (flags, r_type, _, name, _) = proto;
@@ -233,7 +253,7 @@ Def: AstNode = {
 
 FunctionPrototype: (
     Vec<(Span, &'static str)>,
-    Option<(Span, &'static str)>,
+    Option<(Span, ParsedType)>,
     Option<Span>,
     StringToken,
     (Vec<VarInitNode>, bool, Option<Box<VarInitNode>>)
@@ -263,14 +283,14 @@ FunctionDef: FunctionDefNode = {
         let span = Span::join(lead, name.0);
 
         let return_type = if let Some(this_type) = r_type {
-            LpcType::from(this_type.1).as_array(array)
+            this_type.1.as_array(array)
         } else if context.strict_types_at(span) {
             let err = LpcError::new("Missing return type")
                                       .with_span(Some(span))
                                       .with_note("`#pragma strict_types` governs this file, so every function it declares needs an explicit return type.");
             return Err(ParseError::User { error: err });
         } else {
-            LpcType::Mixed(array)
+            LpcType::Mixed(array).into()
         };
 
         let flag_strs = flags.into_iter().map(|f| f.1).collect::<Vec<_>>();
@@ -327,7 +347,7 @@ Closure: ExpressionNode = {
 
         Ok(guard(ExpressionNode::Closure(ClosureNode {
             name,
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             parameters,
             variadic,
             flags,
@@ -380,7 +400,7 @@ ParameterList: Vec<VarInitNode> = {
 
 ArgName: VarInitNode = {
     <var_type:Type> <by_ref:"ref"?> <mut init:VarInit> => {
-        let new_type = LpcType::from(var_type.1);
+        let new_type = var_type.1;
 
         init.type_ = new_type.as_array(init.array);
         init.by_ref = by_ref.is_some();
@@ -394,23 +414,24 @@ ArgName: VarInitNode = {
                                       .with_note("`#pragma strict_types` governs this file, so every parameter it declares needs an explicit type.");
             return Err(ParseError::User { error: err });
         }
-        init.type_ = LpcType::Mixed(init.array);
+        init.type_ = LpcType::Mixed(init.array).into();
         init.by_ref = by_ref.is_some();
 
         Ok(init)
     },
 };
 
-Type: (Span, &'static str) = {
-    "int" => (<>, "int"),
-    "float" => (<>, "float"),
-    "string" => (<>, "string"),
-    "bytes" => (<>, "bytes"),
-    "mixed" => (<>, "mixed"),
-    "mapping" => (<>, "mapping"),
-    "object" => (<>, "object"),
-    "function" => (<>, "function"),
-    "void" => (<>, "void"),
+Type: (Span, ParsedType) = {
+    <l:"class"> <name:"ID"> => (Span::join(l, name.0), ParsedType::Class { name: ustr(&name.1), array: false, span: name.0 }),
+    "int" => (<>, LpcType::from("int").into()),
+    "float" => (<>, LpcType::from("float").into()),
+    "string" => (<>, LpcType::from("string").into()),
+    "bytes" => (<>, LpcType::from("bytes").into()),
+    "mixed" => (<>, LpcType::from("mixed").into()),
+    "mapping" => (<>, LpcType::from("mapping").into()),
+    "object" => (<>, LpcType::from("object").into()),
+    "function" => (<>, LpcType::from("function").into()),
+    "void" => (<>, LpcType::from("void").into()),
 };
 
 GlobalFlag: (Span, &'static str) = {
@@ -546,7 +567,7 @@ ForInit: AstNode = {
 
 ForEachInit: ForEachInit = {
     <var:ForEachVar> => ForEachInit::Array(var),
-    <key:ForEachVar> "," <value:ForEachVar> => ForEachInit::Mapping { key, value },
+    <key:ForEachVar> "," <value:ForEachVar> => ForEachInit::Mapping { key, value: Box::new(value) },
 };
 
 // A loop variable; untyped is `mixed`.
@@ -558,12 +579,12 @@ ForEachVar: VarInitNode = {
     },
     <var_type:Type> <star:"*"?> <name:"ID"> =>? {
         let span = Span::join(var_type.0, name.0);
-        if var_type.1 == "void" {
+        if var_type.1 == LpcType::Void {
             let error = lpc_error!(Some(span), "a `foreach` variable cannot be `void`");
             return Err(ParseError::User { error });
         }
         let array = star.is_some();
-        let mut node = VarInitNode::new(&name.1, LpcType::from(var_type.1).as_array(array));
+        let mut node = VarInitNode::new(&name.1, var_type.1.as_array(array));
         node.array = array;
         node.span = Some(span);
         Ok(node)
@@ -612,7 +633,7 @@ VarInit: VarInitNode = {
         let span = Span::combine(Some(array.unwrap_or(name_span)), value_span.or(Some(name_span)));
 
         Ok(guard(VarInitNode {
-            type_: LpcType::Int(false), // placeholder. Corrected in Decl.
+            type_: LpcType::Int(false).into(), // placeholder. Corrected in Decl.
             name: ustr(&name.1),
             value,
             array: array.is_some(),
@@ -626,7 +647,7 @@ VarInit: VarInitNode = {
 
 Decl: DeclNode = {
     <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> =>? {
-        let new_type = LpcType::from(var_type.1).as_array(init.array);
+        let new_type = var_type.1.as_array(init.array);
         let mut initializations = vec![init];
 
         initializations.append(optional.to_vec().as_mut());
@@ -799,15 +820,15 @@ CastExpression: ExpressionNode = {
     <UnaryExpression>,
     <l:"("> <cast_type:Type> <star:"*"?> ")" <expr:CastExpression> =>? {
         let span = Span::combine(Some(l), expr.span());
-        if cast_type.1 == "void" {
+        if cast_type.1 == LpcType::Void {
             let error = lpc_error!(span, "cannot cast to `void`");
             return Err(ParseError::User { error });
         }
-        if cast_type.1 == "bytes" {
+        if cast_type.1 == LpcType::Bytes(false) {
             let error = lpc_error!(span, "cannot cast to `bytes`; convert with to_bytes()");
             return Err(ParseError::User { error });
         }
-        let type_ = LpcType::from(cast_type.1).as_array(star.is_some());
+        let type_ = cast_type.1.as_array(star.is_some());
 
         Ok(guard(ExpressionNode::Cast(CastNode { expr: Box::new(expr), type_, span }), span)?)
     },

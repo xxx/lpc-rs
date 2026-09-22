@@ -9,7 +9,7 @@ factori!(ClosureNode, {
     default {
         variadic = None,
         name = ustr(&format!("closure-{}", (0..100000).fake::<usize>())),
-        return_type = LpcType::Mixed(false),
+        return_type = LpcType::Mixed(false).into(),
         parameters = None,
         flags = FunctionFlags::default(),
         body = vec![],

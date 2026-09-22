@@ -4,9 +4,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use lpc_rs_core::{ScopeId, function_flags::FunctionFlags, lpc_type::LpcType};
+use lpc_rs_core::{ScopeId, function_flags::FunctionFlags};
 use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
+
+use super::parsed_type::ParsedType;
 
 use crate::compiler::{
     ast::{
@@ -20,7 +22,7 @@ use crate::compiler::{
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub struct ClosureNode {
     pub name: Ustr,
-    pub return_type: LpcType,
+    pub return_type: ParsedType,
     pub parameters: Option<Vec<VarInitNode>>,
     /// The named collector, excluded from the fixed `parameters` and call arity.
     pub variadic: Option<Box<VarInitNode>>,
@@ -60,12 +62,13 @@ impl Display for ClosureNode {
 mod tests {
     use super::*;
     use crate::compiler::ast::expression_node::ExpressionNode;
+    use lpc_rs_core::lpc_type::LpcType;
 
     fn closure(body: Vec<AstNode>) -> ClosureNode {
         ClosureNode {
             variadic: None,
             name: "closure-1".into(),
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             parameters: None,
             flags: Default::default(),
             body,

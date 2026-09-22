@@ -103,7 +103,7 @@ impl OperatorNode {
         let closure = ClosureNode {
             variadic: None,
             name: closure_name,
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             parameters: None,
             flags: FunctionFlags::from(&["private"][..]),
             body: vec![AstNode::Expression(op.body(span))],

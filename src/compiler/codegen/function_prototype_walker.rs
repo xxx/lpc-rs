@@ -93,7 +93,10 @@ impl TreeWalker for FunctionPrototypeWalker {
         let num_default_args =
             RegisterSize::try_from(parameters.iter().filter(|p| p.value.is_some()).count())?;
         let kind = FunctionKind::Closure;
-        let arg_types = parameters.iter().map(|parm| parm.type_).collect::<Vec<_>>();
+        let arg_types = parameters
+            .iter()
+            .map(|parm| parm.type_.resolved())
+            .collect::<Result<Vec<_>>>()?;
         let arg_spans = parameters.iter().flat_map(|n| n.span).collect::<Vec<_>>();
 
         self.context.function_prototypes.insert(
@@ -101,7 +104,7 @@ impl TreeWalker for FunctionPrototypeWalker {
             FunctionPrototypeBuilder::default()
                 .name(node.name.to_owned())
                 .filename(self.context.source.input().clone())
-                .return_type(node.return_type)
+                .return_type(node.return_type.resolved()?)
                 .kind(kind)
                 .arity(FunctionArity {
                     num_args,
@@ -170,14 +173,14 @@ impl TreeWalker for FunctionPrototypeWalker {
         let arg_types = node
             .parameters
             .iter()
-            .map(|parm| parm.type_)
-            .collect::<Vec<_>>();
+            .map(|parm| parm.type_.resolved())
+            .collect::<Result<Vec<_>>>()?;
         self.context.function_prototypes.insert(
             node.name.to_owned(),
             FunctionPrototypeBuilder::default()
                 .name(node.name.to_owned())
                 .filename(self.context.source.input().clone())
-                .return_type(node.return_type)
+                .return_type(node.return_type.resolved()?)
                 .arity(FunctionArity {
                     num_args,
                     num_default_args,
@@ -241,7 +244,7 @@ mod tests {
     async fn disallows_redefining_nomask_function() {
         let mut node = FunctionDefNode {
             variadic: None,
-            return_type: LpcType::Void,
+            return_type: LpcType::Void.into(),
             name: ustr("duplicate"),
             parameters: vec![],
             flags: FunctionFlags::default(),
@@ -293,7 +296,7 @@ mod tests {
     ) -> Result<()> {
         let mut node = FunctionDefNode {
             variadic: None,
-            return_type: LpcType::Void,
+            return_type: LpcType::Void.into(),
             name: ustr("g"),
             parameters: (0..own_args)
                 .map(|i| VarInitNode::new(&format!("p{i}"), LpcType::Int(false)))
@@ -357,7 +360,7 @@ mod tests {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = FunctionDefNode {
             variadic: None,
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             name: ustr("marf"),
             flags: FunctionFlags::default(),
             parameters: vec![
@@ -396,7 +399,7 @@ mod tests {
         let mut node = ClosureNode {
             variadic: None,
             name: "closure-123".into(),
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             flags: FunctionFlags::default(),
             parameters: Some(vec![
                 VarInitNode::new("foo", LpcType::Int(false)),

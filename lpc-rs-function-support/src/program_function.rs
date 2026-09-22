@@ -12,8 +12,8 @@ use lpc_rs_asm::{
     instruction::{Arg, ArgList, Instruction},
 };
 use lpc_rs_core::{
-    RegisterSize, function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle,
-    register::RegisterVariant,
+    RegisterSize, class::ClassScope, function_arity::FunctionArity, lpc_type::LpcType,
+    mangle::Mangle, register::RegisterVariant,
 };
 use lpc_rs_errors::span::Span;
 use tracing::trace;
@@ -36,6 +36,14 @@ use crate::{
 pub struct ProgramFunction {
     /// My prototype from compilation
     pub prototype: FunctionPrototype,
+
+    /// Definitions retained by this code, including inherited and closure bodies.
+    #[builder(default)]
+    pub class_scope: Arc<ClassScope>,
+
+    /// Runtime type assertions referenced by instruction operands.
+    #[builder(default)]
+    pub types: Vec<LpcType>,
 
     /// The number of non-argument, non-return-value locals.
     /// Used for register allocation.
@@ -104,6 +112,8 @@ impl ProgramFunction {
     pub fn new(prototype: FunctionPrototype, num_locals: RegisterSize) -> Self {
         Self {
             prototype,
+            class_scope: Arc::default(),
+            types: vec![],
             num_locals,
             num_upvalues: 0,
             instructions: vec![],
@@ -201,6 +211,9 @@ impl ProgramFunction {
         for (index, constant) in self.constants.iter().enumerate() {
             v.push(format!("    k{index} = {constant}"));
         }
+        for (index, type_) in self.types.iter().enumerate() {
+            v.push(format!("    t{index} = {type_}"));
+        }
         for (index, list) in self.arg_lists.iter().enumerate() {
             let args: Vec<String> = list.iter().map(ToString::to_string).collect();
             v.push(format!("    a{index} = ({})", args.join(", ")));
@@ -283,6 +296,20 @@ mod tests {
 
     fn local(i: RegisterSize) -> RegisterVariant {
         RegisterVariant::Local(Register(i))
+    }
+
+    #[test]
+    fn the_listing_resolves_runtime_type_table_entries() {
+        let mut func = function(FunctionKind::Local);
+        func.types = vec![LpcType::Int(false)];
+        func.instructions = vec![Instruction::Cast(
+            local(1),
+            lpc_rs_asm::instruction::TypeIndex(0),
+            local(2),
+        )];
+        let listing = func.listing().join("\n");
+        assert!(listing.contains("t0 = int"));
+        assert!(listing.contains(&func.instructions[0].to_string()));
     }
 
     #[test]
