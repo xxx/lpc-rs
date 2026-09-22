@@ -75,9 +75,11 @@ indexing still returns integer `0`. Nil does not replace these numeric results.
 
 Saved `0` always restores as integer zero, regardless of the destination's type.
 Saved `nil` stays nil in distinct mode. In zero mode it becomes `0`, and the
-restore emits one warning with the path and number of converted nil values.
-This includes nested values and mapping keys. Warnings are delivered only if
-the task commits; a retry or aborted attempt does not duplicate them.
+restore emits one warning with the number of converted nil values and, for file
+restores, the path. The count includes nested values and mapping keys.
+[`restore_value`](../efun/restore_value.md) uses the same conversion rules for
+serialized strings. Warnings are delivered only if the task commits; a retry or
+aborted attempt does not duplicate them.
 
 Collapsing nil and zero mapping keys can merge entries; later entries win.
 Restore does not infer that an old saved zero meant absence. Class-record

@@ -1,10 +1,15 @@
-# The save-file format
+# The save format
 
 `save_object`, `restore_object`, `save_map` and `restore_map` share one
 line-oriented text format based on CD-lineage `.o` files. The grammar and
 extensions below define what this driver reads and writes. Cross-driver
 interchange depends on the value types and encodings used; in particular,
 the `bytes` and class forms are native extensions.
+
+[`save_value`](efun/save_value.md) and [`restore_value`](efun/restore_value.md)
+use the same value encodings directly in strings, without a name, file header or
+trailing newline. They perform no file I/O. The value reader accepts trailing
+spaces, but no leading whitespace, trailing tabs or newlines, or extra text.
 
 A file is a sequence of lines, each `name value` with exactly one space
 between: `name` is the variable name, or for `save_map` the key: any text
@@ -31,6 +36,8 @@ Saved `0` always reads as numeric zero. Saved `nil` remains nil in
 `restore_map` warn once per call, naming the file and counting converted nil
 values, including nested values and keys. The warning is delivered at commit;
 a caught partial `restore_object` also warns for the earlier lines it applied.
+`restore_value` warns with the same count after a successful parse, without a
+file path. Failed calls and aborted tasks do not deliver its warning.
 See [null values](lpc/null.md) for mode selection and mapping-key collisions.
 
 Reading is strict: a missing trailing comma, a space inside a container, a
@@ -50,8 +57,9 @@ raises a runtime error instead of writing it.
 
 An object reference restores as the live object of that name when it
 exists and was created in the same second, else as the selected null value. A function pointer
-is never written: a variable holding one is left out of the file, and one
-inside an array, mapping or class field is written as the selected null value.
+is never written: a top-level variable or `save_map` entry holding one is left
+out of the file. In `save_value`, or inside an array, mapping or class field, a
+function pointer is written as the selected null value.
 
 Repeated occurrences of the same array, mapping or class restore as independent
 instances. References between occurrences are not preserved. Cycles cannot be

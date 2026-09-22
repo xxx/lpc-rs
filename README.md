@@ -175,7 +175,7 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 | Add player commands | [`add_action`](doc/efun/add_action.md), [`add_rule`](doc/efun/add_rule.md), [`parse_sentence`](doc/efun/parse_sentence.md) |
 | See how the parsing frontends share one engine | [Parser Town](doc/parser-town/README.md) · open [the interactive tour](doc/parser-town/index.html) locally in a browser |
 | Explore garbage collection, roots, and cycles | [Collector Town](doc/collector-town/README.md) · open [the interactive tour](doc/collector-town/index.html) locally in a browser |
-| Save and restore game data | [`save_object`](doc/efun/save_object.md), [`restore_object`](doc/efun/restore_object.md), [save-file format](doc/save-format.md) |
+| Save and restore game data | [`save_object`](doc/efun/save_object.md), [`restore_object`](doc/efun/restore_object.md), [`save_value`](doc/efun/save_value.md), [`restore_value`](doc/efun/restore_value.md), [save format](doc/save-format.md) |
 | Upgrade live objects, clones, or the master and simulated efuns | [`request_object_recompile`](doc/efun/request_object_recompile.md) |
 
 ## Develop and debug LPC

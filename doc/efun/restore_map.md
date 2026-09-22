@@ -32,4 +32,5 @@ if (catch(data = restore_map(filename))) data = ([]);
 
 ### See also
 
+[restore_value](restore_value.md), [save_value](save_value.md),
 `save_map`, `save_object`, `restore_object`, `valid_read`

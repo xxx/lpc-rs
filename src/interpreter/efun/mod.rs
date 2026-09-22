@@ -107,10 +107,12 @@ pub(crate) mod replace_string;
 pub(crate) mod request_clean_up;
 pub(crate) mod restore_map;
 pub(crate) mod restore_object;
+pub(crate) mod restore_value;
 pub(crate) mod rm;
 pub(crate) mod rmdir;
 pub(crate) mod save_map;
 pub(crate) mod save_object;
+pub(crate) mod save_value;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
@@ -1247,6 +1249,16 @@ efuns! {
         arity: 2,
         args: [LpcType::Mapping(false), LpcType::Mixed(false)],
     },
+    save_value => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    restore_value => {
+        returns: LpcType::Mixed(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1608,6 +1620,8 @@ mod tests {
                 "evaluate",
                 "origin",
                 "has_key",
+                "save_value",
+                "restore_value",
             ]
         );
     }
