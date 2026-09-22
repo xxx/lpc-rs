@@ -477,6 +477,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             }
         }
         ExpressionNode::Closure(_) => Ok(LpcType::Function(false)),
+        ExpressionNode::Catch(_) => Ok(LpcType::Mixed(false)),
         ExpressionNode::Capture(node) => node_type(&node.expr, context),
         ExpressionNode::Cast(CastNode { type_, .. }) => type_.resolved(),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {

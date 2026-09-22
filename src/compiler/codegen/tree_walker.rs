@@ -12,6 +12,7 @@ use crate::compiler::{
         break_node::BreakNode,
         call_node::{CallChain, CallNode},
         cast_node::CastNode,
+        catch_node::CatchNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         continue_node::ContinueNode,
@@ -567,6 +568,14 @@ pub trait TreeWalker {
         Self: Sized,
     {
         walk_block(self, node).await
+    }
+
+    /// Visit a catch block in its own lexical scope.
+    async fn visit_catch(&mut self, node: &mut CatchNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.body.visit(self).await
     }
 
     /// Visit a break node

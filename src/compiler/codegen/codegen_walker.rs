@@ -42,6 +42,7 @@ use crate::{
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             cast_node::CastNode,
+            catch_node::CatchNode,
             class_expression::{ClassInitNode, CompoundAssignmentNode, MemberNode},
             closure_node::ClosureNode,
             continue_node::ContinueNode,
@@ -96,14 +97,16 @@ macro_rules! push_instruction {
 struct JumpTarget {
     pub break_target: Label,
     /// `None` inside a `switch` that no loop encloses.
-    pub continue_target: Option<Label>,
+    pub continue_target: Option<(Label, usize)>,
+    pub break_catch_depth: usize,
 }
 
 impl JumpTarget {
-    fn new(break_target: Label, continue_target: Label) -> Self {
+    fn new(break_target: Label, continue_target: Label, catch_depth: usize) -> Self {
         Self {
             break_target,
-            continue_target: Some(continue_target),
+            continue_target: Some((continue_target, catch_depth)),
+            break_catch_depth: catch_depth,
         }
     }
 }
@@ -236,6 +239,9 @@ pub struct CodegenWalker {
 
     /// Labels where jumps at any particular time need to go to.
     jump_targets: Vec<JumpTarget>,
+
+    /// Active catch handlers in the function being emitted.
+    catch_depth: usize,
 
     /// The labels of each open `switch`'s cases in visit order, taken by
     /// `visit_label` as the bodies are emitted.
@@ -802,40 +808,38 @@ impl CodegenWalker {
         Ok(())
     }
 
-    // special case for `catch()`
-    async fn emit_catch(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn emit_catch<T: AstNodeTrait + Send>(
+        &mut self,
+        body: &mut T,
+        span: Option<Span>,
+    ) -> Result<()> {
         let result_register = self.register_counter.next().unwrap().as_local();
-        let label = self.new_label("catch_end");
-
         let start_address = self.current_address();
         push_instruction!(
             self,
             Instruction::CatchStart(result_register, Address(0)),
-            node.span
+            span
         );
 
-        for argument in &mut node.arguments {
-            argument.visit(self).await?;
-        }
+        let enclosing_depth = self.catch_depth;
+        self.catch_depth += 1;
+        let result = body.visit(self).await;
+        self.catch_depth = enclosing_depth;
+        result?;
 
-        // get the address of the `catch_end` pseudo-instruction, so we can jump to a
-        // location that is both guaranteed to have an instruction, as well as
-        // clean up the handled catch point
-        let label_address = self.current_address();
-        self.insert_label(label, label_address);
-
-        // backpatch the `catch_start` instruction with the address of the `catchend`
-        let instructions = &mut self.function_stack.last_mut().unwrap().instructions;
-        let _ = std::mem::replace(
-            &mut instructions[start_address.0],
-            Instruction::CatchStart(result_register, label_address),
-        );
-
-        push_instruction!(self, Instruction::CatchEnd, node.span);
-
+        // Error unwinding resumes at CatchEnd so it removes the handled catch too.
+        let end_address = self.current_address();
+        self.function_stack.last_mut().unwrap().instructions[start_address.0] =
+            Instruction::CatchStart(result_register, end_address);
+        push_instruction!(self, Instruction::CatchEnd, span);
         self.current_result = result_register;
-
         Ok(())
+    }
+
+    fn leave_catches(&mut self, target_depth: usize, span: Option<Span>) {
+        for _ in target_depth..self.catch_depth {
+            push_instruction!(self, Instruction::CatchEnd, span);
+        }
     }
 
     /// The operand of `constant` in the current function's pool, interned
@@ -1611,9 +1615,16 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
+    async fn visit_catch(&mut self, node: &mut CatchNode) -> Result<()> {
+        self.emit_catch(&mut node.body, node.span).await
+    }
+
+    #[instrument(skip_all)]
     async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
-        if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
-            self.schedule_backpatch(&break_target.clone(), self.current_address())?;
+        if let Some(target) = self.jump_targets.last() {
+            let label = target.break_target.clone();
+            self.leave_catches(target.break_catch_depth, node.span);
+            self.schedule_backpatch(&label, self.current_address())?;
             let instruction = Instruction::Jmp(0.into());
             push_instruction!(self, instruction, node.span);
             return Ok(());
@@ -1639,7 +1650,11 @@ impl TreeWalker for CodegenWalker {
         let has_receiver = receiver.is_some();
 
         if !has_receiver && name.as_str() == CATCH {
-            return self.emit_catch(node).await;
+            let argument = node
+                .arguments
+                .first_mut()
+                .ok_or_else(|| lpc_bug!(node.span, "catch has no expression"))?;
+            return self.emit_catch(argument, node.span).await;
         }
 
         let argument_len = node.arguments.len();
@@ -1946,6 +1961,8 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+        let enclosing_catch_depth = std::mem::take(&mut self.catch_depth);
+        let enclosing_jumps = std::mem::take(&mut self.jump_targets);
         let Some(prototype) = self.context.function_prototypes.get(&*node.name) else {
             return Err(lpc_error!(
                 node.span,
@@ -2043,6 +2060,9 @@ impl TreeWalker for CodegenWalker {
 
         self.register_counter.pop();
 
+        self.catch_depth = enclosing_catch_depth;
+        self.jump_targets = enclosing_jumps;
+
         // At this point, the closure has been generated and stored.
         // We just need to store a reference to it in the current result.
         let location = self.register_counter.next().unwrap().as_local();
@@ -2063,11 +2083,13 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if let Some(JumpTarget {
-            continue_target: Some(continue_target),
+            continue_target: Some((continue_target, catch_depth)),
             ..
         }) = self.jump_targets.last()
         {
-            self.schedule_backpatch(&continue_target.clone(), self.current_address())?;
+            let label = continue_target.clone();
+            self.leave_catches(*catch_depth, node.span);
+            self.schedule_backpatch(&label, self.current_address())?;
             let instruction = Instruction::Jmp(Address(0));
             push_instruction!(self, instruction, node.span);
             return Ok(());
@@ -2093,7 +2115,8 @@ impl TreeWalker for CodegenWalker {
         let start_label = self.new_label("do-while-start");
         let end_label = self.new_label("do-while-end");
         let continue_label = self.new_label("do-while-continue");
-        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        let jump_target =
+            JumpTarget::new(end_label.clone(), continue_label.clone(), self.catch_depth);
         self.jump_targets.push(jump_target);
 
         let start_addr = self.current_address();
@@ -2130,7 +2153,8 @@ impl TreeWalker for CodegenWalker {
         let test_label = self.new_label("for-test");
         let end_label = self.new_label("for-end");
         let continue_label = self.new_label("for-continue");
-        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        let jump_target =
+            JumpTarget::new(end_label.clone(), continue_label.clone(), self.catch_depth);
         self.jump_targets.push(jump_target);
 
         self.emit_loop_entry(node.condition.as_ref(), &test_label, node.span)?;
@@ -2193,7 +2217,8 @@ impl TreeWalker for CodegenWalker {
         let test_label = self.new_label("foreach-test");
         let end_label = self.new_label("foreach-end");
         let continue_label = self.new_label("foreach-continue");
-        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        let jump_target =
+            JumpTarget::new(end_label.clone(), continue_label.clone(), self.catch_depth);
         self.jump_targets.push(jump_target);
 
         self.emit_jump(&test_label, node.span)?;
@@ -2571,6 +2596,7 @@ impl TreeWalker for CodegenWalker {
             self.zero_result(node.span)?;
         }
 
+        self.leave_catches(0, node.span);
         push_instruction!(self, Instruction::Ret, node.span);
 
         Ok(())
@@ -2669,6 +2695,7 @@ impl TreeWalker for CodegenWalker {
             .and_then(|target| target.continue_target.clone());
         self.jump_targets.push(JumpTarget {
             break_target: end_label.clone(),
+            break_catch_depth: self.catch_depth,
             continue_target,
         });
         self.case_labels.push(labels);
@@ -3004,8 +3031,11 @@ impl TreeWalker for CodegenWalker {
         let start_label = self.new_label("while-start");
         let test_label = self.new_label("while-test");
         let end_label = self.new_label("while-end");
-        self.jump_targets
-            .push(JumpTarget::new(end_label.clone(), test_label.clone()));
+        self.jump_targets.push(JumpTarget::new(
+            end_label.clone(),
+            test_label.clone(),
+            self.catch_depth,
+        ));
 
         self.emit_loop_entry(Some(&node.condition), &test_label, node.span)?;
 
@@ -3046,6 +3076,7 @@ impl Default for CodegenWalker {
             global_counter,
             context: Default::default(),
             jump_targets: vec![],
+            catch_depth: 0,
             case_labels: vec![],
             visit_range_results: None,
             closure_arg_locations: vec![],

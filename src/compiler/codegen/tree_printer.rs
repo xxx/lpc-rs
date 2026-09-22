@@ -15,6 +15,7 @@ use crate::compiler::{
         break_node::BreakNode,
         call_node::{CallChain, CallNode},
         cast_node::CastNode,
+        catch_node::CatchNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         continue_node::ContinueNode,
@@ -160,6 +161,14 @@ impl TreeWalker for TreePrinter {
         self.println_indented("}");
 
         Ok(())
+    }
+
+    async fn visit_catch(&mut self, node: &mut CatchNode) -> Result<()> {
+        self.println_indented("Catch");
+        self.indent += 2;
+        let result = node.body.visit(self).await;
+        self.indent -= 2;
+        result
     }
 
     async fn visit_break(&mut self, _node: &mut BreakNode) -> Result<()> {

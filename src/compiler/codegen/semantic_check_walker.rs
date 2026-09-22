@@ -14,6 +14,7 @@ use crate::{
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             cast_node::CastNode,
+            catch_node::CatchNode,
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             do_while_node::DoWhileNode,
@@ -36,9 +37,8 @@ use crate::{
         callee::Callee,
         codegen::tree_walker::{
             ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
-            walk_cast, walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
-            walk_function_ptr, walk_label, walk_operator, walk_range, walk_return, walk_switch,
-            walk_unary_op, walk_var_init,
+            walk_cast, walk_closure, walk_do_while, walk_function_def, walk_function_ptr,
+            walk_label, walk_operator, walk_range, walk_return, walk_unary_op, walk_var_init,
         },
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
@@ -605,6 +605,13 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
+    async fn visit_catch(&mut self, node: &mut CatchNode) -> Result<()> {
+        self.valid_labels.push(LabelAllowed(false));
+        let result = node.body.visit(self).await;
+        self.prevent_labels();
+        result
+    }
+
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.closure_depth += 1;
         let enclosing_argv = std::mem::replace(
@@ -658,17 +665,22 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+        if let Some(initializer) = &mut *node.initializer {
+            let _ = initializer.visit(self).await;
+        }
         self.allow_jumps();
-
-        walk_for(self, node).await?;
-
+        if let Some(condition) = &mut node.condition {
+            let _ = condition.visit(self).await;
+        }
+        let _ = node.body.visit(self).await;
+        if let Some(incrementer) = &mut node.incrementer {
+            let _ = incrementer.visit(self).await;
+        }
         self.prevent_jumps();
         Ok(())
     }
 
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
-        self.allow_jumps();
-
         let collection_type = node_type(&node.collection, &self.context)?;
         if !collection_type.is_array()
             && !collection_type.matches_type(LpcType::Mapping(false))
@@ -715,8 +727,18 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        walk_foreach(self, node).await?;
-
+        match &mut node.initializer {
+            ForEachInit::Array(init) => {
+                let _ = init.visit(self).await;
+            }
+            ForEachInit::Mapping { key, value } => {
+                let _ = key.visit(self).await;
+                let _ = value.visit(self).await;
+            }
+        }
+        let _ = node.collection.visit(self).await;
+        self.allow_jumps();
+        let _ = node.body.visit(self).await;
         self.prevent_jumps();
         Ok(())
     }
@@ -748,6 +770,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         self.check_unreachable(&node.body);
         let result = walk_function_def(self, node).await;
+        self.current_function = None;
         self.implicit_argv = enclosing_argv;
 
         self.context.scopes.pop();
@@ -912,21 +935,26 @@ impl TreeWalker for SemanticCheckWalker {
 
                 self.context.diagnostics.record(error);
             }
-        } // else warn?
+        } else {
+            self.context
+                .diagnostics
+                .record(lpc_error!(node.span, "`return` outside a function"));
+        }
 
         Ok(())
     }
 
     async fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
+        node.expression.visit(self).await?;
         self.allow_labels();
         self.allow_breaks();
 
-        walk_switch(self, node).await?;
+        let result = node.body.visit(self).await;
 
         self.prevent_jumps();
         self.prevent_labels();
 
-        Ok(())
+        result
     }
 
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {

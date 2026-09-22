@@ -11,6 +11,7 @@ use crate::compiler::ast::break_node::BreakNode;
 use crate::compiler::ast::call_node::{CallChain, CallNode};
 use crate::compiler::ast::capture_node::CaptureNode;
 use crate::compiler::ast::cast_node::CastNode;
+use crate::compiler::ast::catch_node::CatchNode;
 use crate::compiler::ast::closure_node::ClosureNode;
 use crate::compiler::ast::comma_expression_node::CommaExpressionNode;
 use crate::compiler::ast::continue_node::ContinueNode;
@@ -731,6 +732,13 @@ CaptureExpression: ExpressionNode = {
 };
 
 PrimaryExpression: ExpressionNode = {
+    <name:"ID"> "{" <body:Statements> <r:"}"> =>? {
+        if name.1 != "catch" {
+            return Err(ParseError::User { error: lpc_error!(Some(name.0), "expected `catch` before a block expression") });
+        }
+        let span = Some(Span::join(name.0, r));
+        Ok(guard(ExpressionNode::Catch(CatchNode { body: BlockNode::new(body), span }), span)?)
+    },
     <CaptureExpression>,
     <ClassConstruction>,
     <Int>,

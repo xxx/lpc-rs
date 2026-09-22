@@ -7,6 +7,7 @@ pub mod break_node;
 pub mod call_node;
 pub mod capture_node;
 pub mod cast_node;
+pub mod catch_node;
 pub mod closure_node;
 pub mod comma_expression_node;
 pub mod continue_node;

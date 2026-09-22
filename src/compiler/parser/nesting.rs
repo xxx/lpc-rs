@@ -110,6 +110,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 out.push(Child::Expr(&n.r));
             }
             ExpressionNode::Call(n) => push_children(Child::Call(n), out),
+            ExpressionNode::Catch(n) => out.push(Child::Block(&n.body)),
             ExpressionNode::Closure(n) => push_children(Child::Closure(n), out),
             ExpressionNode::CommaExpression(n) => out.extend(n.value.iter().map(Child::Expr)),
             ExpressionNode::FunctionPtr(n) => {
@@ -521,6 +522,7 @@ mod tests {
             "mapping_value" => expr(nest("([ 1 : ", " ])", "1")),
             "mapping_key" => expr(nest("([ ", " : 1 ])", "1")),
             "block" => stmt(nest("{ ", " }", "")),
+            "catch_block" => stmt(nest("catch { ", " };", "a;")),
             "if" => stmt(format!("{}{{}}", rep("if (a) "))),
             "elseif" => stmt(format!("if (a) {{}}{}", " else if (a) {}".repeat(n - 1))),
             "while" => stmt(format!("{}{{}}", rep("while (a) "))),
@@ -580,6 +582,7 @@ mod tests {
         ("mapping_value", 252),
         ("mapping_key", 252),
         ("block", 254),
+        ("catch_block", 126),
         ("if", 253),
         ("elseif", 253),
         ("while", 253),

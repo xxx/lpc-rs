@@ -3,6 +3,7 @@
 mod array_ops;
 mod call_other;
 mod calling;
+mod catch_block;
 mod catch_result;
 mod entry_args;
 mod explicit_captures;
