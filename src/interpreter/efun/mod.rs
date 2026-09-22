@@ -70,6 +70,7 @@ pub(crate) mod notify_fail;
 pub(crate) mod object_clones;
 pub(crate) mod object_time;
 pub(crate) mod object_update;
+pub(crate) mod origin;
 pub(crate) mod papplyv;
 pub(crate) mod parse_add_rule;
 pub(crate) mod parse_add_synonym;
@@ -1236,6 +1237,11 @@ efuns! {
         arity: (1, 0, ellipsis),
         args: [LpcType::Mixed(false)],
     },
+    origin => {
+        returns: LpcType::String(false),
+        arity: (0, 0),
+        args: [],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1595,6 +1601,7 @@ mod tests {
                 "replace_string",
                 "strindex",
                 "evaluate",
+                "origin",
             ]
         );
     }

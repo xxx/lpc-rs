@@ -28,6 +28,7 @@ pub use cells::FrameCells;
 use crate::interpreter::program::Function;
 use crate::interpreter::{
     bank::RefBank,
+    call_origin::CallOrigin,
     continuation::Pending,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
@@ -126,6 +127,9 @@ pub struct CallFrame {
     /// Entered through a door — `->`, a pointer call, a simul efun — rather
     /// than a local call: the frame below is what `previous_object` names.
     pub external: bool,
+
+    /// How this function was entered, independent of object crossings.
+    pub origin: CallOrigin,
 }
 
 impl Deref for CallFrame {
@@ -268,6 +272,7 @@ impl CallFrame {
             upvalue_ptrs,
             pending: None,
             external: false,
+            origin: CallOrigin::Local,
         }
     }
 

@@ -15,6 +15,7 @@ use crate::interpreter::program::Function;
 use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
     call_frame::FrameReceiver,
+    call_origin::CallOrigin,
     efun::{CALL_OTHER, EFUN_FUNCTIONS, compose::COMPOSE_RECEIVER_EXECUTOR},
     function_type::function_address::FunctionAddress,
     lpc_ref::{LpcRef, NULL},
@@ -77,6 +78,14 @@ pub struct FunctionPtr {
 }
 
 impl FunctionPtr {
+    /// Classification for an explicit pointer call, before dispatcher overrides.
+    pub(crate) fn call_origin(&self) -> CallOrigin {
+        match &self.address {
+            FunctionAddress::Local(_, function) if function.is_closure() => CallOrigin::Closure,
+            _ => CallOrigin::FunctionPointer,
+        }
+    }
+
     pub(crate) fn frame_receiver(
         &self,
         process: Arc<Process>,

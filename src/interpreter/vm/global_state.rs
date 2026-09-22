@@ -10,6 +10,7 @@ use crate::interpreter::program::Function;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
+        call_origin::CallOrigin,
         call_outs::CallOuts,
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         lpc_ref::LpcRef,
@@ -35,6 +36,14 @@ pub struct PreparedCall {
 }
 
 impl PreparedCall {
+    /// Mark a scheduled callback before constructing its retryable entry.
+    pub(crate) fn for_call_out(mut self) -> Self {
+        if let crate::interpreter::task::SeedEntry::Callback { origin, .. } = &mut self.entry {
+            *origin = CallOrigin::CallOut;
+        }
+        self
+    }
+
     /// Run the callback, resolving named targets anew and retaining anonymous code.
     pub async fn execute(self, timeout_ms: u64) -> Result<()> {
         use crate::interpreter::task::{SeedArg, TaskSeed};
@@ -225,6 +234,7 @@ impl GlobalState {
             context,
             entry: crate::interpreter::task::SeedEntry::Callback {
                 function: resolved.function.clone(),
+                origin: CallOrigin::Driver,
                 owner,
                 simul: match &ptr.address {
                     FunctionAddress::SimulEfun(name) => Some(name.to_string()),

@@ -1,6 +1,7 @@
 pub(crate) mod apply;
 pub mod bank;
 pub mod call_frame;
+pub mod call_origin;
 pub mod call_outs;
 pub mod call_stack;
 pub(crate) mod compile_gate;

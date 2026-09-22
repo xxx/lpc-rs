@@ -12,6 +12,7 @@ use ustr::Ustr;
 use crate::interpreter::program::Function;
 use crate::interpreter::{
     call_frame::{CallFrame, FrameReceiver},
+    call_origin::CallOrigin,
     efun::{Efun, call_efun, call_efun_sync, efun_context::EfunContext},
     lpc_ref::{LpcRef, NULL},
     process::Process,
@@ -199,12 +200,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .or_span(self.caller_span()));
         }
 
+        let origin = if self.stack.current_frame()?.function.name() == INIT_PROGRAM {
+            CallOrigin::Driver
+        } else {
+            match entry {
+                CallEntry::Direct | CallEntry::Virtual => CallOrigin::Local,
+                CallEntry::SimulEfun => CallOrigin::Simul,
+                CallEntry::Door => CallOrigin::CallOther,
+                CallEntry::Initializer => CallOrigin::Driver,
+            }
+        };
         trace!("pushing new frame; copying arguments: {num_args}");
         self.stack
             .push_new(receiver, func, num_args, num_args, None::<&[VarId]>)?;
-        if entry.external() {
-            self.stack.current_frame_mut()?.external = true;
-        }
+        let frame = self.stack.current_frame_mut()?;
+        frame.external = entry.external();
+        frame.origin = origin;
         if let Err(e) = self.populate_arguments(list) {
             // The half-built frame comes off; the error names the caller.
             let depth = self.stack.len() - 1;
@@ -375,8 +386,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Push the frame an efun fired through a pointer runs in, as `owner`.
-    pub(crate) fn push_entry_frame(&mut self, owner: Arc<Process>) -> lpc_rs_errors::Result<()> {
-        self.stack.push(CallFrame::entry(owner, &self.context.txn))
+    pub(crate) fn push_entry_frame(
+        &mut self,
+        owner: Arc<Process>,
+        origin: CallOrigin,
+    ) -> lpc_rs_errors::Result<()> {
+        let mut frame = CallFrame::entry(owner, &self.context.txn);
+        frame.origin = origin;
+        self.stack.push(frame)
     }
 
     /// The by-reference parameter no pointer call can satisfy, as the error;

@@ -63,7 +63,7 @@ impl GlobalState {
 
             let max_execution_time = global_state.config.max_execution_time;
             let receiver = prepared.context.process.clone();
-            if let Err(e) = prepared.execute(max_execution_time).await {
+            if let Err(e) = prepared.for_call_out().execute(max_execution_time).await {
                 let template = TaskTemplate::from(global_state.clone());
                 report_runtime_error(&e, Some(receiver), template).await;
             }

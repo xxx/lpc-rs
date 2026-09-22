@@ -9,6 +9,7 @@ use smallvec::SmallVec;
 
 use crate::interpreter::{
     call_frame::{CollectionCall, FrameReceiver},
+    call_origin::CallOrigin,
     function_type::function_ptr::FunctionPtr,
     lpc_ref::LpcRef,
     process::Process,
@@ -70,6 +71,8 @@ pub(crate) struct EfunContinuation {
     pub span: Option<Span>,
     /// The callee the async arm owes when a step suspended.
     pub suspended: Option<Callee>,
+    /// A callback dispatcher override; `None` uses the pointer's own kind.
+    pub origin: Option<CallOrigin>,
 }
 
 /// The call a frame has in flight; the eval loop advances it on every

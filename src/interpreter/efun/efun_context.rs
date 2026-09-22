@@ -19,6 +19,7 @@ use crate::command::{
 };
 use crate::interpreter::{
     call_frame::{CallFrame, FrameReceiver},
+    call_origin::CallOrigin,
     call_stack::CallStack,
     continuation::{Continuation, EfunContinuation, Pending},
     efun::Efun,
@@ -209,6 +210,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         result.map_err(|e| e.or_span(self.call_site_span()))
     }
 
+    /// The current LPC function's origin, or the fired efun's entry origin.
+    pub(crate) fn call_origin(&self) -> CallOrigin {
+        self.calling_frame().origin
+    }
+
     /// The frame whose instruction called this efun.
     fn calling_frame(&self) -> &CallFrame {
         self.stack.last().expect(NO_CALLING_FRAME)
@@ -385,6 +391,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             state,
             span,
             suspended: None,
+            origin: (self.efun != Efun::evaluate).then_some(CallOrigin::Efun),
         })));
     }
 

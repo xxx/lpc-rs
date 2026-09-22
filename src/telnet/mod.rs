@@ -806,7 +806,14 @@ mod tests {
         let proc = vm
             .initialize_process_from_code(
                 "/foo/hearer.c",
-                "string seen; void heard(string s) { seen = file_name(previous_object()); }",
+                r#"
+                string seen;
+                string entered;
+                void heard(string s) {
+                    seen = file_name(previous_object());
+                    entered = origin();
+                }
+                "#,
             )
             .await
             .unwrap()
@@ -847,6 +854,10 @@ mod tests {
         assert_eq!(
             vm.global_state.committed_global(&proc, 0u16),
             LpcRef::from("/foo/asker")
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 1u16),
+            LpcRef::from("driver")
         );
     }
 

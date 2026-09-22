@@ -38,6 +38,7 @@ use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
     apply::diagnostics,
     call_frame::{CallFrame, FrameReceiver},
+    call_origin::CallOrigin,
     call_stack::CallStack,
     function_type::function_address::LocalFunction,
     lpc_int::LpcInt,
@@ -95,10 +96,18 @@ pub enum SeedEntry {
         simul: Option<String>,
         local: Option<LocalFunction>,
         name: Option<String>,
+        origin: CallOrigin,
     },
 }
 
 impl SeedEntry {
+    fn origin(&self) -> CallOrigin {
+        match self {
+            Self::Callback { origin, .. } => *origin,
+            _ => CallOrigin::Driver,
+        }
+    }
+
     fn name(&self) -> &str {
         match self {
             Self::CleanUp => crate::interpreter::CLEAN_UP,
@@ -158,6 +167,7 @@ impl TaskSeed {
         };
         let count = RegisterSize::try_from(self.args.len())?;
         let mut frame = CallFrame::with_receiver(receiver, function, count, count, upvalue_ptrs);
+        frame.origin = self.entry.origin();
         for (i, arg) in self.args.iter().enumerate() {
             frame.push_arg(txn, i, Self::value_of(arg, txn))?;
         }
@@ -459,6 +469,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 simul,
                 local,
                 name,
+                ..
             } => {
                 if !owner
                     .upgrade()
@@ -530,7 +541,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let efun = self.efun_of(&function)?;
             self.refuse_ref_params(efun)?;
             let args = seed.arg_values(&self.context.txn);
-            self.push_entry_frame(process.clone())?;
+            self.push_entry_frame(process.clone(), seed.entry.origin())?;
             self.call_fired_efun(efun, args, process, None).await?;
         } else {
             let cleanup_seed;
@@ -1213,6 +1224,46 @@ mod stm_retry_tests {
             .expect("committer channel closed");
         drop(tx);
         let _ = handle.join();
+    }
+
+    #[tokio::test]
+    async fn callback_origin_survives_a_rejected_attempt() {
+        for origin in [CallOrigin::Driver, CallOrigin::CallOut] {
+            let mut task = run_prog("string probe() { return origin(); }").await;
+            let process = task.context.process().clone();
+            let function = process
+                .initial_program()
+                .lookup_function("probe")
+                .unwrap()
+                .clone();
+            let seed = TaskSeed {
+                entry: SeedEntry::Callback {
+                    function,
+                    owner: Arc::downgrade(&process),
+                    simul: None,
+                    local: None,
+                    name: Some("probe".into()),
+                    origin,
+                },
+                process,
+                args: Vec::new(),
+                initializes: false,
+            };
+            let (tx, rx) = flume::bounded(4);
+            let committer_tx = tx.clone();
+            let handle = std::thread::spawn(move || {
+                Committer::new().run_with_rejections(committer_tx, rx, 1)
+            });
+            let (result, stats) = task.eval_with_committer(&tx, &seed).await;
+            tx.send(CommitProtocol::Close).unwrap();
+            drop(tx);
+            handle.join().unwrap();
+
+            result.unwrap();
+            assert_eq!(stats.attempts, 2);
+            assert_eq!(stats.conflicts, 1);
+            assert_eq!(task.result(), Some(LpcRef::from(origin.as_str())));
+        }
     }
 
     const SCAN_CODE: &str = indoc! { r##"
