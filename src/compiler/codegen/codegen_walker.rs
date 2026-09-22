@@ -446,6 +446,7 @@ impl CodegenWalker {
             .collect::<IndexMap<_, _, ahash::RandomState>>();
         let dispatch = dispatch_table(&functions, &frozen_dispatch);
         let function_scope = Arc::new(FunctionScope::new(
+            &filename,
             &unmangled_functions,
             parent_scopes,
             std::mem::take(&mut self.context.inherit_names),

@@ -15,9 +15,11 @@ hidden and answer `0`.
 ### Qualified names
 
 `"::foo"` searches inherited definitions, ignoring a local override of `foo`.
-`"parent::foo"` searches the parent declared as `inherit "/path" parent;`,
-including that parent's inherited functions. Both return the defining file or
-`0`, just like a bare name. Later inherits take precedence for `"::foo"`.
+`"parent::foo"` uses an explicit alias or a direct parent's source basename,
+including that parent's inherited functions. An explicit alias takes precedence;
+otherwise matching basenames are searched in reverse declaration order for the
+first parent defining `foo`, matching `"::foo"`. Both forms return the defining
+file or `0`, just like a bare name.
 
 When inspecting the calling object (omitted `ob`, `0`, or that same object),
 qualified names use the source program containing the check. Inherited code
@@ -29,7 +31,7 @@ Private declarations inherited from a parent return `0`; functions imported
 by `private inherit` remain visible to the source containing that statement,
 but are hidden from its descendants. Protected functions are visible only
 when inspecting the calling object. If the selected definition is inaccessible,
-lookup does not fall back to an earlier inherit. Missing functions, unknown
+lookup does not try another inherit. Missing functions, unknown
 aliases, and malformed qualifications return `0`. Efuns and simul-efuns are
 excluded, including names such as `"efun::write"`.
 

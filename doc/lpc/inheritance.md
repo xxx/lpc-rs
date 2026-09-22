@@ -48,19 +48,50 @@ still apply.
 ## Calls and aliases
 
 Plain calls use the object's overriding definition. `::name()` bypasses a local
-override and selects the last parent defining that name. An explicit alias
-selects one direct parent:
+override and selects the last parent defining that name. Each direct parent
+also supplies an automatic name: its source filename without the directory or
+trailing `.c`.
 
 ```c
-inherit "/std/room" room;
+inherit "/std/room";
 
 void reset() {
     room::reset();
 }
 ```
 
-Aliases are local to the source declaring them. They must be unique, and `efun`
-is reserved. File basenames do not create aliases automatically.
+Relative paths, macros, and an explicit `.c` suffix produce the same name for
+the same source. The driver's automatic inherit also supplies a basename.
+Only direct parents supply names; use a direct parent's name to reach a function
+it inherited from a more distant ancestor.
+
+When direct parents share a basename, lookup searches them in reverse declaration
+order and stops at the first one defining the requested function, matching `::`.
+Parents without that function are skipped. An inaccessible private definition
+stops lookup without trying another parent.
+
+An explicit alias selects one direct parent and takes precedence over any
+automatic name, regardless of inherit order:
+
+```c
+inherit "/std/room" standard_room;
+inherit "/custom/room" room;
+```
+
+Here `standard_room::reset()` selects `/std/room`, and `room::reset()` selects
+`/custom/room`. An explicit alias never falls back to a matching basename if
+its parent lacks the function. The parent's basename remains available unless
+an explicit alias takes that name.
+
+Explicit aliases must be unique, and `efun` is reserved for driver functions.
+Inheriting a file named `efun.c` does not change `efun::`; use an explicit alias
+to qualify its functions. Use an explicit alias when the basename is not an LPC
+identifier. String-based lookup through `call_inherited()` or `function_exists()`
+can still use such a basename, for example `"base.h::get"` for `base.h.c`.
+Path suffixes such as `"std/room::reset"` are not inheritance namespaces.
+
+Automatic names and explicit aliases belong to the source containing the inherit
+statement. Inherited code and its closures retain that source's lookup rules.
 
 A private import remains usable through plain calls, qualified calls, and local
 function pointers in the source containing the inherit statement. That source
@@ -71,8 +102,8 @@ redirect their internal calls.
 [`call_inherited()`](../efun/call_inherited.md) and qualified
 [`function_exists()`](../efun/function_exists.md) use the calling source's parents
 and visibility, including when that source runs in a descendant object. A
-private declaration selected from a parent stops lookup; it does not fall back
-to an earlier parent.
+private declaration selected from a parent stops lookup without trying another
+parent.
 
 External calls, external pointer creation, and external function introspection
 respect the resulting visibility. An already-created local pointer remains

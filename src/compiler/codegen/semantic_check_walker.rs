@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lpc_rs_core::{EFUN, ScopeId, call_namespace::CallNamespace, lpc_type::LpcType};
+use lpc_rs_core::{ScopeId, call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_error, lpc_warning, span::Span};
 use lpc_rs_utils::string::closure_arg_number;
 
@@ -312,8 +312,7 @@ impl TreeWalker for SemanticCheckWalker {
             return Ok(());
         }
 
-        let unknown_namespace = matches!(namespace, CallNamespace::Named(ns)
-            if !self.context.inherit_names.contains_key(ns.as_str()) && ns.as_str() != EFUN);
+        let unknown_namespace = !self.context.valid_namespace(namespace);
         if unknown_namespace {
             let e = lpc_error!(node.span, "unknown namespace `{}`", namespace.as_str());
             self.context.diagnostics.record(e);

@@ -68,7 +68,7 @@ pub struct CompilationContext {
     /// declaration
     pub inherits: Vec<InheritedProgram>,
 
-    /// The index of name -> inherited objects, for inherits with names
+    /// Explicit aliases to direct parents, taking precedence over source basenames.
     pub inherit_names: HashMap<String, usize>,
 
     /// How deep into an inheritance chain is this context?
@@ -180,11 +180,18 @@ impl CompilationContext {
                 .iter()
                 .rev()
                 .find_map(|parent| parent.lookup_function(name)),
-            CallNamespace::Named(ns) => self
+            CallNamespace::Named(ns) if ns.as_str() == EFUN => None,
+            CallNamespace::Named(ns) if self.inherit_names.contains_key(ns.as_str()) => self
                 .inherit_names
                 .get(ns.as_str())
                 .and_then(|&index| self.inherits.get(index))
                 .and_then(|parent| parent.lookup_function(name)),
+            CallNamespace::Named(ns) => self
+                .inherits
+                .iter()
+                .rev()
+                .filter(|parent| parent.function_scope.has_basename(ns.as_str()))
+                .find_map(|parent| parent.lookup_function(name)),
         }
     }
 
@@ -235,12 +242,18 @@ impl CompilationContext {
         EFUN_PROTOTYPES.get(name).map(Callee::Efun)
     }
 
-    fn valid_namespace(&self, ns: &CallNamespace) -> bool {
+    pub(crate) fn valid_namespace(&self, ns: &CallNamespace) -> bool {
         match ns {
             CallNamespace::Local | CallNamespace::Parent => true,
             CallNamespace::Named(ns) => match ns.as_str() {
                 EFUN => true,
-                ns => self.inherit_names.contains_key(ns),
+                ns => {
+                    self.inherit_names.contains_key(ns)
+                        || self
+                            .inherits
+                            .iter()
+                            .any(|parent| parent.function_scope.has_basename(ns))
+                }
             },
         }
     }
