@@ -38,6 +38,7 @@ so you can concentrate on game code while its existing code handles login.
 | Collect or forward a variable number of arguments | [Variadic parameters](variadic_parameters.md), [argument spreading](argument_spreading.md) |
 | Understand a word such as *efun*, *apply*, or *prototype* | [Glossary](../glossary.md) |
 | Check a built-in function's arguments | [Efun reference](../efun) |
+| Port code from another driver | [Porting notes by source driver](../driver-comparison.md#differences-when-porting) |
 | Find a hook the driver calls in your object | [Object hooks](../apply/object), [other apply categories](../../ulib/doc/applies.md) |
 | Import parent programs or restrict inherited visibility | [Inheritance](inheritance.md) |
 | Use source-path and driver-version macros | [Predefined macros](macros.md#predefined-macros) |

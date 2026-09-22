@@ -121,6 +121,10 @@ Upstream claims need publicly accessible sources pinned to a reviewed revision;
 record the review date and relevant build options. Distinguish source review
 from cross-driver execution tests, and leave unchecked behaviour labelled as such.
 
+Keep driver-specific porting notes in the comparison's per-driver sections.
+Efun, apply, and language references describe native behavior; link to them from
+the comparison instead of duplicating migration advice in individual references.
+
 ## Architecture facts that constrain changes
 
 - **The STM committer is the sole serialization control.** There is no GIL, no

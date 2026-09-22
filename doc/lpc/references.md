@@ -68,9 +68,3 @@ identical for a variable. A class member such as `record.count` uses the same
 hidden-cell writeback, evaluating the receiver once and checking the declared
 field type before replacing its value. A rejected output leaves that field
 unchanged; earlier output writebacks keep their normal ordering.
-
-## Differences from other drivers
-
-LDMud's `&x` (a reference as a runtime value, with an unaware callee) does
-not exist here; the MudOS/FluffOS `ref` form is the only one. FluffOS allows
-`ref` through function pointers; this driver does not.

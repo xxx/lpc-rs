@@ -114,11 +114,6 @@ Raised as runtime errors, all prefixed `parse_add_rule: `:
 | a word containing `'` (`bob's`) | `a quote inside a word in 'rule'` |
 | more than two object slots | `more than two object slots in 'rule'` |
 
-### Departures
-
-Listed in full, with the rest of the parser package's, in
-[`parse_sentence`](parse_sentence.md)'s departures table.
-
 ### See also
 
 `parse_init`, `parse_add_synonym`, `parse_remove`, `parse_sentence`,

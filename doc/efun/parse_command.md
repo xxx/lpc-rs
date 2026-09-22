@@ -180,18 +180,6 @@ string *parse_command_pluralize(string *singulars)
 }
 ```
 
-### Departures from CD's parse_command
-
-`%s` is greedy (CD tries the following element at each word); `%d` is a digit
-run (CD's `sscanf` accepts `5x` as 5); destinations are written only on success
-(CD writes as it matches); a malformed pattern and too few destinations are
-errors (CD warns, or discards); `%l` has no `find_living` fallback; there is
-no built-in all word, numeral table, or pluralizer; a phrase's adjectives must
-all be listed; the id must end the phrase; `%p` takes whichever split resolves
-rather than the first list entry matching at the current word with no
-backtrack; an object with no `parse_command_id_list()` is asked `id(phrase)`
-and the master's shared ids do not apply to it.
-
 ### See also
 
 `add_rule`, `sscanf`, `parse_command_id_list`, `parse_command_numeral`,

@@ -48,6 +48,3 @@ to the debug log when the catching task commits. Runtime errors and explicit
 `throw()` values return their messages unchanged.
 
 `catch` is a keyword, not a function: `&catch()` is a compile error.
-
-For FluffOS porting differences, including jumps out of catch blocks and thrown
-values, see the [driver comparison](../driver-comparison.md#fluffos).

@@ -28,10 +28,8 @@ the reason.
 | 7 | no object answers to the phrase, or every match was rejected without a reason | the typed phrase | 1 if the slot is a many slot (`OBS`/`LVS`) |
 | 8 | `all`, or a plural, or a count on a slot that takes only one | 0 | 0 |
 
-Kinds 1 (`ERR_IS_NOT`) and 9 (`ERR_MANY_PATHS`) are MudOS's; neither is ever
-raised here (see `parse_sentence`'s departures table). The numbers are
-MudOS's own; the driver defines no header for them, so a lib including one
-of MudOS's gets the same constants.
+Kinds 1 and 9 are never raised. The driver defines no header for these numbers;
+the mudlib may define named constants for the kinds it handles.
 
 ### Example
 
@@ -52,9 +50,6 @@ string parser_error_message(int kind, object ob, mixed arg, int flag) {
     return 0;
 }
 ```
-
-Departures from MudOS are listed in
-[`parse_sentence`](../../efun/parse_sentence.md)'s departures table.
 
 ### See also
 

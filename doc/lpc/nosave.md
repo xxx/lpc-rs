@@ -43,6 +43,5 @@ mapping, that other global can still save its contents.
 [`variable_info`](../efun/variable_info.md) includes `nosave` globals and their
 values. Its `flags` string uses the canonical spelling `static` for both forms.
 
-See [`save_object`](../efun/save_object.md),
-[`restore_object`](../efun/restore_object.md), and the
-[driver comparison](../driver-comparison.md#fluffos) for porting differences.
+See [`save_object`](../efun/save_object.md) and
+[`restore_object`](../efun/restore_object.md).

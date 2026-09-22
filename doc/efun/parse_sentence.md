@@ -7,7 +7,7 @@ rules only — not `this_player()`'s own `add_action`/`add_rule` rules, no
 `process_input` pre-hook, and no dispatcher fallback — and returns a result
 code without delivering anything to anyone. `this_player()` must be alive
 and have called `enable_commands()`; otherwise a runtime error. `debug` is
-accepted and ignored (see Departures).
+accepted and ignored.
 
 Every rule registered for `line`'s first word, on every live verb object, is
 tried in registration order, exactly as the ordinary dispatcher tries them
@@ -65,26 +65,6 @@ deeper than 20`; `parse_sentence: nicknames must be a mapping from strings
 to objects`. `parse_sentence` shares `command()`'s nesting limit — a rule's
 handler running `parse_sentence` of its own, and any nested `command()`,
 count together — at 16 deep, `parse_sentence: nesting deeper than 16`.
-
-### Departures from MudOS/FluffOS
-
-| MudOS | lpc-rs |
-|---|---|
-| parser rules reached only by the lib calling `parse_sentence` | also by the dispatcher, after the actor's rules for the verb |
-| default English messages when the master gives none | none: `-2`/`-3`, then the dispatcher's fallback |
-| `a`, `any`, `my`, `the` recognised by the parser | the master's adjective list |
-| `ERR_IS_NOT` vs `ERR_THERE_IS_NO` | only `THERE_IS_NO` |
-| `ERR_MANY_PATHS` cap | never raised |
-| `:c` "choose the first" rule modifier | not recognised |
-| `parse_sentence` codes `1/0/-1/-2` | plus `-3` |
-| `debug` argument | ignored |
-| `parse_refresh` invalidates cached names | no-op |
-| nested scope arrays mean containment | flattened; containment is `environment()` |
-| livingness by the package's own test | `enable_commands`, as `parse_command`'s `%l` |
-| error reported: the last match's | the furthest parse's |
-| verb matched by MudOS's own rules | exact first word |
-| `parse_add_synonym(new, old)` | optional third argument, one rule |
-| `parse_my_rules` shape unspecified | `"verb rule"` strings |
 
 ### See also
 

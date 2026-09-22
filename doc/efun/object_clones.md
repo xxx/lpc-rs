@@ -22,9 +22,6 @@ object *swords = object_clones(sword);
 // Also: object_clones(find_object("/obj/sword"))
 ```
 
-Unlike FluffOS's `children(string)`, `object_clones` takes an object and
-excludes the prototype.
-
 ### See also
 
 `clone_object`, `find_object`, `destruct`

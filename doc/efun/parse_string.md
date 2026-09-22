@@ -4,8 +4,7 @@
 
 Parses `str` under `grammar` and returns the parse as a flat array, or 0 when
 `str` is not a sentence of the grammar — including when it cannot be broken
-into tokens. `alternatives` must be 0; any other value is a runtime error (see
-Departures).
+into tokens. `alternatives` must be 0; any other value is a runtime error.
 
 ### The grammar
 
@@ -112,6 +111,9 @@ An error raised inside an action is that action's error, unprefixed.
 
 ### Limits
 
+There is no separate grammar-text size limit. Regular-expression groups may
+nest at most 250 levels deep.
+
 Each call pulls at most 64 derivations before giving up, and spends at most
 2²⁰ steps (chart operations plus derivation levels) on the parse itself — the tick
 limit bounds the actions, but not the parse. A derivation may nest at most
@@ -123,22 +125,6 @@ depth limit; a right-recursive `List: item List` costs about n²/2 chart
 items for n items, so the step budget, at about 1400 items. The 64 most
 recently used grammar texts stay compiled; a text not among them is
 compiled again on its next use.
-
-### Departures from DGD
-
-| DGD | here |
-|---|---|
-| `nil` when nothing parses | 0 |
-| `alternatives` keeps N extra alternatives per branch point, nested as sub-arrays | 0 only; anything else is an error |
-| alternatives ordered by the topmost differing rule | the engine's order: productions as written, longest span first |
-| the grammar is compiled per object, one at a time | one driver-wide cache of 64 texts |
-| automata built incrementally per sentence seen | built whole, once per text |
-| `Rule N is too long`, `Grammar too large`, `regular expression too large` | no text-size limits (groups nest at most 250 deep); the parse budget bounds the work |
-| a runaway parse is bounded by ticks | the step budget |
-| a deep parse is bounded by memory | 4096 levels, `parse deeper than 4096` |
-| bytes | UTF-8 characters |
-| `< func` stored | accepted, ignored |
-| not callable from a special-purpose object | no such objects |
 
 ### See also
 

@@ -40,12 +40,6 @@ reduce(({ "a", "b" }), (: $1 + $2 :), ">"); // ">ab"
 map(({ ({ 1, 2 }), ({ 3, 4 }) }), &reduce(, &operator(+)())); // ({ 3, 7 })
 ```
 
-### Compatibility
-
-The collection comes first, as in `map`, `filter`, and `sort_array`.
-CD's `reduce` takes the callback first; swap its first two arguments when
-porting a call, including the bound arguments in `&reduce(...)` pointers.
-
 ### See also
 
 `map`, `filter`, `sort_array`, `papplyv`

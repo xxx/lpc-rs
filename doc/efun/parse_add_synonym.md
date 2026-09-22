@@ -31,9 +31,6 @@ All three verbs — `give`, `g`, `gv` — reach the same handlers, named for
 error when `old_verb` (or `old_verb` with that `rule`) names none of
 `this_object()`'s registrations.
 
-Departures from MudOS are listed in [`parse_sentence`](parse_sentence.md)'s
-departures table.
-
 ### See also
 
 `parse_add_rule`, `parse_remove`, `parse_my_rules`, `query_verb`

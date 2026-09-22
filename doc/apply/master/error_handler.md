@@ -66,7 +66,7 @@ earlier attempts; zero conflicts means the operation exhausted its allowance
 without a rejected commit. Uncommitted state, output, and scheduled call outs
 are discarded, and the connection can accept another command.
 
-For porting diagnostics, set `RUST_LOG=info,lpc_rs::applies=debug` and restart
+To trace apply calls, set `RUST_LOG=info,lpc_rs::applies=debug` and restart
 the driver. This includes missing optional applies, argument types, return
 types, integer results, and security decisions. Apply failures and missing
 security or login applies are logged at the default `info` setting. Argument

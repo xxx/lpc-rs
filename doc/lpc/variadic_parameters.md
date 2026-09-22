@@ -83,11 +83,3 @@ The existing declarations `f(...)` and `f(int n, ...)` still create the implicit
 `mixed *argv` local. A named collector replaces that implicit local; `argv`
 is then available as an ordinary name, including as the collector's name.
 Each nested callable determines its own reservation of `argv`.
-
-## FluffOS porting
-
-FluffOS also supports named collectors, including `mixed args...`. In lpc-rs,
-other non-array collector types are errors, and a named tail alone does not make
-the fixed prefix optional on direct calls. Add `varargs` or defaults where
-needed. See the pinned [driver comparison](../driver-comparison.md#fluffos) for
-the reviewed differences.

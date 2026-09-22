@@ -34,16 +34,15 @@ it and counts. A `%d` too large for an int does not match.
 Runtime errors: two adjacent `%s`; `fmt` ending in `%`; an unknown
 conversion letter; fewer variables than non-skip conversions. That count is
 checked before scanning starts, so it fires on every call regardless of
-input, unlike FluffOS, which raises it only when a conversion is reached
-with no variable left.
+input.
 
-A non-string `str` or `fmt` returns 0 rather than raising an error, unlike
-FluffOS. `%f` accepts a magnitude too large for a float as infinity, where
+A non-string `str` or `fmt` returns 0 rather than raising an error.
+`%f` accepts a magnitude too large for a float as infinity, where
 `%d` fails to match on the equivalent integer overflow. `%f` reads only a
 numeric token — sign, digits, `.`, exponent — so the words `inf` and `nan`
 do not match.
 
-Unlike other drivers, `%(regex)` is not supported.
+`%(regex)` is not supported.
 
 ### Examples
 

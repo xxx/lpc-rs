@@ -66,12 +66,4 @@ Copying reads the current transaction's values, including pending writes. All
 new containers commit or abort with that transaction. A concurrent change to any
 copied source container, including a mapping key, can cause a conflict and retry.
 
-## Porting from FluffOS
-
-The native name is `deep_copy`; there is no `copy` alias. FluffOS's `copy` retains
-mapping keys, independently copies repeated container references, and rejects
-cycles encountered while traversing values through its nesting limit. Review
-those differences when renaming calls or providing a simul-efun wrapper.
-See the pinned [driver comparison](../driver-comparison.md#fluffos).
-
 See also: [copy_class](copy_class.md), [classes](../lpc/classes.md).

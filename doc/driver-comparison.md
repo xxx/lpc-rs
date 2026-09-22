@@ -8,7 +8,9 @@ context, return values and side effects can differ.
 Start with the overview, then the notes for the driver you are coming from:
 [CD](#cd), [LDMud](#ldmud), [FluffOS](#fluffos) or [DGD](#dgd).
 The shared [`explode` examples](#explode) cover a string-handling gotcha across
-all four. The linked lpc-rs references give the full contracts.
+all four. [Stored password migration](#stored-passwords) applies to any source
+using the supported hash formats. This page is the home for porting advice;
+the linked efun, apply, and language references describe native contracts.
 
 ## Scope and evidence
 
@@ -76,6 +78,14 @@ Deep copying was source-reviewed on **22 September 2026** at the listed FluffOS
 revision, with `PACKAGE_CONTRIB` enabled as in the reviewed build defaults.
 No cross-driver execution was performed. [Implementation][fl-copy],
 [declaration][fl-contrib-spec], [build options][fl-packages].
+
+The consolidated parser, array-predicate, `sscanf`, and colour-expansion notes
+were reviewed on **22 September 2026** at these same revisions. CD's parser
+notes use the checked-in English implementation without `PARSE_FOREIGN`.
+FluffOS parser notes require `PACKAGE_PARSER`; colour expansion requires
+`PACKAGE_CONTRIB`. Parser debugging additionally needs `DEBUG` or `PARSE_DEBUG`.
+The DGD parser review uses its source and separately pinned LPC documentation.
+Unverified details are marked below; no cross-driver execution was performed.
 
 | Driver | Reviewed revision |
 |---|---|
@@ -171,6 +181,11 @@ These are selected differences, grouped by source driver. They identify places
 where a mudlib's expectations need review; they are not a claim that all other
 APIs match.
 
+Each driver's section collects its language, efun, apply, and data-migration
+notes. Shared topics below avoid repeating the same examples across drivers.
+When checking a port, use [apply tracing](apply/master/error_handler.md) to
+inspect missing callbacks, argument and result types, and security decisions.
+
 ### `explode`
 
 Leading and trailing delimiters, empty input and an empty delimiter can change
@@ -224,24 +239,67 @@ Review code that indexes the first or last field, treats an empty array as
 the source driver's intended handling explicitly; filtering every empty field
 would also remove meaningful interior fields.
 
+### Stored passwords
+
+For an imported password file using a format supported by [`crypt`](efun/crypt.md),
+the check `crypt(password, stored) == stored` can retain its existing meaning.
+Classic DES hashes are supported. A mudlib can replace a verified DES hash on
+login using the native default SHA-512 format:
+
+```c
+if (crypt(p, password) != password)
+    return 0;
+if (sizeof(password) == 13) {
+    password = crypt(p, 0);
+    save_me();
+}
+```
+
+Apply this example only to records identified as classic DES. FluffOS's
+[`oldcrypt`][fl-oldcrypt] is a different MudOS algorithm, unsupported by native
+`crypt`; its records need a separate migration path. A function rename does not
+convert a hash. See the [FluffOS notes](#fluffos).
+
 ### CD
 
 | Topic | CD behaviour | lpc-rs behaviour and porting impact |
 |---|---|---|
+| Array predicate | Calls it `pointerp`. [Reference][cd-pointerp]. | Rename calls to [`arrayp`](efun/arrayp.md), or provide `int pointerp(mixed value) { return arrayp(value); }` as a simul-efun. |
 | `reduce` argument order | The callback is first: `reduce(function, mixed, ...)`. [API declarations][cd-api]. | The array is first: `reduce(items, callback, ...)`. Calls and bound arguments in function pointers need the corresponding order. [Reference](efun/reduce.md). |
 | Repeating timers | `set_alarm(delay, repeat, callback)`; timer IDs start at `1`. [Reference][cd-alarm], [ID allocation][cd-callouts]. | `call_out(callback, delay, repeat)` registers work at transaction commit; IDs also start at `1`, leaving `0` for an unset handle. The efun name and argument order differ. [Reference](efun/call_out.md). |
-| `parse_command` matching | `%s` tries following pattern elements at successive words; destinations are assigned during matching. [Implementation][cd-parse-source]. | `%s` is greedy; destinations change only on a successful match. English numeral/plural rules and several object-resolution details also differ. [Full departures](efun/parse_command.md#departures-from-cds-parse_command). |
+| `parse_command` matching | `%s` tries following pattern elements at successive words; destinations are assigned during matching. [Implementation][cd-parse-source]. | `%s` is greedy; destinations change only on a successful match. See the [parser details below](#cd-command-parsing). |
 | Regular expressions | A traditional Henry Spencer-derived engine. [Implementation][cd-regexp]. | Rust `regex` syntax, including Unicode classes but no look-around or back-references. Patterns need review even where the efun name matches. [Reference](efun/regexp.md). |
 | `save_object` result | Declared `void save_object(string)`. [API declarations][cd-api]. | Returns the save path; the write is deferred to commit. Shared format ancestry does not establish complete interchangeability, particularly for the additional `bytes` encoding. [Efun](efun/save_object.md), [format](save-format.md). |
+
+#### CD command parsing
+
+Review patterns, destination variables, and vocabulary applies together. The
+following details come from the pinned [CD parser][cd-parse-source]. The native
+[`parse_command`](efun/parse_command.md) reference defines the complete contract;
+[`add_rule`](efun/add_rule.md) uses the same native pattern and noun rules.
+
+| Topic | CD behaviour | lpc-rs behaviour and porting impact |
+|---|---|---|
+| `%s` and `%d` | `%s` searches forward for the next match. `%d` accepts a nonnegative numeric prefix, so `5x` can become `5`. | `%s` is greedy. `%d` requires a digit run that fits an integer; signed or spelled-out numbers do not match that capture. |
+| Destination writes | Assigns as matching proceeds; extra captures without destinations are discarded. | Writes destinations only after the entire pattern succeeds; too few destinations raise an error before parsing. |
+| Invalid patterns | Warns and skips invalid pattern elements. | Rejects malformed patterns with runtime errors. Review patterns that formerly appeared to work despite warnings. |
+| Living lookup | `%l` can fall back to `find_living`. | Searches the supplied scope for objects that called `enable_commands`; there is no global-name fallback. |
+| Language defaults | Includes English numeral and plural handling when `PARSE_FOREIGN` is absent. | Numeral words, the all word, and pluralization come from master applies. Supply the mudlib's vocabulary explicitly. |
+| Noun vocabulary | Uses object and shared master ID/adjective lists, with a default pluralizer. | Every adjective must be listed and the ID must end the captured phrase. Without an object's `parse_command_id_list()`, the driver asks `id(phrase)`; shared master IDs do not apply to that fallback. |
+| Prepositions | Takes the first list entry matching at the current word, without reconsidering it after later failure. | Tries splits until the whole pattern and its noun captures resolve; overlapping entries may select a different result. |
+
+Matching in the native parser is case-sensitive and uses whole words. Test
+mudlib assumptions about case normalization at its command-entry boundary.
 
 ### LDMud
 
 | Topic | LDMud behaviour | lpc-rs behaviour and porting impact |
 |---|---|---|
+| Array predicate | Calls it `pointerp`. [Reference][ld-pointerp]. | Rename calls to [`arrayp`](efun/arrayp.md), or provide `int pointerp(mixed value) { return arrayp(value); }` as a simul-efun. |
 | Reference arguments | `&x` passes a reference without a special callee declaration; indexed lvalues and ranges can be referenced. [Reference][ld-refs]. | Both parameter and argument use `ref`. Only variables can be explicit reference arguments; cross-object and function-pointer calls cannot carry them. This can require interface changes. [Reference](lpc/references.md). |
 | Byte values | `bytes` supports byte-string literals such as `b"abc"`. [Types][ld-types]. | There is no LPC bytes literal; values come from file reads, conversions or existing bytes. Bytes are immutable. [Types](lpc/types.md), [`to_bytes`](efun/to_bytes.md). |
 | Regular expressions | Traditional and optional PCRE engines are selectable, with engine-specific option flags. [Reference][ld-regex]. | Patterns use Rust `regex`, without look-around or back-references. Numeric flags select filtering/index output, not an engine. Patterns and flags need separate review. [Reference](efun/regexp.md). |
-| `terminal_colour(text, 0)` | Leaves colour markup uninterpreted while optionally wrapping the text. [Reference][ld-colour]. | Strips colour tokens. Code using `0` solely to wrap text has different output. [Reference](efun/terminal_colour.md#compatibility). |
+| `terminal_colour(text, 0)` | Leaves colour markup uninterpreted while optionally wrapping the text. [Reference][ld-colour]. | Strips colour tokens. Code using `0` solely to wrap text has different output; use [`break_string`](efun/break_string.md) for ordinary text wrapping. [Reference](efun/terminal_colour.md). |
 | `save_object` result and forms | File form returns `0` on success; a no-file form returns serialised data, with optional format selection. [Reference][ld-save]. | Requires a path and returns that path. No format argument or no-file form; callers testing the result as an error flag need changes. [Reference](efun/save_object.md). |
 
 ### FluffOS
@@ -260,6 +318,9 @@ save import still require further driver support. See [class support](lpc/classe
 
 | Topic | FluffOS behaviour | lpc-rs behaviour and porting impact |
 |---|---|---|
+| Reference arguments | Uses `ref` in parameter declarations and `ref` or `&` at call sites. [Reference][fl-refs]. | Uses `ref` in both positions, with variables as explicit reference arguments. Function-pointer and cross-object calls cannot carry references. FluffOS reference forwarding through function pointers is **not checked** against this revision. [Native reference](lpc/references.md). |
+| `sscanf` | Supports `%(regexp)`; checks argument types and raises a missing-destination error when scanning reaches a conversion needing one. [Reference][fl-sscanf], [implementation][fl-sscanf-source]. | Has no regex conversion. Non-string input/format returns `0`; the total destination count is checked before scanning, even if the input would fail earlier. Review error handling as well as format strings. [Reference](efun/sscanf.md). |
+| Colour expansion | `terminal_colour` in `PACKAGE_CONTRIB` looks up split text segments, including ordinary text, and can insert a default `RESET` into the supplied mapping. [Implementation][fl-colour-source]. | Looks up only explicit colour tokens and leaves input mappings unchanged. Callers relying on implicit text replacement or the added mapping entry need changes. [Reference](efun/terminal_colour.md). |
 | Deep copying | `copy` in `PACKAGE_CONTRIB` copies arrays, mapping values, classes, and buffers; mapping keys remain shared. Repeated container references are copied independently; cycles encountered during value traversal hit the nesting limit. Objects and functions retain identity. [Implementation][fl-copy], [declaration][fl-contrib-spec]. | [`deep_copy`](efun/deep_copy.md) copies arrays, mapping keys and values, and all retained class fields. It preserves cycles and shared references within the copy; objects and functions retain identity, and immutable bytes can remain shared. Rename `copy` calls or supply a wrapper after checking key identity and sharing assumptions. There is no native `copy` alias. |
 | `foreach` separator | Uses `in` between the loop variables and the collection. [Reference][fl-foreach], [grammar][fl-parameter-grammar]. | Accepts `in` and `:` with identical iteration behavior. `in` is contextual and remains available as an identifier elsewhere. This adds the separator spelling while retaining native loop scope and type checks. [Reference](lpc/foreach.md). |
 | Catch blocks | Supports `catch(expr)` and `catch { statements }`; rejects `break` and `continue` that leave the catch. Returns zero on success, a string for runtime errors, or the value passed to `throw`. [Reference][fl-catch], [jumps][fl-catch-jumps]. | Supports both forms with the existing zero-or-error-message result. `throw` stringifies its argument. `return`, `break`, and `continue` may leave catch blocks and remove the exited handlers; inner loops and switches retain ordinary jump behavior. Prior writes remain in the current transaction. [Reference](efun/catch.md). |
@@ -273,7 +334,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Timer handles | Reserves `0` for invalid handles; handles combine a counter with the current game tick. [Implementation][fl-callouts]. | Timer IDs start at `1` per VM. Store the returned handle; its numeric value need not match FluffOS or be consecutive. [Reference](efun/call_out.md). |
 | Clone enumeration | `children(path)` includes the loaded prototype. [Reference][fl-children]. | `object_clones(object)` excludes the prototype and groups clones by compiled program version. Both the argument and assumptions about the results differ. [Reference](efun/object_clones.md). |
 | Live recompilation | `recompile_object` updates the prototype and its clones; inheritors need separate updates. [Reference][fl-reload]. | Use `request_object_recompile` and inspect its queued result with `query_object_recompile`; other tools need `valid_recompile` permission to read the status. Migration matches declaring source, name and exact type; compatible named callbacks rebind and closures retain their original code and captures. System selectors support state-preserving master/simul-efun upgrades. Active shadow chains and changes to cleanup eligibility are refused. [Reference](efun/request_object_recompile.md). |
-| Parser results and caching | `parse_sentence` documents integer results `1`, `0`, `-1`, `-2`, or a message; `parse_refresh` clears cached object information. [Results][fl-parser], [refresh][fl-refresh]. | An unresolved object can also produce `-3`; `parse_refresh` is a no-op. Dispatch, scope and handler behaviour have further differences. [Full departures](efun/parse_sentence.md#departures-from-mudosfluffos). |
+| Parser results and caching | `parse_sentence` documents integer results `1`, `0`, `-1`, `-2`, or a message; `parse_refresh` clears cached object information. [Results][fl-parser], [refresh][fl-refresh]. | An unresolved object can also produce `-3`; `parse_refresh` is a no-op. See the [parser package details below](#fluffos-parser-package). |
 | Non-persistent globals | With `SENSIBLE_MODIFIERS`, `nosave` excludes globals from save/restore independently of visibility. The legacy `static` keyword, available without that option, combines exclusion with protected visibility. `nosave` on functions warns and is discarded. [Keywords][fl-nosave-keywords], [storage][fl-nosave-storage], [functions][fl-inherit-grammar]. | `nosave` and `static` are aliases on globals and do not change visibility. Both exclude inherited globals too. `variable_info` reports either spelling as `static`. `nosave` on functions or inherit statements is rejected. [Reference](lpc/nosave.md). |
 | Named variadic parameters | A final parameter followed by `...` collects extra arguments. It also enables `varargs`, allowing a missing fixed prefix to be padded with undefined values. `ref` collectors are rejected; a non-array type other than `mixed` produces a warning. [Declarations][fl-variadic-declarations], [flags][fl-inherit-grammar], [packing][fl-variadic-runtime]. | Supports `mixed args...`, `mixed *args...`, and typed array collectors, including in closure parameter lists. A `mixed` collector retains its ordinary local type and initially receives an array. Collectors cannot have a default or `ref`; other scalar types are rejected; direct calls still require the fixed prefix unless defaulted or declared `varargs`. Bare `...` continues to collect into `argv`. [Reference](lpc/variadic_parameters.md). |
 | Reverse indexing | Supports `<n` element indices and slice bounds. With `old range behavior: 0`, ordinary negative string/buffer bounds are not end-relative. Reverse array reads outside the array raise errors; string reverse reads special-case `<0` as zero and otherwise check bounds. Strings use grapheme positions. [Ranges][fl-ranges], [indices][fl-indexing]. | Supports `<n` for arrays, strings and bytes while retaining native negative indices and bounds. Reverse slices clip to bounds; invalid array reads raise errors, while string/bytes reads return zero. Strings use Unicode scalar positions. Writes support array elements; slice and indexed string/bytes writes are unsupported. [Reference](lpc/indexing.md). |
@@ -281,7 +342,32 @@ save import still require further driver support. See [class support](lpc/classe
 | Binary values | Mutable `buffer` values, including indexed/range assignment. [Buffers][fl-buffer]. | Immutable `bytes`, with explicit text/byte conversions. Buffer mutation and implicit conversions need adaptation. [Types](lpc/types.md). |
 | Regular expressions | Traditional `regexp` and separate `pcre_*` efuns. [Implementation][fl-regexp], [PCRE reference][fl-pcre]. | Rust `regex` syntax; no `pcre_*` API, look-around or back-references. [Reference](efun/regexp.md). |
 | `save_object` options | File form returns `1` for success, `0` for failure; flags control saving zero values and compression; a no-file form returns data. [Reference][fl-save]. | Requires a path, returns the path and saves zero-valued globals. No flag or no-file form. Permission/serialisation errors raise errors; delivery failures after commit are logged. [Reference](efun/save_object.md). |
-| Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. [Reference](efun/crypt.md). |
+| Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
+
+#### FluffOS parser package
+
+These notes concern the reviewed FluffOS implementation with `PACKAGE_PARSER`,
+not every historical MudOS release. Consult its [source][fl-parser-source] and
+[efun declarations][fl-parser-spec] alongside the native
+[`parse_sentence`](efun/parse_sentence.md),
+[`parse_add_rule`](efun/parse_add_rule.md), and
+[handler contract](apply/object/parser_handlers.md).
+
+| Topic | FluffOS behaviour | lpc-rs behaviour and porting impact |
+|---|---|---|
+| Dispatch and actor | `parse_sentence` parses for the calling object, which must have called `parse_init`. | Parses for the living `this_player()`. Registered parser rules are also reached by ordinary command dispatch after the actor's own rules decline the verb. Review actor and dispatch ownership. |
+| Articles and possessives | Recognizes built-in English words including `a`, `any`, `the`, and `my`. | Supply accepted adjectives through the vocabulary applies; these words are not automatic articles or possessive selectors. |
+| Error kinds | Uses `ERR_IS_NOT` (1) and `ERR_MANY_PATHS` (9), as well as kinds 2–8. | Never emits 1 or 9; a missing object phrase uses kind 7. Numeric kinds 2–8 retain those numbers, but inspect each argument contract. The driver supplies no constants header. |
+| Error hook and fallback | `get_the_error` calls the master with a kind-dependent argument count; a missing result becomes zero. | [`parser_error_message`](apply/master/parser_error_message.md) always receives four arguments. No built-in English fallback: missing text leaves `-2` or `-3`, and command dispatch can try another rule or `command_not_found`. |
+| Ambiguity modifier | Recognizes `:c` to choose one match. | Does not recognize `:c`; resolve that choice in the mudlib or adapt the rule. |
+| Debug argument | Nonzero debugging requires a `DEBUG` or `PARSE_DEBUG` build; otherwise it errors. | Accepts and ignores `debug`. |
+| Name caching | `parse_refresh` invalidates cached parser information. | Rules and noun vocabulary are read afresh for each call; `parse_refresh` does nothing. |
+| Nested scope arrays | Interpret nested arrays using the preceding object's visibility, accessibility, and ownership state. | Flatten the explicitly supplied scope into reachable candidates. Normal scope walking uses `environment()`, [`inventory_visible`](apply/object/inventory_visible.md), and [`inventory_accessible`](apply/object/inventory_accessible.md). |
+| Living candidates | Uses the parser's `is_living` apply. | Uses `enable_commands` status, including extra candidates from [`parse_command_users`](apply/master/parse_command_users.md). |
+| Error selection | Weighs rule matches and error counts. | Within a rule, reports the parse that resolved the most object slots, taking the earliest tie; across rules, combines failures by severity. Error text can therefore differ. |
+| Verb matching | Tries progressively longer normalized word sequences as verbs. | Matches the exact first word. Multiword or normalized verb assumptions need adaptation. |
+| Synonyms | The implementation accepts `parse_add_synonym(new, old, rule)` despite its reference showing two arguments. | Also supports the optional rule filter. Review native synonym chaining and removal semantics in [`parse_add_synonym`](efun/parse_add_synonym.md) and [`parse_remove`](efun/parse_remove.md). |
+| Rule inspection | The implemented `parse_my_rules(object, string, int)` parses a command restricted to the caller's rules, returning handler arguments or executing with the flag. Its upstream reference describes a different no-argument API. | [`parse_my_rules()`](efun/parse_my_rules.md) lists the caller's registrations as `"verb rule"` strings; [`parse_dump()`](efun/parse_dump.md) lists all owners' registrations as text. Adapt calls according to their actual purpose. |
 
 ### DGD
 
@@ -289,9 +375,26 @@ save import still require further driver support. See [class support](lpc/classe
 |---|---|---|
 | Atomic function boundaries | The `atomic` modifier gives a function an error-rollback boundary. [Language reference][dgd-lpc]. | Transactions belong to driver tasks; there is no `atomic` function modifier. Calls across objects share their owning transaction. Function-level rollback assumptions need review. [Runtime](../README.md#how-execution-works). |
 | Snapshot restoration | `dump_state` captures system state after the task, for subsequent snapshot restart. [Snapshot API][dgd-dump], [restart lifecycle][dgd-intro]. | Object/map save files serialise selected data; they do not restore the live world, its programs and scheduled work as a driver snapshot. Snapshot-dependent startup requires redesign. [Save format](save-format.md). |
-| `parse_string` alternatives | The third argument controls additional parse alternatives in the result. [Reference][dgd-parse]. | Only `0` is accepted; other values raise an error. Code consuming multiple alternatives needs changes. [Reference](efun/parse_string.md#departures-from-dgd). |
+| `parse_string` alternatives | The third argument controls additional parse alternatives in the result. [Reference][dgd-parse]. | Only `0` is accepted; other values raise an error. Code consuming multiple alternatives needs changes. See the [parser details below](#dgd-string-parsing). |
 | Grammar caching | Generated parser machinery is cached per object until that object is destructed. [Reference][dgd-parse]. | A driver-wide LRU cache holds 64 grammar texts. Cache ownership and eviction differ. [Reference](efun/parse_string.md). |
 | `save_object` visibility | Private and static globals are excluded, as are zero and object values. [Reference][dgd-save]. | Private globals are saved unless marked `nosave`/`static`. Ported objects may therefore save data they previously omitted. [Reference](efun/save_object.md). |
+
+#### DGD string parsing
+
+Compare the [DGD reference][dgd-parse], [parser][dgd-parser-source], and
+[grammar compiler][dgd-grammar-source] with the native
+[`parse_string`](efun/parse_string.md) contract.
+
+| Topic | DGD behaviour | lpc-rs behaviour and porting impact |
+|---|---|---|
+| Failure result | Returns `nil` when no parse succeeds. | Returns `0`; adjust explicit result checks. |
+| Alternative trees | Can return nested arrays of alternatives at ambiguous branches. | Accepts only `alternatives = 0`. Actions may reject a derivation so another is tried, but the efun does not return multiple trees. |
+| Ordering | Ordering by the topmost differing rule is **not checked** against the pinned revision. | Tries productions as written and the longest span first. Do not depend on cross-driver agreement for ambiguous grammars without a probe. |
+| Cache and construction | Keeps generated parser machinery per object and expands automata as sentences require. | Keeps 64 complete compiled grammar texts in a driver-wide LRU cache. Review assumptions about cache lifetime and compilation costs. |
+| Limits | Has rule, grammar, and regex size errors, and charges parsing against ticks. Additional nesting limits are **not checked**. | Has no separate grammar-text size limit; regex groups nest at most 250 levels. Parsing has a step budget, tries at most 64 derivations, and permits at most 4096 production levels. LPC actions still use the task's execution allowance. |
+| Character units | Tokenizes bytes. | Tokenizes UTF-8 characters; byte-oriented grammars may accept different text. |
+| `< func` | Stores the grammar annotation. | Accepts it and ignores it. |
+| Special objects | The reference excludes special objects from calling `parse_string`. | Has no corresponding special-object category. |
 
 ## Coverage still to assess
 
@@ -310,7 +413,10 @@ mudlib compatibility or comparative performance. Further useful comparisons are:
 
 When a compared feature changes, review its row alongside the canonical efun,
 apply or language reference. Keep the detailed contract in that reference and
-update this page's description of the difference. Record the reviewed revision
+keep all driver-specific migration advice in this page's per-driver sections;
+shared examples belong in the common porting topics above. Link from this page
+to native references instead of adding porting sections to each efun or apply.
+Update this page's description of the difference. Record the reviewed revision
 and date when changing an upstream claim; use publicly accessible, pinned
 sources and state any required build options.
 
@@ -426,3 +532,12 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-catch-jumps]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/grammar_rules_loops.cc
 [fl-copy]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/contrib/contrib.cc#L202-L301
 [fl-contrib-spec]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/contrib/contrib.spec#L10
+[cd-pointerp]: https://github.com/cotillion/cd-gamedriver/blob/03a98d78db215e40d33642828aad7a43a65e35f7/doc/efun/pointerp
+[ld-pointerp]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/pointerp
+[fl-sscanf]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/strings/sscanf.md
+[fl-sscanf-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/interpret.cc#L5310-L5624
+[fl-colour-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/contrib/contrib.cc#L577-L1102
+[fl-parser-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc
+[fl-parser-spec]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.spec
+[dgd-parser-source]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/parser/parse.cpp
+[dgd-grammar-source]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/parser/grammar.cpp
