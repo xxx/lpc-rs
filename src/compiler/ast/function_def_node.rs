@@ -27,6 +27,8 @@ pub struct FunctionDefNode {
     pub return_type: LpcType,
     pub name: Ustr,
     pub parameters: Vec<VarInitNode>,
+    /// The named collector, excluded from the fixed `parameters` and call arity.
+    pub variadic: Option<Box<VarInitNode>>,
     pub flags: FunctionFlags,
     pub body: Vec<AstNode>,
     pub span: Option<Span>,
@@ -47,7 +49,17 @@ impl AstNodeTrait for FunctionDefNode {
 
 impl Display for FunctionDefNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let p = self.parameters.iter().map(|a| a.to_string()).join(", ");
+        let mut parameters = self
+            .parameters
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<_>>();
+        if let Some(collector) = &self.variadic {
+            parameters.push(format!("{} {}...", collector.type_, collector.name));
+        } else if self.flags.ellipsis() {
+            parameters.push("...".into());
+        }
+        let p = parameters.join(", ");
         let b = self.body.iter().map(|a| a.to_string()).join(", ");
         write!(f, "{} {}({}) {{ {} }}", self.return_type, self.name, p, b)
     }

@@ -79,6 +79,8 @@ Breaking it down by syntax, functions can take the following forms:
     For security purposes, `$64` is the maximum.
   * Closures can optionally declare their arguments within `[]` at the start of the function body, e.g.
   `(: [int x, int y] x + y :)`. This is optional, but recommended.
+  * A final array parameter such as `(: [mixed *args...] args :)` collects all
+    remaining arguments; see [variadic parameters](variadic_parameters.md).
   * Closures can be multi-line, and can use `return` to return a value, e.g.
     ```c
     (: [int x, int y] {

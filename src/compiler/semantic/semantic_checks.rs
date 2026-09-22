@@ -2467,6 +2467,7 @@ mod tests {
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::Closure(ClosureNode {
+                    variadic: None,
                     name: "closure-123".into(),
                     return_type: LpcType::Mapping(true),
                     parameters: None,

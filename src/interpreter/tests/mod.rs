@@ -7,6 +7,7 @@ mod catch_result;
 mod entry_args;
 mod inheritance;
 mod loading;
+mod named_variadic;
 mod parse_command;
 mod parse_string;
 mod parser;

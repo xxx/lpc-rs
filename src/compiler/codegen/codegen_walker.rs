@@ -1072,27 +1072,23 @@ impl CodegenWalker {
     fn setup_populate_argv(
         &mut self,
         ellipsis: bool,
+        collector: Option<&VarInitNode>,
         span: Option<Span>,
         passed_param_count: RegisterSize,
     ) -> Result<Option<Address>> {
         if ellipsis {
-            let argv_location = self.assign_sym_location(ARGV)?;
+            let name = collector.map_or(ARGV, |param| param.name.as_str());
+            let argv_location = self.assign_sym_location(name)?;
 
-            if let Some(sym) = self.context.lookup_var(ARGV)
+            if let Some(sym) = self.context.lookup_var(name)
                 && let Some(func) = self.function_stack.last_mut()
             {
                 func.local_variables.push(sym.clone())
             }
 
-            // We don't set `argv_location` as `self.current_result`, because it's
-            // being assigned implicitly, and doesn't need to be made available
-            // to more complex expressions. Expressions that use `argv` explicitly
-            // are handled elsewhere, as any other expr would be.
-
             let result = Some(self.current_address());
 
-            // The number of locals isn't known yet, so just set it to zero for now.
-            // This gets backpatched after the function body is generated.
+            // The local count is backpatched after the function body is generated.
             let instruction = Instruction::PopulateArgv(argv_location, passed_param_count, 0);
             push_instruction!(self, instruction, span);
 
@@ -1799,8 +1795,12 @@ impl TreeWalker for CodegenWalker {
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
-        let populate_argv_index =
-            self.setup_populate_argv(node.flags.ellipsis(), node.span, declared_arg_count)?;
+        let populate_argv_index = self.setup_populate_argv(
+            node.flags.ellipsis(),
+            node.variadic.as_deref(),
+            node.span,
+            declared_arg_count,
+        )?;
 
         let start_label = self.new_label("closure-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -2092,8 +2092,12 @@ impl TreeWalker for CodegenWalker {
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
-        let populate_argv_index =
-            self.setup_populate_argv(node.flags.ellipsis(), node.span, declared_arg_count)?;
+        let populate_argv_index = self.setup_populate_argv(
+            node.flags.ellipsis(),
+            node.variadic.as_deref(),
+            node.span,
+            declared_arg_count,
+        )?;
 
         let start_label = self.new_label("function-body-start");
         self.insert_label(&start_label, self.current_address());

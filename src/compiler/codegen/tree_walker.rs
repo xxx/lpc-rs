@@ -201,6 +201,10 @@ where
         }
     }
 
+    if let Some(collector) = &mut node.variadic {
+        collector.visit(walker).await?;
+    }
+
     for expression in &mut node.body {
         expression.visit(walker).await?;
     }
@@ -292,6 +296,10 @@ where
 {
     for parameter in &mut node.parameters {
         parameter.visit(walker).await?;
+    }
+
+    if let Some(collector) = &mut node.variadic {
+        collector.visit(walker).await?;
     }
 
     for expression in &mut node.body {
@@ -971,6 +979,7 @@ mod tests {
         #[tokio::test]
         async fn closure_visits_parameters_then_body() {
             let mut node = ClosureNode {
+                variadic: None,
                 name: "closure-0".into(),
                 return_type: LpcType::Mixed(false),
                 flags: FunctionFlags::default(),
@@ -1056,6 +1065,7 @@ mod tests {
         #[tokio::test]
         async fn function_def_visits_parameters_then_body() {
             let mut node = FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("f"),
                 parameters: vec![init("p")],
@@ -1219,6 +1229,7 @@ mod tests {
         #[tokio::test]
         async fn function_def_propagates_a_parameter_error_and_stops() {
             let mut node = FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("f"),
                 parameters: vec![init("p")],
@@ -1325,6 +1336,7 @@ mod scope_hook_tests {
     #[tokio::test]
     async fn a_closure_is_entered_and_exited_around_its_children() {
         let mut node = ExpressionNode::Closure(ClosureNode {
+            variadic: None,
             name: "closure-0".into(),
             return_type: LpcType::Mixed(false),
             flags: FunctionFlags::default(),

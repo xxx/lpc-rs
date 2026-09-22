@@ -474,6 +474,7 @@ fn typeless_functions_are_mixed() {
     assert!(matches!(
         node,
         AstNode::FunctionDef(FunctionDefNode {
+            variadic: None,
             return_type: LpcType::Mixed(false),
             ..
         })

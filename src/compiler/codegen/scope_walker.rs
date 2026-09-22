@@ -423,7 +423,10 @@ impl TreeWalker for ScopeWalker {
             }
         }
 
-        if node.flags.ellipsis() {
+        if let Some(collector) = &mut node.variadic {
+            collector.visit(self).await?;
+            self.referenced.insert((scope_id, collector.name));
+        } else if node.flags.ellipsis() {
             self.define_argv(scope_id, node.span);
         }
 
@@ -479,7 +482,10 @@ impl TreeWalker for ScopeWalker {
             self.referenced.insert((scope_id, parameter.name));
         }
 
-        if node.flags.ellipsis() {
+        if let Some(collector) = &mut node.variadic {
+            collector.visit(self).await?;
+            self.referenced.insert((scope_id, collector.name));
+        } else if node.flags.ellipsis() {
             self.define_argv(scope_id, node.span);
         }
 
@@ -793,6 +799,7 @@ mod tests {
         async fn sets_up_argv_for_ellipsis() {
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("marf"),
                 flags: FunctionFlags::default().with_ellipsis(true),

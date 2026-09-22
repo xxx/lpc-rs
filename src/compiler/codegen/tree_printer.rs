@@ -218,6 +218,10 @@ impl TreeWalker for TreePrinter {
                 parameter.visit(self).await?;
             }
         }
+        if let Some(collector) = &mut node.variadic {
+            self.println_indented("variadic:");
+            collector.visit(self).await?;
+        }
         self.indent -= 2;
         self.println_indented("body:");
         self.indent += 2;
@@ -348,6 +352,10 @@ impl TreeWalker for TreePrinter {
         self.indent += 2;
         for parameter in &mut node.parameters {
             parameter.visit(self).await?;
+        }
+        if let Some(collector) = &mut node.variadic {
+            self.println_indented("variadic:");
+            collector.visit(self).await?;
         }
         self.indent -= 2;
         self.println_indented("body:");

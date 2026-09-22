@@ -101,6 +101,7 @@ impl OperatorNode {
         span: Option<Span>,
     ) -> Self {
         let closure = ClosureNode {
+            variadic: None,
             name: closure_name,
             return_type: LpcType::Mixed(false),
             parameters: None,

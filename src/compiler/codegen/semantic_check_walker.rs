@@ -59,6 +59,9 @@ pub struct SemanticCheckWalker {
     /// Track the current function, so we can type check returns.
     current_function: Option<FunctionDefNode>,
 
+    /// Whether the innermost callable reserves `argv`, and its declaration span.
+    implicit_argv: (bool, Option<Span>),
+
     /// Are break / continue allowed at this time?
     valid_jumps: Vec<(BreakAllowed, ContinueAllowed)>,
 
@@ -75,6 +78,7 @@ impl SemanticCheckWalker {
         Self {
             context,
             current_function: None,
+            implicit_argv: (false, None),
             valid_jumps: vec![],
             valid_labels: vec![],
             closure_depth: 0,
@@ -530,6 +534,10 @@ impl TreeWalker for SemanticCheckWalker {
 
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.closure_depth += 1;
+        let enclosing_argv = std::mem::replace(
+            &mut self.implicit_argv,
+            (node.flags.ellipsis() && node.variadic.is_none(), node.span),
+        );
 
         // A closure has no caller frame to alias into, so it cannot take `ref`.
         if let Some(parameters) = &node.parameters {
@@ -547,13 +555,14 @@ impl TreeWalker for SemanticCheckWalker {
         self.valid_jumps
             .push((BreakAllowed(false), ContinueAllowed(false)));
         self.valid_labels.push(LabelAllowed(false));
-        walk_closure(self, node).await?;
+        let result = walk_closure(self, node).await;
+        self.implicit_argv = enclosing_argv;
         self.prevent_labels();
         self.prevent_jumps();
 
         self.closure_depth -= 1;
 
-        Ok(())
+        result
     }
 
     async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
@@ -644,6 +653,10 @@ impl TreeWalker for SemanticCheckWalker {
 
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
+        let enclosing_argv = std::mem::replace(
+            &mut self.implicit_argv,
+            (node.flags.ellipsis() && node.variadic.is_none(), node.span),
+        );
 
         if let Some(prototype) = self.context.function_prototypes.get(node.name.as_str()) {
             let arity = prototype.arity;
@@ -661,10 +674,11 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         self.check_unreachable(&node.body);
-        walk_function_def(self, node).await?;
+        let result = walk_function_def(self, node).await;
+        self.implicit_argv = enclosing_argv;
 
         self.context.scopes.pop();
-        Ok(())
+        result
     }
 
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
@@ -926,14 +940,11 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        if node.name == ARGV
-            && let Some(FunctionDefNode { flags, span, .. }) = self.current_function
-            && flags.ellipsis()
-        {
+        if node.name == ARGV && self.implicit_argv.0 {
             let e: LpcError =
                 LpcError::new("redeclaration of `argv` in a function with ellipsis arguments")
                     .with_span(node.span)
-                    .with_label("Declared here", span);
+                    .with_label("Declared here", self.implicit_argv.1);
             return Err(self.context.diagnostics.fail(e));
         }
 
@@ -2576,6 +2587,7 @@ mod tests {
             };
 
             let mut function_def1 = FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("foo"),
                 parameters: vec![param1],
@@ -2595,6 +2607,7 @@ mod tests {
             };
 
             let mut function_def2 = FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("snuh"),
                 parameters: vec![param2],
@@ -2620,6 +2633,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_keyword_name() {
             let mut node = FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("while"),
                 parameters: vec![],
@@ -3546,9 +3560,11 @@ mod tests {
 
             let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
+            walker.implicit_argv = (true, None);
 
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("moop"),
                 parameters: vec![],
@@ -3587,6 +3603,7 @@ mod tests {
 
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
+                variadic: None,
                 return_type: LpcType::Void,
                 name: ustr("moop"),
                 parameters: vec![],

@@ -22,6 +22,8 @@ pub struct ClosureNode {
     pub name: Ustr,
     pub return_type: LpcType,
     pub parameters: Option<Vec<VarInitNode>>,
+    /// The named collector, excluded from the fixed `parameters` and call arity.
+    pub variadic: Option<Box<VarInitNode>>,
     pub flags: FunctionFlags,
     pub body: Vec<AstNode>,
     pub span: Option<Span>,
@@ -61,6 +63,7 @@ mod tests {
 
     fn closure(body: Vec<AstNode>) -> ClosureNode {
         ClosureNode {
+            variadic: None,
             name: "closure-1".into(),
             return_type: LpcType::Mixed(false),
             parameters: None,

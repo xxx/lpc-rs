@@ -69,6 +69,13 @@ impl TreeWalker for FunctionPrototypeWalker {
 
         let parameters = node.parameters.get_or_insert_default();
         let declared = RegisterSize::try_from(parameters.len())?;
+        if highest_positional > declared && node.variadic.is_some() {
+            return Err(lpc_error!(
+                node.span,
+                "positional `${}` lies beyond the fixed parameters of a named variadic closure",
+                highest_positional
+            ));
+        }
         if highest_positional > declared && parameters.iter().any(|p| p.value.is_some()) {
             self.context.diagnostics.record(lpc_error!(
                 node.span,
@@ -233,6 +240,7 @@ mod tests {
     #[tokio::test]
     async fn disallows_redefining_nomask_function() {
         let mut node = FunctionDefNode {
+            variadic: None,
             return_type: LpcType::Void,
             name: ustr("duplicate"),
             parameters: vec![],
@@ -284,6 +292,7 @@ mod tests {
         own_args: usize,
     ) -> Result<()> {
         let mut node = FunctionDefNode {
+            variadic: None,
             return_type: LpcType::Void,
             name: ustr("g"),
             parameters: (0..own_args)
@@ -347,6 +356,7 @@ mod tests {
     async fn function_def_stores_the_prototype() {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = FunctionDefNode {
+            variadic: None,
             return_type: LpcType::Mixed(false),
             name: ustr("marf"),
             flags: FunctionFlags::default(),
@@ -384,6 +394,7 @@ mod tests {
     async fn closure_stores_the_prototype() {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = ClosureNode {
+            variadic: None,
             name: "closure-123".into(),
             return_type: LpcType::Mixed(false),
             flags: FunctionFlags::default(),

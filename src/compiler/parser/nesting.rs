@@ -191,10 +191,12 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
         Child::Block(n) => out.extend(n.body.iter().map(Child::Stmt)),
         Child::Closure(n) => {
             out.extend(n.parameters.iter().flatten().map(Child::VarInit));
+            out.extend(n.variadic.as_deref().map(Child::VarInit));
             out.extend(n.body.iter().map(Child::Stmt));
         }
         Child::FunctionDef(n) => {
             out.extend(n.parameters.iter().map(Child::VarInit));
+            out.extend(n.variadic.as_deref().map(Child::VarInit));
             out.extend(n.body.iter().map(Child::Stmt));
         }
         Child::Decl(n) => out.extend(n.initializations.iter().map(Child::VarInit)),

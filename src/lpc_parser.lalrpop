@@ -235,7 +235,7 @@ FunctionPrototype: (
     Option<(Span, &'static str)>,
     Option<Span>,
     StringToken,
-    (Vec<VarInitNode>, bool)
+    (Vec<VarInitNode>, bool, Option<Box<VarInitNode>>)
 ) = {
     <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> => {
         (flags, r_type, star, name, parameter_tuple)
@@ -246,7 +246,7 @@ FunctionDef: FunctionDefNode = {
     <proto:FunctionPrototype> "{" <body:Statements> "}" =>? {
         let (flags, r_type, star, name, parameter_tuple) = proto;
         let array = star.is_some();
-        let (parameters, ellipsis) = parameter_tuple;
+        let (parameters, ellipsis, variadic) = parameter_tuple;
 
         let lead = flags
             .first()
@@ -280,6 +280,7 @@ FunctionDef: FunctionDefNode = {
         Ok(guard(FunctionDefNode {
             name: ustr(&name.1),
             parameters,
+            variadic,
             flags,
             body,
             return_type,
@@ -309,9 +310,9 @@ Closure: ExpressionNode = {
      <l:"("> ":" <params:ClosureParameters?> <body:ClosureBody?> ":" <r:")"> =>? {
         let span = Span::join(l, r);
 
-        let (parameters, ellipsis) = params.map(|tuple| {
-            (Some(tuple.0), tuple.1)
-        }).unwrap_or((None, false));
+        let (parameters, ellipsis, variadic) = params.map(|tuple| {
+            (Some(tuple.0), tuple.1, tuple.2)
+        }).unwrap_or((None, false, None));
 
         // closures are private to ensure they can't be called directly via the actual `call_other` efun
         let flags = FunctionFlags::from(&["private"][..]).with_ellipsis(ellipsis);
@@ -322,6 +323,7 @@ Closure: ExpressionNode = {
             name,
             return_type: LpcType::Mixed(false),
             parameters,
+            variadic,
             flags,
             body: body.unwrap_or_default(),
             span: Some(span),
@@ -330,15 +332,33 @@ Closure: ExpressionNode = {
     },
 }
 
-DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool) = {
+DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool, Option<Box<VarInitNode>>) = {
     L_DELIM "void" R_DELIM => {
-        (vec![], false)
+        (vec![], false, None)
     },
     L_DELIM <ellipsis:"..."?> R_DELIM => {
-        (vec![], ellipsis.is_some())
+        (vec![], ellipsis.is_some(), None)
     },
     L_DELIM <params:ParameterList> <ellipsis:("," "...")?> R_DELIM => {
-        (params, ellipsis.is_some())
+        (params, ellipsis.is_some(), None)
+    },
+    L_DELIM <mut params:ParameterList> "..." R_DELIM =>? {
+        let collector = params.pop().ok_or_else(|| ParseError::User {
+            error: lpc_error!(None, "a named variadic parameter is required")
+        })?;
+        let problem = if collector.by_ref {
+            Some("a named variadic parameter cannot be `ref`")
+        } else if collector.value.is_some() {
+            Some("a named variadic parameter cannot have a default value")
+        } else if !collector.type_.is_array() {
+            Some("a named variadic parameter must have an array type")
+        } else {
+            None
+        };
+        if let Some(message) = problem {
+            return Err(ParseError::User { error: lpc_error!(collector.span, "{}", message) });
+        }
+        Ok((params, true, Some(Box::new(collector))))
     }
 }
 Parameters = DelimitedParameters<"(", ")">;
