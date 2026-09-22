@@ -356,6 +356,7 @@ async fn policy_allows_game_objects_and_refuses_privileged_operations() {
             require_denied(catch(read_file("/include/ulib.h")), "ordinary reads");
             require_denied(catch(write_file("/unexpected", "data")), "writes");
             require_denied(catch(destruct(room)), "destructing another object");
+            require_denied(catch(store_variable(player, "name", "changed")), "replacing another object's global");
             require_denied(catch(compile_string("/obj/injected", "void create() {}")), "source injection");
             require(!master->valid_load("/secure/other.c", "load_object", this_object(), "/obj/probe.c"), "secure loads must fail");
             require(!master->valid_inherit("/obj/player.c", "/obj/probe.c"), "player inheritance must fail");

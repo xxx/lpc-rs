@@ -123,6 +123,7 @@ pub(crate) mod sort_array;
 pub(crate) mod source_cache_stats;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
+pub(crate) mod store_variable;
 pub(crate) mod strindex;
 pub(crate) mod tell_object;
 pub(crate) mod terminal_colour;
@@ -1259,6 +1260,11 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    store_variable [async] => {
+        returns: LpcType::Void,
+        arity: (4, 1),
+        args: [LpcType::Object(false), LpcType::String(false), LpcType::Mixed(false), LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1622,6 +1628,7 @@ mod tests {
                 "has_key",
                 "save_value",
                 "restore_value",
+                "store_variable",
             ]
         );
     }

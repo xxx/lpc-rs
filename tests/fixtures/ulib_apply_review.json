@@ -29,6 +29,7 @@
   "doc/apply/master/valid_read.md": "85ffd2938d613314ecc8b2585f00bde519326d9fe08edd9e6fd3c333dbfc6d1f",
   "doc/apply/master/valid_recompile.md": "2e0630ac93157bf7fb4e07966495cb90e584ccd4d15a795b58f8e57bbae64aa3",
   "doc/apply/master/valid_shutdown.md": "24a742903abd4e73096e3e7aca93fee1b3a7ca2074abf06748d0243cfb505804",
+  "doc/apply/master/valid_store_variable.md": "0c44670b4c44b722a93eeafda1b2fd40fcf8436d10fbd43cbeca11c0fdffd983",
   "doc/apply/master/valid_variable_info.md": "d696ed56236b9cb99936925637366924e3f444e3e32292d2c01aa0cd7d4f2153",
   "doc/apply/master/valid_write.md": "56406c753cef17d8e4c47183a4be5f45dff493a05b6e4deb043320776be6b12d",
   "doc/apply/master/warning_handler.md": "8168aab28183ce036cbfdc9ac75a5121ee4ff49013478402be5b8b8443f119d0",

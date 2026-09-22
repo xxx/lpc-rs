@@ -47,7 +47,8 @@ and parameters follow the same rules as ordinary variables and parameters.
 
 Existing type checks retain their scope: `mixed` expressions may flow into
 narrower variables without a general runtime assignment check. Cast assertions,
-function-pointer argument checks, and class-field checks enforce the selected null rules.
+function-pointer argument checks, class-field checks, and
+[`store_variable`](../efun/store_variable.md) enforce the selected null rules.
 
 A destructed object behaves as the selected null value for truth, equality,
 type predicates, casts, JSON, and save output. Transactional destruction is

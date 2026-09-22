@@ -70,8 +70,8 @@ as `/obj/player` are inside the mudlib; they are not host filesystem paths.
 
 The policy permits self-destruction for logout and empty-room cleanup. It
 denies LPC file writes, ordinary file reads, connection transfer, inspection
-of another object's globals, object recompilation, LPC-requested shutdown and
-shadows.
+or replacement of another object's globals, object recompilation, LPC-requested
+shutdown and shadows.
 The master and player also use pragmas to forbid inheritance and shadowing;
 the driver's `doc/lpc/pragmas.md` describes those restrictions.
 

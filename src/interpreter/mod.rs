@@ -51,6 +51,8 @@ pub const VALID_EXEC: &str = "valid_exec";
 pub const VALID_DESTRUCT: &str = "valid_destruct";
 /// Master apply: whether calling code may inspect another object's globals.
 pub const VALID_VARIABLE_INFO: &str = "valid_variable_info";
+/// Master apply: whether calling code may replace another object's named global.
+pub const VALID_STORE_VARIABLE: &str = "valid_store_variable";
 /// Master apply: whether the calling object may shadow another (`doc/apply/master/query_allow_shadow.md`).
 pub const QUERY_ALLOW_SHADOW: &str = "query_allow_shadow";
 /// Master apply: whether the calling code may `shutdown` (`doc/apply/master/valid_shutdown.md`).

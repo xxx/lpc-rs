@@ -135,6 +135,20 @@ int valid_variable_info(object caller, object target, string program) {
 }
 
 /**
+ * Authorise caller replacing target's named global with value.
+ * declaring_program is the requested source selector, or nil; program is
+ * the source defining the request. Lookup and type checks follow approval.
+ * Return 0 because ulib needs no writes to another object's globals;
+ * self-writes need no hook, and omission also denies foreign writes.
+ * The hook shares the transaction and proposed reference values: its own
+ * changes can survive a caught refusal, so keep a denying policy read-only.
+ */
+int valid_store_variable(object caller, object target, string name,
+                         string declaring_program, mixed value, string program) {
+    return 0;
+}
+
+/**
  * Authorise an in-place upgrade of prototype and its current clones.
  * caller requested it and program defines the request; the active master
  * asks again before compilation, preserving the original command giver.

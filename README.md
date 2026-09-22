@@ -171,6 +171,7 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 | Look up compiler pragmas and their scope | [Pragma reference](doc/lpc/pragmas.md) |
 | Understand values and callable functions | [Types](doc/lpc/types.md), [functions and closures](doc/lpc/function_type.md), [references](doc/lpc/references.md), [argument spreading](doc/lpc/argument_spreading.md) |
 | Look up a built-in function | [Efun reference](doc/efun) |
+| Inspect or replace named globals | [`variable_info`](doc/efun/variable_info.md), [`store_variable`](doc/efun/store_variable.md) |
 | Implement callbacks the driver calls | [Master hooks](doc/apply/master), [object hooks](doc/apply/object), [living hooks](doc/apply/living), [connection hooks](doc/apply/special) |
 | Add player commands | [`add_action`](doc/efun/add_action.md), [`add_rule`](doc/efun/add_rule.md), [`parse_sentence`](doc/efun/parse_sentence.md) |
 | See how the parsing frontends share one engine | [Parser Town](doc/parser-town/README.md) · open [the interactive tour](doc/parser-town/index.html) locally in a browser |
