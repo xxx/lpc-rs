@@ -100,6 +100,7 @@ pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
 pub(crate) mod rename;
 pub(crate) mod render_markdown;
+pub(crate) mod replace_string;
 pub(crate) mod request_clean_up;
 pub(crate) mod restore_map;
 pub(crate) mod restore_object;
@@ -117,6 +118,7 @@ pub(crate) mod sort_array;
 pub(crate) mod source_cache_stats;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
+pub(crate) mod strindex;
 pub(crate) mod tell_object;
 pub(crate) mod terminal_colour;
 mod terminal_text;
@@ -1215,6 +1217,19 @@ efuns! {
     classp [in type_predicates] => {
         returns: LpcType::Int(false), arity: 1, args: [LpcType::Mixed(false)],
     },
+    replace_string => {
+        returns: LpcType::String(false),
+        arity: (5, 2),
+        args: [
+            LpcType::String(false), LpcType::String(false), LpcType::String(false),
+            LpcType::Int(false), LpcType::Int(false),
+        ],
+    },
+    strindex => {
+        returns: LpcType::Int(false),
+        arity: (3, 1),
+        args: [LpcType::String(false), LpcType::String(false) | LpcType::Int(false), LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1571,6 +1586,8 @@ mod tests {
                 "copy_class",
                 "deep_copy",
                 "classp",
+                "replace_string",
+                "strindex",
             ]
         );
     }
