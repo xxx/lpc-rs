@@ -303,6 +303,12 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        if matches!(*node.lhs, ExpressionNode::Capture(_)) {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "`$()` is not assignable")));
+        }
         walk_assignment(self, node).await?;
 
         if let ExpressionNode::BinaryOp(BinaryOpNode {
@@ -924,6 +930,14 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        if matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
+            && matches!(*node.expr, ExpressionNode::Capture(_))
+        {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "`$()` is not assignable")));
+        }
         walk_unary_op(self, node).await?;
 
         match check_unary_operation_types(node, &self.context) {

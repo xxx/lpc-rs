@@ -162,7 +162,12 @@ guarded member access, shallow copying with `copy_class()`, and native persisten
         
         function g = (: [object pal] some_ob->greet(pal) :); // closure
         g(this_object());
+
+        function h = (: greet($(this_player())) :); // save the player at creation
         ```
+
+    - [`$(expression)` captures a value at closure creation](function_type.md#explicit-value-captures);
+      ordinary closure references continue sharing the original variables.
 
 * `mixed`
     - A `mixed` is a type that can be any other LPC type. It doesn't _change_ the underlying

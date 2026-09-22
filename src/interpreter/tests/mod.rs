@@ -5,6 +5,7 @@ mod call_other;
 mod calling;
 mod catch_result;
 mod entry_args;
+mod explicit_captures;
 mod inheritance;
 mod loading;
 mod named_variadic;

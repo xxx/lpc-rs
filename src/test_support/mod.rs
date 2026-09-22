@@ -414,6 +414,11 @@ impl CompileThrough for FunctionPrototypeWalker {
         let context = InheritanceWalker::compile_through_parsed(program, context)
             .await?
             .into_context();
+        let context = apply::<crate::compiler::codegen::capture_walker::CaptureWalker>(
+            program, context, false,
+        )
+        .await?
+        .into_context();
         apply(program, context, false).await
     }
 }

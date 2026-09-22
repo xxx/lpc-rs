@@ -1924,6 +1924,27 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
+    async fn visit_capture(
+        &mut self,
+        node: &mut crate::compiler::ast::capture_node::CaptureNode,
+    ) -> Result<()> {
+        node.expr.visit(self).await?;
+        let result = self
+            .register_counter
+            .next()
+            .ok_or_else(|| lpc_bug!(node.span, "capture has no result register"))?
+            .as_local();
+        // A local initialized from this value must not alias the hidden capture cell.
+        push_instruction!(
+            self,
+            Instruction::Copy(self.current_result, result),
+            node.span
+        );
+        self.current_result = result;
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         let Some(prototype) = self.context.function_prototypes.get(&*node.name) else {
             return Err(lpc_error!(
@@ -2486,6 +2507,16 @@ impl TreeWalker for CodegenWalker {
         };
         ret.visit(self).await?;
 
+        let num_upvalues = self
+            .context
+            .scopes
+            .current()
+            .ok_or_else(|| lpc_bug!("global initializer has no scope"))?
+            .num_upvalues;
+        self.function_stack
+            .last_mut()
+            .ok_or_else(|| lpc_bug!("global initializer has no function"))?
+            .num_upvalues = num_upvalues;
         let init_globals = self.finalize_function(None, None)?;
         debug_assert!(init_globals.name() == INIT_GLOBALS);
         let init_globals_name = ustr(&init_globals.mangle());

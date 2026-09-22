@@ -103,6 +103,57 @@ Breaking it down by syntax, functions can take the following forms:
     f(); // 30
     ```
     
+## Explicit value captures
+
+Inside a closure, `$(expression)` evaluates the expression when that closure is
+created and saves its value. Ordinary variable references keep sharing the
+original variable, including later assignments:
+
+```c
+int n = 10;
+function live = (: n + $1 :);
+function saved = (: $(n) + $1 :);
+n = 20;
+live(1);  // 21
+saved(1); // 11
+```
+
+Capture expressions run once per creation, in source order, even if the closure
+is never called or their part of its body is later skipped by a conditional.
+They do not run if execution skips creating the closure itself. Errors propagate
+at creation and prevent subsequent captures from running. Transaction retries
+repeat creation and its expressions; an aborted attempt discards its writes and
+new closure.
+
+The expression is checked and evaluated in the enclosing scope. The new
+closure's parameters and body locals are unavailable there. Each nested `$()`
+crosses one closure boundary. For example, the inner capture below reads the
+argument to `factory` when `factory` creates the inner closure:
+
+```c
+function factory = (: (: $($1) + $1 :) :);
+function add_ten = factory(10);
+add_ten(3); // 13
+```
+
+A loop that creates `(: $(i) :)` saves that iteration's value independently.
+Captures also work in global initializers and explicit parameter defaults.
+A captured function can be called directly: `(: $(callback)($1) :)`.
+
+Capturing is shallow. Arrays, mappings, objects, functions and class instances
+keep their identity; changes to their shared state remain visible. Reassigning
+the original variable does not replace the captured value. `$(items)[0] = 3`
+and `$(record).field++` therefore modify the shared instance. The capture itself
+is a value: `$(n) = 3`, `$(n)++`, and passing it directly as a `ref` argument are
+rejected. A `void` expression cannot be captured, and `$()` outside a closure is
+a compile error.
+
+This syntax leaves the existing meaning of `(: name :)` and `(: name, arg :)`
+unchanged: they return a function value and the last comma-expression value,
+respectively. Use `&name()` and `&name(arg)` for named and bound pointers.
+
+## Bound receivers and function inspection
+
 For bound receiver forms (`&(object)->name(...)` and `object->name`), a string
 receiver names an absolute object path (`"foo"` means `/foo`). If the object is
 not loaded, creating the pointer loads and initializes it first, using the same

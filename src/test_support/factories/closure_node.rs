@@ -14,6 +14,8 @@ factori!(ClosureNode, {
         flags = FunctionFlags::default(),
         body = vec![],
         span = None,
+        captures = vec![],
+        capture_scope_id = None,
         scope_id = None
     }
 });

@@ -1,3 +1,4 @@
+pub mod capture_walker;
 mod case_collector;
 pub mod class_walker;
 pub mod codegen_walker;

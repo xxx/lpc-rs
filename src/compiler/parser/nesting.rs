@@ -132,6 +132,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 out.push(Child::Expr(&n.else_clause));
             }
             ExpressionNode::UnaryOp(n) => out.push(Child::Expr(&n.expr)),
+            ExpressionNode::Capture(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Cast(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Spread(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Array(n) => out.extend(n.value.iter().map(Child::Expr)),
@@ -199,6 +200,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
         },
         Child::Block(n) => out.extend(n.body.iter().map(Child::Stmt)),
         Child::Closure(n) => {
+            out.extend(n.captures.iter().map(Child::VarInit));
             out.extend(n.parameters.iter().flatten().map(Child::VarInit));
             out.extend(n.variadic.as_deref().map(Child::VarInit));
             out.extend(n.body.iter().map(Child::Stmt));
@@ -230,6 +232,18 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
         // Inherits are leaves.
         Child::Program(n) => out.extend(n.body.iter().map(Child::Stmt)),
     }
+}
+
+/// Whether folding away this expression would discard an explicit capture.
+pub fn contains_capture(expr: &ExpressionNode) -> bool {
+    let mut pending = vec![Child::Expr(expr)];
+    while let Some(node) = pending.pop() {
+        if matches!(node, Child::Expr(ExpressionNode::Capture(_))) {
+            return true;
+        }
+        push_children(node, &mut pending);
+    }
+    false
 }
 
 /// Where a tree crossed the cap: the first node found more than `max`
@@ -309,6 +323,25 @@ mod tests {
 
     async fn height_of(code: &str) -> usize {
         height(&parsed(code).await)
+    }
+
+    #[tokio::test]
+    async fn explicit_capture_expressions_count_toward_the_nesting_cap() {
+        let plain = height_of("function f() { return (: 1 :); }").await;
+        let captured = height_of("function f() { return (: $(1) :); }").await;
+        assert_eq!(captured, plain + 1);
+
+        let depth = MAX_NESTING_DEPTH + 1;
+        let code = format!(
+            "function f() {{ return (: {}1{} :); }}",
+            "$(".repeat(depth),
+            ")".repeat(depth)
+        );
+        let error = Compiler::new(test_config())
+            .parse_string(&LpcPath::from("/nest.c"), &code)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("code nests too deeply"));
     }
 
     #[tokio::test]

@@ -9,6 +9,7 @@ use crate::compiler::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::compiler::ast::block_node::BlockNode;
 use crate::compiler::ast::break_node::BreakNode;
 use crate::compiler::ast::call_node::{CallChain, CallNode};
+use crate::compiler::ast::capture_node::CaptureNode;
 use crate::compiler::ast::cast_node::CastNode;
 use crate::compiler::ast::closure_node::ClosureNode;
 use crate::compiler::ast::comma_expression_node::CommaExpressionNode;
@@ -47,7 +48,7 @@ use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_core::EFUN;
 use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
 use crate::compiler::parser::collapse_unary_op::{collapse_unary_op, demote_statement_post_op};
-use crate::compiler::parser::nesting::guard;
+use crate::compiler::parser::nesting::{contains_capture, guard};
 use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::{LpcError, lpc_error, lpc_bug, lpc_warning};
@@ -66,6 +67,7 @@ extern {
     type Error = LpcError;
 
     enum Token {
+        "$" => Token::Dollar(<Span>),
         "+" => Token::Plus(<Span>),
         "-" => Token::Minus(<Span>),
         "*" => Token::Mul(<Span>),
@@ -356,6 +358,8 @@ Closure: ExpressionNode = {
             body: body.unwrap_or_default(),
             span: Some(span),
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         }), Some(span))?)
     },
 }
@@ -692,7 +696,17 @@ MemberExpression: ExpressionNode = {
     }
 };
 
+CaptureExpression: ExpressionNode = {
+    <l:"$"> "(" <expr:Expression> <r:")"> =>? {
+        let span = Some(Span::join(l, r));
+        Ok(guard(ExpressionNode::Capture(CaptureNode {
+            name: context.next_capture_name(), expr: Box::new(expr), span,
+        }), span)?)
+    },
+};
+
 PrimaryExpression: ExpressionNode = {
+    <CaptureExpression>,
     <ClassConstruction>,
     <Int>,
     <Float>,
@@ -708,13 +722,18 @@ PrimaryExpression: ExpressionNode = {
     },
     <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> =>? {
         let vec = if let Some(v) = list {
-            // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
-            let reversed = v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec();
+            if v.0.iter().any(|(key, value)| contains_capture(key) || contains_capture(value)) {
+                // Retain captures until lowering, including entries a later key replaces.
+                v.0
+            } else {
+                // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
+                let reversed = v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec();
 
-            // We have to `collect` twice because `unique_by` keeps the first duplicate, but we want
-            // to keep the last, and doing a second `rev()` in a single iterator chain applies it
-            // before the `unique_by` runs
-            reversed.into_iter().rev().collect_vec()
+                // We have to `collect` twice because `unique_by` keeps the first duplicate, but we want
+                // to keep the last, and doing a second `rev()` in a single iterator chain applies it
+                // before the `unique_by` runs
+                reversed.into_iter().rev().collect_vec()
+            }
         } else {
             vec![]
         };
@@ -1140,6 +1159,7 @@ Call: CallNode = {
 };
 
 ComputedCallee: ExpressionNode = {
+    <CaptureExpression>,
     <MemberExpression>,
     <Call> => ExpressionNode::from(<>),
     <IndexExpression>,

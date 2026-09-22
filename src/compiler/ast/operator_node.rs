@@ -109,6 +109,8 @@ impl OperatorNode {
             body: vec![AstNode::Expression(op.body(span))],
             span,
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         };
         Self {
             op,

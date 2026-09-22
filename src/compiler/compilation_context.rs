@@ -100,6 +100,9 @@ pub struct CompilationContext {
     /// The count of closures that have been defined, so we can give them unique
     /// names.
     pub closure_count: u16,
+
+    /// Unique names for explicit capture expressions before desugaring.
+    pub capture_count: usize,
     /// How many hidden lvalue cells have been named so far.
     pub lvalue_temp_count: u16,
 }
@@ -131,6 +134,13 @@ impl CompilationContext {
     /// config's system include directories
     pub fn system_include_dirs(&self) -> &Vec<Ustr> {
         &self.config.system_include_dirs
+    }
+
+    /// An unspellable variable name for the next explicit capture.
+    pub fn next_capture_name(&mut self) -> Ustr {
+        let name = ustr(&format!("capture-{}", self.capture_count));
+        self.capture_count += 1;
+        name
     }
 
     /// The name of the next closure this compilation defines.
@@ -339,6 +349,7 @@ impl Default for CompilationContext {
             source_reader: None,
             diagnostic_sources: DiagnosticSources::default(),
             closure_count: 0,
+            capture_count: 0,
             lvalue_temp_count: 0,
         }
     }

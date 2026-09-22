@@ -371,6 +371,9 @@ pub enum Token {
     #[regex(r"\$[1-9]\d*", string_token, priority = 2)]
     ClosureArgVar(StringToken),
 
+    #[token("$", track_slice)]
+    Dollar(Span),
+
     // The preprocessor judges placement and parses the complete logical line.
     #[token("#", directive_token)]
     DirectiveLine(StringToken),
@@ -562,6 +565,7 @@ impl HasSpan for Token {
             | Token::Comma(x)
             | Token::CallOther(x)
             | Token::Question(x)
+            | Token::Dollar(x)
             | Token::Colon(x)
             | Token::ColonColon(x)
             | Token::Semi(x)
@@ -663,6 +667,7 @@ impl Token {
             | Token::Comma(x)
             | Token::CallOther(x)
             | Token::Question(x)
+            | Token::Dollar(x)
             | Token::Colon(x)
             | Token::ColonColon(x)
             | Token::Semi(x)
@@ -789,6 +794,7 @@ impl Display for Token {
             Token::Comma(_) => ",",
             Token::CallOther(_) => "->",
             Token::Question(_) => "?",
+            Token::Dollar(_) => "$",
             Token::Colon(_) => ":",
             Token::ColonColon(_) => "::",
             Token::Semi(_) => ";",

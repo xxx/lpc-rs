@@ -30,6 +30,9 @@ pub struct ClosureNode {
     pub body: Vec<AstNode>,
     pub span: Option<Span>,
     pub scope_id: Option<ScopeId>,
+    /// Hidden variables evaluated in the creator before entering the closure.
+    pub captures: Vec<VarInitNode>,
+    pub capture_scope_id: Option<ScopeId>,
 }
 
 impl SpannedNode for ClosureNode {
@@ -41,9 +44,22 @@ impl SpannedNode for ClosureNode {
 #[async_trait]
 impl AstNodeTrait for ClosureNode {
     async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        let has_captures = !self.captures.is_empty();
+        if has_captures {
+            tree_walker.enter_scope(&mut self.capture_scope_id);
+            for capture in &mut self.captures {
+                if let Err(error) = tree_walker.visit_capture_initializer(capture).await {
+                    tree_walker.exit_scope();
+                    return Err(error);
+                }
+            }
+        }
         tree_walker.enter_scope(&mut self.scope_id);
         let result = tree_walker.visit_closure(self).await;
         tree_walker.exit_scope();
+        if has_captures {
+            tree_walker.exit_scope();
+        }
         result
     }
 }
@@ -74,6 +90,8 @@ mod tests {
             body,
             span: None,
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         }
     }
 

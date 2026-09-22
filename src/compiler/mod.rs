@@ -357,6 +357,10 @@ impl Compiler {
         let context = apply::<InheritanceWalker>(&mut program_node, context, true)
             .await?
             .into_context();
+        let context =
+            apply::<codegen::capture_walker::CaptureWalker>(&mut program_node, context, true)
+                .await?
+                .into_context();
         let context = apply::<ClassWalker>(&mut program_node, context, true)
             .await?
             .into_context();
@@ -1131,7 +1135,7 @@ mod tests {
             "# };
             assert_eq!(
                 rendered_error(code).await,
-                "error: Unrecognized Token: ;\n  ┌─ /include/bad_token.h:1:9\n  │\n1 │ int x = ;\n  │         ^\n  │\n  = expected one of: \"-\", \"!\", \"~\", \"&\", \"++\", \"--\", \"operator\", \"efun\", \"(\", \"::\", \"StringLiteral\", \"IntLiteral\", \"FloatLiteral\", \"ID\", \"ClosureArgVar\"\n\n"
+                "error: Unrecognized Token: ;\n  ┌─ /include/bad_token.h:1:9\n  │\n1 │ int x = ;\n  │         ^\n  │\n  = expected one of: \"$\", \"-\", \"!\", \"~\", \"&\", \"++\", \"--\", \"operator\", \"efun\", \"(\", \"::\", \"StringLiteral\", \"IntLiteral\", \"FloatLiteral\", \"ID\", \"ClosureArgVar\"\n\n"
             );
         }
 

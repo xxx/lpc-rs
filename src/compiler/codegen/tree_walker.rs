@@ -634,6 +634,25 @@ pub trait TreeWalker {
         node.rhs.visit(self).await
     }
 
+    /// Visit an explicit capture's expression or lowered variable read.
+    async fn visit_capture(
+        &mut self,
+        node: &mut crate::compiler::ast::capture_node::CaptureNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.expr.visit(self).await
+    }
+
+    /// Visit a hidden capture initialization in the closure's creation scope.
+    async fn visit_capture_initializer(&mut self, node: &mut VarInitNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        self.visit_var_init(node).await
+    }
+
     /// Visit a closure node
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()>
     where
@@ -1035,6 +1054,8 @@ mod tests {
                 body: vec![stmt("b1"), stmt("b2")],
                 span: None,
                 scope_id: None,
+                captures: Vec::new(),
+                capture_scope_id: None,
             };
             let mut walker = spy();
             walker.visit_closure(&mut node).await.unwrap();
@@ -1392,10 +1413,34 @@ mod scope_hook_tests {
             body: vec![stmt("b1")],
             span: None,
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         });
         let mut walker = spy();
         node.visit(&mut walker).await.unwrap();
         assert_eq!(walker.visited, ["enter", "p", "b1", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn explicit_capture_initializers_are_outside_the_closures_scope() {
+        let mut node = ClosureNode {
+            variadic: None,
+            name: "closure-0".into(),
+            return_type: LpcType::Mixed(false).into(),
+            flags: FunctionFlags::default(),
+            parameters: Some(vec![init("p")]),
+            body: vec![stmt("body")],
+            captures: vec![init("capture")],
+            span: None,
+            scope_id: None,
+            capture_scope_id: None,
+        };
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(
+            walker.visited,
+            ["enter", "capture", "enter", "p", "body", "exit", "exit"]
+        );
     }
 
     #[tokio::test]

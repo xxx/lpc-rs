@@ -618,6 +618,26 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
+    async fn visit_capture_initializer(&mut self, node: &mut VarInitNode) -> Result<()> {
+        let expr = node
+            .value
+            .as_mut()
+            .ok_or_else(|| lpc_bug!(node.span, "capture has no initializer"))?;
+        expr.visit(self).await?;
+        let type_ = crate::compiler::semantic::semantic_checks::node_type(expr, &self.context)?;
+        if type_ == LpcType::Void {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "cannot capture a void expression")));
+        }
+        node.type_ = type_.into();
+        let mut symbol = Symbol::try_from(&mut *node)?;
+        symbol.upvalue = true;
+        self.insert_symbol(symbol);
+        Ok(())
+    }
+
     async fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         let scope = self.context.scopes.current();
 

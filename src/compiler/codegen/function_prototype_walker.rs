@@ -408,6 +408,8 @@ mod tests {
             body: vec![AstNode::Expression(ExpressionNode::Var(VarNode::new("$4")))],
             span: None,
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         };
 
         let _ = walker.visit_closure(&mut node).await;
