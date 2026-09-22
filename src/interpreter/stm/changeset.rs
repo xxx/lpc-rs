@@ -6,6 +6,7 @@ use ahash::{AHashMap, AHashSet};
 
 use crate::interpreter::{
     lpc_array::LpcArray,
+    lpc_class::LpcClass,
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
     stm::{CommitOrigin, MergeOp, VarId, Version, WorldValue},
@@ -177,6 +178,13 @@ impl Changeset {
     pub(crate) fn written_mapping_mut(&mut self, var_id: VarId) -> Option<&mut Arc<LpcMapping>> {
         match self.entries.get_mut(&var_id).map(|entry| &mut entry.change) {
             Some(Change::Write(WorldValue::Mapping(arc))) => Some(arc),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn written_class_mut(&mut self, var_id: VarId) -> Option<&mut Arc<LpcClass>> {
+        match self.entries.get_mut(&var_id).map(|entry| &mut entry.change) {
+            Some(Change::Write(WorldValue::Class(arc))) => Some(arc),
             _ => None,
         }
     }

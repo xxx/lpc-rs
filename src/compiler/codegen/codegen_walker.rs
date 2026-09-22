@@ -42,6 +42,7 @@ use crate::{
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             cast_node::CastNode,
+            class_expression::{ClassInitNode, CompoundAssignmentNode, MemberNode},
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             decl_node::DeclNode,
@@ -73,6 +74,7 @@ use crate::{
         codegen::{tree_walker, tree_walker::ContextHolder},
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
+        semantic::semantic_checks::node_type,
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
@@ -471,6 +473,48 @@ impl CodegenWalker {
         })
     }
 
+    fn type_index(
+        &mut self,
+        target: LpcType,
+        span: Option<Span>,
+    ) -> Result<lpc_rs_asm::instruction::TypeIndex> {
+        let function = self
+            .function_stack
+            .last_mut()
+            .ok_or_else(|| lpc_bug!(span, "type operand outside a function"))?;
+        let index = if let Some(index) = function.types.iter().position(|type_| *type_ == target) {
+            index
+        } else {
+            function.types.push(target);
+            function.types.len() - 1
+        };
+        Ok(lpc_rs_asm::instruction::TypeIndex(u16::try_from(index)?))
+    }
+
+    fn guard_class(
+        &mut self,
+        location: RegisterVariant,
+        target: LpcType,
+        span: Option<Span>,
+    ) -> Result<()> {
+        if matches!(target, LpcType::Class(_, false)) {
+            let index = self.type_index(target, span)?;
+            push_instruction!(self, Instruction::Guard(location, index), span);
+        }
+        Ok(())
+    }
+
+    async fn member_target(&mut self, node: &mut MemberNode) -> Result<RegisterVariant> {
+        node.receiver.visit(self).await?;
+        let target = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::Copy(self.current_result, target),
+            node.span
+        );
+        Ok(target)
+    }
+
     fn ensure_sync(&self) -> Result<()> {
         for func in self
             .functions
@@ -501,12 +545,12 @@ impl CodegenWalker {
     /// operation
     fn choose_op_instruction(
         &self,
-        node: &BinaryOpNode,
+        op: BinaryOperation,
         reg_left: RegisterVariant,
         reg_right: RegisterVariant,
         reg_result: RegisterVariant,
     ) -> Instruction {
-        match node.op {
+        match op {
             BinaryOperation::Add => Instruction::Add(reg_left, reg_right, reg_result),
             BinaryOperation::Sub => Instruction::Sub(reg_left, reg_right, reg_result),
             BinaryOperation::Mul => Instruction::Mul(reg_left, reg_right, reg_result),
@@ -1115,6 +1159,11 @@ impl CodegenWalker {
                 // generate code for only the value, then copy by hand, because we
                 // pre-generated locations of the parameters above.
                 value.visit(self).await?;
+                self.guard_class(
+                    self.current_result,
+                    parameter.type_.resolved()?,
+                    parameter.span,
+                )?;
                 let instruction =
                     Instruction::Copy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
@@ -1310,16 +1359,114 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    async fn visit_class_init(&mut self, node: &mut ClassInitNode) -> Result<()> {
+        let target = node.type_.resolved()?;
+        let index = self.type_index(target, node.span)?;
+        let instance = self.register_counter.next().unwrap().as_local();
+        push_instruction!(self, Instruction::ClassConst(index, instance), node.span);
+        for (name, value) in &mut node.initializers {
+            value.visit(self).await?;
+            push_instruction!(
+                self,
+                Instruction::MemberStore(self.current_result, instance, *name),
+                value.span()
+            );
+        }
+        self.current_result = instance;
+        Ok(())
+    }
+
+    async fn visit_member(&mut self, node: &mut MemberNode) -> Result<()> {
+        node.receiver.visit(self).await?;
+        let result = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::MemberLoad(self.current_result, node.name, result),
+            node.span
+        );
+        let target = crate::compiler::semantic::semantic_checks::member_type(node, &self.context)?;
+        self.guard_class(result, target, node.span)?;
+        self.current_result = result;
+        Ok(())
+    }
+
+    async fn visit_compound_assignment(&mut self, node: &mut CompoundAssignmentNode) -> Result<()> {
+        let ExpressionNode::Member(member) = &mut *node.lhs else {
+            return Err(lpc_bug!(node.span, "compound target must be a member"));
+        };
+        let receiver = self.member_target(member).await?;
+        let name = member.name;
+        let old = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::MemberLoad(receiver, name, old),
+            node.span
+        );
+        let result = self.register_counter.next().unwrap().as_local();
+        let short = matches!(node.op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
+        let end = self.new_label("member-assignment-end");
+        if short {
+            let initial = if node.op == BinaryOperation::AndAnd {
+                self.constant(LpcConstant::Int(0), node.span)?
+            } else {
+                old
+            };
+            push_instruction!(self, Instruction::Copy(initial, result), node.span);
+            self.schedule_backpatch(&end, self.current_address())?;
+            let jump = if node.op == BinaryOperation::AndAnd {
+                Instruction::Jz(old, Address(0))
+            } else {
+                Instruction::Jnz(old, Address(0))
+            };
+            push_instruction!(self, jump, node.span);
+        }
+        node.rhs.visit(self).await?;
+        if short {
+            push_instruction!(
+                self,
+                Instruction::Copy(self.current_result, result),
+                node.span
+            );
+            self.insert_label(end, self.current_address());
+        } else {
+            let instruction = self.choose_op_instruction(node.op, old, self.current_result, result);
+            push_instruction!(self, instruction, node.span);
+        }
+        push_instruction!(
+            self,
+            Instruction::MemberStore(result, receiver, name),
+            node.span
+        );
+        self.current_result = result;
+        Ok(())
+    }
+
     #[instrument(skip_all)]
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        if let ExpressionNode::Member(member) = &mut *node.lhs {
+            let receiver = self.member_target(member).await?;
+            node.rhs.visit(self).await?;
+            push_instruction!(
+                self,
+                Instruction::MemberStore(self.current_result, receiver, member.name),
+                node.span
+            );
+            return Ok(());
+        }
         node.rhs.visit(self).await?;
         let rhs_result = self.current_result;
+        let target = node_type(&node.lhs, &self.context)?;
+        self.guard_class(rhs_result, target, node.span)?;
         let lhs = &mut *node.lhs;
 
         match lhs {
-            ExpressionNode::Var(_) => {
-                lhs.visit(self).await?;
-                let lhs_result = self.current_result;
+            ExpressionNode::Var(var) => {
+                let lhs_result = if var.is_closure_arg_var() {
+                    self.visit_var(var).await?;
+                    self.current_result
+                } else {
+                    self.location_of(&var.name)?
+                };
                 trace!("assignment: lhs: {}, rhs: {}", lhs_result, rhs_result);
 
                 let assign = Instruction::Copy(rhs_result, lhs_result);
@@ -1452,8 +1599,13 @@ impl TreeWalker for CodegenWalker {
         let reg_result = self.register_counter.next().unwrap().as_local();
         self.current_result = reg_result;
 
-        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
+        let instruction = self.choose_op_instruction(node.op, reg_left, reg_right, reg_result);
         push_instruction!(self, instruction, node.span);
+        if node.op == BinaryOperation::Index
+            && let LpcType::Class(id, true) = node_type(&node.l, &self.context)?
+        {
+            self.guard_class(reg_result, LpcType::Class(id, false), node.span)?;
+        }
 
         Ok(())
     }
@@ -1524,8 +1676,8 @@ impl TreeWalker for CodegenWalker {
 
         let mut arg_results: Vec<Arg> = Vec::with_capacity(argument_len);
         let mut spread_seen = false;
-        // (cell, container, key) for each indexed lvalue: stored back after the call.
-        let mut write_backs: Vec<(RegisterVariant, RegisterVariant, RegisterVariant)> = Vec::new();
+        // Output targets retain their evaluated operands until writeback after the call.
+        let mut write_backs: Vec<Instruction> = Vec::new();
         let lvalue_temps = node.lvalue_temps.clone();
         for (index, argument) in node.arguments.iter_mut().enumerate() {
             if let ExpressionNode::Spread(spread) = argument {
@@ -1535,21 +1687,6 @@ impl TreeWalker for CodegenWalker {
                 continue;
             }
             if let Some((_, temp)) = lvalue_temps.iter().find(|(i, _)| *i == index) {
-                let ExpressionNode::BinaryOp(BinaryOpNode {
-                    op: BinaryOperation::Index,
-                    l,
-                    r,
-                    ..
-                }) = argument
-                else {
-                    return Err(lpc_bug!(
-                        node.span,
-                        "hidden cell `{temp}` stands in for a non-indexed argument"
-                    ));
-                };
-                l.visit(self).await?;
-                let container = self.current_result;
-                let key = self.emit_index(container, r).await?;
                 let cell = self.location_of(temp)?;
                 if !matches!(cell, RegisterVariant::Upvalue(_)) {
                     return Err(lpc_bug!(
@@ -1557,10 +1694,39 @@ impl TreeWalker for CodegenWalker {
                         "hidden cell `{temp}` resolved to a register, not a cell"
                     ));
                 }
+                let (load, store) = match argument {
+                    ExpressionNode::Member(member) => {
+                        let receiver = self.member_target(member).await?;
+                        (
+                            Instruction::MemberLoad(receiver, member.name, cell),
+                            Instruction::MemberStore(cell, receiver, member.name),
+                        )
+                    }
+                    ExpressionNode::BinaryOp(BinaryOpNode {
+                        op: BinaryOperation::Index,
+                        l,
+                        r,
+                        ..
+                    }) => {
+                        l.visit(self).await?;
+                        let container = self.current_result;
+                        let key = self.emit_index(container, r).await?;
+                        (
+                            Instruction::Load(container, key, cell),
+                            Instruction::Store(cell, container, key),
+                        )
+                    }
+                    _ => {
+                        return Err(lpc_bug!(
+                            node.span,
+                            "hidden cell `{temp}` has an invalid output target"
+                        ));
+                    }
+                };
                 push_instruction!(self, Instruction::NewUpvalue(cell), node.span);
-                push_instruction!(self, Instruction::Load(container, key, cell), node.span);
+                push_instruction!(self, load, node.span);
                 arg_results.push(Arg::Ref(cell));
-                write_backs.push((cell, container, key));
+                write_backs.push(store);
                 continue;
             }
             let by_ref = match argument {
@@ -1712,8 +1878,8 @@ impl TreeWalker for CodegenWalker {
             ));
         }
 
-        for (cell, container, key) in write_backs {
-            push_instruction!(self, Instruction::Store(cell, container, key), node.span);
+        for store in write_backs {
+            push_instruction!(self, store, node.span);
         }
 
         Ok(())
@@ -2022,6 +2188,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction =
                     Instruction::Load(collection_location, index_location, locations[0]);
                 push_instruction!(self, instruction, node.span);
+                self.guard_class(locations[0], node.type_.resolved()?, node.span)?;
             }
             ForEachInit::Mapping { key, value } => {
                 debug_assert!(locations.len() == 2);
@@ -2033,6 +2200,8 @@ impl TreeWalker for CodegenWalker {
                 let instruction =
                     Instruction::Load(collection_location, locations[0], locations[1]);
                 push_instruction!(self, instruction, value.span());
+                self.guard_class(locations[0], key.type_.resolved()?, key.span)?;
+                self.guard_class(locations[1], value.type_.resolved()?, value.span)?;
             }
         }
 
@@ -2535,17 +2704,7 @@ impl TreeWalker for CodegenWalker {
 
         let reg_result = self.register_counter.next().unwrap().as_local();
         let target = node.type_.resolved()?;
-        let function = self
-            .function_stack
-            .last_mut()
-            .ok_or_else(|| lpc_bug!(node.span, "cast outside a function"))?;
-        let index = if let Some(index) = function.types.iter().position(|type_| *type_ == target) {
-            index
-        } else {
-            function.types.push(target);
-            function.types.len() - 1
-        };
-        let index = lpc_rs_asm::instruction::TypeIndex(u16::try_from(index)?);
+        let index = self.type_index(target, node.span)?;
         let instruction = Instruction::Cast(location, index, reg_result);
         push_instruction!(self, instruction, node.span);
 
@@ -2555,6 +2714,38 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        if matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
+            && let ExpressionNode::Member(member) = &mut *node.expr
+        {
+            let receiver = self.member_target(member).await?;
+            let value = self.register_counter.next().unwrap().as_local();
+            push_instruction!(
+                self,
+                Instruction::MemberLoad(receiver, member.name, value),
+                node.span
+            );
+            let result = if node.is_post {
+                let before = self.register_counter.next().unwrap().as_local();
+                push_instruction!(self, Instruction::Copy(value, before), node.span);
+                before
+            } else {
+                value
+            };
+            let step = if node.op == UnaryOperation::Inc {
+                Instruction::Inc(value)
+            } else {
+                Instruction::Dec(value)
+            };
+            push_instruction!(self, step, node.span);
+            push_instruction!(
+                self,
+                Instruction::MemberStore(value, receiver, member.name),
+                node.span
+            );
+            self.current_result = result;
+            return Ok(());
+        }
+
         if matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
             && let ExpressionNode::BinaryOp(BinaryOpNode {
                 op: BinaryOperation::Index,
@@ -2668,6 +2859,8 @@ impl TreeWalker for CodegenWalker {
         }
 
         self.current_result = self.location_of(&node.name)?;
+        let target = self.context.lookup_var(node.name).unwrap().type_;
+        self.guard_class(self.current_result, target, node.span)?;
 
         Ok(())
     }
@@ -2701,6 +2894,7 @@ impl TreeWalker for CodegenWalker {
 
         let current_register = if let Some(expression) = &mut node.value {
             expression.visit(self).await?;
+            self.guard_class(self.current_result, node.type_.resolved()?, node.span)?;
             // A read of the variable inside the initializer already gave it a location.
             let assigned = self
                 .context

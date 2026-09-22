@@ -236,6 +236,72 @@ impl TreeWalker for SemanticCheckWalker {
         self.context.scopes.pop();
     }
 
+    async fn visit_class_init(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::ClassInitNode,
+    ) -> Result<()> {
+        super::tree_walker::walk_class_init(self, node).await?;
+        let LpcType::Class(id, false) = node.type_.resolved()? else {
+            return Err(lpc_error!(node.span, "constructor requires a class"));
+        };
+        let definition = self
+            .context
+            .class_scope
+            .get(id)
+            .ok_or_else(|| lpc_error!(node.span, "no visible definition for {id}"))?;
+        let mut names = std::collections::HashSet::new();
+        for (name, value) in &node.initializers {
+            if !names.insert(*name) {
+                return Err(lpc_error!(value.span(), "duplicate initializer `{name}`"));
+            }
+            let field = definition
+                .fields
+                .iter()
+                .find(|field| field.name == *name)
+                .ok_or_else(|| lpc_error!(value.span(), "unknown field `{name}` in {id}"))?;
+            if let Some(actual) = mismatch(field.type_, value, &self.context)? {
+                return Err(lpc_error!(
+                    value.span(),
+                    "initializer `{name}` expects {}, found {actual}",
+                    field.type_
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    async fn visit_member(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::MemberNode,
+    ) -> Result<()> {
+        node.receiver.visit(self).await?;
+        crate::compiler::semantic::semantic_checks::member_type(node, &self.context)?;
+        Ok(())
+    }
+
+    async fn visit_compound_assignment(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::CompoundAssignmentNode,
+    ) -> Result<()> {
+        node.lhs.visit(self).await?;
+        node.rhs.visit(self).await?;
+        let binary = BinaryOpNode {
+            l: node.lhs.clone(),
+            r: node.rhs.clone(),
+            op: node.op,
+            span: node.span,
+        };
+        check_binary_operation_types(&binary, &self.context)?;
+        let target = node_type(&node.lhs, &self.context)?;
+        if let Some(actual) = mismatch(target, &ExpressionNode::BinaryOp(binary), &self.context)? {
+            return Err(lpc_error!(
+                node.span,
+                "compound assignment expects {target}, found {actual}"
+            ));
+        }
+        Ok(())
+    }
+
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
         walk_assignment(self, node).await?;
 
@@ -417,11 +483,12 @@ impl TreeWalker for SemanticCheckWalker {
                     let is_ref_arg = matches!(arg, ExpressionNode::Ref(_));
                     let wants_ref = prototype.is_ref_param(index);
                     if wants_ref && !is_ref_arg {
-                        // An implicit efun lvalue accepts a bare variable or an indexed element.
+                        // Efun outputs can write variables, indexed elements, and class members.
                         if is_efun
                             && matches!(
                                 arg,
                                 ExpressionNode::Var(_)
+                                    | ExpressionNode::Member(_)
                                     | ExpressionNode::BinaryOp(BinaryOpNode {
                                         op: BinaryOperation::Index,
                                         ..

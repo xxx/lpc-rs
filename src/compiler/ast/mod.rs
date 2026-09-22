@@ -39,3 +39,5 @@ pub mod while_node;
 pub mod class_def_node;
 pub mod labeled_statement_node;
 pub mod parsed_type;
+
+pub mod class_expression;

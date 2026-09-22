@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use super::class_expression::{ClassInitNode, CompoundAssignmentNode, MemberNode};
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcIntInner};
@@ -39,6 +40,9 @@ use crate::compiler::{
 #[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
+    ClassInit(ClassInitNode),
+    Member(MemberNode),
+    CompoundAssignment(CompoundAssignmentNode),
     BinaryOp(BinaryOpNode),
     Call(CallNode),
     Cast(CastNode),
@@ -95,6 +99,9 @@ macro_rules! delegated_traits {
 }
 
 delegated_traits!(
+    ExpressionNode::ClassInit,
+    ExpressionNode::Member,
+    ExpressionNode::CompoundAssignment,
     ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
     ExpressionNode::Call,

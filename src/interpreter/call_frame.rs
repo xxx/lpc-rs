@@ -316,17 +316,38 @@ impl CallFrame {
                 self.function.name()
             )));
         }
+        self.check_class_arg(txn, i, &value)?;
         self.store_arg(txn, i, value)
     }
 
+    fn check_class_arg(&self, txn: &TxnHandle, i: usize, value: &LpcRef) -> Result<()> {
+        if let Some(target @ LpcType::Class(_, false)) = self.function.prototype.arg_types.get(i)
+            && !value.passes_cast(*target, txn)
+        {
+            return Err(self.runtime_error(format!(
+                "unexpected argument type to `{}`: {}. expected {target}.",
+                self.function.name(),
+                value.as_lpc_type(txn)
+            )));
+        }
+        Ok(())
+    }
+
     /// Bind argument `i` to `cell`: the callee's parameter aliases it.
-    pub(crate) fn push_ref(&mut self, i: usize, cell: VarId) -> Result<()> {
+    pub(crate) fn push_ref(&mut self, txn: &TxnHandle, i: usize, cell: VarId) -> Result<()> {
         let name = self.function.name();
         if !self.function.prototype.is_ref_param(i) {
             return Err(self.runtime_error(format!(
                 "`{name}` does not take argument {} by reference",
                 i + 1
             )));
+        }
+        if matches!(
+            self.function.prototype.arg_types.get(i),
+            Some(LpcType::Class(_, false))
+        ) {
+            let value = txn.with(|txn| txn.read(cell)).unwrap_or_default();
+            self.check_class_arg(txn, i, &value)?;
         }
         let Some(RegisterVariant::Upvalue(reg)) = self.function.arg_locations.get(i).copied()
         else {
@@ -921,7 +942,7 @@ mod tests {
             None::<&[VarId]>,
             &crate::interpreter::stm::TxnHandle::default(),
         );
-        frame.push_ref(0, cell).unwrap();
+        frame.push_ref(&txn, 0, cell).unwrap();
         assert_eq!(
             frame.slot(Register(0).as_upvalue()).unwrap(),
             Slot::Cell(cell)
@@ -961,7 +982,10 @@ mod tests {
             None::<&[VarId]>,
             &crate::interpreter::stm::TxnHandle::default(),
         );
-        let err = frame.push_ref(0, VarId::new()).unwrap_err().to_string();
+        let err = frame
+            .push_ref(&TxnHandle::empty(), 0, VarId::new())
+            .unwrap_err()
+            .to_string();
         assert!(
             err.contains("`g` does not take argument 1 by reference"),
             "{err}"

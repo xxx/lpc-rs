@@ -19,6 +19,7 @@ use crate::{
     command::registry::RuleList,
     interpreter::{
         lpc_array::LpcArray,
+        lpc_class::LpcClass,
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         process::Process,
@@ -542,6 +543,9 @@ pub trait CommittedReader {
     /// [`committed_array`]([`CommittedReader::committed_array`]).
     fn committed_mapping(&self, var_id: VarId) -> Option<LpcMapping>;
 
+    /// The committed class payload, including its retained field views.
+    fn committed_class(&self, var_id: VarId) -> Option<LpcClass>;
+
     /// The committed object for a cell var, or `None` if the var is absent or
     /// the cell holds a non-object.
     fn committed_object(&self, var_id: VarId) -> Option<Arc<Process>>;
@@ -601,6 +605,12 @@ impl CommittedReader for Arc<GlobalState> {
         self.committed_value(var_id)?
             .into_mapping()
             .map(|mapping| (*mapping).clone())
+    }
+
+    fn committed_class(&self, var_id: VarId) -> Option<LpcClass> {
+        self.committed_value(var_id)?
+            .into_class()
+            .map(|instance| (*instance).clone())
     }
 
     fn committed_object(&self, var_id: VarId) -> Option<Arc<Process>> {

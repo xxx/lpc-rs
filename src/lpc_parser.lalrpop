@@ -1,3 +1,4 @@
+use crate::compiler::ast::class_expression::{ClassInitNode, MemberNode, CompoundAssignmentNode};
 use itertools::Itertools;
 use std::convert::TryFrom;
 use lalrpop_util::ParseError;
@@ -56,7 +57,7 @@ use crate::compiler::compilation_context::CompilationContext;
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
-use ustr::ustr;
+use ustr::{ustr, Ustr};
 
 grammar<'context>(context: &'context mut CompilationContext);
 
@@ -130,6 +131,7 @@ extern {
         "static" => Token::Static(<Span>),
         "nosave" => Token::Nosave(<Span>),
         "class" => Token::Class(<Span>),
+        "." => Token::Dot(<Span>),
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
         "ref" => Token::Ref(<Span>),
@@ -667,7 +669,31 @@ Block: BlockNode = {
     }
 };
 
+ClassConstruction: ExpressionNode = {
+    <constructor:"ID"> "(" "class" <name:"ID"> <initializers:("," <ClassInitializer>)*> <r:")"> =>? {
+        let span = Some(Span::join(constructor.0, r));
+        if constructor.1 != "new" {
+            return Err(ParseError::User { error: lpc_error!(span, "class construction requires `new`") });
+        }
+        Ok(guard(ExpressionNode::ClassInit(ClassInitNode {
+            type_: ParsedType::Class { name: ustr(&name.1), array: false, span: name.0 },
+            initializers,
+            span,
+        }), span)?)
+    }
+};
+
+ClassInitializer: (Ustr, ExpressionNode) = <name:"ID"> ":" <value:AssignmentExpression> => (ustr(&name.1), value);
+
+MemberExpression: ExpressionNode = {
+    <receiver:PostfixExpression> "." <name:"ID"> =>? {
+        let span = Span::combine(receiver.span(), Some(name.0));
+        Ok(guard(ExpressionNode::Member(MemberNode { receiver: Box::new(receiver), name: ustr(&name.1), span }), span)?)
+    }
+};
+
 PrimaryExpression: ExpressionNode = {
+    <ClassConstruction>,
     <Int>,
     <Float>,
     <String>,
@@ -700,6 +726,7 @@ PrimaryExpression: ExpressionNode = {
 };
 
 PostfixExpression: ExpressionNode = {
+    <MemberExpression>,
     <PrimaryExpression>,
     <IndexExpression>,
     <Call> => ExpressionNode::from(<>),
@@ -947,6 +974,13 @@ AssignmentExpression: ExpressionNode = {
     <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> =>? {
         let span = Span::combine(lhs.span(), rhs.span());
 
+        if matches!(lhs, ExpressionNode::Member(_)) && op != AssignmentOperation::Simple {
+            let binary = BinaryOperation::try_from(op).expect("compound assignment operation");
+            return Ok(guard(ExpressionNode::CompoundAssignment(CompoundAssignmentNode {
+                lhs: Box::new(lhs), rhs: Box::new(rhs), op: binary, span,
+            }), span)?);
+        }
+
         // Desugar `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
         let rhs = match op {
             AssignmentOperation::Simple => {
@@ -1106,6 +1140,7 @@ Call: CallNode = {
 };
 
 ComputedCallee: ExpressionNode = {
+    <MemberExpression>,
     <Call> => ExpressionNode::from(<>),
     <IndexExpression>,
 };

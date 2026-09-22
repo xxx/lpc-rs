@@ -24,6 +24,7 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         | LpcRef::Array(_)
         | LpcRef::Mapping(_)
         | LpcRef::Bytes(_)
+        | LpcRef::Class(_)
         | LpcRef::Function(_) => {
             return Err(
                 context.runtime_error(format!("move_object: invalid destination {}", arg_ref))

@@ -39,6 +39,10 @@ as UTF-8, so re-saving a Latin-1 file changes its bytes.
 A float that is not finite (infinity or NaN) cannot be saved: the writer
 raises a runtime error instead of writing it.
 
+Class instances cannot yet be saved, including instances nested in arrays or
+mappings; the writer raises a runtime error. `nosave` globals are still excluded
+before serialization. See [classes](lpc/classes.md) for current support.
+
 An object reference restores as the live object of that name when it
 exists and was created in the same second, else as 0. A function pointer
 is never written: a variable holding one is left out of the file, and one

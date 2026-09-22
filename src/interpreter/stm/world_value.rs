@@ -8,6 +8,7 @@ use crate::{
     command::registry::RuleList,
     interpreter::{
         lpc_array::LpcArray,
+        lpc_class::LpcClass,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         process::{Process, ProgramImage},
@@ -20,6 +21,7 @@ pub(crate) enum WorldValue {
     Ref(LpcRef),
     Array(Arc<LpcArray>),
     Mapping(Arc<LpcMapping>),
+    Class(Arc<LpcClass>),
     /// The object-space cell: the committed `Process` for one object path.
     /// Held strongly so a committed object stays alive regardless of the
     /// physical `ObjectSpace` map's timing (the physical map is applied after
@@ -48,6 +50,7 @@ impl WorldValue {
         match self {
             Self::Ref(lpc_ref) => lpc_ref,
             Self::Array(_)
+            | Self::Class(_)
             | Self::Mapping(_)
             | Self::Process(_)
             | Self::Image(_)
@@ -68,6 +71,13 @@ impl WorldValue {
     pub(crate) fn into_array(self) -> Option<Arc<LpcArray>> {
         match self {
             Self::Array(array) => Some(array),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn into_class(self) -> Option<Arc<LpcClass>> {
+        match self {
+            Self::Class(instance) => Some(instance),
             _ => None,
         }
     }

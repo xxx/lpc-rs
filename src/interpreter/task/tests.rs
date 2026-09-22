@@ -131,6 +131,7 @@ enum BareVal {
     Float(LpcFloatInner),
     Array(Vec<BareVal>),
     Mapping(HashMap<BareVal, BareVal>),
+    Class(crate::interpreter::stm::VarId),
     Object(String),                         // Just the filename
     Function(String, Vec<Option<BareVal>>), // name and args
 }
@@ -162,6 +163,7 @@ impl BareVal {
                     .collect::<HashMap<_, _>>();
                 BareVal::Mapping(mapping)
             }
+            LpcRef::Class(cell) => BareVal::Class(cell.id),
             LpcRef::Object(o) => {
                 if let Some(o) = o.upgrade() {
                     let filename = o.filename().into_owned();
@@ -215,6 +217,7 @@ impl Hash for BareVal {
             // `HashMap` has no `Hash`; the length keeps equal mappings hashing equal.
             BareVal::Mapping(x) => x.len().hash(state),
             BareVal::Object(x) => x.hash(state),
+            BareVal::Class(x) => x.hash(state),
             BareVal::Function(x, y) => {
                 x.hash(state);
                 y.hash(state);
@@ -233,6 +236,7 @@ impl PartialEq for BareVal {
             (BareVal::Array(x), BareVal::Array(y)) => x == y,
             (BareVal::Mapping(x), BareVal::Mapping(y)) => x == y,
             (BareVal::Object(x), BareVal::Object(y)) => x == y,
+            (BareVal::Class(x), BareVal::Class(y)) => x == y,
             (BareVal::Function(x, y), BareVal::Function(a, b)) => x == a && y == b,
             _ => false,
         }
@@ -249,6 +253,7 @@ impl Display for BareVal {
             BareVal::Array(x) => write!(f, "{}", format_slice(x)),
             BareVal::Mapping(x) => write!(f, "{}", format_map(x)),
             BareVal::Object(x) => write!(f, "object({x})"),
+            BareVal::Class(x) => write!(f, "class({x:?})"),
             BareVal::Function(x, y) => {
                 write!(f, "function({x}")?;
                 for arg in y {

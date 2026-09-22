@@ -22,6 +22,7 @@ use crate::{
     interpreter::{
         function_type::function_ptr::FunctionPtr,
         lpc_array::LpcArray,
+        lpc_class::LpcClass,
         lpc_float::LpcFloat,
         lpc_int::LpcInt,
         lpc_mapping::LpcMapping,
@@ -84,6 +85,9 @@ pub enum LpcRef {
 
     /// A mapping's identity in the transactional world, as in [`LpcRef::Array`].
     Mapping(SVar<LpcMapping>),
+
+    /// A class instance in the transactional world.
+    Class(SVar<LpcClass>),
 
     /// Reference type, pointing to an LPC `object`
     Object(Weak<Process>),
@@ -156,6 +160,7 @@ impl LpcRef {
             LpcRef::Bytes(_) => "bytes",
             LpcRef::Array(_) => "array",
             LpcRef::Mapping(_) => "mapping",
+            LpcRef::Class(_) => "class",
             LpcRef::Object(_) => "object",
             LpcRef::Function(_) => "function",
         }
@@ -300,7 +305,7 @@ impl LpcRef {
         }
     }
 
-    pub fn as_lpc_type(&self) -> LpcType {
+    pub(crate) fn as_lpc_type(&self, txn: &TxnHandle) -> LpcType {
         match self {
             LpcRef::Float(_) => LpcType::Float(false),
             LpcRef::Int(_) => LpcType::Int(false),
@@ -308,6 +313,9 @@ impl LpcRef {
             LpcRef::Bytes(_) => LpcType::Bytes(false),
             LpcRef::Array(_) => LpcType::Mixed(true), // this could be better
             LpcRef::Mapping(_) => LpcType::Mapping(false),
+            LpcRef::Class(cell) => txn
+                .with(|t| t.read_class(cell.id))
+                .map_or(LpcType::Void, |instance| LpcType::Class(instance.id, false)),
             LpcRef::Object(x) if x.strong_count() == 0 => LpcType::Int(false),
             LpcRef::Object(_) => LpcType::Object(false),
             LpcRef::Function(_) => LpcType::Function(false),
@@ -318,7 +326,7 @@ impl LpcRef {
     /// destructed object passes like 0, anything else must already be of the
     /// type (an array is checked as a container, not by element).
     pub(crate) fn passes_cast(&self, target: LpcType, txn: &TxnHandle) -> bool {
-        self.is_null() || self.is_dead_object(txn) || target.matches_type(self.as_lpc_type())
+        self.is_null() || self.is_dead_object(txn) || target.matches_type(self.as_lpc_type(txn))
     }
 
     pub fn with_string<F, R>(&self, f: F) -> Result<R>
@@ -616,6 +624,7 @@ impl LpcRef {
             LpcRef::String(_)
             | LpcRef::Bytes(_)
             | LpcRef::Array(_)
+            | LpcRef::Class(_)
             | LpcRef::Mapping(_)
             | LpcRef::Function(_) => NULL,
         }
@@ -746,6 +755,7 @@ impl Hash for LpcRef {
             LpcRef::Bytes(b) => b.hash(state),
             LpcRef::Array(x) => x.id.hash(state),
             LpcRef::Mapping(x) => x.id.hash(state),
+            LpcRef::Class(x) => x.id.hash(state),
             LpcRef::Object(x) => x.as_ptr().hash(state),
             LpcRef::Function(x) => ptr::hash(&**x, state),
         }
@@ -763,6 +773,7 @@ impl PartialEq for LpcRef {
             (LpcRef::Object(x), LpcRef::Object(y)) => Weak::ptr_eq(x, y),
             (LpcRef::Array(x), LpcRef::Array(y)) => x.id == y.id,
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => x.id == y.id,
+            (LpcRef::Class(x), LpcRef::Class(y)) => x.id == y.id,
             (LpcRef::Function(x), LpcRef::Function(y)) => ptr::eq(&**x, &**y),
             _ => false,
         }
@@ -811,6 +822,7 @@ impl Display for LpcRef {
             LpcRef::Bytes(b) => write!(f, "{}", lpc_bytes::literal(b)),
             LpcRef::Array(x) => write!(f, "<array#{}>", x.id.as_u64()),
             LpcRef::Mapping(x) => write!(f, "<mapping#{}>", x.id.as_u64()),
+            LpcRef::Class(x) => write!(f, "<class#{}>", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
                 Some(x) => write!(f, "{}", x),
                 None => write!(f, "0"),
@@ -831,6 +843,7 @@ impl Debug for LpcRef {
             LpcRef::Bytes(b) => write!(f, "{}", lpc_bytes::literal(b)),
             LpcRef::Array(x) => write!(f, "Array({})", x.id.as_u64()),
             LpcRef::Mapping(x) => write!(f, "Mapping({})", x.id.as_u64()),
+            LpcRef::Class(x) => write!(f, "Class({})", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
                 Some(x) => write!(f, "{:?}", x),
                 None => write!(f, "< destructed >"),
@@ -980,7 +993,10 @@ mod tests {
             assert!(!live.eq_in(&NULL, &txn));
             assert!(live.eq_in(&live.clone(), &txn));
             assert_eq!(live.not(&txn), LpcRef::from(0));
-            assert_eq!(live.as_lpc_type(), LpcType::Object(false));
+            assert_eq!(
+                live.as_lpc_type(&TxnHandle::empty()),
+                LpcType::Object(false)
+            );
 
             drop(process);
             let dead = live;
@@ -992,7 +1008,7 @@ mod tests {
             assert!(!dead.eq_in(&LpcRef::from(1), &txn));
             assert!(!dead.eq_in(&LpcRef::from(0.0), &txn));
             assert_eq!(dead.not(&txn), LpcRef::from(1));
-            assert_eq!(dead.as_lpc_type(), LpcType::Int(false));
+            assert_eq!(dead.as_lpc_type(&TxnHandle::empty()), LpcType::Int(false));
             assert_eq!(dead.to_string(), "0");
         }
 

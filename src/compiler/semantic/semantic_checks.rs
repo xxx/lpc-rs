@@ -28,6 +28,7 @@ use crate::compiler::{
 
 static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "break",
+    "class",
     "bytes",
     "case",
     "catch",
@@ -446,6 +447,9 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 /// The `LpcType` of the passed node.
 pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<LpcType> {
     match node {
+        ExpressionNode::ClassInit(node) => node.type_.resolved(),
+        ExpressionNode::Member(node) => member_type(node, context),
+        ExpressionNode::CompoundAssignment(node) => node_type(&node.lhs, context),
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context),
         ExpressionNode::Call(call_node) => {
             match &call_node.chain {
@@ -593,6 +597,28 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
         ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
         ExpressionNode::Operator(_) => Ok(LpcType::Function(false)),
+    }
+}
+
+pub(crate) fn member_type(
+    node: &crate::compiler::ast::class_expression::MemberNode,
+    context: &CompilationContext,
+) -> Result<LpcType> {
+    match node_type(&node.receiver, context)? {
+        LpcType::Mixed(false) => Ok(LpcType::Mixed(false)),
+        LpcType::Class(id, false) => context
+            .class_scope
+            .get(id)
+            .ok_or_else(|| lpc_error!(node.span, "no visible definition for {id}"))?
+            .fields
+            .iter()
+            .find(|field| field.name == node.name)
+            .map(|field| field.type_)
+            .ok_or_else(|| lpc_error!(node.span, "unknown field `{}` in {id}", node.name)),
+        actual => Err(lpc_error!(
+            node.span,
+            "member access requires a class or mixed, found {actual}"
+        )),
     }
 }
 

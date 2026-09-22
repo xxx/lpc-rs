@@ -93,6 +93,14 @@ impl Child<'_> {
 fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
     match node {
         Child::Expr(e) => match e {
+            ExpressionNode::ClassInit(n) => {
+                out.extend(n.initializers.iter().map(|(_, value)| Child::Expr(value)))
+            }
+            ExpressionNode::Member(n) => out.push(Child::Expr(&n.receiver)),
+            ExpressionNode::CompoundAssignment(n) => {
+                out.push(Child::Expr(&n.lhs));
+                out.push(Child::Expr(&n.rhs));
+            }
             ExpressionNode::Assignment(n) => {
                 out.push(Child::Expr(&n.lhs));
                 out.push(Child::Expr(&n.rhs));

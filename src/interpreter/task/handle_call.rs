@@ -276,7 +276,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
                 Arg::Ref(loc) => {
                     let cell = caller.ref_cell(loc)?;
-                    callee.push_ref(i, cell)?;
+                    callee.push_ref(txn, i, cell)?;
                     i += 1;
                 }
                 Arg::Spread(loc) => {
@@ -490,7 +490,7 @@ pub(crate) fn check_arg_type(
     let Some(arg_type) = arg_type else {
         return Ok(());
     };
-    let ref_type = lpc_ref.as_lpc_type();
+    let ref_type = lpc_ref.as_lpc_type(txn);
     // Declared against found — reversed, a union parameter rejected its own members.
     if arg_type.matches_type(ref_type) {
         return Ok(());

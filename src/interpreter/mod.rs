@@ -12,6 +12,7 @@ pub(crate) mod json;
 pub(crate) mod save_format;
 
 pub mod lpc_array;
+pub mod lpc_class;
 pub mod lpc_float;
 pub mod lpc_int;
 pub mod lpc_mapping;

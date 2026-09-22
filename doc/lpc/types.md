@@ -1,7 +1,7 @@
 # lpc-rs supported types
 
-Named [class declarations and types](classes.md) are supported by the compiler;
-runtime class instances are not implemented yet.
+Named [classes](classes.md) support shared instances, named construction, and
+guarded member access. Class copying and persistence are not implemented yet.
 
 * `int`
   - Run-of-the-mill signed integers, 64 bits by default. This size is ostensibly

@@ -337,6 +337,63 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(Step::Await(call));
                 }
             }
+            Instruction::ClassConst(index, dest) => {
+                let frame = self.stack.current_frame()?;
+                let Some(lpc_rs_core::lpc_type::LpcType::Class(id, false)) =
+                    frame.function.types.get(usize::from(index.0))
+                else {
+                    return Err(LpcError::bug("invalid constructor class type"));
+                };
+                let definition = frame
+                    .function
+                    .class_scope
+                    .definitions
+                    .iter()
+                    .find(|definition| definition.id == *id)
+                    .ok_or_else(|| LpcError::bug("missing constructor class definition"))?
+                    .clone();
+                let instance = crate::interpreter::lpc_class::LpcClass::new(definition);
+                let value = LpcRef::Class(self.context.txn.with(|txn| txn.mint_class(instance)));
+                set_location(&mut self.stack, &self.context.txn, dest, value)?;
+            }
+            Instruction::MemberLoad(receiver, name, dest) => {
+                let frame = self.stack.current_frame()?;
+                let receiver = get_location(&self.stack, &self.context.txn, receiver)?;
+                let value = crate::interpreter::lpc_class::read_member(
+                    &receiver,
+                    &self.context.txn,
+                    &frame.function.class_scope,
+                    name,
+                )?;
+                set_location(&mut self.stack, &self.context.txn, dest, value)?;
+            }
+            Instruction::MemberStore(value, receiver, name) => {
+                let frame = self.stack.current_frame()?;
+                let receiver = get_location(&self.stack, &self.context.txn, receiver)?;
+                let value = get_location(&self.stack, &self.context.txn, value)?.into_owned();
+                crate::interpreter::lpc_class::write_member(
+                    &receiver,
+                    &self.context.txn,
+                    &frame.function.class_scope,
+                    name,
+                    value,
+                )?;
+            }
+            Instruction::Guard(value, index) => {
+                let frame = self.stack.current_frame()?;
+                let target = *frame
+                    .function
+                    .types
+                    .get(usize::from(index.0))
+                    .ok_or_else(|| LpcError::bug("invalid nominal guard type"))?;
+                let value = get_location(&self.stack, &self.context.txn, value)?;
+                if !value.passes_cast(target, &self.context.txn) {
+                    return Err(LpcError::runtime(format!(
+                        "expected {target}, found {}",
+                        value.as_lpc_type(&self.context.txn)
+                    )));
+                }
+            }
             Instruction::Cast(r1, index, r2) => {
                 let target = *self
                     .stack
@@ -679,6 +736,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         }
                         LpcRef::Float(_)
                         | LpcRef::Int(_)
+                        | LpcRef::Class(_)
                         | LpcRef::Mapping(_)
                         | LpcRef::Object(_)
                         | LpcRef::Function(_) => {
@@ -695,6 +753,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return_value(new_ref, &mut self.stack)?;
             }
             Instruction::Ret => {
+                let frame = self.stack.current_frame()?;
+                let target = frame.function.prototype.return_type;
+                if matches!(target, lpc_rs_core::lpc_type::LpcType::Class(_, false)) {
+                    let value =
+                        get_location(&self.stack, &self.context.txn, Register(0).as_local())?;
+                    if !value.passes_cast(target, &self.context.txn) {
+                        return Err(LpcError::runtime(format!(
+                            "return expected {target}, found {}",
+                            value.as_lpc_type(&self.context.txn)
+                        )));
+                    }
+                }
                 self.pop_frame()?;
 
                 // halt at the end of all input

@@ -21,6 +21,8 @@ pub const T_MAPPING: i64 = 6;
 pub const T_FUNCTION: i64 = 7;
 /// The tag of a `bytes`.
 pub const T_BYTES: i64 = 8;
+/// The tag of a class instance.
+pub const T_CLASS: i64 = 9;
 
 /// `typeof(x)`: the tag of `x`'s type.
 pub fn r#typeof<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -36,6 +38,7 @@ pub fn r#typeof<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         LpcRef::Mapping(_) => T_MAPPING,
         LpcRef::Function(_) => T_FUNCTION,
         LpcRef::Bytes(_) => T_BYTES,
+        LpcRef::Class(_) => T_CLASS,
     };
     context.return_efun_result(LpcRef::from(tag));
     Ok(())

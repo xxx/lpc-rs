@@ -264,6 +264,8 @@ pub enum Token {
     Static(Span),
     #[token("class", track_slice)]
     Class(Span),
+    #[token(".", track_slice)]
+    Dot(Span),
 
     #[token("nosave", track_slice)]
     Nosave(Span),
@@ -544,6 +546,7 @@ impl HasSpan for Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Dot(x)
             | Token::Class(x)
             | Token::Nosave(x)
             | Token::Varargs(x)
@@ -644,6 +647,7 @@ impl Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Dot(x)
             | Token::Class(x)
             | Token::Nosave(x)
             | Token::Varargs(x)
@@ -790,6 +794,7 @@ impl Display for Token {
             Token::Semi(_) => ";",
             Token::Ellipsis(_) => "...",
             Token::Range(_) => "..",
+            Token::Dot(_) => ".",
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
             Token::MinIntMagnitude(_) => return write!(f, "{}", LpcIntInner::MIN.unsigned_abs()),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),

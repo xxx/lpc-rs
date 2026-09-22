@@ -1,8 +1,8 @@
-# Class declarations and nominal types
+# Classes
 
-The compiler accepts class definitions and named class types. Runtime instance
-construction, member access, copying, and persistence are not implemented yet.
-Declarations alone do not make a mudlib that uses class instances runnable.
+Classes are shared, nominally typed records. They support declarations,
+construction with named initializers, and member reads and writes. Copying,
+reflection helpers, and persistence are not implemented yet.
 
 ```c
 class position {
@@ -56,4 +56,73 @@ An explicitly `mixed` expression still uses the existing mixed-type rules.
 
 Each compiled function, including closures and inherited functions, retains its
 defining class scope. Recompiling another program does not replace those
-definitions. This metadata is the basis for future runtime field views.
+definitions. Member access uses the definition retained by the executing code.
+
+## Construction and members
+
+```c
+class position origin = new(class position, x: 4);
+mixed alias = origin;
+alias.y = 9;                    // origin.y is now 9
+origin.next = new(class position);
+origin.next.x++;
+```
+
+`new(class Name, field: value, ...)` initializes omitted fields to zero and
+evaluates the supplied values once each, in written order. Duplicate names,
+unknown fields, and statically incompatible values are compile errors. Runtime
+checks also apply when a value's actual type was hidden by `mixed`.
+
+Member syntax composes with calls, indexing, and other members. A statically
+typed receiver must have the named field. A `mixed` receiver selects a visible
+definition by its actual nominal identity; access fails at runtime if the
+executing code has no definition for that identity, the field is absent, or the
+receiver is not a class instance. Access through zero is an error.
+
+Assignment shares an instance. Equality and mapping keys use instance identity,
+so two separately constructed records with identical values are unequal.
+`typeof(instance)` returns `9`; `arrayp(instance)` is false. Positional indexing
+and arithmetic on instances are unsupported. `sizeof(instance)` returns zero,
+like other values without a defined size.
+
+Member assignment, compound assignment, and prefix/postfix `++` and `--`
+evaluate their receiver once. Member assignment resolves the receiver before
+its right-hand side. Efun output arguments also accept members:
+
+```c
+sscanf(text, "%d", origin.x);
+```
+
+The receiver is evaluated before the call, and the output is checked and written
+back afterward. Explicit `ref origin.x` remains unsupported; a variable holding
+an instance can still be passed by reference.
+
+## Runtime checks and transactions
+
+Every field replacement checks its declared type, even if the source variable
+has a misleading declared primitive type. Zero is valid for every field type.
+A caught failed replacement leaves the field unchanged. This includes
+construction, compound writes, and efun output writeback.
+
+Scalar class values are checked by nominal identity in variable initialization
+and assignment, function arguments and returns, casts, and typed consumption of
+variables, indexed elements, and `foreach` elements. Passing through `mixed` or
+changing a variable through a reference alias does not bypass these checks.
+Arrays retain shallow container checks. Mutating an array stored in a field
+uses normal shared-array behavior and does not recursively check element types.
+
+An instance occupies one transactional cell. Field changes commit or abort with
+the attempt; conflicting accesses use the existing retry mechanism. Garbage
+collection traces all retained fields, including nested collections and captured
+functions. Unreachable cycles are collected.
+
+Access through a different compiled definition acquires a field view in the
+same transaction. Fields with the same name and declared type reuse storage;
+new names or types start at zero. Field order does not affect storage. Views and
+slots remain until the instance is collected. Removing and later reintroducing
+a field with its previous name and type can therefore recover its old value;
+type changes that later revert have the same behavior.
+
+Native shallow-copy helpers and persistence are planned separately. Saving a
+class currently raises an error, including when nested inside a collection;
+`nosave` globals retain their normal exclusion behavior.

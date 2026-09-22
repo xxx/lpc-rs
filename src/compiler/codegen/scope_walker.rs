@@ -328,12 +328,10 @@ impl TreeWalker for ScopeWalker {
             argument.visit(self).await?;
         }
 
-        // An implicit efun lvalue (e.g. `sscanf`'s trailing variables) promotes
-        // its bare-variable argument the same way an explicit `ref` does; an
-        // indexed argument gets a hidden cell instead.
+        // Efun outputs alias variables, while indexed elements and members use hidden cells.
         if receiver.is_none() {
             let mut to_mark: Vec<Ustr> = Vec::new();
-            let mut indexed: Vec<usize> = Vec::new();
+            let mut output_temps: Vec<usize> = Vec::new();
             if let Some(callee) = self.context.lookup_function_complete(*name, namespace) {
                 let prototype = callee.as_ref();
                 let is_efun = matches!(callee, Callee::Efun(_));
@@ -349,10 +347,11 @@ impl TreeWalker for ScopeWalker {
                     }
                     match argument {
                         ExpressionNode::Var(var) => to_mark.push(var.name),
+                        ExpressionNode::Member(_) if is_efun => output_temps.push(index),
                         ExpressionNode::BinaryOp(BinaryOpNode {
                             op: BinaryOperation::Index,
                             ..
-                        }) if is_efun => indexed.push(index),
+                        }) if is_efun => output_temps.push(index),
                         _ => {}
                     }
                 }
@@ -360,7 +359,7 @@ impl TreeWalker for ScopeWalker {
             for var_name in to_mark {
                 self.mark_cell(var_name);
             }
-            for index in indexed {
+            for index in output_temps {
                 let temp = self.context.next_lvalue_temp_name();
                 let mut symbol = Symbol::new(&temp, LpcType::Mixed(false));
                 symbol.scope_id = self.context.scopes.current().and_then(|scope| scope.id);

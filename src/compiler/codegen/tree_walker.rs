@@ -96,6 +96,16 @@ pub async fn apply<P: Pass>(
 // their remaining children after a failed one, so one pass can report more
 // than one error.
 
+pub async fn walk_class_init<W: TreeWalker + Send>(
+    walker: &mut W,
+    node: &mut crate::compiler::ast::class_expression::ClassInitNode,
+) -> Result<()> {
+    for (_, value) in &mut node.initializers {
+        value.visit(walker).await?;
+    }
+    Ok(())
+}
+
 /// Visit each element of an array literal, in order.
 pub async fn walk_array<W>(walker: &mut W, node: &mut ArrayNode) -> Result<()>
 where
@@ -591,6 +601,37 @@ pub trait TreeWalker {
         Self: Sized,
     {
         walk_call_chain(self, node).await
+    }
+
+    async fn visit_class_init(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::ClassInitNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        walk_class_init(self, node).await
+    }
+
+    async fn visit_member(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::MemberNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.receiver.visit(self).await
+    }
+
+    async fn visit_compound_assignment(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::CompoundAssignmentNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.lhs.visit(self).await?;
+        node.rhs.visit(self).await
     }
 
     /// Visit a closure node

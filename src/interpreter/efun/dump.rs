@@ -87,6 +87,7 @@ pub(super) fn format_ref<const N: usize>(
                 Ok(format!("{:width$}{}", "", "0", width = indent))
             }
         }
+        LpcRef::Class(_) => Ok(format!("{:width$}{lpc_ref}", "", width = indent)),
         LpcRef::Function(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Array(_) => lpc_ref
             .with_array(txn, |arr| {

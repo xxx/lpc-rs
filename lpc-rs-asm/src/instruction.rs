@@ -187,6 +187,18 @@ pub enum Instruction {
     /// x.2 = x.0, which must be 0 or of type x.1.
     Cast(RegisterVariant, TypeIndex, RegisterVariant),
 
+    /// Allocate a zero-filled instance using a scalar class type in the function table.
+    ClassConst(TypeIndex, RegisterVariant),
+
+    /// Read a field using the executing function's visible class definition.
+    MemberLoad(RegisterVariant, Ustr, RegisterVariant),
+
+    /// Replace a field after checking its declared runtime type.
+    MemberStore(RegisterVariant, RegisterVariant, Ustr),
+
+    /// Assert a value's nominal type without writing its storage.
+    Guard(RegisterVariant, TypeIndex),
+
     /// Finish a block of instructions that can catch errors and continue
     /// execution.
     CatchEnd,
@@ -354,6 +366,8 @@ impl Instruction {
             Self::AConst(d)
             | Self::BitwiseNot(_, d)
             | Self::Cast(_, _, d)
+            | Self::ClassConst(_, d)
+            | Self::MemberLoad(_, _, d)
             | Self::Copy(_, d)
             | Self::FunctionPtrConst { location: d, .. }
             | Self::IndexFromEnd(_, _, d)
@@ -397,6 +411,8 @@ impl Instruction {
             | Self::PushArrayItem(_)
             | Self::PushPartialArg(_)
             | Self::Ret
+            | Self::MemberStore(_, _, _)
+            | Self::Guard(_, _)
             | Self::Store(_, _, _) => None,
         }
     }
@@ -418,6 +434,12 @@ impl Instruction {
             Self::CallFp(a0, a1) => Self::CallFp(f(a0), a1),
             Self::CallOther(a0, a1, a2) => Self::CallOther(f(a0), f(a1), a2),
             Self::Cast(a0, ty, a1) => Self::Cast(f(a0), ty, f(a1)),
+            Self::ClassConst(ty, dest) => Self::ClassConst(ty, f(dest)),
+            Self::MemberLoad(receiver, name, dest) => Self::MemberLoad(f(receiver), name, f(dest)),
+            Self::MemberStore(value, receiver, name) => {
+                Self::MemberStore(f(value), f(receiver), name)
+            }
+            Self::Guard(value, ty) => Self::Guard(f(value), ty),
             Self::CatchEnd => Self::CatchEnd,
             Self::CatchStart(a0, a1) => Self::CatchStart(f(a0), a1),
             Self::Cmp(kind, a0, a1, a2) => Self::Cmp(kind, f(a0), f(a1), f(a2)),
@@ -531,7 +553,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 47;
+    pub const COUNT: usize = 51;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -582,6 +604,10 @@ impl Instruction {
         "xor",
         "index_from_end",
         "range_from_end",
+        "class_const",
+        "member_load",
+        "member_store",
+        "guard",
     ];
 
     /// This variant's dense index, `0..Self::COUNT`, in declaration order.
@@ -634,6 +660,10 @@ impl Instruction {
             Self::Xor(..) => 44,
             Self::IndexFromEnd(..) => 45,
             Self::RangeFromEnd(..) => 46,
+            Self::ClassConst(..) => 47,
+            Self::MemberLoad(..) => 48,
+            Self::MemberStore(..) => 49,
+            Self::Guard(..) => 50,
         }
     }
 
@@ -680,6 +710,14 @@ impl Display for Instruction {
             Instruction::CallSimulEfun(name, list) => {
                 write!(f, "{} {name}, {list}", self.mnemonic())
             }
+            Instruction::ClassConst(ty, dest) => write!(f, "{} {ty}, {dest}", self.mnemonic()),
+            Instruction::MemberLoad(receiver, name, dest) => {
+                write!(f, "{} {receiver}, {name}, {dest}", self.mnemonic())
+            }
+            Instruction::MemberStore(value, receiver, name) => {
+                write!(f, "{} {value}, {receiver}, {name}", self.mnemonic())
+            }
+            Instruction::Guard(value, ty) => write!(f, "{} {value}, {ty}", self.mnemonic()),
             Instruction::Cast(r1, ty, r2) => {
                 write!(f, "{} {r1}, {ty}, {r2}", self.mnemonic())
             }
@@ -996,6 +1034,10 @@ mod tests {
             Xor(r(), r(), r()),
             IndexFromEnd(r(), r(), r()),
             RangeFromEnd(ReverseRange::Both, r(), r(), r(), r()),
+            ClassConst(TypeIndex(0), r()),
+            MemberLoad(r(), ustr("field"), r()),
+            MemberStore(r(), r(), ustr("field")),
+            Guard(r(), TypeIndex(0)),
         ]
     }
 
@@ -1030,6 +1072,10 @@ mod tests {
         assert_eq!(Add(r(), r(), d).dest_register(), Some(d));
         assert_eq!(BitwiseNot(r(), d).dest_register(), Some(d));
         assert_eq!(Cast(r(), TypeIndex(0), d).dest_register(), Some(d));
+        assert_eq!(ClassConst(TypeIndex(0), d).dest_register(), Some(d));
+        assert_eq!(MemberLoad(r(), ustr("field"), d).dest_register(), Some(d));
+        assert_eq!(MemberStore(r(), r(), ustr("field")).dest_register(), None);
+        assert_eq!(Guard(r(), TypeIndex(0)).dest_register(), None);
         assert_eq!(Copy(r(), d).dest_register(), Some(d));
         assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
         assert_eq!(IndexFromEnd(r(), r(), d).dest_register(), Some(d));
@@ -1054,7 +1100,7 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 22);
+        assert_eq!(none_count, 24);
         for i in [
             Call(ustr("f"), ArgList(0)),
             CallEfun(0, ArgList(0)),

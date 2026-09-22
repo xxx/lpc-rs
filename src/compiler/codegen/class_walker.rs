@@ -204,6 +204,14 @@ impl TreeWalker for ClassWalker {
         Ok(())
     }
 
+    async fn visit_class_init(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::ClassInitNode,
+    ) -> Result<()> {
+        self.resolve(&mut node.type_)?;
+        super::tree_walker::walk_class_init(self, node).await
+    }
+
     async fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
         self.resolve(&mut node.type_)?;
         walk_decl(self, node).await

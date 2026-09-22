@@ -14,6 +14,7 @@ use crate::{
     interpreter::{
         function_type::function_ptr::{FunctionPtr, ResolvedCall},
         lpc_array::LpcArray,
+        lpc_class::LpcClass,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
@@ -320,6 +321,36 @@ impl Transaction {
         self.changeset
             .write(id.id, WorldValue::Mapping(Arc::new(mapping)));
         id
+    }
+
+    pub(crate) fn mint_class(&mut self, instance: LpcClass) -> SVar<LpcClass> {
+        let cell = SVar::new();
+        self.changeset
+            .write(cell.id, WorldValue::Class(Arc::new(instance)));
+        cell
+    }
+
+    pub(crate) fn read_class(&mut self, var_id: VarId) -> Option<Arc<LpcClass>> {
+        self.read_value(var_id)?.into_class()
+    }
+
+    /// Apply a validated update to the attempt's private class payload.
+    pub(crate) fn with_class_cow<R>(
+        &mut self,
+        var_id: VarId,
+        f: impl FnOnce(&mut LpcClass) -> R,
+    ) -> Result<R> {
+        if let Some(own) = self.changeset.written_class_mut(var_id) {
+            return Ok(f(Arc::make_mut(own)));
+        }
+        let current = self
+            .read_class(var_id)
+            .ok_or_else(|| LpcError::runtime("class is not in this transaction's world"))?;
+        let mut clone = (*current).clone();
+        let result = f(&mut clone);
+        self.changeset
+            .write(var_id, WorldValue::Class(Arc::new(clone)));
+        Ok(result)
     }
 
     /// The committed array contents for a cell var, or `None` if the var is

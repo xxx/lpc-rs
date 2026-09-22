@@ -370,6 +370,9 @@ impl Committer {
                     LpcRef::Array(svar) => {
                         work.push(MarkWork::Var(svar.id));
                     }
+                    LpcRef::Class(svar) => {
+                        work.push(MarkWork::Var(svar.id));
+                    }
                     LpcRef::Mapping(svar) => {
                         work.push(MarkWork::Var(svar.id));
                     }
@@ -408,6 +411,7 @@ impl Committer {
                         world_value,
                         WorldValue::Ref(_)
                             | WorldValue::Array(_)
+                            | WorldValue::Class(_)
                             | WorldValue::Mapping(_)
                             | WorldValue::Image(_)
                     )
@@ -427,6 +431,9 @@ impl Committer {
             WorldValue::Ref(lpc_ref) => work.extend(Self::mark_ref(lpc_ref)),
             WorldValue::Array(array) => {
                 work.extend(array.array.iter().filter_map(Self::mark_ref));
+            }
+            WorldValue::Class(instance) => {
+                work.extend(instance.values().filter_map(Self::mark_ref))
             }
             WorldValue::Mapping(mapping) => {
                 work.extend(
@@ -461,7 +468,7 @@ impl Committer {
 
     fn mark_ref(value: &LpcRef) -> Option<MarkWork> {
         match value {
-            LpcRef::Array(_) | LpcRef::Mapping(_) | LpcRef::Function(_) => {
+            LpcRef::Array(_) | LpcRef::Mapping(_) | LpcRef::Class(_) | LpcRef::Function(_) => {
                 Some(MarkWork::Ref(value.clone()))
             }
             LpcRef::Float(_)
@@ -1736,5 +1743,89 @@ mod tests {
         }
         assert!(committer.snapshot.peek(dead.id).is_none());
         assert_eq!(committer.mark_world(&[]), 5);
+    }
+    #[test]
+    fn gc_traces_classes_legacy_fields_closures_and_container_cycles() {
+        use crate::interpreter::{
+            lpc_class::{LpcClass, read_member, write_member},
+            stm::TxnHandle,
+        };
+        use lpc_rs_core::{
+            class::{ClassDefinition, ClassField, ClassId, ClassScope},
+            lpc_type::LpcType,
+        };
+        let mut committer = Committer::new();
+        let txn = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let id = ClassId {
+            source: ustr("/record.h"),
+            name: ustr("record"),
+        };
+        let legacy = Arc::new(ClassDefinition {
+            id,
+            fields: vec![ClassField {
+                name: ustr("legacy"),
+                type_: LpcType::Mixed(false),
+            }]
+            .into_boxed_slice(),
+        });
+        let current = Arc::new(ClassDefinition {
+            id,
+            fields: vec![ClassField {
+                name: ustr("next"),
+                type_: LpcType::Mixed(false),
+            }]
+            .into_boxed_slice(),
+        });
+        let legacy_scope = ClassScope {
+            definitions: vec![legacy.clone()].into_boxed_slice(),
+        };
+        let current_scope = ClassScope {
+            definitions: vec![current].into_boxed_slice(),
+        };
+        let cell = txn.with(|txn| txn.mint_class(LpcClass::new(legacy)));
+        let value = LpcRef::Class(cell.clone());
+        let capture = VarId::new();
+        txn.with(|txn| txn.write(capture, 17.into()));
+        let pointer = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Efun(ustr("dump")))
+            .upvalue_ptrs(thin_vec![capture])
+            .build()
+            .unwrap();
+        write_member(
+            &value,
+            &txn,
+            &legacy_scope,
+            ustr("legacy"),
+            LpcRef::Function(Arc::new(pointer)),
+        )
+        .unwrap();
+        read_member(&value, &txn, &current_scope, ustr("next")).unwrap();
+        let array = txn.with(|txn| txn.mint_array(LpcArray::new([value.clone()])));
+        write_member(
+            &value,
+            &txn,
+            &current_scope,
+            ustr("next"),
+            LpcRef::Array(array.clone()),
+        )
+        .unwrap();
+        let root = txn.with(|txn| {
+            txn.mint_mapping(crate::interpreter::lpc_mapping::LpcMapping::new(
+                [(value.clone(), LpcRef::Array(array.clone()))]
+                    .into_iter()
+                    .collect(),
+            ))
+        });
+        committer
+            .commit(txn.with(|txn| txn.take_changeset()))
+            .unwrap();
+        assert_eq!(
+            committer.mark_world(&[WorldRoot::Ref(LpcRef::Mapping(root))]),
+            0
+        );
+        for id in [cell.id, capture, array.id] {
+            assert!(committer.snapshot.peek(id).is_some());
+        }
+        assert_eq!(committer.mark_world(&[]), 4);
     }
 }

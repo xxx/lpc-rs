@@ -112,6 +112,9 @@ pub(crate) fn write_value(
         },
         LpcRef::Bytes(b) => out.push_str(&lpc_bytes::literal(b)),
         LpcRef::Function(_) => out.push('0'),
+        LpcRef::Class(_) => {
+            return Err(LpcError::runtime("class persistence is not yet supported"));
+        }
     }
     Ok(())
 }

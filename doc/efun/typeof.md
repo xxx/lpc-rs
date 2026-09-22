@@ -14,6 +14,7 @@ Return the tag of `value`'s type:
 | `6` | a mapping |
 | `7` | a function pointer or closure |
 | `8` | a `bytes` |
+| `9` | a class instance |
 
 The driver ships no header; a mudlib names the tags in one of its own:
 
@@ -26,6 +27,7 @@ The driver ships no header; a mudlib names the tags in one of its own:
 #define T_MAPPING 6
 #define T_FUNCTION 7
 #define T_BYTES 8
+#define T_CLASS 9
 ```
 
 ### Examples
