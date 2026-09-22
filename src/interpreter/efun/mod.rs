@@ -48,6 +48,7 @@ pub(crate) mod function_name;
 pub(crate) mod function_object;
 pub(crate) mod functions;
 pub(crate) mod get_dir;
+pub(crate) mod has_key;
 pub(crate) mod hash_string;
 pub(crate) mod implode;
 pub(crate) mod inherit_list;
@@ -1241,6 +1242,11 @@ efuns! {
         arity: (0, 0),
         args: [],
     },
+    has_key => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [LpcType::Mapping(false), LpcType::Mixed(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1601,6 +1607,7 @@ mod tests {
                 "strindex",
                 "evaluate",
                 "origin",
+                "has_key",
             ]
         );
     }

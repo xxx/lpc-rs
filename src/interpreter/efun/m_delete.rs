@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `m_delete(m, key)`: remove `key` from the mapping and return the same
-/// mapping; the rest keep their order. A destructed-object key names 0.
+/// mapping; the rest keep their order. A destructed-object key names the selected null.
 pub fn m_delete<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let mapping = context.arg(0);
     if !matches!(mapping, LpcRef::Mapping(_)) {

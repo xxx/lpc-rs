@@ -57,8 +57,8 @@ visible immediately within the attempt that performed it.
 
 A missing mapping key yields nil in distinct mode. A present key can also hold
 nil: assigning nil does **not** delete the key. Use `m_delete` to remove it
-and `member_array(key, keys(mapping))` to test membership. Nil and integer zero
-are separate mapping keys in distinct mode.
+and [`has_key(mapping, key)`](../efun/has_key.md) to test membership. Nil and
+integer zero are separate mapping keys in distinct mode.
 
 `allocate(n)` fills its elements with the selected null value. Failed lookups
 and absent reference results, such as `find_object`, `environment`, `read_file`,

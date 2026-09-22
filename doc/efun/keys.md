@@ -16,4 +16,4 @@ keys(m);    // ({ "b", "a" })
 
 ### See also
 
-`values`, `m_delete`, `sizeof`
+[`has_key`](has_key.md), `values`, `m_delete`, `sizeof`
