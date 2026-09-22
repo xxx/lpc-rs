@@ -4,7 +4,8 @@ use lpc_rs_errors::{source_map::SourceMap, span::HasSpan};
 
 use crate::compiler::{lexer::Token, preprocessor::preprocessor_node::PreprocessorNode};
 
-pub(super) fn parameter_name(token: &Token) -> Option<&str> {
+/// LPC keywords can name macros and parameters during preprocessing.
+pub(super) fn identifier_name(token: &Token) -> Option<&str> {
     match token {
         Token::Id(name) => Some(&name.1),
         _ => token.keyword_text(),

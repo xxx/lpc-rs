@@ -238,14 +238,13 @@ impl Preprocessor {
                                 self.handle_directive(t, prev_end, src, &mut output).await?;
                             }
 
-                            // Handle macro expansion
-                            Token::Id(st) => {
+                            _ => {
                                 if self.conditionals.live() {
                                     let appends = expand::Expander::new(
                                         &self.defines,
                                         &self.context.diagnostic_sources,
                                     )
-                                    .expand_use(st, &mut iter)?;
+                                    .expand_use(&token, &mut iter)?;
 
                                     match appends {
                                         Some(expanded) => {
@@ -256,15 +255,13 @@ impl Preprocessor {
                                                 );
                                                 output.push(token.with_span(span));
                                             }
-                                            // Anchor placement past the whole use — the Id, or
-                                            // through the top-level `)` the capture consumed.
+                                            // Consumed macro arguments count toward directive placement.
                                             end = expanded.use_span.r();
                                         }
                                         None => self.append(&mut output, token),
                                     }
                                 }
                             }
-                            _ => self.append(&mut output, token),
                         }
 
                         prev_end = end;
@@ -435,7 +432,7 @@ impl Preprocessor {
                         ));
                     }
                     if !operand
-                        .and_then(define::parameter_name)
+                        .and_then(define::identifier_name)
                         .is_some_and(|name| args.iter().any(|arg| arg == name))
                     {
                         return Err(lpc_error!(
@@ -894,6 +891,98 @@ mod tests {
                 EXPAND(STR(a+b))
             "#,
             &["VALUE", "0xCA_FE", "VALUE", "51966", "VALUE", "\"a+b\""],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn keyword_macros_expand_direct_uses_aliases_and_arguments() {
+        test_valid(
+            r#"
+                #define nosave static
+                #define protected private
+                #define KEEP(x) x
+                #define STORAGE nosave
+                STORAGE int a;
+                nosave int b;
+                KEEP(nosave) int c;
+                protected int d;
+                "nosave" nosave_cache
+            "#,
+            &[
+                "static",
+                "int",
+                "a",
+                ";",
+                "static",
+                "int",
+                "b",
+                ";",
+                "static",
+                "int",
+                "c",
+                ";",
+                "private",
+                "int",
+                "d",
+                ";",
+                "nosave",
+                "nosave_cache",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn keyword_macros_support_calls_and_bound_recursive_expansion() {
+        test_valid(
+            r#"
+                #define nosave(x) x
+                #define WRAP(x) nosave(x)
+                WRAP(7) nosave(8) nosave
+                #undef nosave
+                #define nosave nosave
+                nosave
+                #undef nosave
+                #define nosave protected
+                #define protected nosave
+                nosave protected
+                #if 0
+                nosave(
+                #endif
+            "#,
+            &["7", "8", "nosave", "nosave", "nosave", "protected"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn keyword_macros_work_in_defined_tests_and_if_expressions() {
+        test_valid(
+            r#"
+                #define nosave 7
+                #define STORAGE nosave
+                #if defined(nosave) && nosave == 7 && STORAGE == 7
+                int enabled;
+                #endif
+                #ifdef nosave
+                int present;
+                #endif
+                #undef nosave
+                #ifdef nosave
+                #error still defined
+                #endif
+                #if not defined(nosave)
+                int absent;
+                #endif
+                #ifndef nosave
+                int missing;
+                #endif
+            "#,
+            &[
+                "int", "enabled", ";", "int", "present", ";", "int", "absent", ";", "int",
+                "missing", ";",
+            ],
         )
         .await;
     }

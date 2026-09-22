@@ -46,6 +46,7 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "mapping",
     "mixed",
     "nomask",
+    "nosave",
     "object",
     "private",
     "protected",

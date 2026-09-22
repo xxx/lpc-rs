@@ -1164,6 +1164,7 @@ fn inheritance_rejects_multiple_or_unsupported_modifiers() {
         "private private",
         "static",
         "nomask",
+        "nosave",
         "varargs",
     ] {
         let code = format!("{modifiers} inherit \"/base\";");
@@ -1175,6 +1176,86 @@ fn inheritance_rejects_multiple_or_unsupported_modifiers() {
                 )
                 .is_err(),
             "{code}"
+        );
+    }
+}
+
+#[test]
+fn nosave_globals_combine_storage_visibility_and_nomask() {
+    for (modifiers, visibility, nomask) in [
+        ("nosave", Visibility::Public, false),
+        ("public nosave", Visibility::Public, false),
+        ("nosave private", Visibility::Private, false),
+        ("protected nosave", Visibility::Protected, false),
+        (
+            "nosave nomask protected static",
+            Visibility::Protected,
+            true,
+        ),
+    ] {
+        let code = format!("{modifiers} int count = 7, *cache = ({{ 8 }});");
+        let program = lpc_parser::ProgramParser::new()
+            .parse(
+                &mut CompilationContext::default(),
+                LexWrapper::new(&code, 0).triples(),
+            )
+            .unwrap();
+        let AstNode::Decl(declaration) = &program.body[0] else {
+            panic!("expected a global declaration");
+        };
+        assert_eq!(declaration.initializations.len(), 2);
+        for init in &declaration.initializations {
+            let flags = init.flags.unwrap();
+            assert!(init.global && flags.is_static(), "{code}");
+            assert_eq!(flags.visibility(), visibility, "{code}");
+            assert_eq!(flags.nomask(), nomask, "{code}");
+        }
+        assert_eq!(declaration.initializations[0].type_, LpcType::Int(false));
+        assert_eq!(declaration.initializations[1].type_, LpcType::Int(true));
+    }
+}
+
+#[test]
+fn nosave_functions_and_prototypes_have_a_modifier_diagnostic() {
+    for code in [
+        "nosave int f() { return 1; }",
+        "private nosave int f();",
+        "nosave f() {}",
+    ] {
+        let error = lpc_parser::ProgramParser::new()
+            .parse(
+                &mut CompilationContext::default(),
+                LexWrapper::new(code, 0).triples(),
+            )
+            .unwrap_err();
+        let lalrpop_util::ParseError::User { error } = error else {
+            panic!("expected a modifier diagnostic: {error}");
+        };
+        assert_eq!(
+            error.to_string(),
+            "`nosave` is intended for global variables only"
+        );
+        let start = code.find("nosave").unwrap();
+        assert_eq!(error.span(), Some(Span::new(0, start..start + 6)));
+    }
+}
+
+#[test]
+fn nosave_cannot_modify_locals_or_parameters_or_name_a_variable() {
+    for code in [
+        "void f() { nosave int local; }",
+        "void f(nosave int value) {}",
+        "function f() { return (: [nosave int value] value :); }",
+        "int nosave;",
+    ] {
+        assert!(
+            lpc_parser::ProgramParser::new()
+                .parse(
+                    &mut CompilationContext::default(),
+                    LexWrapper::new(code, 0).triples(),
+                )
+                .is_err(),
+            "{code}",
         );
     }
 }

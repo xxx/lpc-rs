@@ -262,6 +262,8 @@ pub enum Token {
     Return(Span),
     #[token("static", track_slice)]
     Static(Span),
+    #[token("nosave", track_slice)]
+    Nosave(Span),
     #[token("varargs", track_slice)]
     Varargs(Span),
     #[token("nomask", track_slice)]
@@ -539,6 +541,7 @@ impl HasSpan for Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Nosave(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
             | Token::Ref(x)
@@ -637,6 +640,7 @@ impl Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Nosave(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
             | Token::Ref(x)
@@ -701,6 +705,7 @@ impl Token {
             Token::Void(_) => "void",
             Token::Return(_) => "return",
             Token::Static(_) => "static",
+            Token::Nosave(_) => "nosave",
             Token::Varargs(_) => "varargs",
             Token::Nomask(_) => "nomask",
             Token::Ref(_) => "ref",
@@ -808,6 +813,7 @@ impl Display for Token {
             | Token::Void(_)
             | Token::Return(_)
             | Token::Static(_)
+            | Token::Nosave(_)
             | Token::Varargs(_)
             | Token::Nomask(_)
             | Token::Ref(_)
@@ -1099,6 +1105,16 @@ mod tests {
         let vec = lex_vec("bytes b;");
         assert!(matches!(vec[0], Ok(Token::Bytes(_))));
         assert_eq!(vec[0].as_ref().unwrap().to_string(), "bytes");
+    }
+
+    #[test]
+    fn nosave_is_a_keyword_without_reserving_longer_identifiers() {
+        let tokens = LexWrapper::new("nosave nosave_cache", 7)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(tokens[0], Token::Nosave(Span::new(7, 0..6)));
+        assert_eq!(tokens[0].to_string(), "nosave");
+        assert!(matches!(&tokens[1], Token::Id(name) if name.1 == "nosave_cache"));
     }
 
     fn lex_vec(prog: &str) -> Vec<Result<Token>> {

@@ -6,8 +6,8 @@ Read the save file `file` into the calling object's global variables.
 `file` is an in-game path resolved against the lib root (not the caller's
 directory), and `.o` is always appended. Each `name value` line sets the
 global of that name; a name the object does not have, or one that is
-`static`, is ignored, and a variable not named in the file keeps its
-value. There is no type check: a string in the file lands in an `int`
+[`nosave` or `static`](../lpc/nosave.md), is ignored. A variable not named in
+the file keeps its value. There is no type check: a string in the file lands in an `int`
 variable as a string.
 
 Returns 1 on success and 0, without an error, when the file does not exist

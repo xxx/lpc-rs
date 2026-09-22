@@ -3,7 +3,7 @@
 `mapping *variable_info(object ob)`
 
 Return every global declaration in `ob`, including inherited, hidden, private,
-protected, and static variables. Entries follow storage order: ancestor blocks
+protected, and `nosave`/`static` variables. Entries follow storage order: ancestor blocks
 first, then the object's own declarations, each block in declaration order.
 An ancestor shared through multiple parents appears once. Different declarations
 with the same name have separate entries.
@@ -15,7 +15,7 @@ Each entry has these fields:
 | `name` | string | Declared variable name |
 | `program` | string | Declaring program's source path, including `.c` |
 | `type` | string | Declared LPC type, such as `int` or `mixed *` |
-| `flags` | string | Declared visibility, followed by `static` and `nomask` when present |
+| `flags` | string | Declared visibility, followed by `static` (for either `static` or `nosave`) and `nomask` when present |
 | `value` | mixed | Value read through the caller's transaction |
 
 Inheritance restrictions do not rewrite the declaring source's flags.

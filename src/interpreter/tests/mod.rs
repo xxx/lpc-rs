@@ -8,6 +8,7 @@ mod entry_args;
 mod inheritance;
 mod loading;
 mod named_variadic;
+mod nosave;
 mod parse_command;
 mod parse_string;
 mod parser;

@@ -28,7 +28,7 @@ pub(crate) fn resolve_object<'a, const N: usize>(
 
 /// `restore_object(file)`: the calling object's globals from `<file>.o`,
 /// root-relative, once the master's `valid_read` allows the unsuffixed
-/// path. Unknown and `static` names are ignored, variables absent from the
+/// path. Unknown and `static`/`nosave` names are ignored, variables absent from the
 /// file keep their values. 1 on success, 0 when the file cannot be read,
 /// an error on a corrupt line (earlier lines stay applied).
 pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -96,6 +96,77 @@ mod tests {
         int got;
         void create() { got = restore_object("/r"); }
     "# };
+
+    #[tokio::test]
+    async fn nosave_values_and_their_aliases_survive_restore() {
+        let root = TempLib::new("restore-nosave-values");
+        std::fs::write(
+            root.join("r.o"),
+            "transient malformed\ncache ({99})\nlegacy malformed\nsaved 9\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"
+            nosave int transient = 4;
+            nosave int *cache = ({ 5 });
+            nosave int absent = 6;
+            private int saved = 1;
+            static int legacy = 7;
+            string create() {
+                int *alias = cache;
+                cache[0] = 8;
+                transient = 10;
+                restore_object("/r");
+                return transient + " " + cache[0] + " " + alias[0] + " "
+                    + saved + " " + legacy + " " + absent;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from("10 8 8 9 7 6")));
+    }
+
+    #[tokio::test]
+    async fn inherited_nosave_globals_are_not_restore_targets() {
+        let root = lib_holding(
+            "restore-nosave-inheritance",
+            &[(
+                "base.c",
+                r#"
+            public nosave int public_cache = 1;
+            protected nosave int protected_cache = 2;
+            private nosave int private_cache = 3;
+            int saved = 4;
+            int private_value() { return private_cache; }
+        "#,
+            )],
+        );
+        std::fs::write(
+            root.join("data.o"),
+            "public_cache 100\nprotected_cache 200\nprivate_cache 300\nown_cache 500\nsaved 9\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/child.c",
+                r#"
+            inherit "/base";
+            nosave int own_cache = 5;
+            int create() {
+                restore_object("/data");
+                return public_cache + protected_cache + private_value() + own_cache + saved;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(20)));
+    }
 
     #[tokio::test]
     async fn restores_the_named_globals_and_leaves_the_rest() {

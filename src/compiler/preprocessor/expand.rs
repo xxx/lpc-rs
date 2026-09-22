@@ -13,7 +13,7 @@ use lpc_rs_errors::{
 use crate::compiler::{
     lexer::{Token, logos_token::StringToken},
     preprocessor::{
-        define::{Define, FunctionMacro, parameter_name},
+        define::{Define, FunctionMacro, identifier_name},
         predefined::Predefined,
     },
 };
@@ -64,22 +64,26 @@ impl<'a> Expander<'a> {
     /// Expand one potential macro use. `cursor` is the stream the use sits
     /// in; a function-macro's arguments are captured from it. `None`: not a
     /// macro use (undefined name, or a function-macro name with no `(`
-    /// following); the caller emits the Id.
+    /// following); the caller emits the original token.
     pub(super) fn expand_use<T>(
         &self,
-        token: &StringToken,
+        token: &Token,
         cursor: &mut Peekable<T>,
     ) -> Result<Option<Expanded>>
     where
         T: Iterator<Item = Result<Token>>,
     {
-        if let Some(predefined) = Predefined::from_name(&token.1) {
+        let Some(name) = identifier_name(token) else {
+            return Ok(None);
+        };
+        let span = token.span();
+        if let Some(predefined) = Predefined::from_name(name) {
             return Ok(Some(Expanded {
-                tokens: vec![predefined.expand(token.0, self.sources)?],
-                use_span: token.0,
+                tokens: vec![predefined.expand(span, self.sources)?],
+                use_span: span,
             }));
         }
-        let Some((name, define)) = self.defines.get_key_value(&token.1) else {
+        let Some((name, define)) = self.defines.get_key_value(name) else {
             return Ok(None);
         };
         if matches!(define, Define::Function(_))
@@ -92,14 +96,14 @@ impl<'a> Expander<'a> {
             defines: self.defines,
             sources: self.sources,
             top: name,
-            use_span: token.0,
+            use_span: span,
             hide: vec![],
             emitted: 0,
             stringified_bytes: 0,
             depth: 0,
         };
         let mut out = vec![];
-        let mut previous = Some(token.0);
+        let mut previous = Some(span);
         let mut input = cursor
             .map(|token| token.map(|token| ExpansionToken::source(token, &mut previous)))
             .peekable();
@@ -236,7 +240,7 @@ impl<'a> Expansion<'a> {
                 let argument = cursor
                     .next()
                     .and_then(|operand| {
-                        parameter_name(&operand.token).and_then(|name| args.get(name))
+                        identifier_name(&operand.token).and_then(|name| args.get(name))
                     })
                     .ok_or_else(|| {
                         lpc_bug!("invalid stringification operand after definition validation")
@@ -245,7 +249,7 @@ impl<'a> Expansion<'a> {
                 token.token = Token::StringLiteral(StringToken(self.use_span, text));
                 token.origin = None;
             } else if let Some(arg) =
-                parameter_name(&token.token).and_then(|name| args.get_mut(name))
+                identifier_name(&token.token).and_then(|name| args.get_mut(name))
             {
                 let arg_tokens = if let Some(expanded) = &arg.expanded {
                     expanded
@@ -346,17 +350,17 @@ impl<'a> Expansion<'a> {
             let mut token = next?;
             token.leading_space |= pending_space;
             pending_space = false;
-            let Token::Id(st) = &token.token else {
+            let Some(identifier) = identifier_name(&token.token) else {
                 self.emit(token, out)?;
                 continue;
             };
-            if let Some(predefined) = Predefined::from_name(&st.1) {
-                token.token = predefined.expand(st.0, self.sources)?;
+            if let Some(predefined) = Predefined::from_name(identifier) {
+                token.token = predefined.expand(token.token.span(), self.sources)?;
                 token.origin = None;
                 self.emit(token, out)?;
                 continue;
             }
-            match self.defines.get_key_value(&st.1) {
+            match self.defines.get_key_value(identifier) {
                 None => self.emit(token, out)?,
                 Some((name, _)) if self.hide.contains(&name.as_str()) => {
                     // Hidden: a plain identifier.
@@ -552,12 +556,9 @@ mod tests {
         let mut out = vec![];
         while let Some(next) = cursor.next() {
             let token = next?;
-            match &token {
-                Token::Id(st) => match expander.expand_use(st, &mut cursor)? {
-                    Some(expanded) => out.extend(expanded.tokens),
-                    None => out.push(token),
-                },
-                _ => out.push(token),
+            match expander.expand_use(&token, &mut cursor)? {
+                Some(expanded) => out.extend(expanded.tokens),
+                None => out.push(token),
             }
         }
         Ok(out.iter().map(|t| t.to_string()).collect())
@@ -740,7 +741,10 @@ mod tests {
             panic!("expected an Id");
         };
         let use_span = st.0;
-        let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let mut expanded = expander
+            .expand_use(&Token::Id(st), &mut cursor)
+            .unwrap()
+            .unwrap();
         assert_eq!(*expanded.tokens[0].span_ref(), use_span);
     }
 
@@ -754,7 +758,10 @@ mod tests {
             panic!("expected an Id");
         };
         let use_span = st.0;
-        let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let mut expanded = expander
+            .expand_use(&Token::Id(st), &mut cursor)
+            .unwrap()
+            .unwrap();
         let got = *expanded.tokens[0].span_ref();
         assert_ne!(got, use_span);
         assert_eq!(expanded.tokens[0].to_string(), "marf");
@@ -790,7 +797,10 @@ mod tests {
         let Some(Ok(Token::Id(st))) = cursor.next() else {
             panic!("expected an Id");
         };
-        let expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let expanded = expander
+            .expand_use(&Token::Id(st), &mut cursor)
+            .unwrap()
+            .unwrap();
         // `+` is body-derived: the whole call `F(9)`.
         assert_eq!(expanded.tokens[1].span(), Span::new(0, 0..4));
         // `9` is an argument: its own span.

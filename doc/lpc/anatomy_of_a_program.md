@@ -38,6 +38,7 @@ notes:
 - decls can be anywhere in the body (globals are hoisted for codegen, but not for semantic analysis)
 - globals are 'global' only to the program, and cannot be accessed from other programs. they just outlive function invocations.
 - globals are initialized when the object is created, prior to calling `create`, (which happens automatically)
+- `nosave` or `static` on a global excludes it from object save/restore without changing visibility; see [non-persistent globals](nosave.md)
 - a parameter declared `ref` is the caller's variable; see [references](references.md)
 - `f(a, xs...)` passes each element of `xs` as its own argument; see [argument spreading](argument_spreading.md)
 - a final parameter such as `mixed *args...` collects the remaining arguments into an array; see [variadic parameters](variadic_parameters.md)

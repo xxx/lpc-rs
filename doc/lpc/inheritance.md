@@ -41,7 +41,7 @@ protected helpers neither become callable simul-efuns nor override driver efuns.
 Cached simul-efun calls and pointers check public visibility again when invoked.
 
 The compiler accepts one of `public`, `protected`, or `private` on an inherit.
-Other modifiers, including `static`, `nomask`, and `varargs`, are not supported
+Other modifiers, including `static`, `nosave`, `nomask`, and `varargs`, are not supported
 on inherit statements. A parent's `nomask` declarations and `no_inherit` pragma
 still apply.
 

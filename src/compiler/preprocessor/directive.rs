@@ -19,7 +19,7 @@ use crate::{
     compiler::{
         ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
         lexer::{LexWrapper, Token},
-        preprocessor::preprocessor_node::PreprocessorNode,
+        preprocessor::{define::identifier_name, preprocessor_node::PreprocessorNode},
     },
 };
 
@@ -752,6 +752,9 @@ impl ExprParser {
                 Ok((self.defined_call(false)?, 1))
             }
             Token::Id(t) => Ok((PreprocessorNode::Var(t.1), 1)),
+            keyword if keyword.keyword_text().is_some() => {
+                Ok((PreprocessorNode::Var(keyword.to_string()), 1))
+            }
             other => Err(Self::err_at(
                 other.span(),
                 "unexpected token in `#if` expression",
@@ -770,17 +773,20 @@ impl ExprParser {
     fn defined_call(&mut self, negated: bool) -> Result<PreprocessorNode> {
         let lparen = self.next().expect("caller peeked the `(`");
         match self.next() {
-            Some(Token::Id(t)) => match self.next() {
-                Some(Token::RParen(_)) => Ok(PreprocessorNode::Defined(t.1, negated)),
-                _ => Err(Self::err_at(
-                    lparen.span(),
-                    "unmatched `(` in `#if` expression",
-                )),
-            },
-            Some(other) => Err(Self::err_at(
-                other.span(),
-                "unexpected token in `#if` expression",
-            )),
+            Some(token) => {
+                let name = identifier_name(&token).ok_or_else(|| {
+                    Self::err_at(token.span(), "unexpected token in `#if` expression")
+                })?;
+                match self.next() {
+                    Some(Token::RParen(_)) => {
+                        Ok(PreprocessorNode::Defined(name.to_owned(), negated))
+                    }
+                    _ => Err(Self::err_at(
+                        lparen.span(),
+                        "unmatched `(` in `#if` expression",
+                    )),
+                }
+            }
             None => Err(self.end_err()),
         }
     }

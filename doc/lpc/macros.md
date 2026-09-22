@@ -7,6 +7,11 @@ Repeating an identical definition is allowed; changing parameter names, token
 spelling, or the positions of whitespace requires `#undef` first. Whitespace
 amounts and comment text do not affect this comparison.
 
+LPC keywords can be macro names or parameters: `#define nosave static` is
+valid, including in included headers. These names expand in ordinary source,
+macro bodies and arguments, and work in `#ifdef`, `#ifndef`, `defined()` and
+`#if` expressions. Quoted text is unaffected.
+
 ```c
 #define MAX_ITEMS 20
 #define DOUBLE(x) ((x) * 2)

@@ -126,6 +126,7 @@ extern {
         "private" => Token::Private(<Span>),
         "protected" => Token::Protected(<Span>),
         "static" => Token::Static(<Span>),
+        "nosave" => Token::Nosave(<Span>),
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
         "ref" => Token::Ref(<Span>),
@@ -237,8 +238,13 @@ FunctionPrototype: (
     StringToken,
     (Vec<VarInitNode>, bool, Option<Box<VarInitNode>>)
 ) = {
-    <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> => {
-        (flags, r_type, star, name, parameter_tuple)
+    <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> =>? {
+        if let Some((span, _)) = flags.iter().find(|(_, flag)| *flag == "nosave") {
+            return Err(ParseError::User {
+                error: lpc_error!(Some(*span), "`nosave` is intended for global variables only")
+            });
+        }
+        Ok((flags, r_type, star, name, parameter_tuple))
     }
 }
 
@@ -412,6 +418,7 @@ GlobalFlag: (Span, &'static str) = {
     "public" => (<>, "public"),
     "private" => (<>, "private"),
     "static" => (<>, "static"),
+    "nosave" => (<>, "nosave"),
     "protected" => (<>, "protected"),
     "nomask" => (<>, "nomask"),
 };
