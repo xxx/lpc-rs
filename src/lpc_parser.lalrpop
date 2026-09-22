@@ -524,7 +524,7 @@ OpenStatement: AstNode = {
         let node = ForNode::new(init, cond, inc.map(demote_statement_post_op), body, Some(for_t));
         Ok(guard(AstNode::from(node), Some(for_t))?)
     },
-    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:OpenStatement> =>? {
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ForEachSeparator <collection:Expression> ")" <body:OpenStatement> =>? {
         let node = ForEachNode::new(init, collection, body, Some(foreach_t));
         Ok(guard(AstNode::from(node), Some(foreach_t))?)
     },
@@ -558,7 +558,7 @@ ClosedStatement: AstNode = {
         let node = ForNode::new(init, cond, inc.map(demote_statement_post_op), body, Some(for_t));
         Ok(guard(AstNode::from(node), Some(for_t))?)
     },
-    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:ClosedStatement> =>? {
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ForEachSeparator <collection:Expression> ")" <body:ClosedStatement> =>? {
         let node = ForEachNode::new(init, collection, body, Some(foreach_t));
         Ok(guard(AstNode::from(node), Some(foreach_t))?)
     },
@@ -586,6 +586,19 @@ ForInit: AstNode = {
 ForEachInit: ForEachInit = {
     <var:ForEachVar> => ForEachInit::Array(var),
     <key:ForEachVar> "," <value:ForEachVar> => ForEachInit::Mapping { key, value: Box::new(value) },
+};
+
+ForEachSeparator: () = {
+    ":" => (),
+    <word:"ID"> =>? {
+        if word.1 == "in" {
+            Ok(())
+        } else {
+            Err(ParseError::User {
+                error: lpc_error!(Some(word.0), "expected `:` or `in` after `foreach` variables")
+            })
+        }
+    },
 };
 
 // A loop variable; untyped is `mixed`.

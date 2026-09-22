@@ -1032,6 +1032,50 @@ async fn test_closure_bodies() {
 }
 
 #[tokio::test]
+async fn foreach_accepts_both_separators_with_typed_and_untyped_bindings() {
+    for separator in [":", "in"] {
+        for bindings in [
+            "item",
+            "int item",
+            "int *row",
+            "key, value",
+            "string key, class Record value",
+            "class Record *row",
+            "in",
+            "int in",
+            "string in, mixed value",
+        ] {
+            let code =
+                format!("void f(mixed items) {{ foreach ({bindings} {separator} items) {{}} }}");
+            assert_ok!(parse_prog(&code).await);
+        }
+    }
+}
+
+#[tokio::test]
+async fn foreach_rejects_other_words_at_the_separator() {
+    for separator in ["from", "of", "inside", "IN"] {
+        let code = format!("void f(mixed items) {{ foreach (item {separator} items) {{}} }}");
+        let error = parse_prog(&code).await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "expected `:` or `in` after `foreach` variables"
+        );
+        let start = code.find(separator).unwrap();
+        let span = error.span().unwrap();
+        assert_eq!(span.l()..span.r(), start..start + separator.len());
+    }
+}
+
+#[tokio::test]
+async fn in_is_not_a_general_expression_operator() {
+    let error = parse_prog("int f(mixed items) { return 1 in items; }")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "Unrecognized Token: in");
+}
+
+#[tokio::test]
 async fn a_foreach_variable_may_be_typed() {
     let code = "void f(mixed a) { foreach (string s : a) {} foreach (int *k, mixed v : a) {} }";
     let prog = parse_prog(code).await.unwrap();

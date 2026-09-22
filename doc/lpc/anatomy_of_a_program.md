@@ -35,6 +35,7 @@ at compile time; runtime variables and function calls are rejected.
 notes:
 
 - decls can be anywhere in the body (globals are hoisted for codegen, but not for semantic analysis)
+- `foreach` accepts `in` or `:` before the collection; see [foreach loops](foreach.md)
 - globals are 'global' only to the program, and cannot be accessed from other programs. they just outlive function invocations.
 - globals are initialized when the object is created, prior to calling `create`, (which happens automatically)
 - `nosave` or `static` on a global excludes it from object save/restore without changing visibility; see [non-persistent globals](nosave.md)

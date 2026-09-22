@@ -6,6 +6,7 @@ mod calling;
 mod catch_result;
 mod entry_args;
 mod explicit_captures;
+mod foreach;
 mod inheritance;
 mod loading;
 mod named_variadic;
