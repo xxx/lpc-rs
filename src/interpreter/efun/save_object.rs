@@ -70,6 +70,97 @@ mod tests {
         vm
     }
 
+    #[tokio::test]
+    async fn class_globals_round_trip_pending_saves_with_nested_values_and_nosave_exclusions() {
+        let root = TempLib::new("save-class-globals");
+        let vm = allowing_vm(&root).await;
+        let result = vm.initialize_process_from_code("/w.c", r#"
+            class record {
+                int n;
+                string label;
+                class record child;
+                int *numbers;
+                mapping metadata;
+                function callback;
+                object owner;
+                bytes raw;
+            }
+            class record value, alias;
+            nosave class record cache;
+            int create() {
+                value = new(class record, n: 7, label: "hello\nworld",
+                    child: new(class record, n: 12), numbers: ({ 3, 4 }),
+                    metadata: ([ "answer": 42 ]), callback: (: 1 :),
+                    owner: this_object(), raw: to_bytes("hé", "utf8"));
+                alias = value;
+                cache = new(class record, n: 8);
+                cache.child = cache;
+                save_object("/w");
+                value.n = 99;
+                int restored = restore_object("/w");
+                if (!restored || !classp(value) || value == alias || value.child == alias.child) return 0;
+                if (value.n != 7 || alias.n != 7 || cache.n != 8 || cache.child != cache) return 0;
+                if (value.callback != 0 || value.owner != this_object() || value.raw != to_bytes("hé", "utf8")) return 0;
+                if (value.numbers[1] != 4 || value.metadata["answer"] != 42 || value.label != "hello\nworld") return 0;
+                value.child.n = 50;
+                return alias.child.n == 12;
+            }
+        "#).await.unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+        let text = std::fs::read_to_string(root.join("w.o")).unwrap();
+        assert!(text.contains("value c(1,\"/w.c\",\"record\","));
+        assert!(!text.contains("cache "));
+    }
+
+    #[tokio::test]
+    async fn an_aborted_class_save_preserves_the_existing_file() {
+        let root = TempLib::new("save-class-abort");
+        std::fs::write(root.join("w.o"), "previous 42\n").unwrap();
+        let vm = allowing_vm(&root).await;
+        let error = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"
+            class record { int n; }
+            class record value = new(class record, n: 7);
+            void create() { save_object("/w"); throw("abort class save"); }
+        "#,
+            )
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("abort class save"));
+        assert_eq!(
+            std::fs::read_to_string(root.join("w.o")).unwrap(),
+            "previous 42\n"
+        );
+        assert!(!root.join("w.o.tmp").exists());
+    }
+
+    #[tokio::test]
+    async fn caught_class_cycles_do_not_replace_an_earlier_pending_save() {
+        let root = TempLib::new("save-class-cycle");
+        let vm = allowing_vm(&root).await;
+        let result = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"
+            class record { mixed next; }
+            class record value = new(class record);
+            int create() {
+                save_object("/w");
+                value.next = ([ "cycle": ({ value }) ]);
+                mixed error = catch(save_object("/w"));
+                if (!stringp(error)) return 0;
+                restore_object("/w");
+                return classp(value) && value.next == 0;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+    }
+
     /// The file lands at commit; a restore in the same task already reads it.
     #[tokio::test]
     async fn a_same_task_restore_reads_the_pending_save() {

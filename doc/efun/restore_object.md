@@ -8,7 +8,8 @@ directory), and `.o` is always appended. Each `name value` line sets the
 global of that name; a name the object does not have, or one that is
 [`nosave` or `static`](../lpc/nosave.md), is ignored. A variable not named in
 the file keeps its value. There is no type check: a string in the file lands in an `int`
-variable as a string.
+variable as a string. Restored class records validate their own field types;
+scalar class globals still enforce nominal identity when consumed by LPC code.
 
 Returns 1 on success and 0, without an error, when the file does not exist
 or cannot be read, which is how a lib tells a new player from a returning

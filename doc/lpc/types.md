@@ -1,8 +1,7 @@
 # lpc-rs supported types
 
 Named [classes](classes.md) support shared instances, named construction,
-guarded member access, and shallow copying with `copy_class()`. Class persistence
-is not implemented yet.
+guarded member access, shallow copying with `copy_class()`, and native persistence.
 
 * `int`
   - Run-of-the-mill signed integers, 64 bits by default. This size is ostensibly

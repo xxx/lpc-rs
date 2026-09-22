@@ -2,8 +2,8 @@
 
 Classes are shared, nominally typed records. They support declarations,
 construction with named initializers, member reads and writes, shallow copying,
-and field evolution across compiled definitions. General reflection and
-persistence are not implemented yet.
+field evolution across compiled definitions, and native persistence. General
+reflection is not implemented yet.
 
 ```c
 class position {
@@ -125,9 +125,6 @@ slots remain until the instance is collected. Removing and later reintroducing
 a field with its previous name and type can therefore recover its old value;
 type changes that later revert have the same behavior.
 
-Saving a class currently raises an error, including when nested inside a collection;
-`nosave` globals retain their normal exclusion behavior.
-
 ## Shallow copying
 
 [`copy_class(value)`](../efun/copy_class.md) creates an independent instance of
@@ -152,3 +149,27 @@ definition visible in the caller. This lets a generic helper copy records while
 preserving their nominal identity. `copy_class(0)` is an error; `classp(0)` is
 false. Ordinary arrays carry no class identity and cannot be converted back
 into a class by this helper.
+
+## Saving and restoring
+
+`save_object`, `restore_object`, `save_map` and `restore_map` support class
+instances, including nested records and records in arrays or mappings. The
+[native save format](../save-format.md#class-records) stores nominal identity,
+named and typed field slots, and every materialized view. Shared slots within
+one instance remain shared between its views after restoration. Removed or
+type-changed legacy fields remain in the save file.
+
+Generic helpers need no visible class definitions to save or restore records.
+Restoration needs no source files and loads no code. Later member access uses
+the caller's retained definition, adding a view when necessary. Serialized field
+values are checked against their declared types before the instance is usable.
+
+Repeated occurrences restore as separate instances: saving two globals that
+share a record breaks that alias on restoration. Nested reference values follow
+the same rule, and cycles cannot be saved. Function fields restore as zero;
+objects restore using the normal live-object and creation-time checks. `nosave`
+globals retain their normal exclusion behavior. A caught `restore_object` error
+may leave earlier globals restored, as with other value types.
+
+Foreign-driver class-save import and preservation of references between saved
+occurrences remain unsupported.

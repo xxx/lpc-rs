@@ -1,6 +1,6 @@
 //! Transactional class instances and guarded access through compiled definitions.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use lpc_rs_core::class::{ClassDefinition, ClassField, ClassId, ClassScope};
 use lpc_rs_errors::{LpcError, Result};
@@ -54,6 +54,70 @@ impl LpcClass {
 
     pub(crate) fn values(&self) -> impl Iterator<Item = &LpcRef> {
         self.slots.iter().map(|slot| &slot.value)
+    }
+
+    pub(crate) fn stored_views(&self) -> impl Iterator<Item = &[usize]> {
+        self.views.iter().map(|view| view.slots.as_ref())
+    }
+
+    pub(crate) fn from_saved(
+        id: ClassId,
+        fields: Vec<(ClassField, LpcRef)>,
+        views: Vec<Box<[usize]>>,
+        txn: &TxnHandle,
+    ) -> Result<Self> {
+        let invalid = |message: &str| LpcError::runtime(format!("save file: {message}"));
+        let mut unique = HashSet::new();
+        for (field, value) in &fields {
+            if !unique.insert(field) {
+                return Err(invalid("duplicate class slot"));
+            }
+            if !value.passes_cast(field.type_, txn) {
+                return Err(invalid(&format!(
+                    "invalid value for {id}.{}: expected {}",
+                    field.name, field.type_
+                )));
+            }
+        }
+        if views.is_empty() {
+            return Err(invalid("class requires at least one view"));
+        }
+        let mut used = vec![false; fields.len()];
+        let mut unique_views = HashSet::new();
+        let mut restored_views = Vec::with_capacity(views.len());
+        for slots in views {
+            let mut names = HashSet::new();
+            let mut declarations = Vec::with_capacity(slots.len());
+            for &index in &slots {
+                let Some((field, _)) = fields.get(index) else {
+                    return Err(invalid("class view slot index is out of range"));
+                };
+                if !names.insert(field.name) {
+                    return Err(invalid("duplicate field name in class view"));
+                }
+                used[index] = true;
+                declarations.push(field.clone());
+            }
+            let definition = Arc::new(ClassDefinition {
+                id,
+                fields: declarations.into_boxed_slice(),
+            });
+            if !unique_views.insert(definition.clone()) {
+                return Err(invalid("duplicate class view"));
+            }
+            restored_views.push(View { definition, slots });
+        }
+        if used.contains(&false) {
+            return Err(invalid("class slot is not used by any view"));
+        }
+        Ok(Self {
+            id,
+            slots: fields
+                .into_iter()
+                .map(|(field, value)| Slot { field, value })
+                .collect(),
+            views: restored_views,
+        })
     }
 
     fn view(&self, definition: &ClassDefinition) -> Option<&View> {
@@ -1129,17 +1193,27 @@ mod tests {
     }
 
     #[test]
-    fn saving_nested_classes_fails_explicitly() {
-        use crate::interpreter::{lpc_array::LpcArray, save_format::write_value};
+    fn saving_nested_classes_restores_fresh_instances() {
+        use crate::interpreter::{
+            lpc_array::LpcArray,
+            save_format::{read_value, write_value},
+        };
         let txn = TxnHandle::empty();
         let instance =
             LpcRef::Class(txn.with(|txn| txn.mint_class(LpcClass::new(definition(&[])))));
-        let array = LpcRef::Array(txn.with(|txn| txn.mint_array(LpcArray::new([instance]))));
-        let error = write_value(&mut String::new(), &array, &txn, 0).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("class persistence is not yet supported")
+        let array =
+            LpcRef::Array(txn.with(|txn| txn.mint_array(LpcArray::new([instance.clone()]))));
+        let mut text = String::new();
+        write_value(&mut text, &array, &txn, 0).unwrap();
+        let restored = read_value(&text, &txn, &|_| None).unwrap();
+        let item = restored.with_array(&txn, |items| items[0].clone()).unwrap();
+        let LpcRef::Class(cell) = &item else {
+            panic!("restored class")
+        };
+        assert_ne!(item, instance);
+        assert_eq!(
+            txn.with(|txn| txn.read_class(cell.id)).unwrap().id(),
+            definition(&[]).id
         );
     }
     #[tokio::test]

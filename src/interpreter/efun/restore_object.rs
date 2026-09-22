@@ -98,6 +98,110 @@ mod tests {
     "# };
 
     #[tokio::test]
+    async fn a_caught_invalid_class_record_preserves_that_global_and_applies_earlier_lines() {
+        let root = TempLib::new("restore-class-corrupt");
+        std::fs::write(root.join("r.o"), concat!(
+            "before 9\n",
+            "value c(1,\"/r.c\",\"record\",({({\"n\",({\"int\",0,}),\"wrong\",}),}),({({0,}),}))\n",
+            "after 10\n"
+        )).unwrap();
+        let vm = allowing_vm(&root).await;
+        let result = vm.initialize_process_from_code("/r.c", r#"
+            class record { int n; }
+            int before = 1;
+            class record value = new(class record, n: 7);
+            int after = 2;
+            nosave string error;
+            int create() {
+                class record original = value;
+                error = catch(restore_object("/r"));
+                return stringp(error) && before == 9 && after == 2 && value == original && value.n == 7;
+            }
+        "#).await.unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+        let error = string_global(&vm, &result.context.process, "error");
+        assert!(error.contains("restore_object: /r.o line 2"), "{error}");
+        assert!(error.contains("invalid value for"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn restored_class_globals_still_enforce_nominal_identity_when_consumed() {
+        let root = TempLib::new("restore-class-identity");
+        std::fs::write(
+            root.join("r.o"),
+            "value c(1,\"/other.c\",\"record\",({}),({({}),}))\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let result = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"
+            class record {}
+            class record value;
+            int create() {
+                restore_object("/r");
+                mixed error = catch(value);
+                return stringp(error);
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+    }
+
+    #[tokio::test]
+    async fn an_aborted_class_restore_leaves_committed_globals_unchanged() {
+        use crate::interpreter::task::{
+            apply_function::apply_function_by_name, task_template::TaskTemplate,
+        };
+        let root = TempLib::new("restore-class-abort");
+        std::fs::write(
+            root.join("r.o"),
+            "value c(1,\"/r.c\",\"record\",({({\"n\",({\"int\",0,}),99,}),}),({({0,}),}))\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let process = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"
+            class record { int n; }
+            class record value = new(class record, n: 7);
+            int read() { return value.n; }
+            void restore_and_fail() { restore_object("/r"); throw("abort class restore"); }
+        "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let error = apply_function_by_name(
+            "restore_and_fail",
+            &[],
+            process.clone(),
+            TaskTemplate::from(vm.global_state.clone()),
+            Some(5000),
+        )
+        .await
+        .unwrap()
+        .unwrap_err();
+        assert!(error.to_string().contains("abort class restore"));
+        let result = apply_function_by_name(
+            "read",
+            &[],
+            process,
+            TaskTemplate::from(vm.global_state.clone()),
+            Some(5000),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(result, LpcRef::from(7));
+    }
+
+    #[tokio::test]
     async fn nosave_values_and_their_aliases_survive_restore() {
         let root = TempLib::new("restore-nosave-values");
         std::fs::write(

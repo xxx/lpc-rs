@@ -4,7 +4,7 @@
 line-oriented text format based on CD-lineage `.o` files. The grammar and
 extensions below define what this driver reads and writes. Cross-driver
 interchange depends on the value types and encodings used; in particular,
-the `bytes` form is an extension.
+the `bytes` and class forms are native extensions.
 
 A file is a sequence of lines, each `name value` with exactly one space
 between: `name` is the variable name, or for `save_map` the key: any text
@@ -22,6 +22,7 @@ key with any of those is refused before anything is written.
 | array | `({` then each element followed by `,` then `})` | `({1,"two",({}),})` |
 | mapping | `([` then each `key:value` followed by `,` then `])` | `(["k":4,7:"i",])` |
 | object | `$` creation time `@` object name `$` | `$1788811132@/std/player#12$` |
+| class | versioned identity, typed slots and views | `c(1,"/record.h","record",({}),({({}),}))` (empty class) |
 | zero | `0` | `0` |
 
 Reading is strict: a missing trailing comma, a space inside a container, a
@@ -39,17 +40,68 @@ as UTF-8, so re-saving a Latin-1 file changes its bytes.
 A float that is not finite (infinity or NaN) cannot be saved: the writer
 raises a runtime error instead of writing it.
 
-Class instances cannot yet be saved, including instances nested in arrays or
-mappings; the writer raises a runtime error. `nosave` globals are still excluded
-before serialization. See [classes](lpc/classes.md) for current support.
-
 An object reference restores as the live object of that name when it
 exists and was created in the same second, else as 0. A function pointer
 is never written: a variable holding one is left out of the file, and one
-inside an array or mapping is written as `0`.
+inside an array, mapping or class field is written as `0`.
 
-CD-lineage libs never write the `bytes` form; it appears only in files
-this driver has saved.
+Repeated occurrences of the same array, mapping or class restore as independent
+instances. References between occurrences are not preserved. Cycles cannot be
+saved; reading and writing reject value nesting deeper than 128 levels.
 
 Files are written whole, through a temporary file renamed over the target,
 when the writing task commits.
+
+## Class records
+
+[Classes](lpc/classes.md) use this version-one grammar. Spaces below are for
+readability; the serialized form has none outside quoted strings.
+
+```text
+c(1, source_path, class_name, slots, views)
+slots = ({ ({ field_name, type_descriptor, value, }), ... })
+views = ({ ({ slot_index, ... }), ... })
+primitive_type = ({ kind_name, array_flag, })
+class_type = ({ "class", array_flag, source_path, class_name, })
+```
+
+Names and source paths are quoted strings with the ordinary string escapes.
+The class identity is the canonical absolute in-game source path and class
+name. The source path has no empty, `.` or `..` components or trailing slash;
+the root alone is not a source file. Class and field names follow LPC's Unicode
+identifier syntax. Line numbers, storage IDs and compilation counters are absent.
+
+Primitive kinds are `int`, `float`, `string`, `bytes`, `object`, `mapping`,
+`function` and `mixed`. An array flag is 0 or 1. Class field descriptors include
+the full nominal identity of their declared type, including for arrays. Values
+use the ordinary save grammar recursively, so nested records are allowed.
+
+For `class record { int n; }` with `n == 7`, the value is:
+
+```text
+c(1,"/record.h","record",({({"n",({"int",0,}),7,}),}),({({0,}),}))
+```
+
+Each slot holds one field name, declared type and value. A view lists zero-based
+slot indexes in declaration order. All materialized views and their retained
+slots are saved; serialization does not create views. Views that select the same
+slot share its storage after restoration. Different slots may have the same
+name with different declared types across views.
+
+Restoration rejects unknown versions and field kinds, invalid flags or identities,
+duplicate slot keys, duplicate views, duplicate field names within a view,
+out-of-range indexes, slots unused by every view, and incompatible field values.
+At least one view is required; an empty class has an empty view. Integer zero is
+valid for any field type, and array checks remain shallow. Metadata integers
+must be nonnegative and representable; they do not use value-integer clamping.
+Metadata arrays describe schemas and do not count as nested LPC values.
+
+Saving and restoring records requires neither visible class definitions nor
+source files. Restoration loads no source objects. Later member access uses the
+executing code's definitions and the normal field-view adaptation rules.
+`nosave` globals remain excluded before serialization or restoration. A malformed
+record is rejected before it becomes a usable class instance; a caught
+`restore_object` error still leaves earlier successfully restored globals applied.
+
+This is a native format extension. Foreign-driver class-save import and
+graph-preserving serialization are not supported.

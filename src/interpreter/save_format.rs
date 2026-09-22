@@ -1,5 +1,7 @@
-//! CD's save-file grammar: `name value` lines, values in the compact literal
+//! CD-derived save-file grammar: `name value` lines, values in the compact literal
 //! form `save_object` writes and `restore_object` reads.
+
+mod class;
 
 use std::{fmt::Write, sync::Arc};
 
@@ -69,18 +71,7 @@ pub(crate) fn write_value(
             }
             write!(out, "#{}#", hex_float(f)).expect("String never fails")
         }
-        LpcRef::String(s) => {
-            out.push('"');
-            for c in s.to_str().chars() {
-                match c {
-                    '"' => out.push_str("\\\""),
-                    '\\' => out.push_str("\\\\"),
-                    '\n' => out.push_str("\\n"),
-                    c => out.push(c),
-                }
-            }
-            out.push('"');
-        }
+        LpcRef::String(s) => write_string(out, s.to_str()),
         LpcRef::Array(_) => {
             out.push_str("({");
             value.with_array(txn, |array| -> Result<()> {
@@ -112,11 +103,27 @@ pub(crate) fn write_value(
         },
         LpcRef::Bytes(b) => out.push_str(&lpc_bytes::literal(b)),
         LpcRef::Function(_) => out.push('0'),
-        LpcRef::Class(_) => {
-            return Err(LpcError::runtime("class persistence is not yet supported"));
+        LpcRef::Class(cell) => {
+            let instance = txn.with(|t| t.read_class(cell.id)).ok_or_else(|| {
+                LpcError::runtime("save file: class is not in this transaction's world")
+            })?;
+            class::write_class(out, &instance, txn, depth)?;
         }
     }
     Ok(())
+}
+
+fn write_string(out: &mut String, value: &str) {
+    out.push('"');
+    for c in value.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
 }
 
 /// Append `name value\n`. A function pointer skips the line and answers
@@ -214,7 +221,8 @@ impl Reader<'_> {
     fn value(&mut self, depth: usize) -> Result<LpcRef> {
         too_deep(depth)?;
         match self.peek() {
-            Some(b'"') => self.string(),
+            Some(b'"') => self.string().map(LpcRef::from),
+            Some(b'c') => self.class(depth),
             Some(b'b') if self.text[self.at..].starts_with(b"b\"") => self.bytes(),
             Some(b'#') => self.hex_float(),
             Some(b'$') => self.object(),
@@ -332,7 +340,7 @@ impl Reader<'_> {
 
     /// `"..."` with `\n`, `\"` and `\\`; any other escape is its bare
     /// character.
-    fn string(&mut self) -> Result<LpcRef> {
+    fn string(&mut self) -> Result<String> {
         self.expect("\"")?;
         let mut bytes = Vec::new();
         loop {
@@ -357,8 +365,7 @@ impl Reader<'_> {
                 }
             }
         }
-        let s = String::from_utf8(bytes).map_err(|_| self.error("not UTF-8"))?;
-        Ok(LpcRef::from(s))
+        String::from_utf8(bytes).map_err(|_| self.error("not UTF-8"))
     }
 
     /// `b"..."` with `\"` and `\\`; `\xNN` is a hex byte; any other byte is
