@@ -150,6 +150,9 @@ the comparison instead of duplicating migration advice in individual references.
 
 ## Conventions
 
+- LPC documentation examples prefer bare function names when no arguments are
+  bound (`evaluate(strindex, text, needle)`). Use `&name(args)` for partial
+  application, and `&name()` when explaining that syntax itself.
 - **No phase/step tokens** ("D1", "C5", "step 2", "candidate") in filenames, code,
   comments, or commit messages. Handoff/plan docs under `local/` may carry them;
   `local/` is gitignored by design and holds personal notes, handoffs, and scratch.

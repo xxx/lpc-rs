@@ -20,7 +20,7 @@ function; where the driver supplies an object, such as a `call_out`'s
 pointer owner or a command's actor, that object occupies the corresponding
 position. A boot entry has no caller.
 
-An efun pointer such as `&calling_object()` sees the frame that fired it.
+An efun pointer such as `calling_object` sees the frame that fired it.
 
 ### Examples
 

@@ -23,9 +23,8 @@ representation including the receiver and masked argument positions.
 
 ```c
 function_name(add);               // "add"
-function_name(&add());            // "add"
 function_name(&add(10, ));        // "add"
-function_name(&target->add());    // "add"
+function_name(target->add);       // "add"
 function_name(&write("secret"));  // "write"
 function_name(&->query_name());   // "query_name"
 

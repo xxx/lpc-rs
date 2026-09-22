@@ -25,7 +25,7 @@ wants done "once the game is up" belongs.
 
 ```c
 string *epilog(int load_empty) {
-    call_out(&final_boot(), 0);
+    call_out(final_boot, 0);
     return ({ "/d/Gondor/start", "/obj/board" });
 }
 ```

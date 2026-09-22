@@ -9,11 +9,19 @@ call with arguments, and return a value, maybe with a receiver in context.
 The source or format of the definition should not matter - if it's callable, 
 we're calling it a `function` (even if it's a procedure... don't be pedantic).
 
+Call a function variable with `f(args...)`. When a value may instead be a literal,
+use [`evaluate(value, args...)`](../efun/evaluate.md): it calls functions and
+returns other values unchanged.
+
+Prefer the bare function name when no arguments are being bound:
+`evaluate(strindex, "hello", "ll")`. Use `&name(args)` to bind arguments,
+such as `function add_ten = &add(10)`.
+
 Breaking it down by syntax, functions can take the following forms:
 
 * `function_name` - A reference to a function of this program (own or
-  inherited), a simul_efun, or an efun (checked in that order). This is a
-  shorthand form of the next variant.
+  inherited), a simul_efun, or an efun (checked in that order). This is the
+  preferred form when no arguments are bound.
 
 * `&function_name()` - This is equivalent to the above. No arguments are put into
   place in the declaration, but you can still call the function with arguments.
@@ -150,7 +158,7 @@ a compile error.
 
 This syntax leaves the existing meaning of `(: name :)` and `(: name, arg :)`
 unchanged: they return a function value and the last comma-expression value,
-respectively. Use `&name()` and `&name(arg)` for named and bound pointers.
+respectively. Use `name` and `&name(arg)` for named and bound pointers.
 
 ## Bound receivers and function inspection
 

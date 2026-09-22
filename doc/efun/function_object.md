@@ -21,11 +21,10 @@ dynamic pointer does not fall back to its owner. A non-function argument is an e
 ### Examples
 
 ```c
-function_object(foo) == this_object();        // 1, for a local foo
-function_object(&foo()) == this_object();     // 1
-function_object(write) == this_object();      // 1
-function_object(&target->foo()) == target;    // 1
-function_object(&->foo());                    // 0: receiver still unbound
+function_object(foo) == this_object();    // 1, for a local foo
+function_object(write) == this_object();  // 1
+function_object(target->foo) == target;   // 1
+function_object(&->foo());                // 0: receiver still unbound
 ```
 
 `function_info(f)` exposes the owner separately and preserves a bound path string.

@@ -26,7 +26,7 @@ and a task the driver starts on its own (boot, login, a connection event)
 sees 0. A destructed previous object is 0.
 
 A pointer runs as its owner. Firing one is a door, so an efun pointer such
-as `&previous_object()` answers the object that fired it; an object a
+as `previous_object` answers the object that fired it; an object a
 pointer call creates sees the owner, then the firer — the owner twice when
 it fired its own pointer, as a `->` to `this_object()` doubles too.
 

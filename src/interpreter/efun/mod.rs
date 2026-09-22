@@ -31,6 +31,7 @@ pub(crate) mod disable_commands;
 pub(crate) mod dump;
 pub(crate) mod enable_commands;
 pub(crate) mod environment;
+pub(crate) mod evaluate;
 pub(crate) mod exec;
 pub(crate) mod explode;
 pub(crate) mod file_access;
@@ -1230,6 +1231,11 @@ efuns! {
         arity: (3, 1),
         args: [LpcType::String(false), LpcType::String(false) | LpcType::Int(false), LpcType::Int(false)],
     },
+    evaluate => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 0, ellipsis),
+        args: [LpcType::Mixed(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1588,6 +1594,7 @@ mod tests {
                 "classp",
                 "replace_string",
                 "strindex",
+                "evaluate",
             ]
         );
     }

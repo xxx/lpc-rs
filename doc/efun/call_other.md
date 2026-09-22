@@ -32,9 +32,9 @@ This function is the only way to call functions in other objects. Inside the
 called function, `previous_object()` is the caller, even when the receiver is
 `this_object()`.
 
-A pointer to it, `&call_other()`, calls like `&->name()` with the name as its
-second argument: `papplyv(&call_other(), ({ ob, "name" }))` is a pointer that
-calls `ob->name(...)` with whatever it is passed. A second argument that is
+The bare name `call_other` is a pointer to this efun. It calls like `&->name()`
+with the name as its second argument. `papplyv(call_other, ({ ob, "name" }))`
+is a pointer that calls `ob->name(...)` with whatever it is passed. A second argument that is
 not a string is a runtime error.
 
 ### Examples

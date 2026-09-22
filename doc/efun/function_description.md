@@ -31,9 +31,9 @@ formatted output previously returned by `function_name(f)`.
 
 ```c
 // In /example.c, with a local function add(a, b):
-function_description(&add());            // "\"/example\"->add"
+function_description(add);               // "\"/example\"->add"
 function_description(&add(10, ));        // "&\"/example\"->add(?,_)"
-function_description(&write());          // "\"/example\"->write"
+function_description(write);             // "\"/example\"->write"
 function_description(&write("secret"));  // "&\"/example\"->write(?)"
 function_description(&->query_name());   // "->query_name"
 ```
