@@ -510,8 +510,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::PushPartialArg(r) => {
                 self.partial_args.push(r);
             }
-            Instruction::Range(r1, r2, r3, r4) => {
+            Instruction::IndexFromEnd(container, distance, destination) => {
+                self.handle_index_from_end(container, distance, destination)?;
+            }
+            Instruction::Range(r1, r2, r3, r4) | Instruction::RangeFromEnd(_, r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
+
+                let direction = match instruction {
+                    Instruction::RangeFromEnd(kind, ..) => Some(kind),
+                    _ => None,
+                };
+                if direction.is_some()
+                    && (!matches!(
+                        *get_location(&self.stack, &self.context.txn, r2)?,
+                        LpcRef::Int(_)
+                    ) || !matches!(
+                        *get_location(&self.stack, &self.context.txn, r3)?,
+                        LpcRef::Int(_)
+                    ))
+                {
+                    return Err(self.runtime_error("Slice bounds must be integers"));
+                }
 
                 let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
                     let to_idx = |i: LpcIntInner| {
@@ -522,8 +541,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             (len as LpcIntInner + i) as usize
                         }
                     };
-                    let real_start = to_idx(start);
-                    let mut real_end = to_idx(end);
+                    let real_start = if direction.is_some_and(|kind| kind.start_from_end()) {
+                        (len as LpcIntInner).saturating_sub(start).max(0) as usize
+                    } else {
+                        to_idx(start)
+                    };
+                    let mut real_end = if direction.is_some_and(|kind| kind.end_from_end()) {
+                        let end = (len as LpcIntInner).saturating_sub(end);
+                        if end < 0 {
+                            return (1, 0);
+                        }
+                        end as usize
+                    } else {
+                        to_idx(end)
+                    };
 
                     if real_end >= len {
                         real_end = len - 1;

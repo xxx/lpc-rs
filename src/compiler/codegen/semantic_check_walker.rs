@@ -235,6 +235,19 @@ impl TreeWalker for SemanticCheckWalker {
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
         walk_assignment(self, node).await?;
 
+        if let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            r,
+            ..
+        }) = &*node.lhs
+            && matches!(**r, ExpressionNode::Range(_))
+        {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "Slice assignment is not supported")));
+        }
+
         let left_type = node_type(&node.lhs, &self.context)?;
 
         if let Some(right_type) = mismatch(left_type, &node.rhs, &self.context)? {
@@ -411,6 +424,14 @@ impl TreeWalker for SemanticCheckWalker {
                                     })
                             )
                         {
+                            if let ExpressionNode::BinaryOp(BinaryOpNode { r, .. }) = arg
+                                && matches!(**r, ExpressionNode::Range(_))
+                            {
+                                errors.push(lpc_error!(
+                                    arg.span(),
+                                    "A slice cannot be an output argument"
+                                ));
+                            }
                             continue;
                         }
                         let e = if is_efun {

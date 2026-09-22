@@ -29,6 +29,7 @@ so you can concentrate on game code while its existing code handles login.
 | When you need to… | Read |
 |---|---|
 | Store a list of items or a lookup table | [Types](types.md), especially arrays and mappings |
+| Read elements or slices, including positions counted from the end | [Indexing and slices](indexing.md) |
 | Pass a function to another function or schedule a callback | [Functions and closures](function_type.md), [`call_out`](../efun/call_out.md) |
 | Understand a word such as *efun*, *apply*, or *prototype* | [Glossary](../glossary.md) |
 | Check a built-in function's arguments | [Efun reference](../efun) |

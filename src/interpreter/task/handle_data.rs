@@ -267,6 +267,43 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     // }
 
     #[instrument(level = "debug", skip_all)]
+    pub(crate) fn handle_index_from_end(
+        &mut self,
+        container_loc: RegisterVariant,
+        distance_loc: RegisterVariant,
+        destination: RegisterVariant,
+    ) -> lpc_rs_errors::Result<()> {
+        let container = get_location(&self.stack, &self.context.txn, container_loc)?.into_owned();
+        let distance = get_location(&self.stack, &self.context.txn, distance_loc)?.into_owned();
+        let LpcRef::Int(distance) = distance else {
+            return Err(self.runtime_error("Reverse index must be an integer"));
+        };
+        let len = match &container {
+            LpcRef::Array(_) => container
+                .with_array(&self.context.txn, |array| array.len())
+                .unwrap_or_default(),
+            LpcRef::String(_) => container
+                .with_string(|string| string.char_count())
+                .unwrap_or_default(),
+            LpcRef::Bytes(bytes) => bytes.len(),
+            _ => {
+                return Err(
+                    self.runtime_error("Reverse indexing requires an array, string or bytes")
+                );
+            }
+        } as LpcIntInner;
+        let absolute = len.saturating_sub(distance.0);
+        // Keep an out-of-bounds position from being interpreted as a native negative index.
+        let index = if absolute < 0 { len } else { absolute };
+        set_location(
+            &mut self.stack,
+            &self.context.txn,
+            destination,
+            LpcRef::from(index),
+        )
+    }
+
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn handle_load(
         &mut self,

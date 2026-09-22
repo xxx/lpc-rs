@@ -11,6 +11,29 @@ use ustr::Ustr;
 
 use crate::address::Address;
 
+/// Which endpoints of a slice count backward from the collection's length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReverseRange {
+    /// Only the start is a distance from the end.
+    Start,
+    /// Only the end is a distance from the end.
+    End,
+    /// Both endpoints are distances from the end.
+    Both,
+}
+
+impl ReverseRange {
+    /// Whether the start counts from the end.
+    pub fn start_from_end(self) -> bool {
+        matches!(self, Self::Start | Self::Both)
+    }
+
+    /// Whether the end counts from the end.
+    pub fn end_from_end(self) -> bool {
+        matches!(self, Self::End | Self::Both)
+    }
+}
+
 /// One argument of a call: a value copied into the callee, a cell the
 /// callee aliases in place of minting its own, or an array whose elements
 /// are passed one per argument.
@@ -297,6 +320,19 @@ pub enum Instruction {
     /// bitwise ^ comparison.
     /// x.2 = x.0 ^ x.1
     Xor(RegisterVariant, RegisterVariant, RegisterVariant),
+
+    /// Resolve x.1 as a distance from the end of x.0 into an absolute index in x.2.
+    /// Positions before the start normalize to the length, preserving out-of-bounds access.
+    IndexFromEnd(RegisterVariant, RegisterVariant, RegisterVariant),
+
+    /// Slice with explicit endpoint directions; unmarked endpoints retain native indexing.
+    RangeFromEnd(
+        ReverseRange,
+        RegisterVariant,
+        RegisterVariant,
+        RegisterVariant,
+        RegisterVariant,
+    ),
 }
 
 impl Instruction {
@@ -312,6 +348,8 @@ impl Instruction {
             | Self::Cast(_, _, d)
             | Self::Copy(_, d)
             | Self::FunctionPtrConst { location: d, .. }
+            | Self::IndexFromEnd(_, _, d)
+            | Self::RangeFromEnd(_, _, _, _, d)
             | Self::Load(_, _, d)
             | Self::LoadMappingKey(_, _, d)
             | Self::MapConst(d)
@@ -399,6 +437,10 @@ impl Instruction {
             Self::Jncmp(kind, a0, a1, a2) => Self::Jncmp(kind, f(a0), f(a1), a2),
             Self::Jnz(a0, a1) => Self::Jnz(f(a0), a1),
             Self::Jz(a0, a1) => Self::Jz(f(a0), a1),
+            Self::IndexFromEnd(a0, a1, a2) => Self::IndexFromEnd(f(a0), f(a1), f(a2)),
+            Self::RangeFromEnd(kind, a0, a1, a2, a3) => {
+                Self::RangeFromEnd(kind, f(a0), f(a1), f(a2), f(a3))
+            }
             Self::Load(a0, a1, a2) => Self::Load(f(a0), f(a1), f(a2)),
             Self::LoadMappingKey(a0, a1, a2) => Self::LoadMappingKey(f(a0), f(a1), f(a2)),
             Self::MapConst(a0) => Self::MapConst(f(a0)),
@@ -481,7 +523,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 45;
+    pub const COUNT: usize = 47;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -530,6 +572,8 @@ impl Instruction {
         "store",
         "sub",
         "xor",
+        "index_from_end",
+        "range_from_end",
     ];
 
     /// This variant's dense index, `0..Self::COUNT`, in declaration order.
@@ -580,6 +624,8 @@ impl Instruction {
             Self::Store(..) => 42,
             Self::Sub(..) => 43,
             Self::Xor(..) => 44,
+            Self::IndexFromEnd(..) => 45,
+            Self::RangeFromEnd(..) => 46,
         }
     }
 
@@ -700,6 +746,14 @@ impl Display for Instruction {
             Instruction::PushPartialArg(r) => {
                 let s = r.map(|r| r.to_string()).unwrap_or_default();
                 write!(f, "{} {s}", self.mnemonic())
+            }
+            Instruction::IndexFromEnd(r1, r2, r3) => {
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
+            }
+            Instruction::RangeFromEnd(kind, r1, r2, r3, r4) => {
+                let start = if kind.start_from_end() { "<" } else { "" };
+                let end = if kind.end_from_end() { "<" } else { "" };
+                write!(f, "{} {r1}, {start}{r2}, {end}{r3}, {r4}", self.mnemonic())
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "{} {r1}, {r2}, {r3}, {r4}", self.mnemonic())
@@ -932,6 +986,8 @@ mod tests {
             Store(r(), r(), r()),
             Sub(r(), r(), r()),
             Xor(r(), r(), r()),
+            IndexFromEnd(r(), r(), r()),
+            RangeFromEnd(ReverseRange::Both, r(), r(), r(), r()),
         ]
     }
 
@@ -968,6 +1024,11 @@ mod tests {
         assert_eq!(Cast(r(), LpcType::Int(false), d).dest_register(), Some(d));
         assert_eq!(Copy(r(), d).dest_register(), Some(d));
         assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
+        assert_eq!(IndexFromEnd(r(), r(), d).dest_register(), Some(d));
+        assert_eq!(
+            RangeFromEnd(ReverseRange::Both, r(), r(), r(), d).dest_register(),
+            Some(d)
+        );
         assert_eq!(Negate(r(), d).dest_register(), Some(d));
         assert_eq!(Range(r(), r(), r(), d).dest_register(), Some(d));
         assert_eq!(Sizeof(r(), d).dest_register(), Some(d));

@@ -8,7 +8,7 @@ use bit_set::BitSet;
 use indexmap::IndexMap;
 use lpc_rs_asm::{
     address::{Address, Label},
-    instruction::{Arg, ArgList, Comparison, Instruction},
+    instruction::{Arg, ArgList, Comparison, Instruction, ReverseRange},
 };
 use lpc_rs_core::{
     CREATE_FUNCTION, INIT_GLOBALS, INIT_PROGRAM, LpcIntInner, RegisterSize, ScopeId,
@@ -604,36 +604,77 @@ impl CodegenWalker {
         Ok(current_register)
     }
 
+    async fn emit_index_bound(
+        &mut self,
+        expr: &mut ExpressionNode,
+    ) -> Result<(RegisterVariant, bool)> {
+        let (expr, from_end) = match expr {
+            ExpressionNode::UnaryOp(UnaryOpNode {
+                op: UnaryOperation::FromEnd,
+                expr,
+                ..
+            }) => (&mut **expr, true),
+            expr => (expr, false),
+        };
+        expr.visit(self).await?;
+        Ok((self.current_result, from_end))
+    }
+
+    async fn emit_index(
+        &mut self,
+        container: RegisterVariant,
+        expr: &mut ExpressionNode,
+    ) -> Result<RegisterVariant> {
+        let (index, from_end) = self.emit_index_bound(expr).await?;
+        if from_end {
+            let result = self.register_counter.next().unwrap().as_local();
+            push_instruction!(
+                self,
+                Instruction::IndexFromEnd(container, index, result),
+                expr.span()
+            );
+            Ok(result)
+        } else {
+            Ok(index)
+        }
+    }
+
     /// Emit the instruction(s) to take the range of an array or string
     /// # Arguments
     /// `reference` - The [`Register`] holding the reference to the ref we're
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
     async fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
-        let first_index = if let Some(expr) = &mut *node.l {
-            expr.visit(self).await?;
-            self.current_result
+        let (first_index, start_from_end) = if let Some(expr) = &mut *node.l {
+            self.emit_index_bound(expr).await?
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
             // 0.
-            self.register_counter.next().unwrap().as_local()
+            (self.register_counter.next().unwrap().as_local(), false)
         };
 
-        let second_index = if let Some(expr) = &mut *node.r {
-            expr.visit(self).await?;
-            self.current_result
+        let (second_index, end_from_end) = if let Some(expr) = &mut *node.r {
+            self.emit_index_bound(expr).await?
         } else {
             // A missing range end means just go to the end of the array.
-            self.constant(LpcConstant::Int(-1), node.span)?
+            (self.constant(LpcConstant::Int(-1), node.span)?, false)
         };
 
         let result = self.register_counter.next().unwrap().as_local();
         self.current_result = result;
-        push_instruction!(
-            self,
-            Instruction::Range(reference, first_index, second_index, result,),
-            node.span
-        );
+        let direction = match (start_from_end, end_from_end) {
+            (true, true) => Some(ReverseRange::Both),
+            (true, false) => Some(ReverseRange::Start),
+            (false, true) => Some(ReverseRange::End),
+            (false, false) => None,
+        };
+        let instruction = match direction {
+            Some(kind) => {
+                Instruction::RangeFromEnd(kind, reference, first_index, second_index, result)
+            }
+            None => Instruction::Range(reference, first_index, second_index, result),
+        };
+        push_instruction!(self, instruction, node.span);
 
         Ok(())
     }
@@ -1197,8 +1238,7 @@ impl CodegenWalker {
     ) -> Result<()> {
         container.visit(self).await?;
         let container_result = self.current_result;
-        index.visit(self).await?;
-        let index_result = self.current_result;
+        let index_result = self.emit_index(container_result, index).await?;
 
         let element = self.register_counter.next().unwrap().as_local();
         let load = Instruction::Load(container_result, index_result, element);
@@ -1298,8 +1338,7 @@ impl TreeWalker for CodegenWalker {
             }) => {
                 l.visit(self).await?;
                 let var_result = self.current_result;
-                r.visit(self).await?;
-                let index_result = self.current_result;
+                let index_result = self.emit_index(var_result, r).await?;
 
                 let store = Instruction::Store(rhs_result, var_result, index_result);
 
@@ -1405,8 +1444,12 @@ impl TreeWalker for CodegenWalker {
             _ => { /* fallthrough */ }
         }
 
-        node.r.visit(self).await?;
-        let reg_right = self.current_result;
+        let reg_right = if node.op == BinaryOperation::Index {
+            self.emit_index(reg_left, &mut node.r).await?
+        } else {
+            node.r.visit(self).await?;
+            self.current_result
+        };
 
         let reg_result = self.register_counter.next().unwrap().as_local();
         self.current_result = reg_result;
@@ -1508,8 +1551,7 @@ impl TreeWalker for CodegenWalker {
                 };
                 l.visit(self).await?;
                 let container = self.current_result;
-                r.visit(self).await?;
-                let key = self.current_result;
+                let key = self.emit_index(container, r).await?;
                 let cell = self.location_of(temp)?;
                 if !matches!(cell, RegisterVariant::Upvalue(_)) {
                     return Err(lpc_bug!(
@@ -2513,6 +2555,12 @@ impl TreeWalker for CodegenWalker {
         let location = self.current_result;
 
         self.current_result = match node.op {
+            UnaryOperation::FromEnd => {
+                return Err(lpc_bug!(
+                    node.span,
+                    "Reverse index outside an index or slice"
+                ));
+            }
             UnaryOperation::Negate => {
                 let reg_result = self.register_counter.next().unwrap().as_local();
 

@@ -40,12 +40,12 @@
 
     - `string`s can be indexed with the `[]` operator: `s[i]` is the character code (an
       `int`) at index `i`, and `s[a..b]` is the substring from `a` to `b` inclusive (a
-      `string`). Indexing starts at 0; negative indices count from the end.
+      `string`). Indexing starts at 0; negative indices and explicit `<n` indices
+      count from the end. See [indexing and slices](indexing.md) for bounds and writes.
     - `string`s can be repeated with the `*` operator, which will create a new `string` with
       the contents of the original repeated the given number of times.
-    - `string`s are mutable, and are _value_ types in LPC, meaning they are
-      copied when assigned, or passed to functions. This is a difference from
-      numerous other languages.
+    - `string`s are value types in LPC. Assigning a new string does not change
+      another variable holding the old value. Indexed string writes are unsupported.
     - Examples:
       ```c
       string x = "hello";
@@ -55,7 +55,7 @@
       string hi2 = "hello" ", " "world!";
       string foos = "foo" * 3; // "foofoofoo"
       int i = x[0]; // 104
-      x[1] = 'u'; // x becomes "hullo"
+      x = x[0..0] + "u" + x[2..]; // x becomes "hullo"
       ```
 
 * `bytes`
@@ -70,7 +70,8 @@
     - `bytes` can be indexed with the `[]` operator: `b[i]` is the byte value (an `int`, 0 to 255)
       at index `i` -- 0 when `i` falls outside the buffer -- and `b[a..c]` is the subsequence from
       `a` to `c` inclusive (a `bytes`). Indexing starts at 0; negative indices count from the end,
-      as with `string`s.
+      as with `string`s. Explicit `<n` indices and slice endpoints are also supported;
+      see [indexing and slices](indexing.md).
     - `sizeof(b)` is the number of bytes; `foreach (int c : b)` visits each byte in order.
     - `==`, `!=`, `<` and the other comparisons between two `bytes` values compare them by
       content, byte by byte.

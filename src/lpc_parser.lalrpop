@@ -689,13 +689,26 @@ PostfixExpression: ExpressionNode = {
     },
 };
 
+IndexBound: ExpressionNode = {
+    <Expression>,
+    <left:"<"> <expr:Expression> =>? {
+        let span = Span::combine(Some(left), expr.span());
+        Ok(collapse_unary_op(UnaryOpNode {
+            expr: Box::new(expr),
+            op: UnaryOperation::FromEnd,
+            is_post: false,
+            span,
+        })?)
+    },
+};
+
 IndexExpression: ExpressionNode = {
-    <l:PostfixExpression> "[" <r:Expression> <right:"]"> =>? {
+    <l:PostfixExpression> "[" <r:IndexBound> <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
     },
-    <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> =>? {
+    <l:PostfixExpression> "[" <e1:IndexBound> ".." <e2:IndexBound> <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         let r = ExpressionNode::Range(RangeNode {
@@ -706,7 +719,7 @@ IndexExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
     },
-    <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> =>? {
+    <l:PostfixExpression> "[" ".." <e:IndexBound> <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         let r = ExpressionNode::Range(RangeNode {
@@ -717,7 +730,7 @@ IndexExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
     },
-    <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> =>? {
+    <l:PostfixExpression> "[" <e:IndexBound> ".." <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         let r = ExpressionNode::Range(RangeNode {

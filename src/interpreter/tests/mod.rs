@@ -13,6 +13,7 @@ mod parser;
 mod pointers;
 mod previous_object;
 mod references;
+mod reverse_indexing;
 mod security;
 mod shadows;
 mod simul_efuns;

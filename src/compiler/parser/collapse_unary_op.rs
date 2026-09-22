@@ -26,9 +26,10 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> Result<ExpressionNode, LpcError> 
             }),
             _ => ExpressionNode::UnaryOp(node),
         },
-        UnaryOperation::Inc | UnaryOperation::Dec | UnaryOperation::Bang => {
-            ExpressionNode::UnaryOp(node)
-        }
+        UnaryOperation::Inc
+        | UnaryOperation::Dec
+        | UnaryOperation::Bang
+        | UnaryOperation::FromEnd => ExpressionNode::UnaryOp(node),
         UnaryOperation::BitwiseNot => match &*node.expr {
             ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
                 value: !x.value,

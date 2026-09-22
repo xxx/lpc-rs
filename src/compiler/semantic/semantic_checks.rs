@@ -201,6 +201,28 @@ pub fn check_binary_operation_types(
             (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
         },
         BinaryOperation::Index => {
+            let from_end = |expr: &ExpressionNode| {
+                matches!(
+                    expr,
+                    ExpressionNode::UnaryOp(UnaryOpNode {
+                        op: UnaryOperation::FromEnd,
+                        ..
+                    })
+                )
+            };
+            let has_reverse_bound = match &*node.r {
+                ExpressionNode::Range(range) => {
+                    range.l.as_ref().as_ref().is_some_and(from_end)
+                        || range.r.as_ref().as_ref().is_some_and(from_end)
+                }
+                expr => from_end(expr),
+            };
+            if left_type == LpcType::Mapping(false) && has_reverse_bound {
+                return Err(lpc_error!(
+                    node.span,
+                    "Reverse indexing requires an array, string or bytes"
+                ));
+            }
             if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
                 || ((left_type.is_array()
                     || matches!(left_type, LpcType::String(false) | LpcType::Bytes(false)))
@@ -285,7 +307,7 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
             LpcType::Int(false) | LpcType::Mixed(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
-        UnaryOperation::BitwiseNot => match expr_type {
+        UnaryOperation::BitwiseNot | UnaryOperation::FromEnd => match expr_type {
             LpcType::Int(false) | LpcType::Mixed(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
