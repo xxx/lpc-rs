@@ -29,6 +29,11 @@ pub fn floatp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Float(_)))
 }
 
+/// `classp`: 1 if the argument is a class instance, including an empty class.
+pub fn classp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Class(_)))
+}
+
 /// `functionp`: 1 if the argument is a function pointer.
 pub fn functionp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Function(_)))
@@ -84,12 +89,16 @@ mod tests {
         mixed n = (: 1 :);
         bytes o = to_bytes("x", "utf8");
         mixed p = to_bytes("x", "utf8");
+        class record { int n; }
+        class record q = new(class record);
+        mixed r = q;
 
         int *create() {
             return ({
                 PRED(a), PRED(b), PRED(c), PRED(d), PRED(dd), PRED(e), PRED(f), PRED(g),
                 PRED(h), PRED(i), PRED(j), PRED(k), PRED(kk), PRED(l), PRED(m), PRED(n),
                 PRED(o), PRED(p),
+                PRED(q), PRED(r),
             });
         }
     "# };
@@ -131,9 +140,12 @@ mod tests {
                 "bytesp",
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
             ),
+            ("classp", [0; 18]),
         ];
 
         for (predicate, expected) in CASES {
+            let mut expected = expected.to_vec();
+            expected.extend([i64::from(*predicate == "classp"); 2]);
             let master = FIXTURE.replace("PRED", predicate);
             let vm = Vm::new(test_config());
             let master_proc = vm
@@ -148,5 +160,23 @@ mod tests {
                 })
                 .unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn classp_distinguishes_empty_instances_from_null_and_class_arrays() {
+        use crate::{interpreter::lpc_ref::LpcRef, test_support::run_prog};
+        let result = run_prog(
+            r#"
+            class empty {}
+            int create() {
+                class empty absent;
+                class empty value = new(class empty);
+                class empty *values = ({ value });
+                return classp(value) && !classp(absent) && !classp(values) && !classp(0);
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
     }
 }

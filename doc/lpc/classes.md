@@ -1,8 +1,9 @@
 # Classes
 
 Classes are shared, nominally typed records. They support declarations,
-construction with named initializers, and member reads and writes. Copying,
-reflection helpers, and persistence are not implemented yet.
+construction with named initializers, member reads and writes, shallow copying,
+and field evolution across compiled definitions. General reflection and
+persistence are not implemented yet.
 
 ```c
 class position {
@@ -81,7 +82,8 @@ receiver is not a class instance. Access through zero is an error.
 
 Assignment shares an instance. Equality and mapping keys use instance identity,
 so two separately constructed records with identical values are unequal.
-`typeof(instance)` returns `9`; `arrayp(instance)` is false. Positional indexing
+`classp(instance)` returns `1`; `typeof(instance)` returns `9`;
+`arrayp(instance)` is false. Positional indexing
 and arithmetic on instances are unsupported. `sizeof(instance)` returns zero,
 like other values without a defined size.
 
@@ -123,6 +125,30 @@ slots remain until the instance is collected. Removing and later reintroducing
 a field with its previous name and type can therefore recover its old value;
 type changes that later revert have the same behavior.
 
-Native shallow-copy helpers and persistence are planned separately. Saving a
-class currently raises an error, including when nested inside a collection;
+Saving a class currently raises an error, including when nested inside a collection;
 `nosave` globals retain their normal exclusion behavior.
+
+## Shallow copying
+
+[`copy_class(value)`](../efun/copy_class.md) creates an independent instance of
+the same nominal class. It copies every materialized view and all retained field
+storage, including fields accessible only to older code. Compatible fields
+continue to share storage between views within the copy. No new view is acquired
+just to copy the instance.
+
+```c
+class position duplicate = copy_class(origin);
+duplicate.x = 7;       // origin.x is unchanged
+duplicate.next.x = 8;  // origin.next.x changes too
+```
+
+Nested reference values stay shared. Self-references still point to the original
+instance; copying does not walk the reference graph. The new instance compares
+unequal to the original, even before any field changes. Its allocation follows
+normal transaction commit and rollback rules.
+
+Neither copying nor [`classp(value)`](../efun/classp.md) requires a class
+definition visible in the caller. This lets a generic helper copy records while
+preserving their nominal identity. `copy_class(0)` is an error; `classp(0)` is
+false. Ordinary arrays carry no class identity and cannot be converted back
+into a class by this helper.

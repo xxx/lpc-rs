@@ -20,6 +20,7 @@ pub(crate) mod commands;
 pub(crate) mod compile_string;
 pub(crate) mod compose;
 pub(crate) mod conversions;
+pub(crate) mod copy_class;
 pub(crate) mod crypt;
 pub(crate) mod ctime;
 pub(crate) mod debug;
@@ -1204,6 +1205,12 @@ efuns! {
     query_object_recompile [async in object_update] => {
         returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
     },
+    copy_class => {
+        returns: LpcType::Mixed(false), arity: 1, args: [LpcType::Mixed(false)],
+    },
+    classp [in type_predicates] => {
+        returns: LpcType::Int(false), arity: 1, args: [LpcType::Mixed(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1557,6 +1564,8 @@ mod tests {
                 "request_clean_up",
                 "request_object_recompile",
                 "query_object_recompile",
+                "copy_class",
+                "classp",
             ]
         );
     }

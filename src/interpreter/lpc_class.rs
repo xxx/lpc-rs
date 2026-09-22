@@ -91,6 +91,21 @@ impl LpcClass {
     }
 }
 
+pub(crate) fn copy_class(value: &LpcRef, txn: &TxnHandle) -> Result<LpcRef> {
+    let LpcRef::Class(cell) = value else {
+        return Err(LpcError::runtime(format!(
+            "copy_class: expected a class, found {}",
+            value.type_name()
+        )));
+    };
+    txn.with(|t| {
+        let instance = t
+            .read_class(cell.id)
+            .ok_or_else(|| LpcError::runtime("class is not in this transaction's world"))?;
+        Ok(LpcRef::Class(t.mint_class((*instance).clone())))
+    })
+}
+
 fn resolve(
     receiver: &LpcRef,
     txn: &TxnHandle,
@@ -592,6 +607,326 @@ mod tests {
         ClassScope {
             definitions: vec![definition].into_boxed_slice(),
         }
+    }
+
+    #[test]
+    fn copying_preserves_all_views_without_acquiring_one_or_changing_the_source() {
+        use lpc_rs_core::lpc_type::LpcType;
+        let txn = TxnHandle::empty();
+        let old = scope(definition(&[
+            ("shared", LpcType::Int(false)),
+            ("changed", LpcType::Int(false)),
+            ("removed", LpcType::Int(false)),
+        ]));
+        let new = scope(definition(&[
+            ("changed", LpcType::String(false)),
+            ("shared", LpcType::Int(false)),
+            ("added", LpcType::Int(false)),
+        ]));
+        let cell = txn.with(|t| t.mint_class(LpcClass::new(old.definitions[0].clone())));
+        let original = LpcRef::Class(cell.clone());
+        for (scope, field, value) in [
+            (&old, "shared", 7.into()),
+            (&old, "changed", 8.into()),
+            (&old, "removed", 9.into()),
+            (&new, "changed", "new".into()),
+            (&new, "added", 10.into()),
+        ] {
+            write_member(&original, &txn, scope, ustr::ustr(field), value).unwrap();
+        }
+        let before = txn.with(|t| t.read_class(cell.id)).unwrap();
+        let copy = copy_class(&original, &txn).unwrap();
+        let LpcRef::Class(copy_cell) = &copy else {
+            panic!("class copy")
+        };
+        assert_ne!(original, copy);
+        assert_eq!(txn.with(|t| t.read_class(copy_cell.id)).unwrap(), before);
+        assert_eq!(txn.with(|t| t.read_class(cell.id)).unwrap(), before);
+        write_member(&copy, &txn, &new, ustr::ustr("shared"), 70.into()).unwrap();
+        write_member(&copy, &txn, &old, ustr::ustr("removed"), 90.into()).unwrap();
+        assert_eq!(
+            read_member(&copy, &txn, &old, ustr::ustr("shared")).unwrap(),
+            LpcRef::from(70)
+        );
+        assert_eq!(
+            read_member(&copy, &txn, &old, ustr::ustr("changed")).unwrap(),
+            LpcRef::from(8)
+        );
+        assert_eq!(
+            read_member(&copy, &txn, &new, ustr::ustr("changed")).unwrap(),
+            LpcRef::from("new")
+        );
+        assert_eq!(
+            read_member(&copy, &txn, &new, ustr::ustr("added")).unwrap(),
+            LpcRef::from(10)
+        );
+        assert_eq!(txn.with(|t| t.read_class(cell.id)).unwrap(), before);
+    }
+
+    #[test]
+    fn removed_or_type_reverted_fields_reuse_their_retained_values() {
+        use lpc_rs_core::lpc_type::LpcType;
+        let txn = TxnHandle::empty();
+        let old = scope(definition(&[("count", LpcType::Int(false))]));
+        let interim = scope(definition(&[
+            ("count", LpcType::String(false)),
+            ("added", LpcType::Int(false)),
+        ]));
+        let reintroduced = scope(definition(&[
+            ("added", LpcType::Int(false)),
+            ("count", LpcType::Int(false)),
+        ]));
+        let instance =
+            LpcRef::Class(txn.with(|t| t.mint_class(LpcClass::new(old.definitions[0].clone()))));
+        write_member(&instance, &txn, &old, ustr::ustr("count"), 7.into()).unwrap();
+        write_member(
+            &instance,
+            &txn,
+            &interim,
+            ustr::ustr("count"),
+            LpcRef::from("text"),
+        )
+        .unwrap();
+        assert_eq!(
+            read_member(&instance, &txn, &reintroduced, ustr::ustr("count")).unwrap(),
+            LpcRef::from(7)
+        );
+        write_member(
+            &instance,
+            &txn,
+            &reintroduced,
+            ustr::ustr("count"),
+            LpcRef::from(8),
+        )
+        .unwrap();
+        assert_eq!(
+            read_member(&instance, &txn, &old, ustr::ustr("count")).unwrap(),
+            LpcRef::from(8)
+        );
+        assert_eq!(
+            read_member(&instance, &txn, &interim, ustr::ustr("count")).unwrap(),
+            LpcRef::from("text")
+        );
+    }
+
+    #[test]
+    fn aborted_view_acquisition_does_not_publish_new_fields() {
+        use crate::interpreter::stm::{Committer, Transaction};
+        use lpc_rs_core::lpc_type::LpcType;
+        let mut committer = Committer::new();
+        let old = definition(&[("n", LpcType::Int(false))]);
+        let new = scope(definition(&[
+            ("added", LpcType::Int(false)),
+            ("n", LpcType::Int(false)),
+        ]));
+        let seed = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let cell = seed.with(|t| t.mint_class(LpcClass::new(old)));
+        let instance = LpcRef::Class(cell.clone());
+        let before = seed.with(|t| t.read_class(cell.id)).unwrap();
+        committer.commit(seed.with(|t| t.take_changeset())).unwrap();
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(
+            read_member(&instance, &writer, &new, ustr::ustr("added")).unwrap(),
+            NULL
+        );
+        write_member(&instance, &writer, &new, ustr::ustr("added"), 42.into()).unwrap();
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(reader.with(|t| t.read_class(cell.id)).unwrap(), before);
+        drop(writer);
+        assert_eq!(
+            read_member(&instance, &reader, &new, ustr::ustr("added")).unwrap(),
+            NULL
+        );
+        write_member(&instance, &reader, &new, ustr::ustr("added"), 9.into()).unwrap();
+        committer
+            .commit(reader.with(|t| t.take_changeset()))
+            .unwrap();
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(
+            read_member(&instance, &reader, &new, ustr::ustr("added")).unwrap(),
+            LpcRef::from(9)
+        );
+    }
+
+    #[test]
+    fn view_acquisition_conflicts_with_field_writes_and_retries_from_current_values() {
+        use crate::interpreter::stm::{Committer, Transaction};
+        use lpc_rs_core::lpc_type::LpcType;
+        let mut committer = Committer::new();
+        let old = scope(definition(&[("n", LpcType::Int(false))]));
+        let new = scope(definition(&[
+            ("added", LpcType::Int(false)),
+            ("n", LpcType::Int(false)),
+        ]));
+        let seed = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let instance =
+            LpcRef::Class(seed.with(|t| t.mint_class(LpcClass::new(old.definitions[0].clone()))));
+        committer.commit(seed.with(|t| t.take_changeset())).unwrap();
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let adapting = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(
+            read_member(&instance, &adapting, &new, ustr::ustr("n")).unwrap(),
+            NULL
+        );
+        write_member(&instance, &writer, &old, ustr::ustr("n"), 7.into()).unwrap();
+        committer
+            .commit(writer.with(|t| t.take_changeset()))
+            .unwrap();
+        assert!(
+            committer
+                .commit(adapting.with(|t| t.take_changeset()))
+                .is_err()
+        );
+        let retry = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(
+            read_member(&instance, &retry, &new, ustr::ustr("n")).unwrap(),
+            LpcRef::from(7)
+        );
+        assert_eq!(
+            read_member(&instance, &retry, &new, ustr::ustr("added")).unwrap(),
+            NULL
+        );
+        committer
+            .commit(retry.with(|t| t.take_changeset()))
+            .unwrap();
+    }
+
+    #[test]
+    fn copying_reads_pending_values_and_aborted_copies_are_absent() {
+        use crate::interpreter::stm::{Committer, Transaction};
+        use lpc_rs_core::lpc_type::LpcType;
+        let mut committer = Committer::new();
+        let scope = scope(definition(&[("n", LpcType::Int(false))]));
+        let seed = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let instance =
+            LpcRef::Class(seed.with(|t| t.mint_class(LpcClass::new(scope.definitions[0].clone()))));
+        committer.commit(seed.with(|t| t.take_changeset())).unwrap();
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        write_member(&instance, &writer, &scope, ustr::ustr("n"), 7.into()).unwrap();
+        let copy = copy_class(&instance, &writer).unwrap();
+        assert_eq!(
+            read_member(&copy, &writer, &scope, ustr::ustr("n")).unwrap(),
+            LpcRef::from(7)
+        );
+        drop(writer);
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert!(read_member(&copy, &reader, &scope, ustr::ustr("n")).is_err());
+        assert_eq!(
+            read_member(&instance, &reader, &scope, ustr::ustr("n")).unwrap(),
+            NULL
+        );
+    }
+
+    #[test]
+    fn copying_conflicts_when_its_source_changes_before_commit() {
+        use crate::interpreter::stm::{Committer, Transaction};
+        use lpc_rs_core::lpc_type::LpcType;
+        let mut committer = Committer::new();
+        let scope = scope(definition(&[("n", LpcType::Int(false))]));
+        let seed = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let instance =
+            LpcRef::Class(seed.with(|t| t.mint_class(LpcClass::new(scope.definitions[0].clone()))));
+        committer.commit(seed.with(|t| t.take_changeset())).unwrap();
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let copier = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let abandoned = copy_class(&instance, &copier).unwrap();
+        write_member(&instance, &writer, &scope, ustr::ustr("n"), 7.into()).unwrap();
+        committer
+            .commit(writer.with(|t| t.take_changeset()))
+            .unwrap();
+        assert!(
+            committer
+                .commit(copier.with(|t| t.take_changeset()))
+                .is_err()
+        );
+        let retry = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert!(copy_class(&abandoned, &retry).is_err());
+        let copy = copy_class(&instance, &retry).unwrap();
+        assert_eq!(
+            read_member(&copy, &retry, &scope, ustr::ustr("n")).unwrap(),
+            LpcRef::from(7)
+        );
+        committer
+            .commit(retry.with(|t| t.take_changeset()))
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn independently_compiled_views_and_generic_copying_share_only_matching_fields() {
+        use crate::{
+            interpreter::vm::Vm,
+            test_support::{lib_holding, temp_lib_config},
+        };
+        let header = r#"
+            #ifdef UPDATED
+            class record { string changed; int renamed, shared, added; }
+            #else
+            class record { int shared, removed, changed; }
+            #endif
+        "#;
+        let root = lib_holding("class-evolution-programs", &[("record.h", header)]);
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/old.c",
+            r#"
+            #include "record.h"
+            mixed make() { return new(class record, shared: 7, removed: 8, changed: 9); }
+            int check(class record r, int shared) {
+                return r.shared == shared && r.removed == 8 && r.changed == 9;
+            }
+            int update(mixed r) { r.shared++; return ++r.removed; }
+        "#,
+        )
+        .await
+        .unwrap();
+        vm.initialize_process_from_code(
+            "/new.c",
+            r#"
+            #define UPDATED
+            #include "record.h"
+            int adapt(class record r) {
+                if (r.shared != 7 || r.changed != 0 || r.added != 0 || r.renamed != 0) return 0;
+                r.shared = 70; r.changed = "new"; r.added = 10;
+                return 1;
+            }
+            int check(mixed r, int shared) {
+                return r.shared == shared && r.changed == "new" && r.added == 10 && r.renamed == 0;
+            }
+            int rejected(mixed r) {
+                mixed wrong = catch(r.changed = 123);
+                mixed removed = catch(r.removed);
+                return stringp(wrong) && stringp(removed) && r.changed == "new";
+            }
+        "#,
+        )
+        .await
+        .unwrap();
+        vm.initialize_process_from_code(
+            "/generic.c",
+            r#"
+            mixed duplicate(mixed r) { return classp(r) ? copy_class(r) : 0; }
+        "#,
+        )
+        .await
+        .unwrap();
+        let result = vm
+            .initialize_process_from_code(
+                "/runner.c",
+                r#"
+            int create() {
+                mixed original = "/old"->make();
+                if (!"/new"->adapt(original) || !"/old"->check(original, 70)) return 0;
+                mixed copy = "/generic"->duplicate(original);
+                if (!classp(copy) || copy == original || !"/old"->check(copy, 70)) return 0;
+                if ("/old"->update(copy) != 9) return 0;
+                return "/new"->check(copy, 71) && "/new"->check(original, 70) &&
+                    "/old"->check(original, 70) && "/new"->rejected(copy);
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
     }
 
     #[test]

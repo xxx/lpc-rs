@@ -78,6 +78,79 @@ fn timer(vm: &Vm) -> u64 {
 }
 
 #[tokio::test]
+async fn retained_inherited_closures_share_compatible_class_fields_after_recompile() {
+    let base = r#"
+        class record { int shared, changed; int *removed; }
+        function reader(class record r) {
+            return (: ++r.shared + ++r.changed + ++r.removed[0] :);
+        }
+    "#;
+    let original = r#"
+        inherit "/base";
+        class record value;
+        function saved;
+        void create() {
+            value = new(class record, shared: 10, changed: 20, removed: ({ 30 }));
+            saved = reader(value);
+        }
+        int result() { return saved(); }
+    "#;
+    let updated = r#"
+        inherit "/base";
+        function saved;
+        class record value;
+        int adapt() {
+            if (value.shared != 10 || value.changed != 0 || value.added != 0) return 0;
+            value.changed = "new"; value.shared = 100; value.added = 5;
+            return 1;
+        }
+        int result() { return saved(); }
+        int intact() { return value.changed == "new" && value.added == 5 && value.shared == 102; }
+    "#;
+    let (root, mut vm, admin, target) =
+        setup("recompile-class-views", original, &[("base.c", base)]).await;
+    std::fs::write(
+        root.join("base.c"),
+        r#"
+        class record { string changed; int added, shared; }
+    "#,
+    )
+    .unwrap();
+    upgrade(&root, &mut vm, &admin, updated).await;
+    assert_eq!(call(&vm, &target, "adapt").await, LpcRef::from(1));
+    for expected in [153, 156] {
+        vm.global_state.gc().await.unwrap().unwrap();
+        assert_eq!(call(&vm, &target, "result").await, LpcRef::from(expected));
+    }
+    assert_eq!(call(&vm, &target, "intact").await, LpcRef::from(1));
+}
+
+#[tokio::test]
+async fn reintroducing_a_class_field_after_recompile_recovers_its_retained_value() {
+    let original = r#"
+        class record { int count; }
+        class record value = new(class record, count: 7);
+        int result() { return value.count; }
+    "#;
+    let removed = r#"
+        class record { int other; }
+        class record value;
+        int result() { return value.other++; }
+    "#;
+    let reintroduced = r#"
+        class record { int other, count; }
+        class record value;
+        int result() { return value.count == 7 && value.other == 1; }
+    "#;
+    let (root, mut vm, admin, target) = setup("recompile-class-reintroduced", original, &[]).await;
+    upgrade(&root, &mut vm, &admin, removed).await;
+    assert_eq!(call(&vm, &target, "result").await, LpcRef::from(0));
+    vm.global_state.gc().await.unwrap().unwrap();
+    upgrade(&root, &mut vm, &admin, reintroduced).await;
+    assert_eq!(call(&vm, &target, "result").await, LpcRef::from(1));
+}
+
+#[tokio::test]
 async fn repeating_named_callouts_use_each_updated_program_and_keep_their_schedule() {
     let original = r#"
         int ticks;
