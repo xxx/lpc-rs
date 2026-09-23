@@ -360,3 +360,49 @@ fn a_list_one_past_the_default_depth_is_too_deep() {
     let e = on_a_1_mib_stack(async move { fails_with(deep_config(), "", &[], &main).await });
     assert!(e.contains("parse_string: parse deeper than 4096"), "{e}");
 }
+
+#[tokio::test]
+async fn long_repeated_separators_retry_blocked_actions_and_can_exhaust() {
+    let words: Vec<_> = (0..17).map(|i| format!("w{i}")).collect();
+    let input = words.join(" at ");
+    let target = words[1..].join(" at ");
+    let main = format!(
+        r#"
+        string grammar = "
+            whitespace = /[ ]+/
+            word = /[a-z0-9]+/
+            S: Words 'at' Words ? accept
+            Words: word ? text
+            Words: Words word ? text
+            Words: Words 'at' ? text
+        ";
+        int calls, allow;
+        mixed *text(mixed *t) {{ return ({{ implode(t, " ") }}); }}
+        mixed accept(mixed *t) {{
+            calls++;
+            if (!allow || t[0] != "w0") return 0;
+            return ({{ t[0], t[2] }});
+        }}
+        mixed *create() {{
+            mixed refused = parse_string(grammar, "{input}");
+            allow = 1;
+            mixed *accepted = parse_string(grammar, "{input}");
+            return ({{ refused, accepted[0], accepted[1], calls }});
+        }}
+    "#
+    );
+    for mode in [
+        lpc_rs_core::null_mode::NullMode::Zero,
+        lpc_rs_core::null_mode::NullMode::Distinct,
+    ] {
+        let config = crate::test_config_builder!()
+            .null_mode(mode)
+            .build()
+            .unwrap();
+        assert_eq!(
+            run_with(config, "", &[], &main).await,
+            vec![LpcRef::nil(mode), s("w0"), s(&target), 32.into()],
+            "{mode:?}"
+        );
+    }
+}

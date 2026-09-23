@@ -311,7 +311,8 @@
             joint DFA; spans use JavaScript character offsets instead of UTF-8
             byte offsets. The model eagerly materializes bounded derivations and
             skips same-span cycles; Rust enumerates lazily with different
-            limits. It does not implement general LPC actions, action
+            limits and uses the completed chart to skip child spans whose remaining
+            rule cannot match; the teaching model does not perform that pruning. It does not implement general LPC actions, action
             memoization, the full DGD dialect, many-object selection, complete
             noun vocabulary or scope traversal (including <code>:v</code> modifiers
             and structured explicit scopes), multiword verb selection, multiple-rule dispatch, handler

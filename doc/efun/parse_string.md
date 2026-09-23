@@ -115,8 +115,9 @@ There is no separate grammar-text size limit. Regular-expression groups may
 nest at most 250 levels deep.
 
 Each call pulls at most 64 derivations before giving up, and spends at most
-2²⁰ steps (chart operations plus derivation levels) on the parse itself — the tick
-limit bounds the actions, but not the parse. A derivation may nest at most
+2²⁰ steps (chart operations, derivation levels and checks that the rest of a
+rule can match) on the parse itself — the tick limit bounds the actions, but
+not the parse. A derivation may nest at most
 4096 production levels deep — a list grammar reaches that at 4096 items —
 and a deeper one ends the parse the way an exhausted budget does. The
 shape of a list rule decides which limit a long input meets first: a

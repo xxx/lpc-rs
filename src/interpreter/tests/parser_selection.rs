@@ -437,3 +437,56 @@ async fn a_later_many_rule_can_succeed_after_single_object_ambiguity() {
     )
     .await;
 }
+
+#[tokio::test]
+async fn long_repeated_separators_retry_refused_splits_in_order() {
+    let words: Vec<_> = (0..17).map(|i| format!("w{i}")).collect();
+    let input = words.join(" at ");
+    let target = words[1..].join(" at ");
+    let prefixes = (1..words.len())
+        .rev()
+        .map(|end| words[..end].join(" at "))
+        .collect::<Vec<_>>()
+        .join("|");
+    let item = format!(
+        r#"
+        string *parse_command_id_list() {{ return ({{ "{target}" }}); }}
+        int direct_cast_str_at_obj() {{ return 1; }}
+        void move(object dest) {{ move_object(dest); }}
+    "#
+    );
+    let verb = format!(
+        r#"
+        string *seen = ({{}});
+        int acted;
+        void create() {{ parse_init(); parse_add_rule("cast", "STR at OBJ"); }}
+        int can_cast_str_at_obj(string spell) {{
+            seen += ({{ spell }});
+            return spell == "w0";
+        }}
+        void do_cast_str_at_obj(string spell, object ob, string raw_spell, string raw_target) {{
+            if (spell != "w0" || raw_spell != spell || raw_target != "{target}" ||
+                ob != find_object("/item") || query_verb() != "cast" ||
+                query_command() != "cast {input}") throw("wrong successful split");
+            acted++;
+        }}
+        string trace() {{ return implode(seen, "|"); }}
+        int actions() {{ return acted; }}
+    "#
+    );
+    check(
+        r#"string parser_error_message() { throw("premature error hook"); }"#,
+        &[("/item.c", &item), ("/verb.c", &verb)],
+        &format!(
+            r#"
+            "/item"->move(this_object());
+            mixed parsed = parse_sentence("cast {input}");
+            int dispatched = command("cast {input}");
+            return ({{ parsed, dispatched, "/verb"->actions(),
+                "/verb"->trace() == "{prefixes}|{prefixes}", heard }});
+        "#
+        ),
+        vec![1.into(), 1.into(), 2.into(), 1.into(), s("")],
+    )
+    .await;
+}
