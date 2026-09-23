@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use lpc_rs_core::visibility::Visibility;
 use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
 
@@ -16,6 +17,7 @@ pub struct ClassFieldNode {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct ClassDefNode {
     pub name: Ustr,
+    pub visibility: Visibility,
     pub fields: Vec<ClassFieldNode>,
     pub span: Span,
 }

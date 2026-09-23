@@ -246,6 +246,7 @@ mod tests {
                     .collect(),
             })]
             .into_boxed_slice(),
+            ..ClassScope::default()
         }
     }
 

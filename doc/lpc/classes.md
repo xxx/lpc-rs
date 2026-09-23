@@ -4,7 +4,7 @@ Defaults described as zero below use `NULL_MODE=zero`. In distinct mode,
 defaults are `0` for int, `0.0` for float, and `nil` for other values; see
 [null values](null.md).
 
-Classes are shared, nominally typed records. They support declarations,
+Classes are shared, nominally typed records. They support declarations with visibility,
 construction with named initializers, member reads and writes, shallow copying,
 field evolution across compiled definitions, and native persistence. General
 reflection is not implemented yet.
@@ -42,17 +42,63 @@ definition in an included header belongs to that header; inheritance preserves
 the original identity. A declaration produced by a macro belongs to the source
 where that macro is expanded.
 
-Changing field order or types does not change nominal identity. Moving a class
+Changing visibility, field order or types does not change nominal identity. Moving a class
 to another file does. Line numbers, include spelling after path normalization,
 and compilation-local source IDs are not part of the identity. Defining a class
 in a host source outside the mudlib is rejected because it has no in-game source
 identity.
 
 An unqualified name must select one visible class. If different inherited files
-declare classes with the same name, using that name is ambiguous. Multiple
-inheritance paths to the same definition are allowed. Conflicting definitions
-of the same identity within one compiled program are rejected. Repeating a local
+expose classes with the same name, using that name is ambiguous. Multiple
+inheritance paths to the same definition are allowed. Conflicting visible definitions
+of the same identity within one source scope are rejected. Repeating a local
 definition is also an error, even if its fields match.
+
+### Declaration visibility
+
+```c
+private class cache_entry {
+    mixed value;
+}
+
+private class cache_entry cached;
+```
+
+The first `private` controls the class definition; the second controls the global
+variable. A definition accepts one visibility modifier:
+
+| Declaration | Available in the defining source and its includes | Available to inheriting sources |
+|---|---|---|
+| `class` or `public class` | Yes | Yes |
+| `protected class` | Yes | Yes |
+| `private class` | Yes | No |
+
+Public and protected classes currently have the same access behavior: other
+objects have no external class-name lookup and must include or inherit a
+definition to use it. Class fields have no separate visibility modifiers.
+`static`, `nosave`, `nomask`, `varargs`, and multiple visibility modifiers are
+errors on class definitions.
+
+[Inheritance visibility](inheritance.md#visibility) also restricts class exports.
+A private inherit makes imported public or protected definitions available
+locally but hides them from the next descendant. It never exposes a parent's
+private class. A protected inherit preserves descendant access. When the same
+identity arrives through several paths, any visible path can supply it, and the
+least restrictive available path controls further export. A local definition of
+that identity, such as another inclusion of its header, supplies the local
+visibility instead; its fields must still match other visible definitions.
+
+Including a private class header declares it within each including source;
+privacy does not change its shared nominal identity. Two parents' private classes
+do not make a child's class name ambiguous.
+
+Values of hidden classes can still be passed to functions that understand them.
+Child code cannot name a hidden class in a declaration or constructor, or read or
+write its members, including through `mixed`. Inherited functions, global initializers and closures
+keep their defining scope and retain access. Visibility does not prevent
+[`copy_class`](../efun/copy_class.md), [`deep_copy`](../efun/deep_copy.md), or
+[value serialization](../efun/save_value.md) from copying or encoding an instance;
+restoration does not grant member access to code without a visible definition.
 
 Known incompatible scalar class types are rejected in assignments, arguments, returns,
 and casts. A conditional expression combining different nominal class types is

@@ -205,8 +205,25 @@ InheritVisibility: (Span, lpc_rs_core::visibility::Visibility) = {
 };
 
 ClassDef: ClassDefNode = {
-    <l:"class"> <name:"ID"> "{" <fields:ClassFields*> <r:"}"> ";"? => {
-        ClassDefNode { name: ustr(&name.1), fields: fields.into_iter().flatten().collect(), span: Span::join(l, r) }
+    <flags:GlobalFlag*> <l:"class"> <name:"ID"> "{" <fields:ClassFields*> <r:"}"> ";"? =>? {
+        use lpc_rs_core::visibility::Visibility;
+        let mut visibility = Visibility::Public;
+        for (span, flag) in &flags {
+            visibility = match *flag {
+                "public" => Visibility::Public,
+                "protected" => Visibility::Protected,
+                "private" => Visibility::Private,
+                _ => return Err(ParseError::User {
+                    error: lpc_error!(Some(*span), "`{}` is not a class visibility modifier", flag)
+                }),
+            };
+        }
+        if flags.len() > 1 {
+            return Err(ParseError::User {
+                error: lpc_error!(Some(Span::join(flags[0].0, flags.last().unwrap().0)), "multiple visibilities specified")
+            });
+        }
+        Ok(ClassDefNode { name: ustr(&name.1), visibility, fields: fields.into_iter().flatten().collect(), span: Span::join(l, r) })
     }
 };
 

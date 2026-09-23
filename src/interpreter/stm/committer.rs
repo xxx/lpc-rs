@@ -1787,9 +1787,11 @@ mod tests {
         });
         let legacy_scope = ClassScope {
             definitions: vec![legacy.clone()].into_boxed_slice(),
+            ..ClassScope::default()
         };
         let current_scope = ClassScope {
             definitions: vec![current].into_boxed_slice(),
+            ..ClassScope::default()
         };
         let cell = txn.with(|txn| txn.mint_class(LpcClass::new(legacy)));
         let value = LpcRef::Class(cell.clone());

@@ -180,6 +180,7 @@ mod tests {
                     .into_boxed_slice(),
                 })]
                 .into_boxed_slice(),
+                ..ClassScope::default()
             })
         };
         code.class_scope = scope("x");

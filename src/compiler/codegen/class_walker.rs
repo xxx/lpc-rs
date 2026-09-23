@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use lpc_rs_core::{
     class::{ClassDefinition, ClassField, ClassId, ClassScope},
     lpc_type::LpcType,
+    visibility::Visibility,
 };
 use lpc_rs_errors::{Result, lpc_bug, lpc_error, span::Span};
 use ustr::{Ustr, ustr};
@@ -33,6 +34,9 @@ pub struct ClassWalker {
     context: CompilationContext,
     names: HashMap<Ustr, Vec<ClassId>>,
 }
+
+#[cfg(test)]
+mod visibility_tests;
 
 impl ClassWalker {
     fn expose(&mut self, id: ClassId) {
@@ -129,14 +133,41 @@ impl Pass for ClassWalker {
 impl TreeWalker for ClassWalker {
     async fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
         let mut definitions = HashMap::new();
-        for (parent, inherit) in self.context.inherits.iter().zip(&node.inherits) {
-            for definition in &parent.class_scope.definitions {
+        let mut visibility = HashMap::new();
+        let parents = self
+            .context
+            .inherits
+            .iter()
+            .map(|parent| &parent.class_scope)
+            .zip(&node.inherits)
+            .chain(
+                self.context
+                    .inherited_interfaces
+                    .iter()
+                    .map(|parent| &parent.class_scope)
+                    .zip(&node.inherits),
+            );
+        for (scope, inherit) in parents {
+            for definition in &scope.definitions {
+                let access = scope.visibility(definition.id);
+                if access == Visibility::Private {
+                    continue;
+                }
                 Self::insert_definition(&mut definitions, definition.clone(), inherit.span)?;
-            }
-        }
-        for (parent, inherit) in self.context.inherited_interfaces.iter().zip(&node.inherits) {
-            for definition in &parent.class_scope.definitions {
-                Self::insert_definition(&mut definitions, definition.clone(), inherit.span)?;
+                let imported = access.restricted_by(inherit.visibility);
+                visibility
+                    .entry(definition.id)
+                    .and_modify(|held| {
+                        // Any accessible inheritance path can expose the shared identity.
+                        *held = match (*held, imported) {
+                            (Visibility::Public, _) | (_, Visibility::Public) => Visibility::Public,
+                            (Visibility::Protected, _) | (_, Visibility::Protected) => {
+                                Visibility::Protected
+                            }
+                            _ => Visibility::Private,
+                        };
+                    })
+                    .or_insert(imported);
             }
         }
         for id in definitions.keys() {
@@ -191,6 +222,7 @@ impl TreeWalker for ClassWalker {
                     }),
                     Some(class.span),
                 )?;
+                visibility.insert(id, class.visibility);
             }
         }
 
@@ -199,8 +231,10 @@ impl TreeWalker for ClassWalker {
             (left.id.source.as_str(), left.id.name.as_str())
                 .cmp(&(right.id.source.as_str(), right.id.name.as_str()))
         });
+        visibility.retain(|_, access| *access != Visibility::Public);
         self.context.class_scope = Arc::new(ClassScope {
             definitions: definitions.into_boxed_slice(),
+            visibility,
         });
 
         for declaration in &mut node.body {

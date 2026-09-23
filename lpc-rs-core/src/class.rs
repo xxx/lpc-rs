@@ -1,10 +1,10 @@
 //! Nominal class identities and immutable field definitions.
 
-use std::{fmt, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use ustr::Ustr;
 
-use crate::{lpc_type::LpcType, mangle::Mangle};
+use crate::{lpc_type::LpcType, mangle::Mangle, visibility::Visibility};
 
 /// A class's canonical defining source and name, independent of its field layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -49,9 +49,16 @@ pub struct ClassDefinition {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ClassScope {
     pub definitions: Box<[Arc<ClassDefinition>]>,
+    /// Restrictions in this source scope; absent entries are public.
+    pub visibility: HashMap<ClassId, Visibility>,
 }
 
 impl ClassScope {
+    /// The visibility of a definition in this source scope.
+    pub fn visibility(&self, id: ClassId) -> Visibility {
+        self.visibility.get(&id).copied().unwrap_or_default()
+    }
+
     pub fn get(&self, id: ClassId) -> Option<&ClassDefinition> {
         self.definitions
             .iter()

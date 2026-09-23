@@ -23,8 +23,10 @@ meaning. A visibility modifier restricts the imported declarations:
 | `private inherit` | Public and protected declarations | Imported declarations are hidden | Imported functions are hidden |
 
 A modifier never exposes a declaration that was already private, or makes a
-protected declaration public. Restrictions apply to functions and global
-variables. A public wrapper defined in the inheriting source can expose an
+protected declaration public. Restrictions apply to functions, global variables,
+and [class definitions](classes.md#declaration-visibility). Inherited code retains
+its defining class scope even when its classes are hidden from the child.
+A public wrapper defined in the inheriting source can expose an
 operation deliberately:
 
 ```c

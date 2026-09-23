@@ -691,6 +691,7 @@ mod tests {
     fn scope(definition: Arc<ClassDefinition>) -> ClassScope {
         ClassScope {
             definitions: vec![definition].into_boxed_slice(),
+            ..ClassScope::default()
         }
     }
 
