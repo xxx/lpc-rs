@@ -4,7 +4,8 @@
  * no_clone, no_inherit and no_shadow keep this policy object from being
  * duplicated, inherited or intercepted by another object's shadow functions.
  *
- * Policy hooks return 1 to allow or 0 to deny; omission also denies.
+ * Policy hooks return 1 to allow or 0 to deny; omission denies except for
+ * the optional valid_override() compilation policy.
  * Their program argument names the source defining the requesting code,
  * which may differ from caller's filename through inheritance, or be 0
  * when an efun pointer has no defining program.
@@ -76,6 +77,18 @@ int valid_load(string path, string func, object caller, string program) {
  */
 int valid_inherit(string path, string from) {
     return path[0..4] == "/std/";
+}
+
+/**
+ * Refuse explicit efun:: calls in code compiled on an LPC caller's behalf.
+ * source names the call's file (or macro invocation); main_file names the
+ * program being compiled, and both retain their extensions.
+ * ulib needs only ordinary efun calls, which do not ask this hook.
+ * Omitting this optional hook allows explicit calls; boot compilation also
+ * bypasses it, and changing it does not revoke already compiled code.
+ */
+int valid_override(string source, string name, string main_file) {
+    return 0;
 }
 
 /**

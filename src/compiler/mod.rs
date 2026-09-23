@@ -66,7 +66,7 @@ pub struct Compiler {
     #[builder(default)]
     simul_efuns: Option<Arc<Program>>,
 
-    /// The master's say over inherits and includes; `None` reads freely.
+    /// Compilation permissions; `None` compiles without authorization.
     #[builder(default)]
     gate: Option<Arc<dyn CompileGate>>,
 
@@ -357,6 +357,17 @@ impl Compiler {
         let context = apply::<InheritanceWalker>(&mut program_node, context, true)
             .await?
             .into_context();
+        let context = if context.gate.is_some() {
+            apply::<codegen::efun_override_walker::EfunOverrideWalker>(
+                &mut program_node,
+                context,
+                true,
+            )
+            .await?
+            .into_context()
+        } else {
+            context
+        };
         let context =
             apply::<codegen::capture_walker::CaptureWalker>(&mut program_node, context, true)
                 .await?

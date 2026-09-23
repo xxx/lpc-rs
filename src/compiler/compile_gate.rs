@@ -1,13 +1,12 @@
-//! The master's say over what a compile may read for another file: a parent
-//! to inherit, a file to include.
+//! Authorization of compilation dependencies and explicit efun calls.
 
 use std::fmt::Debug;
 
 use async_trait::async_trait;
 use lpc_rs_errors::Result;
 
-/// Consulted before a compile reads a file on another file's behalf. A
-/// compiler without one (boot, lpcc, direct compiles) reads freely.
+/// Compilation permissions; a compiler without a gate (boot, lpcc, direct
+/// compiles) does not ask for authorization.
 #[async_trait]
 pub trait CompileGate: Debug + Send + Sync {
     /// May the program `from` inherit `path`? Both are canonical in-game
@@ -16,6 +15,14 @@ pub trait CompileGate: Debug + Send + Sync {
 
     /// May the file `from` include `path`? Both are canonical in-game paths.
     async fn include(&self, path: &str, from: &str) -> Result<bool>;
+
+    /// May `source` call `efun::name` while compiling `main_file`?
+    /// Paths retain extensions; macro expansion identifies the invocation site.
+    /// Gates that do not implement this optional policy allow explicit efuns.
+    async fn efun_override(&self, source: &str, name: &str, main_file: &str) -> Result<bool> {
+        let _ = (source, name, main_file);
+        Ok(true)
+    }
 }
 
 #[cfg(test)]

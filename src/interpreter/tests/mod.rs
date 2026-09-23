@@ -5,6 +5,7 @@ mod call_other;
 mod calling;
 mod catch_block;
 mod catch_result;
+mod efun_overrides;
 mod entry_args;
 mod explicit_captures;
 mod foreach;

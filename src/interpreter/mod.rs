@@ -69,6 +69,8 @@ pub const VALID_LOAD: &str = "valid_load";
 pub const COMPILE_OBJECT: &str = "compile_object";
 /// Master apply: whether a program being compiled may inherit another (`doc/apply/master/valid_inherit.md`).
 pub const VALID_INHERIT: &str = "valid_inherit";
+/// Optional master apply: whether source may compile an explicit efun call.
+pub const VALID_OVERRIDE: &str = "valid_override";
 /// Master apply: returns the object a new connection becomes (`doc/apply/master/connect.md`).
 pub const CONNECT: &str = "connect";
 /// Master apply: the files to preload at boot (`doc/apply/master/epilog.md`).

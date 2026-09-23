@@ -1,5 +1,4 @@
-//! The master's verdicts on what an LPC-triggered compile may read, asked in
-//! the loading task's transaction.
+//! Compilation permissions asked in the requesting task's transaction.
 
 use std::sync::Arc;
 
@@ -9,15 +8,14 @@ use lpc_rs_errors::Result;
 use crate::{
     compiler::compile_gate::CompileGate,
     interpreter::{
-        VALID_INHERIT, VALID_READ,
-        apply::valid_apply,
+        VALID_INHERIT, VALID_OVERRIDE, VALID_READ,
+        apply::{master_apply, valid_apply},
         lpc_ref::LpcRef,
         task_context::{Callers, TaskContext},
     },
 };
 
-/// `valid_inherit` and `valid_read("include")` through [`valid_apply`],
-/// nested in the loading task's transaction.
+/// Dependency and efun-override policies nested in the requesting transaction.
 #[derive(Debug)]
 pub(crate) struct MasterGate {
     ctx: TaskContext,
@@ -64,6 +62,21 @@ impl CompileGate for MasterGate {
             ],
         )
         .await
+    }
+
+    async fn efun_override(&self, source: &str, name: &str, main_file: &str) -> Result<bool> {
+        let verdict = master_apply(
+            &self.ctx,
+            self.callers.clone(),
+            VALID_OVERRIDE,
+            &[
+                LpcRef::from(source),
+                LpcRef::from(name),
+                LpcRef::from(main_file),
+            ],
+        )
+        .await?;
+        Ok(verdict.is_none_or(|value| value.is_truthy(self.ctx.txn())))
     }
 }
 
@@ -144,12 +157,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn without_a_master_both_answers_are_no() {
+    async fn without_a_master_dependencies_are_refused_and_overrides_are_allowed() {
         let root = TempLib::new("master-gate-none");
         let vm = Vm::new(temp_lib_config(&root));
         let ctx = seated(&vm).await;
         let gate = MasterGate::new(&ctx, None);
         assert!(!gate.inherit("/parent.c", "/child.c").await.unwrap());
         assert!(!gate.include("/h.h", "/child.c").await.unwrap());
+        assert!(gate.efun_override("/a.c", "sizeof", "/a.c").await.unwrap());
     }
 }

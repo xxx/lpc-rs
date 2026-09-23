@@ -330,6 +330,52 @@ fn documentation_links_stay_inside_the_copyable_directory() {
 }
 
 #[tokio::test]
+async fn policy_refuses_loading_code_that_bypasses_efun_resolution() {
+    let root = tempfile::TempDir::new().unwrap();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("ulib");
+    for path in files_below(&source) {
+        let destination = root.path().join(path.strip_prefix(&source).unwrap());
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        fs::copy(path, destination).unwrap();
+    }
+    fs::write(
+        root.path().join("obj/forbidden.c"),
+        "int value() { return efun::sizeof(({ 1 })); }",
+    )
+    .unwrap();
+    let mut vm = Vm::new(
+        ConfigBuilder::default()
+            .lib_dir(root.path().to_str().unwrap())
+            .system_include_dirs(vec!["/include"])
+            .build()
+            .unwrap(),
+    );
+    vm.bootstrap().await.unwrap();
+    let task = vm
+        .initialize_process_from_code(
+            "/obj/probe.c",
+            r#"
+        int create() {
+            mixed error=catch("/obj/forbidden"->value());
+            return stringp(error) && strindex(error, "efun::sizeof: permission denied") >= 0;
+        }
+    "#,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        task.result(),
+        Some(lpc_rs::interpreter::lpc_ref::LpcRef::from(1))
+    );
+    assert!(
+        vm.global_state
+            .object_space
+            .lookup("/obj/forbidden")
+            .is_none()
+    );
+}
+
+#[tokio::test]
 async fn policy_allows_game_objects_and_refuses_privileged_operations() {
     let mut vm = Vm::new(config());
     vm.bootstrap().await.unwrap();

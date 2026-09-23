@@ -88,7 +88,7 @@ pub struct CompilationContext {
     /// Simul-efun program selected for this compilation.
     pub simul_efuns: Option<Arc<Program>>,
 
-    /// The master's say over inherits and includes; `None` reads freely.
+    /// Compilation permissions; `None` compiles without authorization.
     pub gate: Option<Arc<dyn CompileGate>>,
 
     /// Source reads and probes shared with inherited compilers.

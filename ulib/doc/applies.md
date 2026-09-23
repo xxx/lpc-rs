@@ -54,7 +54,8 @@ ones are in [examples/master.c](../examples/master.c).
 ### Policy
 
 These hooks return an integer: nonzero permits, `0` denies. Omission denies
-the gated operation. They run in the requesting operation's transaction.
+the gated operation except for `valid_override`, whose omission allows explicit
+efun calls. They run in the requesting operation's transaction.
 `program` identifies the source defining the code that asked, which can differ
 from the caller object's name through inheritance or virtual objects.
 
@@ -62,6 +63,7 @@ from the caller object's name through inheritance or virtual objects.
 |---|---|---|
 | `valid_load(string path, string func, object caller, string program)` | Loading source not already resident. `path` is the canonical source filename with `.c`. Calls to resident objects and cloning an existing prototype do not ask again. | `/obj/`, `/room/`, `/std/` only. |
 | `valid_inherit(string path, string from)` | Explicit source inheritance, with canonical filenames. Configured auto-inheritance is exempt. | `/std/` only. |
+| `valid_override(string source, string name, string main_file)` | Explicit `efun::` calls during LPC-triggered compilation. Source and main paths retain extensions; macros name their invocation site. Boot compilation is exempt. Omitting the hook allows calls; existing compiled code is not revoked. | Deny; ordinary efun calls remain available. |
 | `valid_read(string path, string func, object caller, string program)` | File reads and compilation includes. An include uses `func == "include"`, `caller == 0`, and the including source as `program`. | Only includes under `/include/`. |
 | `valid_write(string path, string func, object caller, string program)` | File mutation, including the virtual source path given to `compile_string()`. | Deny. |
 | `valid_destruct(object caller, object target, string program)` | Object destruction, including self-destruction. | Only `caller == target`. |

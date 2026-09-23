@@ -70,6 +70,11 @@ inheritance from `/std/`, and compilation includes from `/include/`. Paths such
 as `/obj/player` are inside the mudlib; they are not host filesystem paths.
 `LPC_LIB_DIR` determines their filesystem root.
 
+The optional `valid_override()` policy refuses explicit `efun::` calls in
+LPC-triggered compilation; ordinary efun calls remain available. Removing this
+hook permits explicit calls. Boot compilation is exempt, and changing the
+policy does not revoke code already compiled into an object.
+
 The policy permits self-destruction for logout and empty-room cleanup. It
 denies LPC file writes, ordinary file reads, connection transfer, inspection
 or replacement of another object's globals, object recompilation, LPC-requested
