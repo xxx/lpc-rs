@@ -6,7 +6,9 @@ Every rule registered anywhere in the game by `parse_add_rule` or
 `parse_add_synonym`, in registration order, as one string: one line per
 rule, `"verb rule  (owner)\n"` — `owner` the registering object's in-game
 path. A bare-verb rule leaves nothing between the verb and the two spaces
-before the parenthesis. A rule whose owner has been destructed is left out.
+before the parenthesis. Verb keys use canonical spacing, including multiword
+keys; rule text is preserved exactly. This is registration order, not dispatch's
+longest-phrase order. A rule whose owner has been destructed is left out.
 
 ### Example
 

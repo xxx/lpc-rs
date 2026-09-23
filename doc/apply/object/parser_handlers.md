@@ -47,7 +47,9 @@ Permission names use `obj`/`liv` for plural slots; action names use `obs`/`lvs`.
 The `:v` modifier changes neither names nor argument layouts; the generic rule
 argument retains it as part of the exact registered text.
 
-Names and generic prefixes always use the base verb, including for synonyms.
+Names and generic prefixes always use the base verb, including for multiword
+synonyms. A multiword base is inserted literally into names; it can use generic
+tiers, but spaces are not converted to underscores for specific methods.
 Duplicate generated names use their earliest tier's layout; parameter types or
 counts do not select a different tier. For example, a literal named `word` can
 make the first two names identical, in which case the specific layout wins.
@@ -70,7 +72,8 @@ Each capture contributes one semantic value:
 
 After the leading arguments in the table, generic shape and generic rule
 handlers receive the typed verb, including a synonym, as returned by
-`query_verb(1)`. Every tier then receives one source string per capture in rule
+`query_verb(1)`: the full matched phrase with its original internal whitespace.
+Every tier then receives one source string per capture in rule
 order, including `WRD` and `STR`. These strings retain the matched source text.
 Literals contribute no source-string suffix.
 
@@ -169,16 +172,20 @@ soft one, and the earliest of whichever kind wins is what gets reported.
 `do_`'s return value is not read at all: the rule counts as handled once
 `do_` runs, however it answers.
 
-Rejecting a rule leaves later registered rules eligible. The first rule to
-reach `do_` wins, and no earlier failure is sent to `parser_error_message`.
-Only after every rule fails are retained diagnostics offered to that hook,
-in registration order, until it returns a string. Permission handlers and
+The longest matching verb phrase is tried first, with registration order within
+each phrase. Rejecting a rule leaves later rules and shorter phrases eligible.
+The first rule to reach `do_` wins, and no earlier failure is sent to
+`parser_error_message`. Only after every phrase fails are retained diagnostics
+offered to that hook, in the same trial order, until it returns a string. Permission handlers and
 `do_` run in the current transaction: a refusal does not undo earlier writes
 or output. A runtime exception stops selection and propagates to the caller.
 
 All four families run with `this_player()` and `previous_object()` set to the
-actor and `origin()` set to `"driver"`. `query_verb()` is the typed verb, including
-a synonym, while handler names and generic prefixes use the base verb.
+actor and `origin()` set to `"driver"`. `query_verb()` is the canonical matched
+phrase, including a synonym; `query_verb(1)` preserves its raw input span.
+Handler names and generic prefixes use the base verb. Scope and vocabulary hooks
+see the same matched context, and each deferred error hook sees its own failed
+phrase. Nested commands restore the surrounding context on return or exception.
 
 ### The many-slot array
 

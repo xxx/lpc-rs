@@ -4,7 +4,8 @@ use lpc_rs_utils::lpc_string::LpcString;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `query_verb`, an efun returning the verb of the command in progress; with a
-/// nonzero argument, the first word as typed. 0 outside a command.
+/// nonzero argument, the matched parser phrase or other family's first word as typed.
+/// Returns 0 outside a command.
 pub fn query_verb<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let full = matches!(
         context.try_arg(0),

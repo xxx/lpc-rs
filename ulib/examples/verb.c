@@ -13,8 +13,13 @@
  * handlers. Only absence tries another tier or target. Can searches the actor
  * before the owner; direct/indirect search the noun candidate before the owner.
  * A present actor can supplies the answer instead of the owner can.
- * Refusals leave later rules eligible; the first rule to reach do wins.
- * Error reporting waits until all rules fail, and refusals do not undo effects.
+ * Longer matching verb phrases run first, with registration order within each phrase.
+ * Refusals leave later rules and shorter phrases eligible; the first do wins.
+ * Error reporting waits until all phrases fail, and refusals do not undo effects.
+ * "hand over" below uses give's methods; query_verb() reports "hand over".
+ * query_verb(1) and generic typed-verb arguments preserve the whole typed phrase.
+ * Whitespace in registered keys is normalized; case and punctuation stay exact.
+ * Direct multiword bases use generic methods, without invented underscore names.
  * These samples refuse gifts and do not implement transfer or ownership.
  * Their unmodified object tokens require reachable matches. For an observation
  * verb, parse_add_rule("look", "at OBJ:v") permits visible but unreachable
@@ -39,6 +44,7 @@
 void create() {
     parse_init();
     parse_add_rule("give", "OBJ to LIV");
+    parse_add_synonym("hand over", "give");
 }
 
 /**

@@ -90,7 +90,7 @@ They support the driver's grammar facilities (`parse_command()` and
 | `parse_command_numeral(string word)` | Positive count, negative ordinal, or `0` for unrecognised; absence recognises nothing. | `one`, `two`, `first`, `second`. |
 | `parse_command_pluralize(string *singulars)` | Corresponding plural at each array index, for an object whose plural hook supplies no array. Missing means no derived plurals. | Append `s`; deliberately incomplete English. |
 | `parse_command_users()` | Extra living candidates for `LIV`/`LVS` slots, beyond local scope. Missing adds none. | Named guests from `users()`. |
-| `parser_error_message(int kind, object ob, mixed arg, int flag)` | Called only after every parser rule fails, in registration order until it returns a string. Return failure text, or `0`/`nil` to try the next retained failure. Omission supplies no message; dispatch then uses its ordinary unhandled-command fallback. `kind` selects the failure and the meaning of `arg`; `ob` is populated only for a handler refusal. | Preserve refusal text, otherwise a generic message. |
+| `parser_error_message(int kind, object ob, mixed arg, int flag)` | Called only after all matching parser phrases fail, longest phrase first and registration order within each, until it returns a string. Its query context identifies the failed phrase. Return failure text, or `0`/`nil` to try the next retained failure. Omission supplies no message; dispatch then uses its ordinary unhandled-command fallback. `kind` selects the failure and the meaning of `arg`; `ob` is populated only for a handler refusal. | Preserve refusal text, otherwise a generic message. |
 
 Valid parser failure kinds are `2` non-living, `3` inaccessible, `4` ambiguous
 (`arg` is the candidate array), `5` ordinal out of range (`arg` is the count),
@@ -161,6 +161,23 @@ and the typed verb before the two source phrases. The generic-rule tier receives
 It omits literal arguments. A synonym preserves the base verb and changes the
 typed-verb argument. The rule text retains its original whitespace and any `:v` modifiers.
 
+The example also registers `hand over` as a synonym of `give`. Its handlers stay
+named for `give`; generic base arguments remain `"give"`. For input
+`"hand\t over sword to bob"`, `query_verb()` returns `"hand over"`, while
+`query_verb(1)` and generic
+typed-verb arguments preserve `"hand\t over"`. The whole command line remains
+available through `query_command()`. Nested parses restore the enclosing context.
+Scope and vocabulary hooks see the matched phrase, and each deferred error hook
+sees its own failure's phrase. Ordinary unhandled-command fallback sees the first
+word again.
+
+Parser verb names normalize Unicode whitespace to single spaces and reject
+empty names; case and punctuation remain exact. Matching requires whole words.
+Aliases copy current registrations, with exact rule-text filters; later base
+additions do not extend them. Removing the base removes its aliases too.
+A multiword base can use generic methods; spaces are not converted to underscores
+in specific names. The single-word base plus multiword alias avoids that issue.
+
 Every capture, including `WRD` and `STR`, contributes a source string after the
 semantic values (and typed verb for generic tiers). The middle two tiers also
 insert literal semantic arguments in rule order. `WRD` is named `wrd`, while a
@@ -193,10 +210,12 @@ rule is unhandled. The disabled example refuses gifts in `indirect_`, and its
 The hooks need to be distributed to their stated owners, named objects added,
 and the verb object loaded before this grammar can be used. Registered grammar
 rules are tried after the living's own actions decline; `parse_sentence()` can
-also invoke the parser explicitly. The first rule to reach `do_` wins, even if
+also invoke the parser explicitly. Longest matching verb phrases run first,
+with registration order within each phrase. If a phrase's rules fail, shorter
+matching phrases remain eligible. The first rule to reach `do_` wins, even if
 an earlier rule supplied a refusal string. `parser_error_message()` runs only
-when every rule fails. Refusing a rule does not undo its handler effects, and
-runtime exceptions propagate immediately.
+when every phrase fails, reporting failures in the same trial order. Refusing a
+rule does not undo its handler effects, and runtime exceptions propagate immediately.
 
 Two-object rules with one `OBS`/`LVS` slot use the same individual-object
 permission arguments in both orientations. Only `do_` receives an array for

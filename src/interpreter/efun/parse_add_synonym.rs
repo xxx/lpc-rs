@@ -3,7 +3,7 @@
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::registry::VerbRules,
+    command::{frontend::parser::normalize_verb, registry::VerbRules},
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
@@ -26,10 +26,13 @@ pub fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         })
         .transpose()?;
 
+    let new_verb = normalize_verb(new_verb.to_str())
+        .map_err(|error| context.runtime_error(format!("parse_add_synonym: {error}")))?;
+    let old_verb = normalize_verb(old_verb.to_str())
+        .map_err(|error| context.runtime_error(format!("parse_add_synonym: {error}")))?;
     let this = context.process().clone();
-    let old_verb = old_verb.to_str();
     let verb_rules = VerbRules::new(context.task_context());
-    if !verb_rules.add_synonym(&this, new_verb.to_str().into(), old_verb, rule_filter) {
+    if !verb_rules.add_synonym(&this, new_verb, old_verb.as_str(), rule_filter) {
         return Err(context.runtime_error(format!(
             "parse_add_synonym: this_object() has no rules for '{old_verb}'"
         )));

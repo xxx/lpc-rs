@@ -9,30 +9,31 @@ code without delivering anything to anyone. `this_player()` must be alive
 and have called `enable_commands()`; otherwise a runtime error. `debug` is
 accepted and ignored.
 
-Every rule registered for `line`'s first word, on every live verb object, is
-tried in registration order, exactly as the ordinary dispatcher tries them
-(see `parse_add_rule`) — `parse_sentence` differs only in which rules it
-tries and in delivering nothing itself.
+Registered verbs match leading whole words, with case and punctuation preserved
+and Unicode whitespace treated as separators. The longest matching phrase is
+tried first; its rules run in registration order across live owners. If none
+succeeds, shorter matching phrases are tried. The ordinary dispatcher's parser
+tier uses the same selection. See [`parse_add_rule`](parse_add_rule.md#the-verb).
 
 ### Result
 
 | value | meaning |
 |---|---|
 | `1` | some rule's `do_` ran |
-| `0` | no rule is registered for `line`'s first word |
+| `0` | no registered verb matches a leading phrase of `line` |
 | `-1` | a rule matched the verb, but no rule's grammar parsed the rest of `line` |
 | `-2` | a rule's grammar matched, but a handler refused and the master gave no message |
 | `-3` | a rule's grammar matched, but an object phrase did not resolve and the master gave no message |
 | a string | `master->parser_error_message()`'s result for the failure |
 
-Rules are tried in registration order; the first one whose `do_` runs ends
-the search with `1`. Earlier failures do not prevent a later rule from
-succeeding. For example, a refusal from `"STR"` does not block a later
-`"at OBJ"` rule for `look at sword`. A successful earlier rule still wins,
-even if a later rule is more specific.
+The first rule whose `do_` runs ends the search with `1`. Earlier failures do
+not prevent a later rule or shorter verb phrase from succeeding, including when
+a longer phrase's action is absent. Within one phrase, a successful earlier rule
+wins even if a later rule is more specific. For example, a refusal from `"STR"`
+does not block a later `"at OBJ"` rule for `look at sword`.
 
 Only when every rule fails does the driver call `parser_error_message`,
-offering each reportable failure in registration order until the hook
+offering each reportable failure in phrase and registration order until the hook
 returns a string. A successful search never calls that hook. If the hook
 supplies no message, results combine by severity: `-3` beats `-2` beats `-1`.
 A later silent refusal cannot downgrade an earlier unresolved object.
@@ -43,6 +44,12 @@ resolved, ties to the earliest (see `parser_handlers`). For pair checking,
 both noun phrases count as resolved before permission checks begin. All handlers run in
 the current transaction; declining a rule does not undo its effects.
 Runtime exceptions propagate immediately.
+
+During a parser trial, including scope and vocabulary callbacks, `query_verb()`
+is the canonical matched phrase; `query_verb(1)` and generic handlers' typed-verb
+argument contain its original input span, including internal whitespace.
+`query_command()` retains the whole line. Each deferred error hook receives its
+own failed phrase's context. Nested commands restore the surrounding context.
 
 ### scope
 

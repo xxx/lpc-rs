@@ -13,6 +13,11 @@ Returns 1 when the line was handled, 0 otherwise (including when `living` is
 not a living object). Rules `init()` registered earlier in the same task
 are already usable.
 
+The living's native and `add_action` rules run before parser-package rules.
+That parser tier tries the longest registered verb phrase first, with
+registration order within each phrase and shorter-phrase fallback. See
+[`parse_sentence`](parse_sentence.md) for its selection and error policies.
+
 A handler may run `command()` of its own, nested at most 16 deep; deeper is a
 runtime error.
 

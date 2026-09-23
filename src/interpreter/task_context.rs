@@ -41,7 +41,7 @@ use crate::{
 pub struct CommandState {
     /// The line `dispatch` is trying, after any `process_input` rewrite.
     pub line: String,
-    /// The first word as typed.
+    /// The parser's matched phrase, or another command family's first word, as typed.
     pub verb_typed: String,
     /// What `query_verb()` returns for the rule being tried.
     pub verb_reported: String,

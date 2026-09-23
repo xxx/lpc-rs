@@ -6,18 +6,19 @@ Compiles `rule` and appends it, under `verb`, to the rules `this_object()`
 owns — `this_object()` must have called `parse_init()` first. Several rules
 may share a verb; when a typed line reaches the parser package (after the
 dispatcher tries the actor's own `add_action`/`add_rule` rules first — see
-`parse_sentence`), every registered rule for that verb, on every live verb
-object, is tried in registration order until one runs its `do_`. The
+`parse_sentence`), the longest matching verb phrase is tried first, with rules
+for that phrase on every live verb object tried in registration order. If none
+runs its `do_`, shorter matching phrases are tried in turn. The
 dispatcher reads the registry only at that point, after the actor's own
 rules have declined, so a rule one of those handlers registers or removes
 for the same verb is already seen on that very line.
 
 A failed rule, including one that supplies a reason string, leaves later
-rules eligible. The first successful rule wins even if a later rule is more
-specific. Only after all rules fail does the driver ask
-[`parser_error_message`](../apply/master/parser_error_message.md) for text,
-in registration order, stopping at the first string. A successful search
-never calls that hook.
+rules and shorter phrases eligible. Within one phrase, the first successful
+rule wins even if a later rule is more specific. Only after all phrases fail
+does the driver ask [`parser_error_message`](../apply/master/parser_error_message.md)
+for text, in that same phrase and registration order, stopping at the first
+string. A successful search never calls that hook.
 
 `parse_add_rule` is a pure append: it never reads the registry first, so
 registering the same verb and rule text twice from the same object creates
@@ -25,6 +26,24 @@ two separate rules, not one. Both are tried in registration order, both
 appear in `parse_my_rules`/`parse_dump`, and nothing merges or replaces the
 earlier one. To replace a rule, `parse_remove` its verb first, then
 register again.
+
+### The verb
+
+A verb may contain several words. Leading/trailing Unicode whitespace is removed
+and whitespace between words becomes one space in the registered key. Matching
+uses the same word boundaries, preserving case and punctuation. Empty or
+whitespace-only names are errors. `pick up` does not match `pick upper`.
+
+For example, `parse_add_synonym("pick up", "get")` makes `pick up gem` use
+`get`'s handlers. A registered `pick up` is tried before `pick`, regardless of
+registration order, with `pick` still eligible if the longer phrase fails.
+The grammar receives only the text after the matched phrase, with source text
+preserved. Registrations are snapshotted before parser callbacks; additions or
+removals during a trial affect the next parse, while destructed owners are skipped.
+
+Handler names retain the base verb literally. A multiword base therefore uses
+the generic handler tiers; spaces are not converted to underscores. Use a
+single-word base and a multiword synonym when specific handler names are wanted.
 
 ### The rule
 
@@ -147,6 +166,7 @@ Raised as runtime errors, all prefixed `parse_add_rule: `:
 | condition | text |
 |---|---|
 | `this_object()` has not called `parse_init()` | `parse_init() has not been called` |
+| empty or whitespace-only verb | `the verb must contain at least one word` |
 | unsupported modifier, or a modifier on a text token | `unsupported parser modifier in 'token'; only OBJ:v, OBS:v, LIV:v and LVS:v are supported` |
 | two `STR` tokens | `two STR tokens in 'rule'` |
 | a token glued to other letters (`OBJect`) | `a token inside a word in 'rule'` |

@@ -17,6 +17,8 @@ use crate::command::{
 /// Why a rule does not compile; the text reaches the LPC caller.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParserRuleError {
+    /// An empty or whitespace-only verb name.
+    EmptyVerb,
     /// Two `STR` tokens.
     TwoStrs(String),
     /// A token glued to other letters (`OBJect`).
@@ -33,6 +35,7 @@ impl fmt::Display for ParserRuleError {
     /// Display the error.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ParserRuleError::EmptyVerb => write!(f, "the verb must contain at least one word"),
             ParserRuleError::TwoStrs(rule) => write!(f, "two STR tokens in '{rule}'"),
             ParserRuleError::TokenInWord(rule) => write!(f, "a token inside a word in '{rule}'"),
             ParserRuleError::Modifier(token) => write!(
@@ -48,6 +51,18 @@ impl fmt::Display for ParserRuleError {
 }
 
 impl std::error::Error for ParserRuleError {}
+
+/// Canonical parser key: whitespace-separated words, with spelling preserved.
+pub(crate) fn normalize_verb(verb: &str) -> Result<Ustr, ParserRuleError> {
+    let mut words = verb.split_whitespace();
+    let first = words.next().ok_or(ParserRuleError::EmptyVerb)?;
+    let mut key = first.to_owned();
+    for word in words {
+        key.push(' ');
+        key.push_str(word);
+    }
+    Ok(key.into())
+}
 
 /// One `parse_add_rule` rule: what its handlers are named and how the
 /// line's captures map onto their arguments.
@@ -169,6 +184,7 @@ fn compiled_for(rule: &str, tokens: &[Token]) -> Result<Arc<Compiled>, ParserRul
 /// Compile `rule` for `verb`: the tokens as pattern groups through the
 /// native builder, memoised by rule text, with handler slugs and argument layouts.
 pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
+    let verb = normalize_verb(verb)?;
     let tokens = rule
         .split_whitespace()
         .map(|word| token(word, rule))
@@ -218,7 +234,7 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
         })
         .collect();
     Ok(ParserRule {
-        verb: verb.into(),
+        verb,
         rule: rule.to_owned(),
         can_slug: slug(false, false),
         do_slug: slug(true, false),
@@ -234,6 +250,20 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
 mod tests {
     use super::*;
     use crate::command::grammar::{Limits, parse};
+
+    #[test]
+    fn verb_keys_normalize_whitespace_without_changing_spelling_or_rule_text() {
+        let rule = compile(" \tPréndre\u{2003} l'objet\n", " OBJ:v ").unwrap();
+        assert_eq!(rule.verb.as_str(), "Préndre l'objet");
+        assert_eq!(rule.rule, " OBJ:v ");
+    }
+
+    #[test]
+    fn empty_verb_keys_are_rejected() {
+        for verb in ["", " \t\n", "\u{2003}"] {
+            assert_eq!(compile(verb, "").unwrap_err(), ParserRuleError::EmptyVerb);
+        }
+    }
 
     #[test]
     fn visible_modifiers_keep_capture_kinds_and_handler_slugs() {

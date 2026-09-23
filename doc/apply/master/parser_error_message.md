@@ -6,10 +6,11 @@ Absent `ob` and absent `arg` values described as `0` below use the selected
 [null value](../../lpc/null.md): `nil` in distinct mode. Numeric counts,
 kind codes, and flags remain integers.
 
-Applied in the master only after every registered parser rule for the verb
-has failed. A successful rule prevents this apply from being called for any
+Applied in the master only after every rule for every matching parser verb
+phrase has failed. A successful rule prevents this apply from being called for any
 earlier failures. After total failure, the driver offers one retained
-failure per rule in registration order, skipping failures with no diagnostic.
+failure per rule, longest matched phrase first and registration order within
+each phrase, skipping failures with no diagnostic.
 Within a rule, the retained failure comes from the parse that resolved the
 most object slots, taking the earliest tie.
 
@@ -27,9 +28,11 @@ never reaches this apply; there is nothing to describe.
 
 The apply runs in the current transaction, after all failed rules' handler
 effects. `this_player()` and `previous_object()` are the actor, `origin()` is
-`"driver"`, and `query_verb()` is the typed verb, including a synonym. Nested
-commands or parses restore that outer verb when they return. Exceptions from
-this apply propagate to the caller.
+`"driver"`. `query_verb()` reports this failure's canonical matched phrase,
+including a synonym; `query_verb(1)` preserves that phrase's raw input span,
+including internal whitespace. `query_command()` remains the original line.
+Nested commands or parses restore that outer context when they return.
+Exceptions from this apply propagate to the caller.
 
 Diagnostic arguments retain the failure's phrase, reason, count, or candidate
 references as recorded while trying its rule. Later handlers can change those
