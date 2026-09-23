@@ -28,6 +28,7 @@ use crate::{
             program_node::ProgramNode,
             range_node::RangeNode,
             return_node::ReturnNode,
+            spread_node::SpreadNode,
             switch_node::SwitchNode,
             unary_op_node::{UnaryOpNode, UnaryOperation},
             var_init_node::VarInitNode,
@@ -154,17 +155,6 @@ impl SemanticCheckWalker {
             return Ok(());
         };
 
-        for argument in arguments {
-            let ExpressionNode::Spread(spread) = argument else {
-                continue;
-            };
-            let ty = node_type(&spread.expr, &self.context)?;
-            if !ty.matches_type(LpcType::Mixed(true)) {
-                let e = lpc_error!(spread.span, "`...` spreads an array, not {}", ty);
-                self.context.diagnostics.record(e);
-            }
-        }
-
         let spread_span = arguments[first].span();
         match callee {
             Some(name @ (CATCH | SIZEOF)) => {
@@ -228,6 +218,24 @@ impl Pass for SemanticCheckWalker {
 
 #[async_trait]
 impl TreeWalker for SemanticCheckWalker {
+    async fn visit_spread(&mut self, node: &mut SpreadNode) -> Result<()> {
+        node.expr.visit(self).await?;
+        let type_ = node_type(&node.expr, &self.context)?;
+        let array_or_mixed = |ty: LpcType| ty.is_array() || ty == LpcType::Mixed(false);
+        let valid = match type_ {
+            LpcType::Union(types) => types.types().into_iter().all(array_or_mixed),
+            ty => array_or_mixed(ty),
+        };
+        if !valid {
+            self.context.diagnostics.record(lpc_error!(
+                node.span,
+                "`...` spreads an array, not {}",
+                type_
+            ));
+        }
+        Ok(())
+    }
+
     fn enter_scope(&mut self, scope_id: &mut Option<ScopeId>) {
         self.context.scopes.goto(*scope_id);
     }
@@ -397,8 +405,8 @@ impl TreeWalker for SemanticCheckWalker {
                 self.context.diagnostics.record(e);
             }
 
-            // call_other is not type checked
-            return Ok(());
+            // The target signature is unknown, but its receiver and arguments still need checking.
+            return super::tree_walker::walk_call_root(self, node).await;
         }
 
         let unknown_namespace = !self.context.valid_namespace(namespace);

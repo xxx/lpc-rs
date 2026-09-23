@@ -751,7 +751,7 @@ PrimaryExpression: ExpressionNode = {
     <OperatorFunction>,
     <Closure>,
     "(" <Expression> ")",
-    <l:"("> "{" <list:(ExpressionList ","?)?>  "}" <r:")"> =>? {
+    <l:"("> "{" <list:(ArrayExpressionList ","?)?>  "}" <r:")"> =>? {
         let vec = list.map(|list| list.0).unwrap_or_else(|| vec![]);
         Ok(guard(ExpressionNode::Array(ArrayNode::new(vec)), Some(Span::join(l, r)))?)
     },
@@ -1104,9 +1104,9 @@ Return: ReturnNode = {
     }
 }
 
-ExpressionList: Vec<ExpressionNode> = {
-    <AssignmentExpression> => vec![<>],
-    <list:ExpressionList> "," <arg:AssignmentExpression> => {
+ArrayExpressionList: Vec<ExpressionNode> = {
+    <SpreadExpression> => vec![<>],
+    <list:ArrayExpressionList> "," <arg:SpreadExpression> => {
         let mut v = list;
         v.push(arg);
         v
@@ -1129,6 +1129,10 @@ ArgumentExpression: ExpressionNode = {
             global: false,
         }))
     },
+    <SpreadExpression>,
+};
+
+SpreadExpression: ExpressionNode = {
     <e:AssignmentExpression> <r:"..."> => {
         let span = Span::combine(e.span(), Some(r));
         ExpressionNode::Spread(SpreadNode { expr: Box::new(e), span })

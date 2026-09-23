@@ -291,6 +291,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let result = self.handle_aconst(location);
                 consumed(&mut self.array_items, result)?;
             }
+            Instruction::AConstSpread(list, location) => {
+                let values = self.arg_values(list)?;
+                let array = self
+                    .context
+                    .txn
+                    .with(|txn| txn.mint_array(LpcArray::new(values)));
+                set_location(
+                    &mut self.stack,
+                    &self.context.txn,
+                    location,
+                    LpcRef::Array(array),
+                )?;
+            }
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(
                     r1,

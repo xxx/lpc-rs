@@ -208,6 +208,7 @@ examples on this page use the default `NULL_MODE=zero` unless stated otherwise.
 * `<type> *` (array)
     - Arrays are a sequence of values of the same type.
     - Arrays can be created with the `({ <values> })` syntax.
+    - [Array literal spreading](array_spreading.md) inserts another array's elements: `({ 1, xs..., 2 })`.
     - Arrays can be indexed with numeric or range indices.
     - Arrays can be concatenated with the `+` operator.
     - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates kept; `a - b` removes every occurrence of `b`'s members; `a | b` is `a` as it is, then `b`'s members absent from `a` in `b`'s order, duplicates included. Members are compared by content for strings and `bytes` and by identity for objects and nested arrays or mappings.

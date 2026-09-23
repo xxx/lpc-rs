@@ -882,7 +882,7 @@ impl CodegenWalker {
     }
 
     /// The operand naming `args` in the current function's argument lists,
-    /// a fresh entry per call site.
+    /// a fresh entry per call or spreading array literal.
     fn arg_list(&mut self, args: Vec<Arg>, span: Option<Span>) -> Result<ArgList> {
         let Some(function) = self.function_stack.last_mut() else {
             return Err(lpc_bug!(
@@ -893,7 +893,7 @@ impl CodegenWalker {
         let Ok(index) = u16::try_from(function.arg_lists.len()) else {
             return Err(lpc_error!(
                 span,
-                "too many calls in one function (the limit is {})",
+                "too many calls or spreading array literals in one function (the limit is {})",
                 usize::from(u16::MAX) + 1
             ));
         };
@@ -1351,6 +1351,42 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
+        if node
+            .value
+            .iter()
+            .any(|item| matches!(item, ExpressionNode::Spread(_)))
+        {
+            let mut items = Vec::with_capacity(node.value.len());
+            for item in &mut node.value {
+                let (expression, spread) = match item {
+                    ExpressionNode::Spread(node) => (&mut *node.expr, true),
+                    expression => (expression, false),
+                };
+                expression.visit(self).await?;
+                let mut value = self.current_result;
+                if !matches!(value, RegisterVariant::Constant(_)) {
+                    // Later expressions may reassign the register that supplied this value.
+                    let saved = self.register_counter.next().unwrap().as_local();
+                    push_instruction!(self, Instruction::Copy(value, saved), expression.span());
+                    value = saved;
+                }
+                items.push(if spread {
+                    Arg::Spread(value)
+                } else {
+                    Arg::Value(value)
+                });
+            }
+            let list = self.arg_list(items, node.span)?;
+            let destination = self.register_counter.next().unwrap().as_local();
+            push_instruction!(
+                self,
+                Instruction::AConstSpread(list, destination),
+                node.span
+            );
+            self.current_result = destination;
+            return Ok(());
+        }
+
         let mut items = Vec::with_capacity(node.value.len());
         for member in &mut node.value {
             let _ = member.visit(self).await;

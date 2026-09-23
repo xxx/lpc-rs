@@ -85,7 +85,7 @@ pub struct ProgramFunction {
     /// pool order.
     #[builder(default)]
     pub constants: Vec<LpcConstant>,
-    /// The argument lists this function's calls read, one per call site,
+    /// The value lists this function's calls and spreading array constructors read,
     /// named by `ArgList` operands.
     #[builder(default)]
     pub arg_lists: Vec<Vec<Arg>>,
@@ -131,7 +131,7 @@ impl ProgramFunction {
         }
     }
 
-    /// The arguments the call with `list` reads.
+    /// The values the instruction with `list` reads.
     #[inline]
     pub fn args(&self, list: ArgList) -> &[Arg] {
         &self.arg_lists[usize::from(list.0)]

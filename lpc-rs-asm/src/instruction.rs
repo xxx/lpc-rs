@@ -41,7 +41,7 @@ pub enum Arg {
     Value(RegisterVariant),
     /// A `ref` argument's cell.
     Ref(RegisterVariant),
-    /// A spread argument's array.
+    /// An array expanded into a call or array literal.
     Spread(RegisterVariant),
 }
 
@@ -86,7 +86,7 @@ impl Display for TypeIndex {
     }
 }
 
-/// The index of a call's argument list in its function's `arg_lists`.
+/// The index of a call or array constructor's value list in its function's `arg_lists`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArgList(pub u16);
 
@@ -198,6 +198,9 @@ pub enum Instruction {
 
     /// Assert a value's nominal type without writing its storage.
     Guard(RegisterVariant, TypeIndex),
+
+    /// Construct an array from a value/spread list, without a call's argument-count limit.
+    AConstSpread(ArgList, RegisterVariant),
 
     /// Finish a block of instructions that can catch errors and continue
     /// execution.
@@ -364,6 +367,7 @@ impl Instruction {
     pub fn dest_register(&self) -> Option<RegisterVariant> {
         match *self {
             Self::AConst(d)
+            | Self::AConstSpread(_, d)
             | Self::BitwiseNot(_, d)
             | Self::Cast(_, _, d)
             | Self::ClassConst(_, d)
@@ -424,6 +428,7 @@ impl Instruction {
     {
         match self {
             Self::AConst(a0) => Self::AConst(f(a0)),
+            Self::AConstSpread(list, destination) => Self::AConstSpread(list, f(destination)),
             Self::Add(a0, a1, a2) => Self::Add(f(a0), f(a1), f(a2)),
             Self::And(a0, a1, a2) => Self::And(f(a0), f(a1), f(a2)),
             Self::BitwiseNot(a0, a1) => Self::BitwiseNot(f(a0), f(a1)),
@@ -522,7 +527,7 @@ impl Instruction {
         found
     }
 
-    /// The argument list this instruction calls with, for the call family.
+    /// The value list read by a call or spreading array constructor.
     pub fn arg_list(&self) -> Option<ArgList> {
         match *self {
             Self::Call(_, list)
@@ -530,7 +535,8 @@ impl Instruction {
             | Self::CallEfun(_, list)
             | Self::CallSimulEfun(_, list)
             | Self::CallFp(_, list)
-            | Self::CallOther(_, _, list) => Some(list),
+            | Self::CallOther(_, _, list)
+            | Self::AConstSpread(list, _) => Some(list),
             _ => None,
         }
     }
@@ -553,7 +559,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 51;
+    pub const COUNT: usize = 52;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -608,6 +614,7 @@ impl Instruction {
         "member_load",
         "member_store",
         "guard",
+        "aconst_spread",
     ];
 
     /// This variant's dense index, `0..Self::COUNT`, in declaration order.
@@ -664,6 +671,7 @@ impl Instruction {
             Self::MemberLoad(..) => 48,
             Self::MemberStore(..) => 49,
             Self::Guard(..) => 50,
+            Self::AConstSpread(..) => 51,
         }
     }
 
@@ -676,6 +684,9 @@ impl Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            Instruction::AConstSpread(list, destination) => {
+                write!(f, "{} {list}, {destination}", self.mnemonic())
+            }
             Instruction::AConst(r1) => {
                 write!(f, "{} {r1}", self.mnemonic())
             }
@@ -965,12 +976,12 @@ mod tests {
     }
 
     #[test]
-    fn six_variants_carry_an_argument_list() {
+    fn seven_variants_carry_an_argument_list() {
         let carriers = every_variant()
             .iter()
             .filter(|i| i.arg_list().is_some())
             .count();
-        assert_eq!(carriers, 6);
+        assert_eq!(carriers, 7);
     }
 
     #[test]
@@ -1038,6 +1049,7 @@ mod tests {
             MemberLoad(r(), ustr("field"), r()),
             MemberStore(r(), r(), ustr("field")),
             Guard(r(), TypeIndex(0)),
+            AConstSpread(ArgList(0), r()),
         ]
     }
 
@@ -1069,6 +1081,7 @@ mod tests {
         let d = RegisterVariant::Local(Register(7));
 
         assert_eq!(AConst(d).dest_register(), Some(d));
+        assert_eq!(AConstSpread(ArgList(0), d).dest_register(), Some(d));
         assert_eq!(Add(r(), r(), d).dest_register(), Some(d));
         assert_eq!(BitwiseNot(r(), d).dest_register(), Some(d));
         assert_eq!(Cast(r(), TypeIndex(0), d).dest_register(), Some(d));

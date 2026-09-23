@@ -19,6 +19,9 @@ arguments past the callee's fixed parameters land in its named variadic
 collector, or in `argv` for a bare `...` declaration. See
 [variadic parameters](variadic_parameters.md).
 
+The same `xs...` syntax inserts elements into an
+[array literal](array_spreading.md).
+
 ## Rules the compiler enforces
 
 - The operand's type is an array or `mixed`; anything else is

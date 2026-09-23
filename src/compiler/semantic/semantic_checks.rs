@@ -565,7 +565,15 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             let typed = node.value.iter().filter(|i| {
                 context.config.null_mode != NullMode::Zero || !is_null_literal(i, context)
             });
-            let res: Result<Vec<_>> = typed.map(|i| node_type(i, context)).collect();
+            let res: Result<Vec<_>> = typed
+                .map(|item| match item {
+                    ExpressionNode::Spread(spread) => {
+                        Ok(element_type(node_type(&spread.expr, context)?)
+                            .unwrap_or(LpcType::Mixed(false)))
+                    }
+                    item => node_type(item, context),
+                })
+                .collect();
 
             let value_types = res?;
 
