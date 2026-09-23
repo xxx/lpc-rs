@@ -693,16 +693,6 @@
           return;
         }
         args[c.slot] = { object: found[0].name };
-        if (family === 'parser')
-          m.calls.push(
-            (kinds.indexOf(c.slot) === 0 ? 'direct_' : 'indirect_') +
-              verb +
-              '_' +
-              slug +
-              '(' +
-              args.concat(raw).map(format).join(', ') +
-              ') → 1'
-          );
       });
       if (unresolved) {
         m.failureKind = 'noun';
@@ -717,7 +707,18 @@
               slug +
               '(' +
               args.concat(raw).map(format).join(', ') +
-              ') → 1 (all slots filled)'
+              ') → 1'
+          );
+        });
+        kinds.forEach(function (slot, i) {
+          m.calls.push(
+            (i === 0 ? 'direct_' : 'indirect_') +
+              verb +
+              '_' +
+              slug +
+              '(' +
+              args.concat(raw).map(format).join(', ') +
+              ') → 1 (selected pair recheck)'
           );
         });
         m.calls.push(

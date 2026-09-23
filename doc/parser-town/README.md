@@ -25,7 +25,7 @@ The initial sentence is `give red sword to bob`. Switch entrances to see how the
 | Entrance | Rule | Input seen by the engine | Result in this example |
 |---|---|---|---|
 | Native | `add_rule("'give' %o 'to' %L", "do_give")` | `give red sword to bob` | `do_give` receives the sword and bob objects. |
-| Parser package | `parse_add_rule("give", "OBJ to LIV")` | `red sword to bob` | `can_`, object selection, all-filled rechecks, then `do_`; `parse_sentence` returns `1`. |
+| Parser package | `parse_add_rule("give", "OBJ to LIV")` | `red sword to bob` | `can_`, pair permissions, selection, pair recheck, then `do_`; `parse_sentence` returns `1`. |
 | DGD | `Command: 'give' Phrase 'to' Phrase ? accept` plus the displayed token and phrase rules | `give red sword to bob` | `parse_string` returns an array of strings from the tree. |
 
 The compiler lowers syntax to Grammar; frontend metadata remains outside it. Labels identify native/package captures, parser slugs identify handler families, and DGD production IDs identify semantic actions. The shared engine does not know what an LPC object is.
@@ -84,7 +84,7 @@ First visits stop for `clamp(words / 3.8 + 3.5, 9, 26)` seconds, divided only by
 | Earley Yard | Predict, scan, complete, nullable advancement, deduplication. | [grammar/earley.rs](../../src/command/grammar/earley.rs) |
 | Derivation Grove | Complete spans become trees and labeled captures. | [grammar/earley.rs](../../src/command/grammar/earley.rs), [grammar/tree.rs](../../src/command/grammar/tree.rs) |
 | Argument House | Resolve noun captures and construct native arguments. | [native/matcher.rs](../../src/command/frontend/native/matcher.rs), [resolve](../../src/command/resolve) |
-| Permission Court | Package `can_`, selection, all-filled checks, `do_`. | [parser/attempt.rs](../../src/command/parser/attempt.rs), [handler contract](../apply/object/parser_handlers.md) |
+| Permission Court | Package `can_`, pair permissions, selection, pair recheck, `do_`. | [parser/attempt.rs](../../src/command/parser/attempt.rs), [pair selection](../../src/command/parser/attempt/relations.rs), [handler contract](../apply/object/parser_handlers.md) |
 | Action Workshop | Fold tree values through DGD semantic actions. | [parse_string.rs](../../src/interpreter/efun/parse_string.rs) |
 | Result Square | Frontends expose their own success contracts. | [add_rule](../efun/add_rule.md), [parse_sentence](../efun/parse_sentence.md), [parse_string](../efun/parse_string.md) |
 | Return Office | Lexical, syntax, resolution, and handler failures. | [trial.rs](../../src/command/trial.rs), [parser/lpc.rs](../../src/command/parser/lpc.rs) |

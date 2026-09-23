@@ -30,12 +30,12 @@ register again.
 
 Tokens separated by spaces; `""` registers the bare verb alone.
 
-| token | matches | handler argument |
+| token | matches | action (`do_`) argument |
 |---|---|---|
-| `OBJ` | words naming one object | the chosen object, or `0` |
-| `OBS` | words naming objects, with a numeral | an array of the chosen objects, or `0` |
-| `LIV` | words naming one living | the chosen living, or `0` |
-| `LVS` | words naming livings, with a numeral | an array of the chosen livings, or `0` |
+| `OBJ` | words naming one object | the chosen object |
+| `OBS` | words naming objects, with a numeral | an array of objects and plain refusal strings |
+| `LIV` | words naming one living | the chosen living |
+| `LVS` | words naming livings, with a numeral | an array of livings and plain refusal strings |
 | `WRD` | one word | the word, as a string |
 | `STR` | one or more words | the words, as a string |
 | anything else | that word, literally, case-sensitive | — |
@@ -77,26 +77,30 @@ void create() {
 }
 ```
 
-Typing `give sword to bob` calls, in order (`OBJ(sword)` below stands for the
-object resolved from the word `sword`; an object slot not yet chosen is
-`0`):
+With one matching sword and one matching Bob, typing `give sword to bob`
+calls, in order (`OBJ(sword)` stands for the resolved object; unresolved
+slots use the selected null value):
 
 - `can_give_obj_to_liv(0, 0, "sword", "bob")`
-- `direct_give_obj_to_liv(OBJ(sword), 0, "sword", "bob")` — on each object
-  named `sword`, to pick the one meant; for the duration of this call the
-  candidate itself sits in its own (direct) slot, and the indirect slot is
-  still unfilled
-- `indirect_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — on each
-  living named `bob`, once the sword is chosen; the candidate now sits in
-  its own (indirect) slot alongside the already-chosen direct object
+- `direct_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — on the sword
+- `indirect_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — on Bob,
+  if the sword's direct check accepted
 - `direct_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` and
   `indirect_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — the
-  all-filled re-ask, once both slots are chosen
+  selected pair's recheck, in that order
 - `do_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")`
 
-A many slot's (`OBS`/`LVS`) filtering candidate sits in its own slot the same
-way — as a bare object, never as a one-element array; the array shape is
-only for a slot already *chosen* (the all-filled re-ask and `do_`).
+When there are several matches, the parser checks compatible pairs before
+selecting the objects. Bob's permission can therefore determine which sword
+is meant, and the sword's permission can determine which Bob is meant.
+
+With one plural slot, as in `OBS to LIV` or `OBJ with OBS`, permission checks
+and rechecks still receive individual objects. The action receives an array
+for the plural slot, with rejected members removed and plain refusal strings
+appended. Explicit ordinals are pinned before permission checks; ordinary
+counts are selected afterward. Single-object rules and rules with two plural
+slots retain aggregate rechecks; see the full
+[handler contract](../apply/object/parser_handlers.md).
 
 ### Scope
 

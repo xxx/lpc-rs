@@ -1,6 +1,6 @@
-//! The protocol for one parse — `can_`, each object slot resolved and
-//! filtered, the final re-ask, `do_` — decided without the world: all it
-//! needs of the world it asks for through [`Ask`].
+//! The protocol for one parse, with world access supplied by [`Ask`].
+
+mod relations;
 
 use lpc_rs_errors::Result;
 
@@ -117,8 +117,7 @@ fn plain_reasons(reasons: &[(usize, Reply)]) -> Vec<String> {
 }
 
 /// A failure whose silent fallback (when the master gives no message) is
-/// `Refused`: from the actor's own handlers — `can_`, the all-filled
-/// re-ask, or a missing `do_`.
+/// `Refused`: from `can_`, pair checks, the final re-ask, or a missing `do_`.
 fn refused(kind: Kind, object: Option<Target>, arg: Arg, flag: bool, progress: usize) -> Failure {
     Failure {
         kind,
@@ -149,8 +148,8 @@ fn unresolved(
     }
 }
 
-/// One parse: `can_`, each object slot resolved and filtered, the final
-/// re-ask, `do_`. `Err` is this parse's failure.
+/// One parse: `can_`, resolution and permission checks, selection, rechecks,
+/// and `do_`. `Err` is this parse's failure.
 pub(crate) async fn attempt<A: Ask>(
     ask: &mut A,
     caps: &[Capture],
@@ -187,6 +186,21 @@ pub(crate) async fn attempt<A: Ask>(
             )));
         }
         Reply::Yes | Reply::Absent => {}
+    }
+
+    let object_slots: Vec<usize> = caps
+        .iter()
+        .enumerate()
+        .filter_map(|(index, cap)| cap.kind.is_object().then_some(index))
+        .collect();
+    if let &[direct, indirect] = object_slots.as_slice()
+        && !(caps[direct].kind.is_many() && caps[indirect].kind.is_many())
+    {
+        let values = match relations::select(ask, caps, [direct, indirect], values, &words).await? {
+            Ok(values) => values,
+            Err(failure) => return Ok(Err(failure)),
+        };
+        return act(ask, &values, &words, 2).await;
     }
 
     let mut chosen: Vec<ChosenSlot> = Vec::new();
@@ -355,8 +369,17 @@ pub(crate) async fn attempt<A: Ask>(
             do_values[*index] = Slot::Mixed(picked.clone(), plain_reasons(reasons));
         }
     }
+    act(ask, &do_values, &words, chosen.len()).await
+}
+
+async fn act<A: Ask>(
+    ask: &mut A,
+    values: &[Slot],
+    words: &[Slot],
+    progress: usize,
+) -> Result<std::result::Result<(), Failure>> {
     match ask
-        .call(Family::Do, Target::Owner, &with_words(&do_values, &words))
+        .call(Family::Do, Target::Owner, &with_words(values, words))
         .await?
     {
         Reply::Absent => Ok(Err(refused(
@@ -364,7 +387,7 @@ pub(crate) async fn attempt<A: Ask>(
             None,
             Arg::None,
             false,
-            chosen.len(),
+            progress,
         ))),
         _ => Ok(Ok(())),
     }
@@ -756,7 +779,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_second_slot_is_indirect_and_counts_as_progress_one() {
+    async fn a_missing_second_noun_fails_before_permission_checks() {
         let caps = caps("OBS in OBJ", "swords in bag");
         let mut ask = recorded(
             vec![yes(Family::Direct, Target::Candidate(0))],
@@ -765,15 +788,7 @@ mod tests {
         let failed = failure(&mut ask, &caps).await;
         assert_eq!(failed.kind, Kind::ThereIsNo);
         assert_eq!(failed.progress, 1);
-        assert!(
-            ask.calls
-                .iter()
-                .any(|(family, _, _)| *family == Family::Direct)
-        );
-        assert!(
-            !ask.calls
-                .iter()
-                .any(|(family, _, _)| *family == Family::Indirect)
-        );
+        assert_eq!(ask.calls.len(), 1);
+        assert_eq!(ask.calls[0].0, Family::Can);
     }
 }

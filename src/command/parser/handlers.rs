@@ -144,7 +144,7 @@ pub(crate) enum Kind {
     NotAccessible = 3,
     /// Several qualifiers survived filtering with no ordinal to choose one.
     Ambig = 4,
-    /// An ordinal named a position past the number of qualifiers.
+    /// An ordinal named a position past the available matches.
     Ordinal = 5,
     /// A handler's own string reason, `#` stripped.
     Allocated = 6,
@@ -163,7 +163,7 @@ pub(crate) enum Arg {
     None,
     /// A phrase or a handler's reason text.
     Text(String),
-    /// The qualifier count an ordinal reached past.
+    /// The available count an ordinal reached past.
     Count(i64),
     /// The qualifying candidates of an ambiguous slot.
     Objects(Vec<usize>),
@@ -181,11 +181,11 @@ pub(crate) struct Failure {
     pub(crate) arg: Arg,
     /// The message's fourth argument: whether the phrase named a many slot.
     pub(crate) flag: bool,
-    /// Object slots chosen before failing.
+    /// Object slots resolved before failing.
     pub(crate) progress: usize,
     /// The verdict when the master's `parser_error_message` gives no
     /// string: `Refused` from the actor's own handlers (`can_`, the
-    /// re-ask, a missing `do_`), `Unresolved` from resolving or
+    /// pair checks, the re-ask, a missing `do_`), `Unresolved` from resolving or
     /// disambiguating an object slot.
     pub(crate) silent: RejectionCode,
 }

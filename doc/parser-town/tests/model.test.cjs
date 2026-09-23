@@ -78,8 +78,9 @@ test('handler refusal occurs outside the shared chart', () => {
   }
   const m = M.run({ family: 'parser' });
   assert.equal(m.calls.length, 6);
-  assert.match(m.calls[1], /direct_give_obj_to_liv\(\/room\/sword, 0/);
-  assert.match(m.calls[3], /all slots filled/);
+  assert.match(m.calls[1], /direct_give_obj_to_liv\(\/room\/sword, \/players\/bob/);
+  assert.match(m.calls[2], /indirect_give_obj_to_liv\(\/room\/sword, \/players\/bob/);
+  assert.match(m.calls[3], /selected pair recheck/);
   assert.match(m.calls[5], /^do_give/);
 });
 test('maximal munch, rule-order ties, dropped whitespace and exact spans', () => {

@@ -141,8 +141,9 @@ were reviewed on **22 September 2026** at these same revisions. CD's parser
 notes use the checked-in English implementation without `PARSE_FOREIGN`.
 FluffOS parser notes require `PACKAGE_PARSER`; colour expansion requires
 `PACKAGE_CONTRIB`. Parser debugging additionally needs `DEBUG` or `PARSE_DEBUG`.
-Successful rule selection and failure reporting were also reviewed against
-that FluffOS parser revision on **22 September 2026**, with `PACKAGE_PARSER`.
+Successful rule selection, failure reporting, and two-object permission checks
+were also reviewed against that FluffOS parser revision on **22 September 2026**,
+with `PACKAGE_PARSER`.
 The DGD parser review uses its source and separately pinned LPC documentation.
 Unverified details are marked below; no cross-driver execution was performed.
 
@@ -430,13 +431,17 @@ not every historical MudOS release. Consult its [source][fl-parser-source] and
 |---|---|---|
 | Dispatch and actor | `parse_sentence` parses for the calling object, which must have called `parse_init`. | Parses for the living `this_player()`. Registered parser rules are also reached by ordinary command dispatch after the actor's own rules decline the verb. Review actor and dispatch ownership. |
 | Articles and possessives | Recognizes built-in English words including `a`, `any`, `the`, and `my`. | Supply accepted adjectives through the vocabulary applies; these words are not automatic articles or possessive selectors. |
-| Error kinds | Uses `ERR_IS_NOT` (1) and `ERR_MANY_PATHS` (9), as well as kinds 2–8. | Never emits 1 or 9; a missing object phrase uses kind 7. Numeric kinds 2–8 retain those numbers, but inspect each argument contract. The driver supplies no constants header. |
+| Error kinds | Defines `ERR_IS_NOT` (1) and `ERR_MANY_PATHS` (9), as well as kinds 2–8. The reviewed guard for 9 counts freshly cleared bitsets; source inspection indicates it cannot fire there. This was not execution-tested. [Guard][fl-parser-pair-limit]. | Never emits 1 or 9; a missing object phrase uses kind 7. Numeric kinds 2–8 retain those numbers, but inspect each argument contract. The driver supplies no constants header. |
 | Error hook and fallback | `get_the_error` calls the master with a kind-dependent argument count; a missing result becomes zero. | [`parser_error_message`](apply/master/parser_error_message.md) always receives four arguments, and runs only after all rules fail. No built-in English fallback: missing text leaves the silent result code, and command dispatch uses its ordinary failure fallback. |
 | Ambiguity modifier | Recognizes `:c` to choose one match. | Does not recognize `:c`; resolve that choice in the mudlib or adapt the rule. |
 | Debug argument | Nonzero debugging requires a `DEBUG` or `PARSE_DEBUG` build; otherwise it errors. | Accepts and ignores `debug`. |
 | Name caching | `parse_refresh` invalidates cached parser information. | Rules and noun vocabulary are read afresh for each call; `parse_refresh` does nothing. |
 | Nested scope arrays | Interpret nested arrays using the preceding object's visibility, accessibility, and ownership state. | Flatten the explicitly supplied scope into reachable candidates. Normal scope walking uses `environment()`, [`inventory_visible`](apply/object/inventory_visible.md), and [`inventory_accessible`](apply/object/inventory_accessible.md). |
 | Living candidates | Uses the parser's `is_living` apply. | Uses `enable_commands` status, including extra candidates from [`parse_command_users`](apply/master/parse_command_users.md). |
+| Two-object selection | Retains possible objects for a dependent relation pass. [Relations][fl-parser-relations]. | With at most one plural slot, checks pairs before resolving ambiguity or ordinary counts. Both orientations of one plural slot work; two plural slots retain aggregate checks and independent action arrays. |
+| Permission arguments | Full relation checks pass individual objects; provisional indirect checks can receive a plural array. [Construction][fl-parser-handler-args], [relations][fl-parser-relations]. | Pair checks and their final rechecks always pass two individual objects, with no provisional null partner. Only `do_` receives the plural action array. Single-object rules and rules with two plural slots retain aggregate rechecks. Adapt hooks that require provisional or array calls. |
+| Ordinal selection | Indirect ordinals are narrowed before the relation loop; direct ordinal handling occurs in that loop. Exact cross-driver outcomes are unverified. [Relations][fl-parser-relations]. | For pair rules, both slots pin ordinals to live, reachable noun matches before permissions, without substituting another compatible object. Other rule shapes retain ordinals after initial filtering. |
+| Partial plural refusal | Relation processing retains errors alongside matches. [Relations][fl-parser-relations]. | A pair's late refusal can remove one plural member without rejecting the accepted members. Actions receive raw plain refusal strings for the selected partner; soft reasons are omitted. No master error hook runs after an eventual successful rule. |
 | Successful rule selection | Uses rule weights to select a successful match. [Selection][fl-parser-selection]. | The first successful rule in registration order wins, even if a later rule is more specific. Earlier failures do not block later successes. |
 | Error selection | Weighs rule matches and error counts. [Selection][fl-parser-selection]. | Within a rule, retains the parse that resolved the most object slots, taking the earliest tie. If every rule fails, offers diagnostics in registration order until the master returns a string; if none does, combines silent codes by severity (`-3`, then `-2`, then `-1`). Error text can therefore differ. |
 | Verb matching | Tries progressively longer normalized word sequences as verbs. | Matches the exact first word. Multiword or normalized verb assumptions need adaptation. |
@@ -625,6 +630,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-colour-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/contrib/contrib.cc#L577-L1102
 [fl-parser-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc
 [fl-parser-selection]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2825
+[fl-parser-relations]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2478
+[fl-parser-handler-args]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2084
+[fl-parser-pair-limit]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2675
 [fl-parser-spec]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.spec
 [dgd-parser-source]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/parser/parse.cpp
 [dgd-grammar-source]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/parser/grammar.cpp

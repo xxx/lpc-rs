@@ -6,7 +6,7 @@
  * Name matching also needs vocabulary or id(), as in object.c and ../obj/player.c.
  *
  * In the examples below, item_words and recipient_words are the noun phrases
- * as typed; item and recipient hold resolved objects or nil while unresolved.
+ * as typed; can receives nil objects, while pair permissions receive both objects.
  * Nil is 0 in the default mode; distinct mode keeps it separate from numeric 0.
  * The specific handler name wins over its generic fallback when both exist.
  * Refusals leave later rules eligible; the first rule to reach do wins.
@@ -44,9 +44,9 @@ int can_give_obj_to_liv(object item, object recipient, string item_words, string
 
 /**
  * On an item, decide whether it qualifies as the object being given.
- * item is this object during filtering; recipient may still be 0, while
+ * item is this object and recipient is the living being checked with it;
  * item_words and recipient_words retain the typed noun phrases.
- * The parser asks again with both objects filled after resolving the rule.
+ * Each possible pair is checked before selection, then selected pairs are rechecked.
  * Return 1 to qualify, 0 to reject, or a reason string from a mixed-return
  * version; without a specific or generic direct hook the item is excluded.
  * Requiring the item to be carried by this_player() permits only held gifts.
@@ -57,8 +57,9 @@ int direct_give_obj_to_liv(object item, object recipient, string item_words, str
 
 /**
  * On a living recipient, decide whether it accepts the item from this_player().
- * item is the selected gift and recipient is this living; the *_words strings
- * hold the typed phrases, and this hook is rechecked after full resolution.
+ * item is the gift being checked and recipient is this living; the *_words
+ * strings hold the typed phrases, and selected pairs are rechecked afterward.
+ * This hook runs only if the pair's direct check accepts and both objects survive.
  * Return 1 to accept, 0 to reject silently, or a refusal string as here.
  * If all rules fail, this reason can reach parser_error_message() as kind 6.
  * A leading # makes it yield to a plain reason from another matching object.

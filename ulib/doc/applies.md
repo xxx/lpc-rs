@@ -135,9 +135,12 @@ The specific name wins when present; a synonym uses the original verb's name.
 Other rules have different arguments: one per grammar token, then one phrase
 string per object slot. The rule's literal `to` contributes no argument.
 
-`can_` sees unresolved object slots as `0`. During candidate filtering,
-`direct_` and `indirect_` see their own candidate filled in; other slots may
-still be `0`. They are asked again after resolution with all slots filled.
+`can_` sees unresolved object slots as `0` (`nil` in distinct mode). For this
+two-object rule, `direct_` and `indirect_` receive both individual objects.
+The parser checks pairs in scope order, asking direct before indirect and
+skipping indirect if direct refuses. Both nouns resolve before these calls;
+permission checks can therefore disambiguate either object. Selected pairs
+are checked once more before the action. Destructed objects are skipped.
 Return `1` to permit, `0` to reject, or a reason string to reject with an
 explanation. A leading `#` makes the reason soft, so a plain reason from
 another candidate takes precedence. Without `can_`, permission defaults to
@@ -154,11 +157,20 @@ an earlier rule supplied a refusal string. `parser_error_message()` runs only
 when every rule fails. Refusing a rule does not undo its handler effects, and
 runtime exceptions propagate immediately.
 
-For many-object `OBS`/`LVS` slots, candidate filtering passes the candidate as a
-bare object in its own slot. Elsewhere, resolved many-object slots are arrays.
-In `do_`, those arrays also include plain refusal strings from rejected
-candidates. Use appropriately typed arguments and inspect entries before
-treating them as objects; the simple `OBJ to LIV` example avoids this case.
+Two-object rules with one `OBS`/`LVS` slot use the same individual-object
+permission arguments in both orientations. Only `do_` receives an array for
+the plural slot: accepted objects followed by plain refusal strings for that
+partner. A late refusal removes that member while preserving the others.
+Ordinals pin a reachable noun match before permissions; ordinary counts select
+from compatible matches afterward. A late rejection does not substitute a new
+object or restart selection.
+
+Single-object rules and rules with two plural slots retain aggregate filtering
+and rechecks: each initial check fills its own slot with one object, earlier
+slots hold selected values, and final rechecks receive arrays for plural slots.
+Their action arrays also include plain initial refusal strings. Use appropriately
+typed arguments and inspect entries before treating them as objects; the simple
+`OBJ to LIV` example avoids array arguments.
 
 ## Living applies
 

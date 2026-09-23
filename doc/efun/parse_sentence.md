@@ -39,7 +39,8 @@ A later silent refusal cannot downgrade an earlier unresolved object.
 
 Within one rule's attempt at the line, which may parse it several ways,
 the retained failure is whichever parse got furthest: most object slots
-chosen, ties to the earliest (see `parser_handlers`). All handlers run in
+resolved, ties to the earliest (see `parser_handlers`). For pair checking,
+both noun phrases count as resolved before permission checks begin. All handlers run in
 the current transaction; declining a rule does not undo its effects.
 Runtime exceptions propagate immediately.
 

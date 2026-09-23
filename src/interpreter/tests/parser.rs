@@ -580,11 +580,7 @@ const LOG_BOB: (&str, &str) = (
 );
 
 #[tokio::test]
-async fn a_candidates_own_slot_holds_itself_while_filtered_and_reverts_to_zero() {
-    // Q7's sequence for `give OBJ to LIV`: filtering the direct slot puts
-    // the sword candidate in its own (still-empty) slot; filtering the
-    // indirect slot puts bob in its, with the direct slot already chosen;
-    // the all-filled re-ask hands both handlers every object.
+async fn two_object_permissions_receive_both_objects_during_filtering_and_recheck() {
     let body = r#"
         object room = find_object("/room");
         move_object(room);
@@ -610,7 +606,7 @@ async fn a_candidates_own_slot_holds_itself_while_filtered_and_reverts_to_zero()
         r,
         vec![
             LpcRef::from(1),
-            s("self 0 sword bob"),
+            s("self other sword bob"),
             s("self other sword bob"),
             s("other self sword bob"),
             s("other self sword bob"),
@@ -1199,8 +1195,9 @@ async fn the_all_filled_reask_can_still_refuse_after_filtering_qualified() {
         "/reask_refuses.c",
         indoc! { r#"
         string *parse_command_id_list() { return ({ "sword" }); }
+        int calls;
         mixed direct_give_obj_to_liv(mixed a, mixed b, string x, string y) {
-            return b == 0 ? 1 : 0;
+            return ++calls == 1;
         }
         void go(object d) { move_object(d); }
     "# },
@@ -1223,8 +1220,9 @@ async fn the_all_filled_reask_can_still_be_a_reason_after_filtering_qualified() 
         "/reask_reasons.c",
         indoc! { r#"
         string *parse_command_id_list() { return ({ "sword" }); }
+        int calls;
         mixed direct_give_obj_to_liv(mixed a, mixed b, string x, string y) {
-            if (b == 0) return 1;
+            if (++calls == 1) return 1;
             return "not now";
         }
         void go(object d) { move_object(d); }

@@ -32,32 +32,75 @@ the base verb, then the rule text exactly as `parse_add_rule` received it
 Unchosen values described as `0` below use the selected [null value](../../lpc/null.md):
 `0` in zero mode, `nil` in distinct mode.
 
-One argument per token, in rule order:
+One argument per capture token, in rule order; literal words add no argument:
 
 - `WRD`/`STR` — the matched text, as a string.
-- `OBJ`/`LIV` — the object chosen for that slot, or `0` while it is
-  unchosen. The one exception: for the duration of a candidate's own
-  `direct_`/`indirect_` filtering call for that same slot, the argument is
-  that candidate itself, not `0` — the slot reverts to `0` once the call
-  returns, before the next candidate is asked.
-- `OBS`/`LVS` — an array of the objects chosen for that slot, or `0` while
-  unchosen. The same exception holds during filtering, but the candidate
-  sits in its own slot as a bare object, never as a one-element array — the
-  array shape is only for a slot already *chosen*.
+- `OBJ`/`LIV` — an individual object, or `0` while unresolved.
+- `OBS`/`LVS` — an individual object during pair permission checks;
+  an array for `do_`. Single-object rules and rules with two plural slots
+  retain the aggregate permission protocol described below.
 
 Then, one more argument per object slot (`OBJ`/`OBS`/`LIV`/`LVS`, in rule
 order), holding the words that slot's phrase was typed as — present in
 every call, resolved or not.
 
-`can_` is called once, with every object argument `0` (nothing is chosen
-yet). `direct_`/`indirect_` are each called once per reachable candidate the
-resolver found for their slot (an unreachable match, per
-`inventory_accessible`, is never asked at all), with earlier slots' arguments
-filled, the current slot holding that one candidate (bare object, even for a
-many slot), and later slots still `0`; once every slot is chosen, `direct_`
-and `indirect_` are each called once more on the objects finally chosen,
-with every argument filled. `do_` is called once, after that re-ask, with
-every slot filled.
+`can_` is called once, with every object argument `0`. `do_` is called once
+after selection and permission rechecks, with all slots filled. An `OBS` or
+`LVS` action argument is always an array, even when only one object qualifies.
+
+### Two-object rules with at most one plural slot
+
+This covers two singular slots and either orientation of one singular and
+one plural slot, such as `OBJ from OBJ`, `OBS from OBJ`, and `OBJ with OBS`.
+
+1. Resolve both noun phrases to live, reachable matches. An unreachable match,
+   per `inventory_accessible`, is never asked for permission.
+2. Pin explicit ordinals to those matches in scope order, before permissions.
+   `second sword` means the second reachable sword even if the first refuses.
+   If the pinned object is incompatible, the rule fails without substituting
+   another object. An out-of-range ordinal reports this pre-permission count.
+3. Check each pair in scope order: the first direct match with each indirect
+   match, then the next direct match. Call `direct_` on the direct object, then
+   `indirect_` on the indirect object only if `direct_` accepts. Both arguments
+   are individual objects in both calls, including a plural grammar slot.
+   There are no provisional calls with a null partner. Missing either handler
+   excludes that pair.
+4. Select from pairs accepted by both handlers. A singular slot with several
+   compatible objects is ambiguous. A plural slot takes all compatible objects,
+   or up to its requested count, in scope order. A singular phrase in a plural
+   slot takes the first compatible object. Plural counts cannot resolve an
+   ambiguity in the singular partner.
+5. Recheck each selected pair once, in the same order, with the same individual
+   object arguments and direct-before-indirect ordering. A refused pair is
+   removed; other accepted plural members remain eligible. Selection is not
+   restarted, and a removed member is not replaced to fill a requested count.
+6. Run `do_` if at least one selected pair survives. Build its plural array only
+   now, as described below.
+
+Objects destructed by an earlier hook are skipped, including destruction of
+either endpoint between a pair's direct and indirect calls. Before `do_`, any
+selected pair with a destructed endpoint is removed. Permission effects remain
+visible to later checks; rechecking is one pass, not a search for a stable state.
+Changes made by a later hook do not trigger another check of an earlier pair.
+
+If noun resolution succeeds but no pair survives permissions, a reason string
+can supply kind 6; without a reason this is a silent refusal (`-2`). Unresolved
+nouns, inaccessible matches, invalid counts, ordinals, and ambiguity retain
+their ordinary diagnostics and silent unresolved result (`-3`).
+
+### Single-object rules and rules with two plural slots
+
+These retain aggregate filtering and rechecks. Resolve each object slot in
+order, ask each reachable match with its own slot holding that individual
+object, and select that slot before proceeding to the next one. Earlier slots
+hold their selected values; later slots remain `0`. Ordinals count matches
+that passed this filtering.
+
+After selection, ask each chosen direct object and then each chosen indirect
+object again with all slots filled. A plural slot is the same object-only array
+in every recheck of that slot. Any refusal at this stage rejects the whole rule.
+Two plural slots therefore supply independent arrays, without a mapping of
+approved pairs; pair filtering is not performed for those rules.
 
 ### Returns
 
@@ -78,16 +121,27 @@ in registration order, until it returns a string. Permission handlers and
 `do_` run in the current transaction: a refusal does not undo earlier writes
 or output. A runtime exception stops selection and propagates to the caller.
 
+All four families run with `this_player()` and `previous_object()` set to the
+actor and `origin()` set to `"driver"`. `query_verb()` is the typed verb, including
+a synonym, while handler names and generic prefixes use the base verb.
+
 ### The many-slot array
 
-Everywhere but `do_` — `can_`, `direct_`/`indirect_`, and the all-filled
-re-ask — an `OBS`/`LVS` slot's argument is the array of objects chosen for
-it so far, and nothing else (a candidate filtering for that very slot is the
-one exception described above: itself, as a bare object, not an array).
-`do_` alone sees something wider for that same slot: the qualifying objects,
-in candidate order, followed by every *plain* (non-`#`) reason a candidate
-that did not qualify returned, as a string; soft reasons are dropped by this
-point.
+An `OBS`/`LVS` action array contains the accepted objects in scope order,
+followed by plain (non-`#`) refusal strings in that same order of rejected
+matches. Soft reasons are omitted. Inspect entries before treating them as
+objects.
+
+For pair filtering, include refusals only for the selected singular partner.
+Either permission hook can supply the reason for a rejected plural member.
+A selected pair's final reply replaces its initial reply, so a late plain
+refusal is also included. Destructed members contribute neither objects nor
+reasons. `parser_error_message` is never called on a successful rule merely to
+format these strings.
+
+Under the aggregate protocol, the action array includes plain reasons from
+initial filtering. Permission arrays contain only chosen objects; action
+arrays are separate arrays and also include the reasons.
 
 ### See also
 
