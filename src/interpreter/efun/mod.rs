@@ -834,7 +834,7 @@ efuns! {
     member_array => {
         returns: LpcType::Int(false),
         arity: (3, 1),
-        args: [LpcType::Mixed(false), LpcType::Mixed(true), LpcType::Int(false)],
+        args: [LpcType::Mixed(false), LpcType::Mixed(true) | LpcType::String(false), LpcType::Int(false)],
     },
     values [in keys_values] => {
         returns: LpcType::Mixed(true),
@@ -880,7 +880,7 @@ efuns! {
     map => {
         returns: LpcType::Mixed(false),
         arity: (2, 0, ellipsis),
-        args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
+        args: [LpcType::Mixed(true) | LpcType::Mapping(false) | LpcType::String(false), LpcType::Function(false)],
     },
     sort_array => {
         returns: LpcType::Mixed(true),
