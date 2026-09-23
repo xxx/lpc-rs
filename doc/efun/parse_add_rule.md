@@ -23,7 +23,7 @@ string. A successful search never calls that hook.
 `parse_add_rule` is a pure append: it never reads the registry first, so
 registering the same verb and rule text twice from the same object creates
 two separate rules, not one. Both are tried in registration order, both
-appear in `parse_my_rules`/`parse_dump`, and nothing merges or replaces the
+appear in `query_parser_rules`/`parse_dump`, and nothing merges or replaces the
 earlier one. To replace a rule, `parse_remove` its verb first, then
 register again.
 

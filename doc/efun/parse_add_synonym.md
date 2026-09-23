@@ -52,4 +52,4 @@ is empty or whitespace-only.
 
 ### See also
 
-`parse_add_rule`, `parse_remove`, `parse_my_rules`, `query_verb`
+`parse_add_rule`, `parse_remove`, `query_parser_rules`, `query_verb`

@@ -375,7 +375,7 @@ async fn normalized_aliases_keep_exact_filters_snapshots_and_base_removal() {
             parse_add_synonym("pick it up"," pick  up "," OBJ:v ");
             parse_add_rule("take away","WRD");
         }}
-        string *rules() {{ return parse_my_rules(); }}
+        string *rules() {{ return query_parser_rules(); }}
         void remove(string key) {{ parse_remove(key); }}
         int rejects_filter() {{ return stringp(catch(parse_add_synonym("bad","take away","OBJ:v"))); }}
         {RECORD}
@@ -404,7 +404,7 @@ async fn empty_names_fail_without_changing_the_registry() {
                 if(!stringp(error) || strindex(error,"verb must contain at least one word")<0) return ({0});
             }
         }
-        return ({sizeof(parse_my_rules())==1 && parse_sentence("")==0});
+        return ({sizeof(query_parser_rules())==1 && parse_sentence("")==0});
     "#).await;
 }
 

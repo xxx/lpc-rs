@@ -117,7 +117,7 @@ count together — at 16 deep, `parse_sentence: nesting deeper than 16`.
 
 ### See also
 
-`parse_add_rule`, `parse_add_synonym`, `parse_remove`, `parse_my_rules`,
+`parse_add_rule`, `parse_add_synonym`, `parse_remove`, `query_parser_rules`,
 `command`, [`parser_handlers`](../apply/object/parser_handlers.md),
 [`parser_error_message`](../apply/master/parser_error_message.md),
 [`parse_command_users`](../apply/master/parse_command_users.md)

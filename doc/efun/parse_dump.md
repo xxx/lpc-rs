@@ -29,4 +29,4 @@ registered in `/verbs/look.c`, `parse_dump()` returns:
 
 ### See also
 
-`parse_my_rules`, `parse_add_rule`, `parse_add_synonym`
+`query_parser_rules`, `parse_add_rule`, `parse_add_synonym`

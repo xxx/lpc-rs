@@ -1,6 +1,6 @@
-# parse_my_rules
+# query_parser_rules
 
-`string *parse_my_rules()`
+`string *query_parser_rules()`
 
 `this_object()`'s own registered rules, in registration order, each as
 `"verb rule"` — a `parse_add_synonym` sibling reports the verb it was

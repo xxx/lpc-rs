@@ -17,12 +17,12 @@ const VERB: (&str, &str) = (
             parse_add_synonym("examine", "look", "at OBJ");
         }
         void drop() { parse_remove("look"); }
-        string *rules() { return parse_my_rules(); }
+        string *rules() { return query_parser_rules(); }
     "# },
 );
 
 #[tokio::test]
-async fn my_rules_lists_verb_and_rule_in_registration_order() {
+async fn query_parser_rules_lists_verb_and_rule_in_registration_order() {
     let r = run(
         "",
         &[VERB],
@@ -86,7 +86,7 @@ const CHAIN: (&str, &str) = (
             parse_add_synonym("x", "give");
         }
         void drop() { parse_remove("give"); }
-        string *rules() { return parse_my_rules(); }
+        string *rules() { return query_parser_rules(); }
     "# },
 );
 

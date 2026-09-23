@@ -24,5 +24,5 @@ regardless of either; the purge only reclaims the entry.
 
 ### See also
 
-`parse_init`, `parse_add_rule`, `parse_add_synonym`, `parse_my_rules`,
+`parse_init`, `parse_add_rule`, `parse_add_synonym`, `query_parser_rules`,
 `parse_dump`

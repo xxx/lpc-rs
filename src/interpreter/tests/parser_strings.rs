@@ -381,7 +381,7 @@ async fn copied_string_rules_preserve_alias_arguments_and_remove_with_the_base()
     let verb = format!(
         r#"
         void create() {{ parse_init(); parse_add_rule("cast","STR at STR"); parse_add_synonym("aim at","cast","STR at STR"); }}
-        string *rules() {{ return parse_my_rules(); }}
+        string *rules() {{ return query_parser_rules(); }}
         void drop() {{ parse_remove("cast"); }}
         {RECORD}
     "#
@@ -405,7 +405,7 @@ async fn invalid_object_and_text_modifiers_leave_registered_string_rules_intact(
         mixed modifier=catch(parse_add_rule("cast","STR STR:v"));
         return ({stringp(objects) && strindex(objects,"more than two object slots")>=0
             && stringp(modifier) && strindex(modifier,"unsupported parser modifier")>=0
-            && sizeof(parse_my_rules())==1 && parse_my_rules()[0]=="cast STR at STR"});
+            && sizeof(query_parser_rules())==1 && query_parser_rules()[0]=="cast STR at STR"});
     "#,
     )
     .await;

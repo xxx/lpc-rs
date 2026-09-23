@@ -18,4 +18,4 @@ destructed.
 ### See also
 
 `parse_add_rule`, `parse_add_synonym`, `parse_remove`, `parse_refresh`,
-`parse_my_rules`, `parse_dump`
+`query_parser_rules`, `parse_dump`

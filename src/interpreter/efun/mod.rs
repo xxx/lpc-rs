@@ -79,7 +79,6 @@ pub(crate) mod parse_add_synonym;
 pub(crate) mod parse_command;
 pub(crate) mod parse_dump;
 pub(crate) mod parse_init;
-pub(crate) mod parse_my_rules;
 pub(crate) mod parse_refresh;
 pub(crate) mod parse_remove;
 pub(crate) mod parse_sentence;
@@ -92,6 +91,7 @@ pub(crate) mod query_command;
 pub(crate) mod query_connection;
 pub(crate) mod query_ip_number;
 pub(crate) mod query_notify_fail;
+pub(crate) mod query_parser_rules;
 pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
 pub(crate) mod random;
@@ -549,9 +549,6 @@ efuns! {
     parse_init => {
         returns: LpcType::Void,
     },
-    parse_my_rules => {
-        returns: LpcType::String(true),
-    },
     parse_refresh => {
         returns: LpcType::Void,
     },
@@ -594,6 +591,9 @@ efuns! {
     },
     query_notify_fail => {
         returns: LpcType::Mixed(false),
+    },
+    query_parser_rules => {
+        returns: LpcType::String(true),
     },
     query_resident_memory => {
         returns: LpcType::Int(false),
@@ -1495,7 +1495,6 @@ mod tests {
                 "parse_command",
                 "parse_dump",
                 "parse_init",
-                "parse_my_rules",
                 "parse_refresh",
                 "parse_remove",
                 "parse_sentence",
@@ -1504,6 +1503,7 @@ mod tests {
                 "query_call_outs",
                 "query_command",
                 "query_notify_fail",
+                "query_parser_rules",
                 "query_resident_memory",
                 "query_verb",
                 "remove_action",
