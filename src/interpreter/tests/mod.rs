@@ -19,6 +19,7 @@ mod parser;
 mod parser_handlers;
 mod parser_multiword;
 mod parser_relations;
+mod parser_restricted;
 mod parser_selection;
 mod parser_strings;
 mod parser_visibility;

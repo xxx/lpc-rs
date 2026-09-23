@@ -1,5 +1,5 @@
 //! One line tried against rules in precedence order inside one command
-//! frame; `dispatch` and `parse_sentence` are its two callers.
+//! frame, shared by command dispatch and the parser efuns.
 
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use ustr::Ustr;
 use crate::{
     command::{
         frontend::{add_action, native},
-        parser::{self, Nickname, Rejection, RejectionCode, Verdict},
+        parser::{self, Completion, Nickname, Options, Rejection, RejectionCode, Verdict},
         registry::{ActorRules, Family, Rule, VerbRules},
         resolve::{LpcVocabulary, Resolver},
         scope::{SuppliedScope, neighbourhood},
@@ -20,6 +20,7 @@ use crate::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
+        stm::TxnHandle,
         task_context::{CommandState, TaskContext},
     },
 };
@@ -126,7 +127,7 @@ pub(crate) async fn run(
     if Box::pin(try_actor_rules(ctx, actor, line, &mut resolver, candidates)).await? {
         return Ok(true);
     }
-    match Box::pin(sentence_trial(ctx, actor, line, None, &[])).await? {
+    match Box::pin(sentence_trial(ctx, actor, line, None, Options::default())).await? {
         Sentence::Handled => Ok(true),
         Sentence::Message(message) => {
             deliver(ctx, || as_actor(ctx, actor), actor, Some(actor), &message).await?;
@@ -185,11 +186,13 @@ async fn try_actor_rules(
     Ok(false)
 }
 
-/// `parse_sentence`'s outcome.
+/// A parser efun's outcome.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Sentence {
     /// A verb-attached rule's `do_` ran.
     Handled,
+    /// A restricted parse's generic action arguments, without executing the action.
+    Arguments(Vec<LpcRef>),
     /// No registered parser verb matches a leading phrase of the line.
     NoVerb,
     /// No verb-attached rule's grammar parsed the rest of the line.
@@ -203,6 +206,21 @@ pub(crate) enum Sentence {
 }
 
 impl Sentence {
+    /// The parser efuns share status codes, message strings and argument arrays.
+    pub(crate) fn into_value(self, txn: &TxnHandle) -> LpcRef {
+        match self {
+            Self::Handled => LpcRef::from(1),
+            Self::Arguments(args) => {
+                LpcRef::Array(txn.with(|t| t.mint_array(args.into_iter().collect())))
+            }
+            Self::NoVerb => LpcRef::from(0),
+            Self::NoParse => LpcRef::from(-1),
+            Self::Refused => LpcRef::from(-2),
+            Self::Unresolved => LpcRef::from(-3),
+            Self::Message(message) => LpcRef::from(message.as_str()),
+        }
+    }
+
     /// The outcome when no rule handled the line or gave a message:
     /// `Unresolved` over `Refused` over `NoParse`; `NoParse` for none.
     pub(crate) fn worst(codes: &[RejectionCode]) -> Sentence {
@@ -229,7 +247,44 @@ pub(crate) async fn sentence(
     depth_guard(ctx, "parse_sentence")?;
     let first_word = line.split_whitespace().next().unwrap_or("").to_owned();
     let _frame = Frame::push(ctx, line, &first_word);
-    sentence_trial(ctx, actor, line, scope, nicknames).await
+    sentence_trial(
+        ctx,
+        actor,
+        line,
+        None,
+        Options {
+            scope: scope.as_ref(),
+            nicknames,
+            ..Options::default()
+        },
+    )
+    .await
+}
+
+/// Parse only the caller's registrations, with an explicit actor for every callback.
+pub(crate) async fn owned_sentence(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    owner: &Arc<Process>,
+    line: &str,
+    completion: Completion,
+) -> Result<Sentence> {
+    depth_guard(ctx, "parse_my_rules")?;
+    let ctx = ctx.clone();
+    ctx.this_player.store(Some(actor.clone()));
+    let first_word = line.split_whitespace().next().unwrap_or("");
+    let _frame = Frame::push(&ctx, line, first_word);
+    sentence_trial(
+        &ctx,
+        actor,
+        line,
+        Some(owner),
+        Options {
+            completion,
+            ..Options::default()
+        },
+    )
+    .await
 }
 
 /// Try every matching parser phrase before reporting any failure.
@@ -237,10 +292,13 @@ async fn sentence_trial(
     ctx: &TaskContext,
     actor: &Arc<Process>,
     line: &str,
-    scope: Option<SuppliedScope>,
-    nicknames: &[Nickname],
+    only_owner: Option<&Arc<Process>>,
+    options: Options<'_>,
 ) -> Result<Sentence> {
-    let candidates = VerbRules::new(ctx).for_line(line);
+    let mut candidates = VerbRules::new(ctx).for_line(line);
+    if let Some(owner) = only_owner {
+        candidates.retain(|matched| matched.rule.owned_by(owner));
+    }
     if candidates.is_empty() {
         return Ok(Sentence::NoVerb);
     }
@@ -260,12 +318,12 @@ async fn sentence_trial(
             &owner,
             parser,
             matched.rest,
-            scope.clone(),
-            nicknames,
+            options,
         ))
         .await?;
         match verdict {
             Verdict::Handled => return Ok(Sentence::Handled),
+            Verdict::Arguments(args) => return Ok(Sentence::Arguments(args)),
             Verdict::Rejected(rejection) => rejections.push(PendingRejection {
                 verb: rule.verb,
                 typed: matched.typed,

@@ -77,8 +77,9 @@ from the caller object's name through inheritance or virtual objects.
 ### Grammar vocabulary
 
 These optional examples are unnecessary for ulib's `add_action()` commands.
-They support the driver's grammar facilities (`parse_command()` and
-`parse_sentence()`). Install only the vocabulary your game needs.
+They support the driver's grammar facilities (`parse_command()`,
+`parse_sentence()` and `parse_my_rules()`). Install only the vocabulary your game
+needs.
 
 | Apply and arguments | Result and omission | Optional example |
 |---|---|---|
@@ -220,9 +221,9 @@ yes; without an object permission on both the candidate and owner, that
 candidate is excluded. Owner permission arguments still name the noun objects;
 kind-6 diagnostics identify the object that actually returned the reason.
 
-`do_` runs once after acceptance and its return is ignored. Without `do_`, the
-rule is unhandled. The disabled example refuses gifts in `indirect_`, and its
-`do_` only prints a teaching message; it is not an item-transfer implementation.
+When executing a rule, `do_` runs once after acceptance and its return is ignored.
+Without `do_`, the rule is unhandled. The disabled example refuses gifts in
+`indirect_`, and its `do_` only prints a teaching message; it is not an item-transfer implementation.
 The hooks need to be distributed to their stated owners, named objects added,
 and the verb object loaded before this grammar can be used. Registered grammar
 rules are tried after the living's own actions decline; `parse_sentence()` can
@@ -232,6 +233,16 @@ matching phrases remain eligible. The first rule to reach `do_` wins, even if
 an earlier rule supplied a refusal string. `parser_error_message()` runs only
 when every phrase fails, reporting failures in the same trial order. Refusing a
 rule does not undo its handler effects, and runtime exceptions propagate immediately.
+
+`parse_my_rules(actor, line)` uses only the calling object's registrations and
+returns generic action arguments after permissions accept, without looking up
+or calling any `do_`. The `match_text` helper in `examples/verb.c` demonstrates
+this for text captures. The result is `({ base, rule, captures..., typed_verb,
+source_strings... })`; failures use the same status codes or error messages as
+`parse_sentence`, without delivering them. A third argument of nonzero executes
+normally and returns 1. The explicit living actor supplies scope and every
+callback's player/caller context; nested calls restore the surrounding context.
+Returning arguments still runs permissions and retains their effects.
 
 Two-object rules with one `OBS`/`LVS` slot use the same individual-object
 permission arguments in both orientations. Only `do_` receives an array for

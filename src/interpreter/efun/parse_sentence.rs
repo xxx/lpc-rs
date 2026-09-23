@@ -4,11 +4,7 @@
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::{
-        parser::Nickname,
-        scope::SuppliedScope,
-        trial::{self, Sentence},
-    },
+    command::{parser::Nickname, scope::SuppliedScope, trial},
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
@@ -39,14 +35,7 @@ pub async fn parse_sentence<const N: usize>(context: &mut EfunContext<'_, N>) ->
         &nicknames,
     ))
     .await?;
-    context.return_efun_result(match outcome {
-        Sentence::Handled => LpcRef::from(1),
-        Sentence::NoVerb => LpcRef::from(0),
-        Sentence::NoParse => LpcRef::from(-1),
-        Sentence::Refused => LpcRef::from(-2),
-        Sentence::Unresolved => LpcRef::from(-3),
-        Sentence::Message(message) => LpcRef::from(message.as_str()),
-    });
+    context.return_efun_result(outcome.into_value(context.txn()));
     Ok(())
 }
 

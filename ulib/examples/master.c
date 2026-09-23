@@ -150,6 +150,7 @@ object *parse_command_users() {
  * Return a message, or 0 for no parser message; omission also supplies none.
  * Called after all parser phrases fail, longest first and registration order within each.
  * A string ends reporting; a successful rule prevents all error-hook calls.
+ * parse_my_rules considers only its caller's rules and returns text without delivery.
  * query_verb() reports this failure's phrase; query_verb(1) preserves its typed spacing.
  * Silence allows later failure reports, then the ordinary dispatch fallback.
  * This example preserves a handler's reason and uses one fallback otherwise.

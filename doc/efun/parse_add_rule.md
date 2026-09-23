@@ -20,6 +20,11 @@ does the driver ask [`parser_error_message`](../apply/master/parser_error_messag
 for text, in that same phrase and registration order, stopping at the first
 string. A successful search never calls that hook.
 
+[`parse_my_rules`](parse_my_rules.md) restricts this search to the caller's
+registrations. Its default argument mode ends at the first parse that passes
+permissions, returning generic action arguments without requiring or calling
+any `do_` handler.
+
 `parse_add_rule` is a pure append: it never reads the registry first, so
 registering the same verb and rule text twice from the same object creates
 two separate rules, not one. Both are tried in registration order, both
@@ -86,8 +91,8 @@ For `parse_add_rule("cast", "STR at STR")`, the line
 Earlier captures take the longest spans that let the remaining rule match.
 A literal separator can also occur inside a capture. A refusal leaves later
 splits eligible before trying the next registered rule; the first split to
-reach `do_` wins. Permission effects remain visible during retries, and an
-exception stops the search.
+reach `do_` (or return arguments in `parse_my_rules`) wins. Permission effects
+remain visible during retries, and an exception stops the search.
 
 At most 32 grammatical parses are tried for one rule and input, including
 parses refused by handlers. Highly ambiguous text rules can have additional
@@ -195,7 +200,7 @@ Raised as runtime errors, all prefixed `parse_add_rule: `:
 
 ### See also
 
-`parse_init`, `parse_add_synonym`, `parse_remove`, `parse_sentence`,
+`parse_init`, `parse_add_synonym`, `parse_remove`, `parse_sentence`, `parse_my_rules`,
 [`parser_handlers`](../apply/object/parser_handlers.md),
 [`inventory_visible`](../apply/object/inventory_visible.md),
 [`inventory_accessible`](../apply/object/inventory_accessible.md)

@@ -14,7 +14,8 @@
  * before the owner; direct/indirect search the noun candidate before the owner.
  * A present actor can supplies the answer instead of the owner can.
  * Longer matching verb phrases run first, with registration order within each phrase.
- * Refusals leave later rules and shorter phrases eligible; the first do wins.
+ * Refusals leave later rules and shorter phrases eligible; the first do wins
+ * when executing, or the first accepted parse when returning arguments.
  * Error reporting waits until all phrases fail, and refusals do not undo effects.
  * "hand over" below uses give's methods; query_verb() reports "hand over".
  * query_verb(1) and generic typed-verb arguments preserve the whole typed phrase.
@@ -187,5 +188,17 @@ int can_cast_str_at_str(string spell, string target, string spell_words, string 
  */
 void do_cast_str_at_str(string spell, string target, string spell_words, string target_words) {
     write("The grammar matched " + spell + " at " + target + ".\n");
+}
+
+/**
+ * Parse only this verb object's rules for an explicit living actor.
+ * Permissions still run, but no action is required or called.
+ * Success returns ({ base, rule, captures..., typed_verb, source_strings... });
+ * failure returns a parser status or message, without delivering it.
+ * For "cast spark at tower", captures are "spark" and "tower"; the helper
+ * returns them for another consumer without printing the action's message.
+ */
+mixed match_text(object actor, string line) {
+    return parse_my_rules(actor, line);
 }
 #endif

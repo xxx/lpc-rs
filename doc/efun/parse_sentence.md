@@ -111,13 +111,13 @@ candidate — naming an object here does not itself add it to the scope.
 objects` — `scope` given and not an array; `parse_sentence: the scope nests
 deeper than 20`; `parse_sentence: a nested scope array must immediately follow
 a live object`; `parse_sentence: nicknames must be a mapping from strings
-to objects`. `parse_sentence` shares `command()`'s nesting limit — a rule's
-handler running `parse_sentence` of its own, and any nested `command()`,
-count together — at 16 deep, `parse_sentence: nesting deeper than 16`.
+to objects`. `parse_sentence`, `parse_my_rules` and `command()` share a nesting
+limit of 16; exceeding it here raises `parse_sentence: nesting deeper than 16`.
 
 ### See also
 
 `parse_add_rule`, `parse_add_synonym`, `parse_remove`, `query_parser_rules`,
+[`parse_my_rules`](parse_my_rules.md),
 `command`, [`parser_handlers`](../apply/object/parser_handlers.md),
 [`parser_error_message`](../apply/master/parser_error_message.md),
 [`parse_command_users`](../apply/master/parse_command_users.md)

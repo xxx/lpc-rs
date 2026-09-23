@@ -76,8 +76,23 @@ impl Family {
 }
 
 impl Tier {
+    /// Lay out arguments using the matched phrase's current source spelling.
+    pub(crate) fn arguments(
+        self,
+        ctx: &TaskContext,
+        rule: &ParserRule,
+        args: &[LpcRef],
+    ) -> Vec<LpcRef> {
+        let typed = ctx.with_command(|state| {
+            state
+                .map(|state| state.verb_typed.clone())
+                .unwrap_or_default()
+        });
+        self.with_typed_verb(rule, args, &typed)
+    }
+
     /// Capture values precede the source-text tail supplied by the protocol.
-    fn arguments(self, rule: &ParserRule, args: &[LpcRef], typed_verb: &str) -> Vec<LpcRef> {
+    fn with_typed_verb(self, rule: &ParserRule, args: &[LpcRef], typed_verb: &str) -> Vec<LpcRef> {
         let (captures, words) = args.split_at(rule.compiled.kinds.len());
         let generic = matches!(self, Self::Shape | Self::Rule);
         let mut result = Vec::new();
@@ -163,12 +178,7 @@ pub(crate) async fn call(
             diagnostics::missing(&name, Some(target));
             continue;
         };
-        let typed = ctx.with_command(|state| {
-            state
-                .map(|state| state.verb_typed.clone())
-                .unwrap_or_default()
-        });
-        let args = tier.arguments(rule, args, &typed);
+        let args = tier.arguments(ctx, rule, args);
         return apply_on(
             ctx,
             as_actor(ctx, actor),

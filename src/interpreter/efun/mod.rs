@@ -79,6 +79,7 @@ pub(crate) mod parse_add_synonym;
 pub(crate) mod parse_command;
 pub(crate) mod parse_dump;
 pub(crate) mod parse_init;
+pub(crate) mod parse_my_rules;
 pub(crate) mod parse_refresh;
 pub(crate) mod parse_remove;
 pub(crate) mod parse_sentence;
@@ -548,6 +549,11 @@ efuns! {
     },
     parse_init => {
         returns: LpcType::Void,
+    },
+    parse_my_rules [async] => {
+        returns: LpcType::Mixed(false),
+        arity: (3, 1),
+        args: [LpcType::Object(false), LpcType::String(false), LpcType::Int(false)],
     },
     parse_refresh => {
         returns: LpcType::Void,
@@ -1495,6 +1501,7 @@ mod tests {
                 "parse_command",
                 "parse_dump",
                 "parse_init",
+                "parse_my_rules",
                 "parse_refresh",
                 "parse_remove",
                 "parse_sentence",

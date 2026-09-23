@@ -34,6 +34,8 @@ use lpc::Lpc;
 pub(crate) enum Verdict {
     /// `do_` ran.
     Handled,
+    /// Permissions accepted; these are the generic action arguments.
+    Arguments(Vec<LpcRef>),
     /// No parse of the line fitted the rule's grammar.
     NoParse,
     /// Matching or permission checks failed.
@@ -116,18 +118,35 @@ pub(crate) struct Nickname {
     pub(crate) object: Arc<Process>,
 }
 
+/// What to do after a parse passes permission checks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Completion {
+    /// Find and call an action handler.
+    #[default]
+    Execute,
+    /// Return the generic action arguments without looking up an action.
+    Arguments,
+}
+
+/// Scope overrides and completion policy for a parser search.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Options<'a> {
+    pub(crate) scope: Option<&'a SuppliedScope>,
+    pub(crate) nicknames: &'a [Nickname],
+    pub(crate) completion: Completion,
+}
+
 /// Run `rule` (owned by `owner`) for `actor` over `rest`, the line after
-/// its verb; `scope` replaces the default walk when given.
+/// its verb, using the search's scope and completion policy.
 pub(crate) async fn run(
     ctx: &TaskContext,
     actor: &Arc<Process>,
     owner: &Arc<Process>,
     rule: &ParserRule,
     rest: &str,
-    scope: Option<SuppliedScope>,
-    nicknames: &[Nickname],
+    options: Options<'_>,
 ) -> Result<Verdict> {
-    let candidates = match scope {
+    let candidates = match options.scope {
         Some(supplied) => supplied.walk(ctx, actor).await?,
         None => scope::walk(ctx, actor).await?,
     };
@@ -152,7 +171,8 @@ pub(crate) async fn run(
     let extras: Vec<Vec<String>> = objects
         .iter()
         .map(|object| {
-            nicknames
+            options
+                .nicknames
                 .iter()
                 .filter(|n| Arc::ptr_eq(&n.object, object))
                 .map(|n| n.name.clone())
@@ -162,14 +182,14 @@ pub(crate) async fn run(
     let vocabulary =
         LpcVocabulary::with_extras(ctx, as_actor(ctx, actor), objects, extras, remote_from);
     let resolver = Resolver::new(vocabulary, None);
-    let mut ask = Lpc::new(ctx, actor, owner, rule, &all, resolver);
+    let mut ask = Lpc::new(ctx, actor, owner, rule, &all, resolver, options.completion);
 
     let mut failures = Vec::new();
     let mut any_parse = false;
     for caps in rule.compiled.captures_of(rest) {
         any_parse = true;
         match attempt(&mut ask, &caps).await? {
-            Ok(()) => return Ok(Verdict::Handled),
+            Ok(()) => return Ok(ask.into_verdict()),
             Err(failure) => failures.push(failure),
         }
     }

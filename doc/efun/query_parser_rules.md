@@ -11,4 +11,5 @@ This is registration order, not the longest-phrase order used for dispatch.
 
 ### See also
 
-`parse_add_rule`, `parse_add_synonym`, `parse_remove`, `parse_dump`
+`parse_add_rule`, `parse_add_synonym`, `parse_remove`, `parse_dump`,
+[`parse_my_rules`](parse_my_rules.md)

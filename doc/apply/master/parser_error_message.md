@@ -6,19 +6,20 @@ Absent `ob` and absent `arg` values described as `0` below use the selected
 [null value](../../lpc/null.md): `nil` in distinct mode. Numeric counts,
 kind codes, and flags remain integers.
 
-Applied in the master only after every rule for every matching parser verb
-phrase has failed. A successful rule prevents this apply from being called for any
+Applied in the master only after every eligible rule for every matching parser
+verb phrase has failed. `parse_my_rules` considers only its caller's rules.
+A successful rule prevents this apply from being called for any
 earlier failures. After total failure, the driver offers one retained
 failure per rule, longest matched phrase first and registration order within
 each phrase, skipping failures with no diagnostic.
 Within a rule, the retained failure comes from the parse that resolved the
 most object slots, taking the earliest tie.
 
-The first string result ends reporting: `parse_sentence` returns it, or
-ordinary command dispatch delivers it to the actor. Any non-string result,
-including `0` or distinct `nil`, leaves that failure silent and allows the
+The first string result ends reporting: `parse_sentence` or `parse_my_rules`
+returns it, or ordinary command dispatch delivers it to the actor. Any non-string
+result, including `0` or distinct `nil`, leaves that failure silent and allows the
 next retained failure to be reported. An absent apply supplies no message.
-If every failure remains silent, `parse_sentence` combines their codes:
+If every failure remains silent, both parser efuns combine their codes:
 `-3` (unresolved object) over `-2` (handler refusal) over `-1` (no grammar
 matched). Ordinary command dispatch proceeds to its usual `notify_fail` or
 `command_not_found` fallback.
@@ -93,4 +94,5 @@ string parser_error_message(int kind, object ob, mixed arg, int flag) {
 
 [`parse_add_rule`](../../efun/parse_add_rule.md),
 [`parse_sentence`](../../efun/parse_sentence.md),
+[`parse_my_rules`](../../efun/parse_my_rules.md),
 [`parser_handlers`](../object/parser_handlers.md)

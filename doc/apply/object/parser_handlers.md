@@ -24,6 +24,12 @@ ends that lookup, and an exception propagates. After all eligible targets have
 been searched, absent `can_` permits the rule, absent object permissions exclude
 the candidate or pair, and absent `do_` leaves the rule unhandled.
 
+[`parse_my_rules`](../../efun/parse_my_rules.md) with its execution flag omitted
+or zero runs the same permissions, then returns the generic-rule action
+arguments. It never looks up `do_`, so an action handler is not required.
+References to action execution below apply to ordinary dispatch,
+`parse_sentence`, and `parse_my_rules` with a nonzero execution flag.
+
 When an object permission runs on the owner, its arguments still name the
 original noun candidates. A destructed candidate cannot be accepted through
 owner fallback. All calls retain the actor as player and immediate caller.
@@ -203,6 +209,8 @@ phrase, including a synonym; `query_verb(1)` preserves its raw input span.
 Handler names and generic prefixes use the base verb. Scope and vocabulary hooks
 see the same matched context, and each deferred error hook sees its own failed
 phrase. Nested commands restore the surrounding context on return or exception.
+For `parse_my_rules`, the actor is its explicit argument, even when the caller's
+ambient `this_player()` is different or absent.
 
 ### The many-slot array
 
@@ -226,6 +234,7 @@ arrays are separate arrays and also include the reasons.
 
 [`parse_add_rule`](../../efun/parse_add_rule.md),
 [`parse_sentence`](../../efun/parse_sentence.md),
+[`parse_my_rules`](../../efun/parse_my_rules.md),
 [`inventory_visible`](inventory_visible.md),
 [`inventory_accessible`](inventory_accessible.md),
 [`parser_error_message`](../master/parser_error_message.md)
