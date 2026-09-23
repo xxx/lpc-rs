@@ -629,6 +629,9 @@ impl TaskContext {
     /// from the attempt; committed entries get a deferred removal plus the
     /// shadow. Returns the milliseconds left, or -1 if unknown.
     pub fn cancel_call_out(&self, id: u64) -> i64 {
+        if self.txn().with(|t| t.is_cancelled_call_out(id)) {
+            return -1;
+        }
         if let Some(ms) = self.txn().with(|t| t.cancel_pending_call_out(id)) {
             return ms;
         }
