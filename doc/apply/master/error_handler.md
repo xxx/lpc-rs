@@ -16,8 +16,8 @@ The error mapping has the following keys:
   included, no terminal color codes.
 
 To find the player to show the error to, call `this_interactive()` inside the
-handler. For a command or `input_to` failure, it returns the connected player
-whose input triggered the operation, including when a room or NPC callback
+handler. For a command, `input_to`, or `get_char` failure, it returns the
+connected player whose input triggered the operation, including when a room or NPC callback
 failed. The failed operation's `set_this_player()` calls do not change this
 recipient. `error["object"]` and `previous_object()` identify the object being
 reported and may be a different object.

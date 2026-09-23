@@ -3,17 +3,18 @@
 `string write_prompt()`
 
 The driver applies `write_prompt` in the object bound to a connection after
-each command line it runs, and after each `input_to` callback. Whatever it
-returns is sent as the prompt, followed by the mark: telnet EOR when the
-client negotiated it, else GA — unless the client asked us to suppress
-go-aheads (SGA), in which case no mark is sent at all. It may also `write` its
+each command line it runs, and after each `input_to` or `get_char` callback.
+Whatever it returns is sent as the prompt, followed by the mark: telnet EOR when the
+client negotiated it, else GA — unless suppress-go-ahead (SGA) was
+negotiated, in which case no mark is sent at all. It may also `write` its
 prompt and return nothing, and the mark still follows. A body that does not
 define `write_prompt` gets no prompt and no mark. A `write_prompt` that
 errors supplies no prompt text; the error goes to the master's `error_handler`,
 with the same connection fallback as other runtime errors, before the mark.
 
-When the command or callback left another `input_to` pending, `write_prompt`
-is not applied and the mark alone is sent, whether or not the body defines it:
+When the command or callback left another `input_to` or `get_char` pending,
+`write_prompt` is not applied and the mark alone is sent, whether or not the
+body defines it:
 the callback wrote its own prompt (`"Password: "`).
 
 The first prompt after `logon()` succeeds gets the same cycle, so a login
@@ -31,4 +32,4 @@ string write_prompt() {
 
 ### See also
 
-`input_to`, `catch_tell`
+`input_to`, `get_char`, `catch_tell`

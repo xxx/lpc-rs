@@ -1,4 +1,5 @@
 use lpc_rs_errors::Result;
+use lpc_rs_telnet::InputMode;
 use tracing::trace;
 
 use crate::{
@@ -13,15 +14,26 @@ use crate::{
 /// `input_to`, an efun for registering a function to be called when the user
 /// types something into the game.
 pub fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let ptr = handler_from(context, context.arg(0).clone(), "input_to")?;
+    register(context, InputMode::Line, "input_to")
+}
+
+pub(super) fn register<const N: usize>(
+    context: &mut EfunContext<'_, N>,
+    mode: InputMode,
+    name: &str,
+) -> Result<()> {
+    let ptr = handler_from(context, context.arg(0).clone(), name)?;
 
     let LpcRef::Int(no_echo) = context.arg(1) else {
-        return Err(context.runtime_error("non-integer sent as second argument to `input_to`"));
+        return Err(
+            context.runtime_error(format!("non-integer sent as second argument to `{name}`"))
+        );
     };
 
     let input_to = InputTo {
         ptr,
         no_echo: (*no_echo).into(),
+        mode,
     };
 
     let process = context.this_player().load();
@@ -39,7 +51,7 @@ pub fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         return Ok(());
     } else {
         // No connection to receive the message, so do nothing.
-        trace!("input_to on non-interactive process");
+        trace!("{name} on non-interactive process");
         // 0 is already returned by default
     }
 
@@ -52,6 +64,7 @@ mod tests {
 
     use indoc::indoc;
     use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_telnet::InputMode;
     use lpc_rs_utils::config::ConfigBuilder;
 
     use crate::{
@@ -71,10 +84,21 @@ mod tests {
         test_support::{Connected, allow_exec, connect, test_config},
     };
 
-    async fn connected(mode: NullMode, code: &str) -> (Vm, Arc<Process>, Connected) {
+    fn modes() -> impl Iterator<Item = (NullMode, &'static str, InputMode)> {
+        [NullMode::Zero, NullMode::Distinct]
+            .into_iter()
+            .flat_map(|mode| {
+                [
+                    (mode, "input_to", InputMode::Line),
+                    (mode, "get_char", InputMode::Character),
+                ]
+            })
+    }
+
+    async fn connected(mode: NullMode, efun: &str, code: &str) -> (Vm, Arc<Process>, Connected) {
         let vm = Vm::new(test_config_builder!().null_mode(mode).build().unwrap());
         let process = vm
-            .initialize_process_from_code("/asker.c", code)
+            .initialize_process_from_code("/asker.c", &code.replace("input_to", efun))
             .await
             .unwrap()
             .context
@@ -92,10 +116,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn input_to_commits_in_order_and_preserves_captured_data() {
-        for mode in [NullMode::Zero, NullMode::Distinct] {
+    async fn input_registration_commits_in_order_and_preserves_captured_data() {
+        for (mode, efun, expected_mode) in modes() {
             let (vm, process, mut connected) = connected(
                 mode,
+                efun,
                 r#"
                 string result;
                 void heard(string *captured, string line) { result = captured[0] + line; }
@@ -119,6 +144,7 @@ mod tests {
                 panic!("registration follows the first message");
             };
             assert!(input.no_echo);
+            assert_eq!(input.mode, expected_mode);
             assert_eq!(
                 connected.rx.try_recv().unwrap(),
                 ConnectionOp::SendMessage("after".into())
@@ -147,10 +173,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn failed_input_to_replacement_leaves_the_old_handler_and_state() {
-        for mode in [NullMode::Zero, NullMode::Distinct] {
+    async fn failed_input_replacement_leaves_the_old_handler_and_state() {
+        for (mode, efun, expected_mode) in modes() {
             let (vm, process, mut connected) = connected(
                 mode,
+                efun,
                 r#"
                 int state;
                 void original(string line) { state = 7; }
@@ -180,6 +207,7 @@ mod tests {
             );
             let input = connected.connection.take_input_to().unwrap();
             assert!(!input.no_echo);
+            assert_eq!(input.mode, expected_mode);
             vm.global_state
                 .prepare_function_ptr(
                     &input.ptr,
@@ -197,10 +225,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn caught_errors_keep_input_to_in_the_committing_transaction() {
-        for mode in [NullMode::Zero, NullMode::Distinct] {
+    async fn caught_errors_keep_input_registration_in_the_committing_transaction() {
+        for (mode, efun, expected_mode) in modes() {
             let (vm, process, mut connected) = connected(
                 mode,
+                efun,
                 r#"
                 void heard(string line) {}
                 void fail() { input_to(heard); throw("caught"); }
@@ -211,17 +240,18 @@ mod tests {
             assert_eq!(call(&vm, &process, "arm").await.unwrap(), LpcRef::from(1));
             assert!(matches!(
                 connected.rx.try_recv(),
-                Ok(ConnectionOp::InputTo(_))
+                Ok(ConnectionOp::InputTo(input)) if input.mode == expected_mode
             ));
             assert!(connected.rx.try_recv().is_err());
         }
     }
 
     #[tokio::test]
-    async fn input_to_follows_a_transactional_connection_handover() {
-        for mode in [NullMode::Zero, NullMode::Distinct] {
+    async fn input_registration_follows_a_transactional_connection_handover() {
+        for (mode, efun, expected_mode) in modes() {
             let (vm, process, mut connected) = connected(
                 mode,
+                efun,
                 r#"
                 int result;
                 void heard(string line) {
@@ -250,6 +280,7 @@ mod tests {
                 panic!("registration follows the handover");
             };
             assert!(connected.rx.try_recv().is_err());
+            assert_eq!(input.mode, expected_mode);
             vm.global_state
                 .prepare_function_ptr(
                     &input.ptr,
@@ -267,16 +298,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retried_input_to_is_published_only_once() {
-        for mode in [NullMode::Zero, NullMode::Distinct] {
+    async fn retried_input_registration_is_published_only_once() {
+        for (mode, efun, expected_mode) in modes() {
             let vm = Vm::new(test_config_builder!().null_mode(mode).build().unwrap());
             let mut task = vm
                 .initialize_process_from_code(
                     "/asker.c",
-                    r#"
+                    &r#"
                 void heard(string line) {}
                 int arm() { set_this_player(this_object()); return input_to(heard); }
-            "#,
+            "#
+                    .replace("input_to", efun),
                 )
                 .await
                 .unwrap();
@@ -310,7 +342,7 @@ mod tests {
             assert_eq!(task.result(), Some(LpcRef::from(1)));
             assert!(matches!(
                 connected.rx.try_recv(),
-                Ok(ConnectionOp::InputTo(_))
+                Ok(ConnectionOp::InputTo(input)) if input.mode == expected_mode
             ));
             assert!(
                 connected.rx.try_recv().is_err(),

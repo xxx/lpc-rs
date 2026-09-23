@@ -8,7 +8,7 @@ use std::{
 };
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use lpc_rs_telnet::{Opt, Session, TerminalInfo};
+use lpc_rs_telnet::{InputMode, Opt, Session, TerminalInfo};
 use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 
 use crate::{
@@ -16,21 +16,24 @@ use crate::{
     telnet::ops::ConnectionOp,
 };
 
-/// A struct to encapsulate the state of awaiting a line of input from the user.
+/// A callback awaiting a line or character of input from the user.
 #[derive(Debug, Clone)]
 pub struct InputTo {
     /// The function to call when we receive input.
     pub ptr: Arc<FunctionPtr>,
 
-    /// Whether `no_echo` was set when `input_to` was called, so we know
-    /// that we need to re-enable it.
+    /// Whether the client should hide input while this callback is pending.
     pub no_echo: bool,
+
+    /// Whether the callback consumes a line or one Unicode scalar.
+    pub mode: InputMode,
 }
 
 impl PartialEq for InputTo {
     fn eq(&self, other: &Self) -> bool {
-        // heh
-        std::ptr::eq(&self.ptr, &other.ptr) && self.no_echo == other.no_echo
+        Arc::ptr_eq(&self.ptr, &other.ptr)
+            && self.no_echo == other.no_echo
+            && self.mode == other.mode
     }
 }
 
@@ -86,7 +89,7 @@ pub struct Connection {
     /// The loop's channel.
     tx: UnboundedSender<ConnectionOp>,
 
-    /// The function the next line goes to.
+    /// The callback for the next line or character.
     input_to: ArcSwapOption<InputTo>,
 
     /// The loop's mirror of the session, for readers that never see it.
@@ -159,7 +162,7 @@ impl Connection {
         self.tx.clone()
     }
 
-    /// An `input_to` is waiting for the next line.
+    /// A line or character callback is waiting for input.
     pub fn awaits_input(&self) -> bool {
         self.input_to.load().is_some()
     }
@@ -169,7 +172,7 @@ impl Connection {
         self.input_to.load_full()
     }
 
-    /// Set, or clear, the function the next line goes to.
+    /// Set, or clear, the callback for the next line or character.
     pub(crate) fn set_input_to(&self, input_to: Option<InputTo>) {
         self.input_to.store(input_to.map(Arc::new));
     }

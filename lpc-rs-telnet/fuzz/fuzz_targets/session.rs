@@ -3,12 +3,15 @@
 use arbitrary::Arbitrary;
 use bytes::BytesMut;
 use libfuzzer_sys::fuzz_target;
-use lpc_rs_telnet::{Op, Session};
+use lpc_rs_telnet::{Event, InputMode, Op, Session};
 
 /// The fuzzer's own owned shape of an `Op`, plus client bytes.
 #[derive(Arbitrary, Debug)]
 enum Step {
     Feed(Vec<u8>),
+    CharacterInput,
+    LineInput,
+    Next,
     Text(String),
     Mxp(String),
     Prompt(String),
@@ -27,6 +30,13 @@ fuzz_target!(|steps: Vec<Step>| {
     for step in &steps {
         match step {
             Step::Feed(bytes) => session.feed(bytes),
+            Step::CharacterInput => session.set_input_mode(InputMode::Character),
+            Step::LineInput => session.set_input_mode(InputMode::Line),
+            Step::Next => {
+                if let Some(Event::Character(text)) = session.next_event() {
+                    assert_eq!(text.chars().count(), 1);
+                }
+            }
             Step::Text(s) => session.send(Op::Text(s)),
             Step::Mxp(s) => session.send(Op::Mxp(s)),
             Step::Prompt(s) => session.send(Op::Prompt(s)),
@@ -46,9 +56,13 @@ fuzz_target!(|steps: Vec<Step>| {
                 session.send(Op::Mssp(&pairs));
             }
         }
-        while session.next_event().is_some() {}
         session.drain_output(&mut out);
         out.clear();
+    }
+    while let Some(event) = session.next_event() {
+        if let Event::Character(text) = event {
+            assert_eq!(text.chars().count(), 1);
+        }
     }
     session.drain_output(&mut out);
     assert!(out.is_empty());

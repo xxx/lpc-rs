@@ -15,11 +15,23 @@ use crate::{
 /// Bytes an inbound line may hold; the rest of a longer line is dropped.
 pub const MAX_LINE: usize = 8192;
 
+/// How incoming text is divided into application events.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum InputMode {
+    /// Wait for a line terminator.
+    #[default]
+    Line,
+    /// Deliver one Unicode scalar or control character.
+    Character,
+}
+
 /// What the client did, as far as the caller needs to know.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     /// One line of input, terminator removed, decoded as lossy UTF-8.
     Line(String),
+    /// One Unicode scalar or control character, decoded as lossy UTF-8.
+    Character(String),
     /// The client's window size, in characters.
     Naws {
         /// Columns.
@@ -38,7 +50,7 @@ pub enum Event {
     },
     /// The client enabled MSSP; answer with [`Op::Mssp`].
     MsspRequested,
-    /// The line just delivered lost bytes past [`MAX_LINE`].
+    /// Input lost bytes past [`MAX_LINE`] while buffering a line.
     LineTruncated,
 }
 
@@ -147,6 +159,12 @@ const CR: u8 = b'\r';
 const LF: u8 = b'\n';
 const NUL: u8 = 0;
 
+#[derive(Debug)]
+enum Incoming {
+    Data(VecDeque<u8>),
+    Event(Event),
+}
+
 /// One connection's telnet state. See the crate docs.
 #[derive(Debug)]
 pub struct Session {
@@ -156,11 +174,13 @@ pub struct Session {
     frames: Vec<Frame>,
     line: Vec<u8>,
     line_overflowed: bool,
+    input_mode: InputMode,
+    restore_sga: bool,
     after_cr: bool,
     naws: Option<(u16, u16)>,
     charset: Option<String>,
     terminal: Terminal,
-    events: VecDeque<Event>,
+    incoming: VecDeque<Incoming>,
     out: BytesMut,
     stats: Stats,
 }
@@ -185,11 +205,13 @@ impl Session {
             frames: Vec::new(),
             line: Vec::new(),
             line_overflowed: false,
+            input_mode: InputMode::Line,
+            restore_sga: false,
             after_cr: false,
             naws: None,
             charset: None,
             terminal: Terminal::default(),
-            events: VecDeque::new(),
+            incoming: VecDeque::new(),
             out: BytesMut::new(),
             stats: Stats::default(),
         };
@@ -204,13 +226,18 @@ impl Session {
         session
     }
 
-    /// Bytes from the client. Events and replies queue up; drain both after.
+    /// Queue client data and answer negotiations; drain events and replies after.
     pub fn feed(&mut self, bytes: &[u8]) {
         let mut frames = std::mem::take(&mut self.frames);
         self.parser.feed(bytes, &mut frames);
         for frame in frames.drain(..) {
             match frame {
-                Frame::Byte(byte) => self.byte(byte),
+                Frame::Byte(byte) => match self.incoming.back_mut() {
+                    Some(Incoming::Data(bytes)) => bytes.push_back(byte),
+                    _ => self
+                        .incoming
+                        .push_back(Incoming::Data(VecDeque::from([byte]))),
+                },
                 Frame::Command(_) => {}
                 Frame::Negotiate(command, opt) => self.negotiate(command, opt),
                 Frame::Sub(opt, payload) => self.subnegotiation(Opt::from(opt), &payload),
@@ -286,9 +313,53 @@ impl Session {
         }
     }
 
-    /// The next thing the client did, oldest first.
+    /// Select how unread text is delivered, preserving any partial input.
+    /// Character mode requests SGA; line mode withdraws it if it was off on entry.
+    pub fn set_input_mode(&mut self, mode: InputMode) {
+        if self.input_mode == mode {
+            return;
+        }
+        self.input_mode = mode;
+        match mode {
+            InputMode::Character => {
+                if !self.line.is_empty() {
+                    self.incoming
+                        .push_front(Incoming::Data(std::mem::take(&mut self.line).into()));
+                }
+                if std::mem::take(&mut self.line_overflowed) {
+                    self.incoming
+                        .push_front(Incoming::Event(Event::LineTruncated));
+                }
+                self.restore_sga = self.table.us_on(Opt::Sga.into());
+                let reply = self.table.ask_will(Opt::Sga.into());
+                self.reply(reply);
+            }
+            InputMode::Line => {
+                if !self.restore_sga {
+                    let reply = self.table.ask_wont(Opt::Sga.into());
+                    self.reply(reply);
+                }
+            }
+        }
+    }
+
+    /// Decode the next event in the current mode, leaving later data unread.
     pub fn next_event(&mut self) -> Option<Event> {
-        self.events.pop_front()
+        while let Some(incoming) = self.incoming.pop_front() {
+            match incoming {
+                Incoming::Event(event) => return Some(event),
+                Incoming::Data(mut bytes) => {
+                    let byte = bytes.pop_front().expect("queued data is nonempty");
+                    if !bytes.is_empty() {
+                        self.incoming.push_front(Incoming::Data(bytes));
+                    }
+                    if let Some(event) = self.byte(byte) {
+                        return Some(event);
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Move everything queued for the client into `into`.
@@ -337,17 +408,35 @@ impl Session {
         }
     }
 
-    fn byte(&mut self, byte: u8) {
+    fn byte(&mut self, byte: u8) -> Option<Event> {
+        if self.after_cr && matches!(byte, LF | NUL) {
+            self.after_cr = false;
+            return None;
+        }
+        self.after_cr = byte == CR;
+        if self.input_mode == InputMode::Character {
+            self.line.push(byte);
+            return match std::str::from_utf8(&self.line) {
+                Ok(text) => {
+                    let event = Event::Character(text.to_owned());
+                    self.line.clear();
+                    Some(event)
+                }
+                Err(error) => {
+                    let invalid = error.error_len()?;
+                    if invalid < self.line.len() {
+                        self.incoming
+                            .push_front(Incoming::Data(self.line.split_off(invalid).into()));
+                    }
+                    self.line.clear();
+                    Some(Event::Character("\u{fffd}".into()))
+                }
+            };
+        }
         match byte {
-            CR => {
-                self.end_line();
-                self.after_cr = true;
-            }
-            LF | NUL if self.after_cr => self.after_cr = false,
-            LF => self.end_line(),
+            CR | LF => return Some(self.end_line()),
             NUL => {}
             data => {
-                self.after_cr = false;
                 if self.line.len() < MAX_LINE {
                     self.line.push(data);
                 } else if !self.line_overflowed {
@@ -356,15 +445,17 @@ impl Session {
                 }
             }
         }
+        None
     }
 
-    fn end_line(&mut self) {
+    fn end_line(&mut self) -> Event {
         let text = String::from_utf8_lossy(&self.line).into_owned();
         self.line.clear();
-        self.events.push_back(Event::Line(text));
         if std::mem::take(&mut self.line_overflowed) {
-            self.events.push_back(Event::LineTruncated);
+            self.incoming
+                .push_front(Incoming::Event(Event::LineTruncated));
         }
+        Event::Line(text)
     }
 
     fn negotiate(&mut self, command: u8, raw: u8) {
@@ -405,7 +496,9 @@ impl Session {
                 payload.extend_from_slice(b"UTF-8");
                 wire::subnegotiation(&mut self.out, opt.into(), &payload);
             }
-            Opt::Mssp => self.events.push_back(Event::MsspRequested),
+            Opt::Mssp => self
+                .incoming
+                .push_back(Incoming::Event(Event::MsspRequested)),
             Opt::Mxp => {
                 wire::subnegotiation(&mut self.out, opt.into(), &[]);
                 self.out.extend_from_slice(MXP_LOCK_LOCKED);
@@ -425,10 +518,10 @@ impl Session {
                 if let [c1, c2, r1, r2] = *payload {
                     let size = (u16::from_be_bytes([c1, c2]), u16::from_be_bytes([r1, r2]));
                     self.naws = Some(size);
-                    self.events.push_back(Event::Naws {
+                    self.incoming.push_back(Incoming::Event(Event::Naws {
                         cols: size.0,
                         rows: size.1,
-                    });
+                    }));
                 }
             }
             Opt::Charset => self.charset_subnegotiation(payload),
@@ -438,7 +531,8 @@ impl Session {
                     Some((package, rest)) => (package.to_owned(), rest.trim_start().to_owned()),
                     None => (text.trim().to_owned(), String::new()),
                 };
-                self.events.push_back(Event::Gmcp { package, payload });
+                self.incoming
+                    .push_back(Incoming::Event(Event::Gmcp { package, payload }));
             }
             _ => {}
         }
@@ -486,7 +580,8 @@ impl Session {
 
     fn agree_charset(&mut self, name: &str) {
         self.charset = Some(name.to_owned());
-        self.events.push_back(Event::Charset(name.to_owned()));
+        self.incoming
+            .push_back(Incoming::Event(Event::Charset(name.to_owned())));
     }
 }
 
@@ -741,6 +836,172 @@ mod tests {
         s.feed(&bytes);
         assert_eq!(events(&mut s), [Event::Line("ok".into())]);
         assert_eq!(s.stats().malformed, 1);
+    }
+
+    #[test]
+    fn character_input_keeps_unicode_scalars_whole_at_every_split() {
+        let text = "aé€🦀e\u{301}";
+        for split in 0..=text.len() {
+            let mut s = connected();
+            s.set_input_mode(InputMode::Character);
+            s.feed(&text.as_bytes()[..split]);
+            let mut got = events(&mut s);
+            s.feed(&text.as_bytes()[split..]);
+            got.extend(events(&mut s));
+            assert_eq!(
+                got,
+                text.chars()
+                    .map(|c| Event::Character(c.to_string()))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn character_input_replaces_invalid_utf8_without_losing_valid_following_text() {
+        let bytes = b"\xc0\x80\xe2(\xa1\xe2\x82!\xf0\x80\x80\x80ok";
+        for split in 0..=bytes.len() {
+            let mut s = connected();
+            s.set_input_mode(InputMode::Character);
+            s.feed(&bytes[..split]);
+            let mut got = events(&mut s);
+            s.feed(&bytes[split..]);
+            got.extend(events(&mut s));
+            assert_eq!(
+                got,
+                String::from_utf8_lossy(bytes)
+                    .chars()
+                    .map(|c| Event::Character(c.to_string()))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn character_input_preserves_control_keys_and_collapses_nvt_padding() {
+        let mut s = connected();
+        s.set_input_mode(InputMode::Character);
+        let mut got = Vec::new();
+        for byte in b"\x08\x7f\t\0\x1b[A\r\nZ\r\0Y\n" {
+            s.feed(&[*byte]);
+            got.extend(events(&mut s));
+        }
+        assert_eq!(
+            got,
+            "\u{8}\u{7f}\t\0\u{1b}[A\rZ\rY\n"
+                .chars()
+                .map(|c| Event::Character(c.to_string()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_line_callback_can_select_characters_from_the_same_read() {
+        let mut s = connected();
+        s.feed("name\r\néx".as_bytes());
+        assert_eq!(s.next_event(), Some(Event::Line("name".into())));
+        s.set_input_mode(InputMode::Character);
+        assert_eq!(
+            events(&mut s),
+            [Event::Character("é".into()), Event::Character("x".into())]
+        );
+    }
+
+    #[test]
+    fn a_character_callback_can_select_lines_from_the_same_read() {
+        let mut s = connected();
+        s.set_input_mode(InputMode::Character);
+        s.feed(b"yrest\r\n");
+        assert_eq!(s.next_event(), Some(Event::Character("y".into())));
+        s.set_input_mode(InputMode::Line);
+        assert_eq!(events(&mut s), [Event::Line("rest".into())]);
+    }
+
+    #[test]
+    fn partial_lines_are_preserved_when_character_input_is_selected() {
+        let mut s = connected();
+        s.feed("éx".as_bytes());
+        assert_eq!(s.next_event(), None);
+        s.set_input_mode(InputMode::Character);
+        assert_eq!(
+            events(&mut s),
+            [Event::Character("é".into()), Event::Character("x".into())]
+        );
+    }
+
+    #[test]
+    fn incomplete_characters_are_preserved_when_line_input_is_selected() {
+        let mut s = connected();
+        s.set_input_mode(InputMode::Character);
+        s.feed(b"\xe2\x82");
+        assert_eq!(s.next_event(), None);
+        s.set_input_mode(InputMode::Line);
+        s.feed(b"\xac next\r\n");
+        assert_eq!(events(&mut s), [Event::Line("€ next".into())]);
+    }
+
+    #[test]
+    fn nvt_padding_does_not_become_an_empty_line_after_a_character_callback() {
+        let mut s = connected();
+        s.set_input_mode(InputMode::Character);
+        s.feed(b"\r\nnext\r\n");
+        assert_eq!(s.next_event(), Some(Event::Character("\r".into())));
+        s.set_input_mode(InputMode::Line);
+        assert_eq!(events(&mut s), [Event::Line("next".into())]);
+    }
+
+    #[test]
+    fn protocol_events_keep_their_position_between_input_callbacks() {
+        let mut s = connected();
+        s.set_input_mode(InputMode::Character);
+        s.feed(b"a\xff\xfa\xc9Core.Ping\xff\xf0b\r\n");
+        assert_eq!(s.next_event(), Some(Event::Character("a".into())));
+        assert_eq!(
+            s.next_event(),
+            Some(Event::Gmcp {
+                package: "Core.Ping".into(),
+                payload: String::new()
+            })
+        );
+        s.set_input_mode(InputMode::Line);
+        assert_eq!(events(&mut s), [Event::Line("b".into())]);
+    }
+
+    #[test]
+    fn character_mode_restores_sga_after_an_outstanding_acknowledgment() {
+        let mut s = connected();
+        s.set_input_mode(InputMode::Character);
+        assert_eq!(out(&mut s), [IAC, WILL, SGA]);
+        s.set_input_mode(InputMode::Character);
+        assert!(out(&mut s).is_empty());
+        s.set_input_mode(InputMode::Line);
+        assert!(out(&mut s).is_empty());
+        s.feed(&[IAC, DO, SGA]);
+        assert_eq!(out(&mut s), [IAC, WONT, SGA]);
+        s.feed(&[IAC, DONT, SGA]);
+        assert!(!s.is_on(Opt::Sga));
+    }
+
+    #[test]
+    fn character_mode_preserves_preexisting_sga() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, SGA]);
+        assert_eq!(out(&mut s), [IAC, WILL, SGA]);
+        s.set_input_mode(InputMode::Character);
+        s.set_input_mode(InputMode::Line);
+        assert!(out(&mut s).is_empty());
+        assert!(s.is_on(Opt::Sga));
+    }
+
+    #[test]
+    fn refusing_sga_does_not_block_received_characters() {
+        let mut s = connected();
+        s.set_input_mode(InputMode::Character);
+        out(&mut s);
+        s.feed(&[IAC, DONT, SGA, b'x']);
+        assert_eq!(events(&mut s), [Event::Character("x".into())]);
+        s.set_input_mode(InputMode::Line);
+        assert!(out(&mut s).is_empty());
     }
 
     #[test]
@@ -1018,6 +1279,11 @@ mod tests {
                     _ => (next() & 0xFF) as u8,
                 })
                 .collect();
+            s.set_input_mode(if next() % 2 == 0 {
+                InputMode::Line
+            } else {
+                InputMode::Character
+            });
             s.feed(&chunk);
             fed += len;
             if next() % 8 == 0 {
@@ -1027,7 +1293,16 @@ mod tests {
                 s.send(Op::Mxp("<b>x</b>"));
                 s.send(Op::EchoOn);
             }
-            while s.next_event().is_some() {}
+            while let Some(event) = s.next_event() {
+                if let Event::Character(text) = event {
+                    assert_eq!(text.chars().count(), 1);
+                }
+                s.set_input_mode(if next() % 2 == 0 {
+                    InputMode::Line
+                } else {
+                    InputMode::Character
+                });
+            }
             s.drain_output(&mut buf);
             buf.clear();
         }

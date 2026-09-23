@@ -88,8 +88,8 @@ private void receive_name(string input) {
  * Return the next prompt after logon(), a command or an input callback.
  * The driver delivers the string and a Telnet prompt marker; returning 0
  * supplies no text, and omitting the hook supplies neither text nor marker.
- * While input_to() is pending this hook is skipped and only the marker is
- * sent, so the name-selection code must write its own "Name: " prompt.
+ * While input_to() or get_char() is pending, this hook is skipped and only
+ * the negotiated marker is sent; name selection writes its own "Name: " prompt.
  */
 string write_prompt() {
     return name ? name + "> " : nil;
@@ -111,7 +111,7 @@ void catch_tell(string message) {
  * line is the command after any master modify_command() rewrite.
  * Return a replacement string for apostrophe-prefixed speech, 0 to dispatch
  * the original, or another non-string value to consume a line entirely.
- * Omission passes input through; input_to() name callbacks bypass this path.
+ * Omission passes input through; input_to() and get_char() callbacks bypass this path.
  * Unlike this hook, the master's modify_command() consumes input on 0.
  */
 mixed process_input(string line) {

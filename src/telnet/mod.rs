@@ -12,7 +12,7 @@ use std::{
 
 use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
-use lpc_rs_telnet::{Event, MAX_LINE, Op, Session};
+use lpc_rs_telnet::{Event, InputMode, MAX_LINE, Op, Session};
 use lpc_rs_utils::lpc_string::LpcString;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -180,7 +180,7 @@ impl Telnet {
                 }, if needs_flush || !outbox.pending().is_empty() => wrote,
                 _ = idle_deadline(&connection, max_idle_time), if max_idle_time != 0 => Turn::Idle,
             };
-            let flow = match turn {
+            let mut flow = match turn {
                 Turn::Op(op) => {
                     Self::handle_op(
                         op,
@@ -199,39 +199,7 @@ impl Telnet {
                 Turn::Read(Ok(n)) => {
                     session.feed(&buf[..n]);
                     connection.refresh(&session);
-                    let mut flow = Flow::Continue;
-                    while let Some(event) = session.next_event() {
-                        Self::handle_event(
-                            event,
-                            &mut session,
-                            &connection,
-                            &template,
-                            shutting_down,
-                            &mut mud_stats,
-                        )
-                        .await;
-                        // What the event queued lands before the next
-                        // event: a second line in the same read must
-                        // see the first line's `input_to`.
-                        while let Ok(op) = connection_rx.try_recv() {
-                            flow = Self::handle_op(
-                                Some(op),
-                                &mut session,
-                                &connection,
-                                &template,
-                                &mut shutting_down,
-                                &mut outbox,
-                            )
-                            .await;
-                            if matches!(flow, Flow::Leave(_)) {
-                                break;
-                            }
-                        }
-                        if matches!(flow, Flow::Leave(_)) {
-                            break;
-                        }
-                    }
-                    flow
+                    Flow::Continue
                 }
                 Turn::Read(Err(e)) => {
                     warn!("User input error for {}: {:?}", &remote_ip, e);
@@ -270,6 +238,39 @@ impl Telnet {
                 }
             };
 
+            loop {
+                // Callback effects choose the mode for the remaining buffered bytes.
+                while matches!(flow, Flow::Continue) {
+                    let Ok(op) = connection_rx.try_recv() else {
+                        break;
+                    };
+                    flow = Self::handle_op(
+                        Some(op),
+                        &mut session,
+                        &connection,
+                        &template,
+                        &mut shutting_down,
+                        &mut outbox,
+                    )
+                    .await;
+                }
+                if matches!(flow, Flow::Leave(_)) {
+                    break;
+                }
+                let Some(event) = session.next_event() else {
+                    break;
+                };
+                Self::handle_event(
+                    event,
+                    &mut session,
+                    &connection,
+                    &template,
+                    shutting_down,
+                    &mut mud_stats,
+                )
+                .await;
+            }
+
             if let Flow::Leave(departure) = flow {
                 // The driver's close sends what was queued first; a client
                 // that left cannot hear it.
@@ -296,12 +297,8 @@ impl Telnet {
         match op {
             Some(ConnectionOp::SendMessage(msg)) => outbox.send(session, Op::Text(&msg)),
             Some(ConnectionOp::InputTo(input_to)) => {
-                session.send(if input_to.no_echo {
-                    Op::EchoOff
-                } else {
-                    Op::EchoOn
-                });
                 connection.set_input_to(Some(input_to));
+                Self::sync_input_mode(session, connection);
             }
             Some(ConnectionOp::Gmcp { package, payload }) => outbox.send(
                 session,
@@ -320,6 +317,7 @@ impl Telnet {
                 }
             }
             Some(ConnectionOp::PromptCycle) => {
+                Self::sync_input_mode(session, connection);
                 // A prompt for a client that is not reading would be dropped.
                 if !*shutting_down && !outbox.is_overflowed() {
                     Self::prompt_cycle(session, connection, template).await;
@@ -358,6 +356,7 @@ impl Telnet {
         shutting_down: bool,
     ) {
         let global_state = &template.global_state;
+        connection.take_input_to();
         let body = global_state.detach(connection, None).await;
         trace!(
             "{} left ({departure:?}); a body was bound: {}",
@@ -419,7 +418,7 @@ impl Telnet {
         mud_stats: &mut Option<IndexMap<String, Vec<String>>>,
     ) {
         match event {
-            Event::Line(line) => {
+            Event::Line(line) | Event::Character(line) => {
                 connection.mark_line();
                 if shutting_down {
                     return;
@@ -621,7 +620,7 @@ impl Telnet {
         let _ = connection.send(ConnectionOp::PromptCycle);
     }
 
-    /// The mark alone behind a pending `input_to`; else the body's
+    /// The mark alone behind a pending input callback; else the body's
     /// `write_prompt`, whose text is queued so its own output goes first;
     /// a body without the apply gets nothing.
     async fn prompt_cycle(session: &mut Session, connection: &Connection, template: &TaskTemplate) {
@@ -642,6 +641,16 @@ impl Telnet {
         let _ = connection.send(ConnectionOp::Prompt(text));
     }
 
+    fn sync_input_mode(session: &mut Session, connection: &Connection) {
+        let input = connection.input_to();
+        session.set_input_mode(input.as_ref().map_or(InputMode::Line, |input| input.mode));
+        session.send(if input.is_some_and(|input| input.no_echo) {
+            Op::EchoOff
+        } else {
+            Op::EchoOn
+        });
+    }
+
     async fn resolve_input_to(
         input_to: &InputTo,
         msg: &str,
@@ -649,10 +658,6 @@ impl Telnet {
         connection: &Connection,
         template: &TaskTemplate,
     ) {
-        if input_to.no_echo {
-            session.send(Op::EchoOn);
-        }
-
         let template = template.clone();
         template.set_this_player(connection.body());
         let input: LpcRef = LpcString::from(msg).into();
@@ -778,6 +783,7 @@ mod tests {
         let input_to = InputTo {
             ptr: Arc::new(ptr),
             no_echo: false,
+            mode: InputMode::Line,
         };
 
         Telnet::resolve_input_to(
@@ -843,6 +849,7 @@ mod tests {
         let input_to = InputTo {
             ptr: Arc::new(ptr),
             no_echo: false,
+            mode: InputMode::Line,
         };
 
         Telnet::resolve_input_to(
@@ -1038,6 +1045,7 @@ mod tests {
             let input_to = InputTo {
                 ptr: Arc::new(ptr),
                 no_echo: false,
+                mode: InputMode::Line,
             };
             let mut session = Session::new();
 
@@ -1135,6 +1143,7 @@ mod tests {
                 let input_to = InputTo {
                     ptr: Arc::new(ptr),
                     no_echo: false,
+                    mode: InputMode::Line,
                 };
                 let mut connected = connect(&vm, &body).await;
                 let mut session = Session::new();
@@ -1192,6 +1201,7 @@ mod tests {
             let input_to = InputTo {
                 ptr: Arc::new(ptr),
                 no_echo: false,
+                mode: InputMode::Line,
             };
 
             Telnet::resolve_input_to(
@@ -1266,6 +1276,7 @@ mod tests {
             let input_to = InputTo {
                 ptr,
                 no_echo: false,
+                mode: InputMode::Line,
             };
             Telnet::resolve_input_to(
                 &input_to,
@@ -1338,6 +1349,7 @@ mod tests {
         const DO: u8 = 253;
         const DONT: u8 = 254;
         const ECHO: u8 = 1;
+        const SGA: u8 = 3;
         const EOR: u8 = 25;
         const NAWS: u8 = 31;
         const CHARSET: u8 = 42;
@@ -1490,6 +1502,7 @@ mod tests {
                 .send(ConnectionOp::InputTo(InputTo {
                     ptr: Arc::new(ptr),
                     no_echo: true,
+                    mode: InputMode::Line,
                 }))
                 .unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
@@ -1615,8 +1628,392 @@ mod tests {
                     .unwrap();
                 assert_eq!(read_n(&mut w.client, 10).await, b"replaced\r\n");
                 w.client.write_all(b"line\r\n").await.unwrap();
-                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, ECHO]);
                 assert_eq!(read_n(&mut w.client, 13).await, b"second:line\r\n");
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, ECHO]);
+            }
+        }
+
+        async fn character_wire(
+            mode: NullMode,
+            code: &str,
+        ) -> (Wired, Arc<crate::interpreter::process::Process>) {
+            let w = wire_with(
+                crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap(),
+            )
+            .await;
+            let process =
+                w.vm.initialize_process_from_code("/character.c", code)
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+            w.vm.global_state
+                .attach(w.connection.clone(), process.clone())
+                .await;
+            let template = TaskTemplate::from(w.vm.global_state.clone());
+            template.set_this_player(Some(process.clone()));
+            assert_eq!(
+                apply_function_by_name("arm", &[], process.clone(), template, Some(5_000))
+                    .await
+                    .unwrap()
+                    .unwrap(),
+                LpcRef::from(1)
+            );
+            (w, process)
+        }
+
+        async fn acknowledge_character_input(w: &mut Wired, hidden: bool) {
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, SGA]);
+            if hidden {
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
+                w.client.write_all(&[IAC, DO, ECHO]).await.unwrap();
+            }
+            w.client
+                .write_all(&[IAC, DO, SGA, IAC, DO, 200])
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, 200]);
+        }
+
+        #[tokio::test]
+        async fn get_char_delivers_split_unicode_without_a_newline_then_restores_lines() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, process) = character_wire(
+                    mode,
+                    r#"
+                    string heard;
+                    private void key(string c) {
+                        heard = c;
+                        if (origin() != "driver" || this_player() != this_object()
+                            || previous_object() != this_object()) throw("wrong context");
+                        write_socket("[" + c + "]");
+                    }
+                    int arm() { function register = get_char; return register("key"); }
+                "#,
+                )
+                .await;
+                acknowledge_character_input(&mut w, false).await;
+                let bytes = "🦀".as_bytes();
+                for byte in &bytes[..3] {
+                    w.client.write_all(&[*byte, IAC, DO, 200]).await.unwrap();
+                    assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, 200]);
+                    assert!(w.connection.awaits_input());
+                }
+                w.client.write_all(&bytes[3..]).await.unwrap();
+                assert_eq!(read_n(&mut w.client, 6).await, "[🦀]".as_bytes());
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, SGA]);
+                assert!(!w.connection.awaits_input());
+                assert_eq!(
+                    w.vm.global_state.committed_global(&process, 0u16),
+                    LpcRef::from("🦀")
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn get_char_rearms_hidden_input_without_mode_or_echo_churn() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, _) = character_wire(
+                    mode,
+                    r#"
+                    int remaining = 3;
+                    void key(string c) {
+                        write_socket("[" + c + "]");
+                        if (--remaining) get_char(key, 1);
+                    }
+                    int arm() { return get_char(key, 1); }
+                    string write_prompt() { return "> "; }
+                "#,
+                )
+                .await;
+                acknowledge_character_input(&mut w, true).await;
+                w.client.write_all("aé!".as_bytes()).await.unwrap();
+                let mut expected = "[a][é][!]".as_bytes().to_vec();
+                expected.extend([IAC, WONT, SGA, IAC, WONT, ECHO]);
+                expected.extend(b"> ");
+                expected.extend([IAC, GA]);
+                assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+                assert!(!w.connection.awaits_input());
+            }
+        }
+
+        #[tokio::test]
+        async fn get_char_and_input_to_can_alternate_within_one_read() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, _) = character_wire(
+                    mode,
+                    r#"
+                    void key(string c) { write_socket("key:" + c + "\n"); input_to(line); }
+                    void line(string text) { write_socket("line:" + text + "\n"); get_char(last); }
+                    void last(string c) { write_socket("last:" + c + "\n"); }
+                    int arm() { return get_char(key); }
+                "#,
+                )
+                .await;
+                acknowledge_character_input(&mut w, false).await;
+                w.client.write_all("yrest\r\né".as_bytes()).await.unwrap();
+                let mut expected = b"key:y\r\n".to_vec();
+                expected.extend([IAC, WONT, SGA, IAC, GA]);
+                expected.extend(b"line:rest\r\n");
+                expected.extend([IAC, GA]);
+                expected.extend("last:é\r\n".as_bytes());
+                assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+                assert!(!w.connection.awaits_input());
+                w.client
+                    .write_all(&[IAC, DONT, SGA, IAC, DO, 200])
+                    .await
+                    .unwrap();
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, 200]);
+            }
+        }
+
+        #[tokio::test]
+        async fn get_char_consumes_already_buffered_line_data_when_registered() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let mut w = wire_with(
+                    crate::test_config_builder!()
+                        .null_mode(mode)
+                        .build()
+                        .unwrap(),
+                )
+                .await;
+                w.client.write_all(b"x").await.unwrap();
+                w.client.write_all(&[IAC, DO, 200]).await.unwrap();
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, 200]);
+                let process = bind(
+                    &w,
+                    r#"
+                    void key(string c) { write_socket("key:" + c); }
+                    int arm() { return get_char(key); }
+                "#,
+                )
+                .await;
+                w.vm.global_state
+                    .attach(w.connection.clone(), process.clone())
+                    .await;
+                let template = TaskTemplate::from(w.vm.global_state.clone());
+                template.set_this_player(Some(process.clone()));
+                apply_function_by_name("arm", &[], process, template, Some(5_000))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, SGA]);
+                assert_eq!(read_n(&mut w.client, 5).await, b"key:x");
+            }
+        }
+
+        #[tokio::test]
+        async fn get_char_accepts_controls_and_keeps_cr_padding_out_of_line_input() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, _) = character_wire(
+                    mode,
+                    r#"
+                    void key(string c) {
+                        if (c == "\r") input_to(line);
+                        else get_char(key);
+                        write_socket("K");
+                    }
+                    void line(string text) { write_socket("[" + text + "]"); }
+                    int arm() { return get_char(key); }
+                "#,
+                )
+                .await;
+                acknowledge_character_input(&mut w, false).await;
+                w.client
+                    .write_all(b"\x1b[A\x08\x7f\t\0\r\nnext\r\n")
+                    .await
+                    .unwrap();
+                let mut expected = b"KKKKKKK".to_vec();
+                expected.extend([IAC, WONT, SGA, b'K', IAC, GA]);
+                expected.extend(b"[next]");
+                assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+            }
+        }
+
+        #[tokio::test]
+        async fn a_failed_character_callback_restores_mode_echo_and_prompt() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, process) = character_wire(
+                    mode,
+                    r#"
+                    int state;
+                    void key(string c) { state = 1; get_char(key, 1); throw("failed key"); }
+                    int arm() { return get_char(key, 1); }
+                    string write_prompt() { return "> "; }
+                "#,
+                )
+                .await;
+                let master =
+                    w.vm.initialize_process_from_code(
+                        "/secure/master.c",
+                        r#"
+                    string error;
+                    void error_handler(mapping info) { error = info["error"]; }
+                "#,
+                    )
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                acknowledge_character_input(&mut w, true).await;
+                w.client.write_all(b"x").await.unwrap();
+                let mut expected = vec![IAC, WONT, SGA, IAC, WONT, ECHO];
+                expected.extend(b"> ");
+                expected.extend([IAC, GA]);
+                assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+                assert!(
+                    w.vm.global_state
+                        .committed_global(&master, 0u16)
+                        .to_string()
+                        .contains("failed key")
+                );
+                assert!(!w.connection.awaits_input());
+                assert_eq!(
+                    w.vm.global_state.committed_global(&process, 0u16),
+                    LpcRef::from(0)
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn a_pending_character_callback_is_cleared_on_disconnect() {
+            let (w, _) = character_wire(
+                NullMode::Distinct,
+                r#"
+                void key(string c) { throw("must not run"); }
+                int arm() { return get_char(key); }
+            "#,
+            )
+            .await;
+            drop(w.client);
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+            assert!(w.connection.is_dead());
+            assert!(!w.connection.awaits_input());
+            assert!(w.connection.body().is_none());
+        }
+
+        #[tokio::test]
+        async fn refusing_hidden_character_input_does_not_restart_negotiation() {
+            let (mut w, _) = character_wire(
+                NullMode::Distinct,
+                r#"
+                void key(string c) { write_socket(c); }
+                int arm() { return get_char(key, 1); }
+            "#,
+            )
+            .await;
+            assert_eq!(
+                read_n(&mut w.client, 6).await,
+                [IAC, WILL, SGA, IAC, WILL, ECHO]
+            );
+            w.client
+                .write_all(&[IAC, DONT, SGA, IAC, DONT, ECHO, IAC, DO, 200])
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, 200]);
+            w.client.write_all(b"x").await.unwrap();
+            assert_eq!(read_n(&mut w.client, 1).await, b"x");
+        }
+
+        #[tokio::test]
+        async fn the_last_input_registration_wins_and_remaining_text_becomes_a_command() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, _) = character_wire(
+                    mode,
+                    r#"
+                    void wrong(string text) { write_socket("wrong"); }
+                    void key(string prefix, string c) { write_socket(prefix + c); }
+                    int process_input(string text) { write_socket("command:" + text); return 1; }
+                    int arm() {
+                        get_char(wrong);
+                        input_to(wrong);
+                        return get_char(&key("bound:"));
+                    }
+                "#,
+                )
+                .await;
+                acknowledge_character_input(&mut w, false).await;
+                w.client.write_all(b"xrest\r\n").await.unwrap();
+                let mut expected = b"bound:x".to_vec();
+                expected.extend([IAC, WONT, SGA]);
+                expected.extend(b"command:rest");
+                assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+            }
+        }
+
+        #[tokio::test]
+        async fn a_dead_character_receiver_cancels_and_line_input_resumes() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, process) = character_wire(
+                    mode,
+                    r#"
+                    void key(string c) { throw("must not run"); }
+                    int process_input(string text) { write_socket("command:" + text); return 1; }
+                    int arm() { return get_char(key, 1); }
+                "#,
+                )
+                .await;
+                w.vm.initialize_process_from_code(
+                    "/secure/master.c",
+                    r#"
+                    int valid_destruct() { return 1; }
+                    void error_handler(mapping info) {}
+                "#,
+                )
+                .await
+                .unwrap();
+                acknowledge_character_input(&mut w, true).await;
+                let receiver =
+                    w.vm.initialize_process_from_code(
+                        "/receiver.c",
+                        r#"
+                    void key(string c) { throw("must not run"); }
+                    function callback() { return key; }
+                    void remove() { destruct(this_object()); }
+                "#,
+                    )
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                let template = TaskTemplate::from(w.vm.global_state.clone());
+                let ptr = apply_function_by_name(
+                    "callback",
+                    &[],
+                    receiver.clone(),
+                    template.clone(),
+                    Some(5_000),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                let LpcRef::Function(ptr) = ptr else {
+                    panic!("callback pointer");
+                };
+                w.connection
+                    .send(ConnectionOp::InputTo(InputTo {
+                        ptr,
+                        no_echo: true,
+                        mode: InputMode::Character,
+                    }))
+                    .unwrap();
+                w.connection
+                    .send(ConnectionOp::SendMessage("ready".into()))
+                    .unwrap();
+                assert_eq!(read_n(&mut w.client, 5).await, b"ready");
+                apply_function_by_name("remove", &[], receiver, template, Some(5_000))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                w.client.write_all(b"xrest\r\n").await.unwrap();
+                let mut expected = b"Canceled.\r\n".to_vec();
+                expected.extend([IAC, WONT, SGA, IAC, WONT, ECHO]);
+                expected.extend(b"command:rest");
+                assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+                assert!(Arc::ptr_eq(&w.connection.body().unwrap(), &process));
             }
         }
 
@@ -1843,6 +2240,7 @@ mod tests {
                 .send(ConnectionOp::InputTo(InputTo {
                     ptr: Arc::new(ptr),
                     no_echo: false,
+                    mode: InputMode::Line,
                 }))
                 .unwrap();
             w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();

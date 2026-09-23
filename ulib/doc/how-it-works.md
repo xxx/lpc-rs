@@ -39,8 +39,8 @@ The player registers `help`, `who` and `quit` on itself, so they travel with it.
 `process_input()` expands the apostrophe shortcut. An `add_action()` handler
 receives the text after the command verb, or `0` when there is no argument.
 Returning `1` marks the command handled. After dispatch, `write_prompt()`
-provides the next prompt. While `input_to()` is waiting, the driver skips that
-hook; `logon()` and the name callback write their own `Name:` prompt.
+provides the next prompt. While `input_to()` or `get_char()` is waiting, the
+driver skips that hook; `logon()` and the name callback write their own `Name:` prompt.
 
 The room sends chat with `tell_object()` to named, interactive occupants.
 The player's `catch_tell()` forwards it through `write_socket()`. Using

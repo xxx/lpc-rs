@@ -47,6 +47,7 @@ pub(crate) mod function_info;
 pub(crate) mod function_name;
 pub(crate) mod function_object;
 pub(crate) mod functions;
+pub(crate) mod get_char;
 pub(crate) mod get_dir;
 pub(crate) mod has_key;
 pub(crate) mod hash_string;
@@ -1266,6 +1267,11 @@ efuns! {
         arity: (4, 1),
         args: [LpcType::Object(false), LpcType::String(false), LpcType::Mixed(false), LpcType::String(false)],
     },
+    get_char => {
+        returns: LpcType::Int(false),
+        arity: (2, 1),
+        args: [LpcType::String(false) | LpcType::Function(false), LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1630,6 +1636,7 @@ mod tests {
                 "save_value",
                 "restore_value",
                 "store_variable",
+                "get_char",
             ]
         );
     }

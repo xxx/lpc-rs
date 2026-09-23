@@ -200,7 +200,8 @@ string command_not_found(object player, string line) {
  * error contains "error" (message), "location" (source position), "object"
  * (affected object) and "diagnostic" (the rendered source diagnostic).
  * this_interactive() identifies the initiating client's body, which may differ
- * from error["object"]; boot errors and call-outs have no initiating client.
+ * from error["object"]; input_to() and get_char() callbacks keep this context.
+ * Boot errors and call-outs have no initiating client.
  * The return is ignored; the driver always logs the full error, while this
  * hook gives the guest a short notice; omission also sends the diagnostic.
  */
