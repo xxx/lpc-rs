@@ -296,9 +296,11 @@ impl Telnet {
         match op {
             Some(ConnectionOp::SendMessage(msg)) => outbox.send(session, Op::Text(&msg)),
             Some(ConnectionOp::InputTo(input_to)) => {
-                if input_to.no_echo {
-                    session.send(Op::EchoOff);
-                }
+                session.send(if input_to.no_echo {
+                    Op::EchoOff
+                } else {
+                    Op::EchoOn
+                });
                 connection.set_input_to(Some(input_to));
             }
             Some(ConnectionOp::Gmcp { package, payload }) => outbox.send(
@@ -1313,6 +1315,7 @@ mod tests {
     mod over_a_duplex {
         use std::time::Duration;
 
+        use lpc_rs_core::null_mode::NullMode;
         use lpc_rs_utils::config::{Config, ConfigBuilder};
         use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
@@ -1507,6 +1510,114 @@ mod tests {
                 w.vm.global_state.committed_global(&proc, 0u16),
                 LpcRef::from(165)
             );
+        }
+
+        async fn input_wire(mode: NullMode) -> (Wired, Arc<crate::interpreter::process::Process>) {
+            let w = wire_with(
+                crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap(),
+            )
+            .await;
+            let process = w.vm.initialize_process_from_code("/input.c", r#"
+                void first(string line) { write_socket("first:" + line + "\n"); }
+                void second(string line) { write_socket("second:" + line + "\n"); }
+                int arm(int use_second, int hidden) { return input_to(use_second ? second : first, hidden); }
+            "#).await.unwrap().context.process;
+            w.vm.global_state
+                .attach(w.connection.clone(), process.clone())
+                .await;
+            (w, process)
+        }
+
+        async fn arm_input(
+            w: &Wired,
+            process: &Arc<crate::interpreter::process::Process>,
+            second: bool,
+            hidden: bool,
+        ) {
+            let template = TaskTemplate::from(w.vm.global_state.clone());
+            template.set_this_player(Some(process.clone()));
+            let result = apply_function_by_name(
+                "arm",
+                &[
+                    LpcRef::from(i64::from(second)),
+                    LpcRef::from(i64::from(hidden)),
+                ],
+                process.clone(),
+                template,
+                Some(5_000),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(result, LpcRef::from(1));
+        }
+
+        async fn acknowledge_hidden_input(w: &mut Wired) {
+            // The refused option confirms the preceding echo acknowledgment was processed.
+            w.client
+                .write_all(&[IAC, DO, ECHO, IAC, DO, 200])
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, 200]);
+        }
+
+        #[tokio::test]
+        async fn input_to_replacement_restores_acknowledged_echo() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, process) = input_wire(mode).await;
+                arm_input(&w, &process, false, true).await;
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
+                acknowledge_hidden_input(&mut w).await;
+
+                arm_input(&w, &process, true, false).await;
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, ECHO]);
+                w.client.write_all(&[IAC, DONT, ECHO]).await.unwrap();
+                w.client.write_all(b"line\r\n").await.unwrap();
+                assert_eq!(read_n(&mut w.client, 13).await, b"second:line\r\n");
+            }
+        }
+
+        #[tokio::test]
+        async fn input_to_replacement_restores_echo_after_pending_acknowledgment() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, process) = input_wire(mode).await;
+                arm_input(&w, &process, false, true).await;
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
+                arm_input(&w, &process, true, false).await;
+                w.connection
+                    .send(ConnectionOp::SendMessage("replaced\n".into()))
+                    .unwrap();
+                assert_eq!(read_n(&mut w.client, 10).await, b"replaced\r\n");
+
+                w.client.write_all(&[IAC, DO, ECHO]).await.unwrap();
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, ECHO]);
+                w.client.write_all(&[IAC, DONT, ECHO]).await.unwrap();
+                w.client.write_all(b"line\r\n").await.unwrap();
+                assert_eq!(read_n(&mut w.client, 13).await, b"second:line\r\n");
+            }
+        }
+
+        #[tokio::test]
+        async fn input_to_replacement_can_hide_input_without_repeating_negotiation() {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let (mut w, process) = input_wire(mode).await;
+                arm_input(&w, &process, false, false).await;
+                arm_input(&w, &process, true, true).await;
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
+                acknowledge_hidden_input(&mut w).await;
+
+                arm_input(&w, &process, true, true).await;
+                w.connection
+                    .send(ConnectionOp::SendMessage("replaced\n".into()))
+                    .unwrap();
+                assert_eq!(read_n(&mut w.client, 10).await, b"replaced\r\n");
+                w.client.write_all(b"line\r\n").await.unwrap();
+                assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, ECHO]);
+                assert_eq!(read_n(&mut w.client, 13).await, b"second:line\r\n");
+            }
         }
 
         #[tokio::test]

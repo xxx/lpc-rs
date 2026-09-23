@@ -2,23 +2,34 @@
 
 `int input_to(string | function f, int no_echo = 0)`
 
-This function is used to set a function to be called when the command giver 
-enters their next line of input. The function will be passed the input string 
-as the only argument. The function will be called in the same object as the 
-call to `input_to`, and `previous_object()` there is that object.
+Register a callback for the next line entered by `this_player()`. The input
+string is supplied using ordinary function-pointer argument binding.
+The callback runs in its receiver, with `previous_object()` set to the pointer's
+owner and `this_player()` set to the object attached to the connection when the
+line arrives. Its entry has `origin() == "driver"`.
 
 `f` is a function pointer, or the name of a function in the calling object
 (`static` included). A name the object does not define is an error.
 
-if `no_echo` is set to 1, the input will not be echoed to the command giver.
+Any nonzero `no_echo` asks the client to hide its input; zero restores ordinary
+local echo. Replacing a pending handler updates that setting immediately when
+the registration is delivered, including while echo negotiation is pending.
+Echo is restored when a hidden-input line arrives.
 
-If the command giver is not interactive, the function will not be called.
+Registrations are delivered in call order with other socket operations after
+the owning transaction commits. An aborted attempt registers nothing; conflict
+retries publish only the successful attempt's operations. A caught error does
+not discard a registration if the transaction later commits.
+
+A new registration replaces the pending handler. Each handler consumes one
+line and may register another handler from its callback.
 
 When the function's receiver cannot be loaded, the error goes to the master's
 `error_handler` and the command giver sees `Canceled.`
 
-This function returns 1 if the command giver is interactive, and the handler
-was successfully set up, otherwise 0.
+Returns `1` if the command giver has a connection and registration was recorded,
+or `0` if it is not interactive. The result does not guarantee that the
+connection remains open until delivery.
 
 ### Examples
 

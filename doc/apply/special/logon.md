@@ -18,6 +18,10 @@ though commands have not been enabled yet (this is the place to do it, though).
 Implementing `logon` is _not_ optional, and the user will be disconnected if the
 object does not implement it.
 
+Output and `input_to` registrations are delivered in call order after the
+`logon` transaction commits. An uncaught error discards both; conflict retries
+deliver only the successful attempt's operations.
+
 ### Examples
 
 ```c

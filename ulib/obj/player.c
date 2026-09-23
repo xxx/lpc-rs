@@ -29,6 +29,7 @@ string query_name() {
  * this_player() is this body, and neither argument is used as an identity.
  * Return 1 to keep the connection while input_to() waits for a guest name;
  * a 0 result or a missing logon() causes the connection to be rejected.
+ * Output and input registration are delivered in call order after commit.
  * Commands stay disabled until receive_name() accepts a unique name.
  */
 int logon(string remote_ip_addr, int remote_port) {

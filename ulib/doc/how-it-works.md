@@ -17,6 +17,8 @@ For each connection, the driver calls the master's `connect()`, which clones
 variables. The driver attaches the socket to this clone and calls its `logon()`.
 Returning `1` keeps the connection. `input_to(receive_name)` directs the next
 line to a name-selection function instead of the command system.
+The welcome text and input registration are delivered in call order after the
+login transaction commits; failed attempts publish neither.
 
 Objects can accept constructor arguments: `clone_object("/obj/box", "oak")`
 forwards `"oak"` to the new box's `create` after global initialisation. Its
