@@ -146,7 +146,9 @@ object *parse_command_users() {
  * or 0 for 8; ob is the refusing object for kind 6 and otherwise 0.
  * flag marks a plural slot for 2/3/7 and is otherwise 0.
  * Return a message, or 0 for no parser message; omission also supplies none.
- * Dispatch may then try other rules or command_not_found().
+ * Called only after every parser rule fails, in registration order until a
+ * string is returned; a successful rule prevents all error-hook calls.
+ * Silence allows later failure reports, then the ordinary dispatch fallback.
  * This example preserves a handler's reason and uses one fallback otherwise.
  */
 string parser_error_message(int kind, object ob, mixed arg, int flag) {

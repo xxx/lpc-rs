@@ -71,6 +71,13 @@ soft one, and the earliest of whichever kind wins is what gets reported.
 `do_`'s return value is not read at all: the rule counts as handled once
 `do_` runs, however it answers.
 
+Rejecting a rule leaves later registered rules eligible. The first rule to
+reach `do_` wins, and no earlier failure is sent to `parser_error_message`.
+Only after every rule fails are retained diagnostics offered to that hook,
+in registration order, until it returns a string. Permission handlers and
+`do_` run in the current transaction: a refusal does not undo earlier writes
+or output. A runtime exception stops selection and propagates to the caller.
+
 ### The many-slot array
 
 Everywhere but `do_` — `can_`, `direct_`/`indirect_`, and the all-filled

@@ -5,7 +5,7 @@
 use lpc_rs_errors::Result;
 
 use super::{
-    Verdict,
+    RejectionCode,
     handlers::{Arg, Failure, Family, Kind, Reply, best_reason},
 };
 use crate::command::{
@@ -126,7 +126,7 @@ fn refused(kind: Kind, object: Option<Target>, arg: Arg, flag: bool, progress: u
         arg,
         flag,
         progress,
-        silent: Verdict::Refused,
+        silent: RejectionCode::Refused,
     }
 }
 
@@ -145,7 +145,7 @@ fn unresolved(
         arg,
         flag,
         progress,
-        silent: Verdict::Unresolved,
+        silent: RejectionCode::Unresolved,
     }
 }
 
@@ -517,7 +517,7 @@ mod tests {
         let failed = failure(&mut ask, &caps).await;
         assert_eq!(failed.kind, Kind::Refused);
         assert_eq!(failed.progress, 0);
-        assert_eq!(failed.silent, Verdict::Refused);
+        assert_eq!(failed.silent, RejectionCode::Refused);
         assert_eq!(ask.calls.len(), 1);
     }
 
@@ -648,7 +648,7 @@ mod tests {
         assert_eq!(failed.kind, Kind::Allocated);
         assert_eq!(failed.object, Some(Target::Candidate(1)));
         assert_eq!(failed.arg, Arg::Text("plain".to_owned()));
-        assert_eq!(failed.silent, Verdict::Unresolved);
+        assert_eq!(failed.silent, RejectionCode::Unresolved);
     }
 
     #[tokio::test]
@@ -715,7 +715,7 @@ mod tests {
         let failed = failure(&mut ask, &caps).await;
         assert_eq!(failed.kind, Kind::Refused);
         assert_eq!(failed.progress, 1);
-        assert_eq!(failed.silent, Verdict::Refused);
+        assert_eq!(failed.silent, RejectionCode::Refused);
         let done = ask
             .calls
             .iter()

@@ -9,6 +9,8 @@
  * as typed; item and recipient hold resolved objects or nil while unresolved.
  * Nil is 0 in the default mode; distinct mode keeps it separate from numeric 0.
  * The specific handler name wins over its generic fallback when both exist.
+ * Refusals leave later rules eligible; the first rule to reach do wins.
+ * Error reporting waits until all rules fail, and refusals do not undo effects.
  * These samples refuse gifts and do not implement transfer or ownership.
  * See ../doc/applies.md, "Grammar handler families", for other rule shapes.
  */
@@ -58,8 +60,8 @@ int direct_give_obj_to_liv(object item, object recipient, string item_words, str
  * item is the selected gift and recipient is this living; the *_words strings
  * hold the typed phrases, and this hook is rechecked after full resolution.
  * Return 1 to accept, 0 to reject silently, or a refusal string as here.
- * The string reaches parser_error_message() as kind 6; a leading # makes
- * that reason yield to a plain reason from another matching object.
+ * If all rules fail, this reason can reach parser_error_message() as kind 6.
+ * A leading # makes it yield to a plain reason from another matching object.
  * Omitting both indirect hooks excludes this recipient from the rule.
  */
 mixed indirect_give_obj_to_liv(object item, object recipient, string item_words, string recipient_words) {

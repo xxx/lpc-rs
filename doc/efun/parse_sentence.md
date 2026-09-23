@@ -25,15 +25,23 @@ tries and in delivering nothing itself.
 | `-3` | a rule's grammar matched, but an object phrase did not resolve and the master gave no message |
 | a string | `master->parser_error_message()`'s result for the failure |
 
-Rules are tried in registration order; the first one to reach `1` or a
-message ends the search right there. Short of that, results fold across
-rules by severity, worst wins: `-3` beats `-2` beats `-1` — once any rule
-scores `-3`, a later rule's `-2` or `-1` cannot pull the result back down,
-and likewise `-2` over `-1`. That fold is *across* rules. *Within* one
-rule's own attempt at the line — which may parse it several ways (a greedy
-`STR` capture, an ambiguous split) — the failure that single rule reports is
-whichever of its own parses got furthest: most object slots chosen, ties to
-the earliest (see `parser_handlers`).
+Rules are tried in registration order; the first one whose `do_` runs ends
+the search with `1`. Earlier failures do not prevent a later rule from
+succeeding. For example, a refusal from `"STR"` does not block a later
+`"at OBJ"` rule for `look at sword`. A successful earlier rule still wins,
+even if a later rule is more specific.
+
+Only when every rule fails does the driver call `parser_error_message`,
+offering each reportable failure in registration order until the hook
+returns a string. A successful search never calls that hook. If the hook
+supplies no message, results combine by severity: `-3` beats `-2` beats `-1`.
+A later silent refusal cannot downgrade an earlier unresolved object.
+
+Within one rule's attempt at the line, which may parse it several ways,
+the retained failure is whichever parse got furthest: most object slots
+chosen, ties to the earliest (see `parser_handlers`). All handlers run in
+the current transaction; declining a rule does not undo its effects.
+Runtime exceptions propagate immediately.
 
 ### scope
 

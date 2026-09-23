@@ -16,6 +16,7 @@ mod nosave;
 mod parse_command;
 mod parse_string;
 mod parser;
+mod parser_selection;
 mod pointers;
 mod previous_object;
 mod references;

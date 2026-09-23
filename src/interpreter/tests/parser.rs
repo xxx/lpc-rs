@@ -342,9 +342,10 @@ async fn two_qualifiers_are_ambiguous_and_the_master_says_so() {
         int r = command("take sword");
         return ({ r, heard });
     "#;
+    let single_only = VERBS.1.replace("parse_add_rule(\"take\", \"OBS\");", "");
     let r = run(
         MASTER,
-        &[SWORD, SWORD2, KNIFE, VERBS, ROOM],
+        &[SWORD, SWORD2, KNIFE, (VERBS.0, &single_only), ROOM],
         &custom_main(body),
     )
     .await;

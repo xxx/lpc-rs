@@ -12,6 +12,13 @@ dispatcher reads the registry only at that point, after the actor's own
 rules have declined, so a rule one of those handlers registers or removes
 for the same verb is already seen on that very line.
 
+A failed rule, including one that supplies a reason string, leaves later
+rules eligible. The first successful rule wins even if a later rule is more
+specific. Only after all rules fail does the driver ask
+[`parser_error_message`](../apply/master/parser_error_message.md) for text,
+in registration order, stopping at the first string. A successful search
+never calls that hook.
+
 `parse_add_rule` is a pure append: it never reads the registry first, so
 registering the same verb and rule text twice from the same object creates
 two separate rules, not one. Both are tried in registration order, both

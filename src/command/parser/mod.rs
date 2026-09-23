@@ -27,22 +27,86 @@ use crate::{
 };
 
 use attempt::attempt;
-use handlers::{Arg, Failure, Kind, furthest};
+use handlers::{Arg, Kind, furthest};
 use lpc::Lpc;
 
-/// How one parser rule fared against a line.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// How one parser rule fared before consulting the master's error hook.
 pub(crate) enum Verdict {
     /// `do_` ran.
     Handled,
     /// No parse of the line fitted the rule's grammar.
     NoParse,
-    /// A handler refused and the master gave no message.
+    /// Matching or permission checks failed.
+    Rejected(Rejection),
+}
+
+/// A failed rule's result when the master gives no message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RejectionCode {
+    /// A handler refused.
     Refused,
-    /// An object phrase did not resolve and the master gave no message.
+    /// An object phrase did not resolve.
     Unresolved,
-    /// The master's message for the failure.
-    Message(String),
+}
+
+/// A failed rule's diagnostic, retained until every rule has failed.
+pub(crate) struct Rejection {
+    pub(crate) code: RejectionCode,
+    args: Option<[LpcRef; 4]>,
+}
+
+impl Rejection {
+    /// Snapshot candidate references before the rule's scope is discarded.
+    fn new(ctx: &TaskContext, ask: &Lpc<'_>, failure: handlers::Failure) -> Self {
+        let args = (failure.kind != Kind::Refused).then(|| {
+            let arg = match failure.arg {
+                Arg::None => ctx.txn().nil(),
+                Arg::Text(text) => LpcRef::from(text.as_str()),
+                Arg::Count(n) => LpcRef::from(n),
+                Arg::Objects(candidates) => ask.objects(&candidates),
+            };
+            let object = failure.object.map_or_else(
+                || ctx.txn().nil(),
+                |target| LpcRef::from(Arc::downgrade(ask.process(target))),
+            );
+            [
+                LpcRef::from(failure.kind as i64),
+                object,
+                arg,
+                LpcRef::from(i64::from(failure.flag)),
+            ]
+        });
+        Self {
+            code: failure.silent,
+            args,
+        }
+    }
+
+    /// Ask the master for a message after selection has exhausted all rules.
+    pub(crate) async fn report(
+        self,
+        ctx: &TaskContext,
+        actor: &Arc<Process>,
+    ) -> Result<Option<String>> {
+        let Some(args) = self.args else {
+            return Ok(None);
+        };
+        let Some(master) = ctx.master_object() else {
+            return Ok(None);
+        };
+        let Some(function) = master
+            .program(ctx.txn())
+            .unmangled_functions
+            .get(PARSER_ERROR_MESSAGE)
+            .cloned()
+        else {
+            return Ok(None);
+        };
+        match apply_on(ctx, as_actor(ctx, actor), &master, actor, function, &args).await? {
+            LpcRef::String(message) => Ok(Some(message.to_string())),
+            _ => Ok(None),
+        }
+    }
 }
 
 /// A `parse_sentence` nickname: `name` also names `object`.
@@ -106,7 +170,7 @@ pub(crate) async fn run(
     let resolver = Resolver::new(vocabulary, None);
     let mut ask = Lpc::new(ctx, actor, owner, rule, &all, resolver);
 
-    let mut failures: Vec<Failure> = Vec::new();
+    let mut failures = Vec::new();
     let mut any_parse = false;
     for caps in rule.compiled.captures_of(rest) {
         any_parse = true;
@@ -121,52 +185,5 @@ pub(crate) async fn run(
     let Some(failure) = furthest(failures) else {
         return Ok(Verdict::NoParse);
     };
-    report(ctx, actor, &ask, failure).await
-}
-
-/// Ask the master to describe `failure`; a string is the verdict's
-/// message, anything else falls back to `failure.silent`. `Kind::Refused`
-/// never reaches the master — it carries no message. The hook is looked up
-/// before `arg` is built, so nothing is minted for a master without one.
-async fn report(
-    ctx: &TaskContext,
-    actor: &Arc<Process>,
-    ask: &Lpc<'_>,
-    failure: Failure,
-) -> Result<Verdict> {
-    let silent = failure.silent;
-    if failure.kind == Kind::Refused {
-        return Ok(silent);
-    }
-    let Some(master) = ctx.master_object() else {
-        return Ok(silent);
-    };
-    let Some(function) = master
-        .program(ctx.txn())
-        .unmangled_functions
-        .get(PARSER_ERROR_MESSAGE)
-        .cloned()
-    else {
-        return Ok(silent);
-    };
-    let arg = match failure.arg {
-        Arg::None => ctx.txn().nil(),
-        Arg::Text(text) => LpcRef::from(text.as_str()),
-        Arg::Count(n) => LpcRef::from(n),
-        Arg::Objects(candidates) => ask.objects(&candidates),
-    };
-    let object = failure.object.map_or_else(
-        || ctx.txn().nil(),
-        |target| LpcRef::from(Arc::downgrade(ask.process(target))),
-    );
-    let args = [
-        LpcRef::from(failure.kind as i64),
-        object,
-        arg,
-        LpcRef::from(i64::from(failure.flag)),
-    ];
-    match apply_on(ctx, as_actor(ctx, actor), &master, actor, function, &args).await? {
-        LpcRef::String(message) => Ok(Verdict::Message(message.to_string())),
-        _ => Ok(silent),
-    }
+    Ok(Verdict::Rejected(Rejection::new(ctx, &ask, failure)))
 }

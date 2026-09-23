@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use super::{Verdict, attempt::Target};
+use super::{RejectionCode, attempt::Target};
 use crate::{
     command::frontend::parser::ParserRule,
     interpreter::{
@@ -187,7 +187,7 @@ pub(crate) struct Failure {
     /// string: `Refused` from the actor's own handlers (`can_`, the
     /// re-ask, a missing `do_`), `Unresolved` from resolving or
     /// disambiguating an object slot.
-    pub(crate) silent: Verdict,
+    pub(crate) silent: RejectionCode,
 }
 
 /// The failure to report: the furthest, ties to the earliest.
@@ -291,7 +291,7 @@ mod tests {
             arg: Arg::Text("x".into()),
             flag: false,
             progress: 1,
-            silent: Verdict::Unresolved,
+            silent: RejectionCode::Unresolved,
         };
         let b = Failure {
             kind: Kind::Refused,
@@ -299,7 +299,7 @@ mod tests {
             arg: Arg::None,
             flag: false,
             progress: 2,
-            silent: Verdict::Refused,
+            silent: RejectionCode::Refused,
         };
         let c = Failure {
             kind: Kind::ThereIsNo,
@@ -307,11 +307,11 @@ mod tests {
             arg: Arg::Text("y".into()),
             flag: false,
             progress: 2,
-            silent: Verdict::Unresolved,
+            silent: RejectionCode::Unresolved,
         };
         assert_eq!(
             furthest(vec![a.clone(), b.clone(), c]).map(|f| (f.arg, f.silent)),
-            Some((Arg::None, Verdict::Refused))
+            Some((Arg::None, RejectionCode::Refused))
         );
         assert_eq!(furthest(vec![a.clone()]).map(|f| f.progress), Some(1));
         assert!(furthest(vec![]).is_none());

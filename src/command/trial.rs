@@ -8,7 +8,7 @@ use lpc_rs_errors::{Result, lpc_error};
 use crate::{
     command::{
         frontend::{add_action, native},
-        parser::{self, Nickname, Verdict},
+        parser::{self, Nickname, Rejection, RejectionCode, Verdict},
         registry::{ActorRules, Family, Rule, VerbRules},
         resolve::{LpcVocabulary, Resolver},
         scope::neighbourhood,
@@ -119,8 +119,7 @@ pub(crate) async fn run(
     Ok(false)
 }
 
-/// Try `candidates` in turn against `line`; `true` as soon as one handles
-/// it (delivering a `Protocol` rule's message first).
+/// Try `candidates` in turn, delivering a parser message only if none handles the line.
 async fn try_rules(
     ctx: &TaskContext,
     actor: &Arc<Process>,
@@ -129,6 +128,7 @@ async fn try_rules(
     resolver: &mut Resolver<LpcVocabulary<'_>>,
     candidates: Vec<Rule>,
 ) -> Result<bool> {
+    let mut rejections = Vec::new();
     for rule in candidates {
         if rule
             .pointer()
@@ -162,12 +162,10 @@ async fn try_rules(
                 });
                 match Box::pin(parser::run(ctx, actor, &owner, parser, rest, None, &[])).await? {
                     Verdict::Handled => return Ok(true),
-                    Verdict::Message(message) => {
-                        deliver(ctx, || as_actor(ctx, actor), actor, Some(actor), &message).await?;
-                        return Ok(true);
-                    }
-                    Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,
+                    Verdict::Rejected(rejection) => rejections.push(rejection),
+                    Verdict::NoParse => {}
                 }
+                continue;
             }
         };
         ctx.with_command(|state| {
@@ -182,6 +180,10 @@ async fn try_rules(
         if !matches!(result, LpcRef::Nil | LpcRef::Int(LpcInt(0))) {
             return Ok(true);
         }
+    }
+    if let Sentence::Message(message) = report_rejections(ctx, actor, rejections).await? {
+        deliver(ctx, || as_actor(ctx, actor), actor, Some(actor), &message).await?;
+        return Ok(true);
     }
     Ok(false)
 }
@@ -206,16 +208,13 @@ pub(crate) enum Sentence {
 impl Sentence {
     /// The outcome when no rule handled the line or gave a message:
     /// `Unresolved` over `Refused` over `NoParse`; `NoParse` for none.
-    pub(crate) fn worst(verdicts: &[Verdict]) -> Sentence {
-        let rank = |v: &Verdict| match v {
-            Verdict::Unresolved => 2,
-            Verdict::Refused => 1,
-            _ => 0,
-        };
-        match verdicts.iter().max_by_key(|v| rank(v)) {
-            Some(Verdict::Unresolved) => Sentence::Unresolved,
-            Some(Verdict::Refused) => Sentence::Refused,
-            _ => Sentence::NoParse,
+    pub(crate) fn worst(codes: &[RejectionCode]) -> Sentence {
+        if codes.contains(&RejectionCode::Unresolved) {
+            Sentence::Unresolved
+        } else if codes.contains(&RejectionCode::Refused) {
+            Sentence::Refused
+        } else {
+            Sentence::NoParse
         }
     }
 }
@@ -237,9 +236,8 @@ pub(crate) async fn sentence(
 }
 
 /// The verb-attached rules for `first_word`, tried in registration order:
-/// none registered is `NoVerb`; the first `Handled` wins; a `Message`
-/// returns at once; otherwise the outcomes fold by severity, `Unresolved`
-/// over `Refused` over `NoParse`.
+/// none registered is `NoVerb`; the first `Handled` wins; failures are
+/// reported only after every rule has failed.
 async fn sentence_trial(
     ctx: &TaskContext,
     actor: &Arc<Process>,
@@ -254,7 +252,7 @@ async fn sentence_trial(
     }
     let rest = rest_of(line, first_word);
 
-    let mut verdicts = Vec::new();
+    let mut rejections = Vec::new();
     for rule in &candidates {
         let Some(owner) = rule.owner() else { continue };
         let Some(parser) = rule.protocol() else {
@@ -272,11 +270,27 @@ async fn sentence_trial(
         .await?;
         match verdict {
             Verdict::Handled => return Ok(Sentence::Handled),
-            Verdict::Message(message) => return Ok(Sentence::Message(message)),
-            other => verdicts.push(other),
+            Verdict::Rejected(rejection) => rejections.push(rejection),
+            Verdict::NoParse => {}
         }
     }
-    Ok(Sentence::worst(&verdicts))
+    report_rejections(ctx, actor, rejections).await
+}
+
+/// Return the first message in registration order, else combine silent failure codes.
+async fn report_rejections(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    rejections: Vec<Rejection>,
+) -> Result<Sentence> {
+    let mut codes = Vec::with_capacity(rejections.len());
+    for rejection in rejections {
+        codes.push(rejection.code);
+        if let Some(message) = rejection.report(ctx, actor).await? {
+            return Ok(Sentence::Message(message));
+        }
+    }
+    Ok(Sentence::worst(&codes))
 }
 
 #[cfg(test)]
@@ -289,14 +303,17 @@ mod tests {
     #[test]
     fn unresolved_outranks_refused_outranks_no_parse() {
         assert_eq!(
-            Sentence::worst(&[Verdict::NoParse, Verdict::Refused, Verdict::NoParse]),
+            Sentence::worst(&[RejectionCode::Refused]),
             Sentence::Refused
         );
         assert_eq!(
-            Sentence::worst(&[Verdict::Refused, Verdict::Unresolved, Verdict::Refused]),
+            Sentence::worst(&[
+                RejectionCode::Refused,
+                RejectionCode::Unresolved,
+                RejectionCode::Refused,
+            ]),
             Sentence::Unresolved
         );
-        assert_eq!(Sentence::worst(&[Verdict::NoParse]), Sentence::NoParse);
     }
 
     #[test]

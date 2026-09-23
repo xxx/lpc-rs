@@ -90,7 +90,7 @@ They support the driver's grammar facilities (`parse_command()` and
 | `parse_command_numeral(string word)` | Positive count, negative ordinal, or `0` for unrecognised; absence recognises nothing. | `one`, `two`, `first`, `second`. |
 | `parse_command_pluralize(string *singulars)` | Corresponding plural at each array index, for an object whose plural hook supplies no array. Missing means no derived plurals. | Append `s`; deliberately incomplete English. |
 | `parse_command_users()` | Extra living candidates for `LIV`/`LVS` slots, beyond local scope. Missing adds none. | Named guests from `users()`. |
-| `parser_error_message(int kind, object ob, mixed arg, int flag)` | Return parser failure text, or `0` for silence. Omission also supplies no message; dispatch may try other rules and its ordinary unhandled-command fallback. `kind` selects the failure and the meaning of `arg`; `ob` is populated only for a handler refusal. | Preserve refusal text, otherwise a generic message. |
+| `parser_error_message(int kind, object ob, mixed arg, int flag)` | Called only after every parser rule fails, in registration order until it returns a string. Return failure text, or `0`/`nil` to try the next retained failure. Omission supplies no message; dispatch then uses its ordinary unhandled-command fallback. `kind` selects the failure and the meaning of `arg`; `ob` is populated only for a handler refusal. | Preserve refusal text, otherwise a generic message. |
 
 Parser failure kinds are `2` non-living, `3` inaccessible, `4` ambiguous
 (`arg` is the candidate array), `5` ordinal out of range (`arg` is the count),
@@ -149,7 +149,10 @@ rule is unhandled. The disabled example refuses gifts in `indirect_`, and its
 The hooks need to be distributed to their stated owners, named objects added,
 and the verb object loaded before this grammar can be used. Registered grammar
 rules are tried after the living's own actions decline; `parse_sentence()` can
-also invoke the parser explicitly.
+also invoke the parser explicitly. The first rule to reach `do_` wins, even if
+an earlier rule supplied a refusal string. `parser_error_message()` runs only
+when every rule fails. Refusing a rule does not undo its handler effects, and
+runtime exceptions propagate immediately.
 
 For many-object `OBS`/`LVS` slots, candidate filtering passes the candidate as a
 bare object in its own slot. Elsewhere, resolved many-object slots are arrays.

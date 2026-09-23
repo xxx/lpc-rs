@@ -6,16 +6,35 @@ Absent `ob` and absent `arg` values described as `0` below use the selected
 [null value](../../lpc/null.md): `nil` in distinct mode. Numeric counts,
 kind codes, and flags remain integers.
 
-Applied in the master when a `parse_add_rule` rule's parse fails and the
-failure has something worth describing. A string result becomes what
-`parse_sentence` returns, or — on the dispatcher path — what is delivered to
-the actor; `0`, or no such apply, leaves the failure silent: `-2` (a handler
-refused) or `-3` (an object phrase did not resolve) from `parse_sentence`,
-and on the dispatcher path the next rule for the verb, then the ordinary
+Applied in the master only after every registered parser rule for the verb
+has failed. A successful rule prevents this apply from being called for any
+earlier failures. After total failure, the driver offers one retained
+failure per rule in registration order, skipping failures with no diagnostic.
+Within a rule, the retained failure comes from the parse that resolved the
+most object slots, taking the earliest tie.
+
+The first string result ends reporting: `parse_sentence` returns it, or
+ordinary command dispatch delivers it to the actor. Any non-string result,
+including `0` or distinct `nil`, leaves that failure silent and allows the
+next retained failure to be reported. An absent apply supplies no message.
+If every failure remains silent, `parse_sentence` combines their codes:
+`-3` (unresolved object) over `-2` (handler refusal) over `-1` (no grammar
+matched). Ordinary command dispatch proceeds to its usual `notify_fail` or
 `command_not_found` fallback.
 
-A handler that refuses outright — `0`, no reason string — never reaches this
-apply; there is nothing to describe.
+A handler that refuses outright — `0` or distinct `nil`, no reason string —
+never reaches this apply; there is nothing to describe.
+
+The apply runs in the current transaction, after all failed rules' handler
+effects. `this_player()` and `previous_object()` are the actor, `origin()` is
+`"driver"`, and `query_verb()` is the typed verb, including a synonym. Nested
+commands or parses restore that outer verb when they return. Exceptions from
+this apply propagate to the caller.
+
+Diagnostic arguments retain the failure's phrase, reason, count, or candidate
+references as recorded while trying its rule. Later handlers can change those
+objects before reporting; references to destructed objects read as the selected
+null value.
 
 ### Kinds
 
