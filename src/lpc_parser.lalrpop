@@ -1184,7 +1184,7 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
 }
 
 Call: CallNode = {
-    <receiver:(<PostfixExpression> "->")?> <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> =>? {
+    <receiver:(<PostfixExpression> "->")?> <ns:CallNamespace?> <name:"ID"> "(" <list:(<ArgumentExpressionList> ","?)?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
 
         let (left, namespace) = ns.unwrap_or_else(|| (name.0, CallNamespace::default()));
@@ -1201,7 +1201,7 @@ Call: CallNode = {
             lvalue_temps: Vec::new(),
         }, span)?)
     },
-    <expr:ComputedCallee> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> =>? {
+    <expr:ComputedCallee> <lparen:"("> <list:(<ArgumentExpressionList> ","?)?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
         let span = Span::combine(expr.span().or(Some(lparen)), Some(right));
 

@@ -498,6 +498,88 @@ async fn error_when_pragma_strict_types_without_return_type() {
 }
 
 #[tokio::test]
+async fn trailing_call_commas_preserve_arguments_and_spans() {
+    for expression in [
+        "f(value,)",
+        "ob->f(value,)",
+        "::f(value,)",
+        "parent::f(value,)",
+        "efun::sizeof(value,)",
+        "callbacks[0](value,)",
+        "factory()(value,)",
+        "record.callback(value,)",
+        "f(\nvalue, // final argument\n)",
+    ] {
+        let code = format!("void create() {{ {expression}; }}");
+        let lexer = LexWrapper::new(&code, 0).triples();
+        let node = lpc_parser::ProgramParser::new()
+            .parse(&mut CompilationContext::default(), lexer)
+            .unwrap_or_else(|error| panic!("{expression}: {error}"));
+        let AstNode::FunctionDef(def) = &node.body[0] else {
+            panic!("expected a function");
+        };
+        let AstNode::Expression(ExpressionNode::Call(call)) = &def.body[0] else {
+            panic!("expected a call");
+        };
+        assert!(matches!(&call.arguments[..], [ExpressionNode::Var(v)] if v.name == "value"));
+        let start = code.find(expression).unwrap();
+        assert_eq!(
+            call.span,
+            Some(Span::new(0, start..start + expression.len()))
+        );
+    }
+}
+
+#[tokio::test]
+async fn trailing_call_commas_preserve_comma_expressions_refs_and_spreads() {
+    let program = parse_prog("void create() { f((a, b), ref n, xs...,); }")
+        .await
+        .unwrap();
+    let AstNode::FunctionDef(def) = &program.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::Expression(ExpressionNode::Call(call)) = &def.body[0] else {
+        panic!("expected a call");
+    };
+    assert!(matches!(
+        &call.arguments[..],
+        [ExpressionNode::CommaExpression(pair), ExpressionNode::Ref(reference), ExpressionNode::Spread(spread)]
+        if pair.value.len() == 2 && reference.name == "n"
+            && matches!(spread.expr.as_ref(), ExpressionNode::Var(v) if v.name == "xs")
+    ));
+}
+
+#[tokio::test]
+async fn trailing_call_commas_do_not_allow_empty_argument_slots() {
+    for callee in [
+        "f",
+        "ob->f",
+        "::f",
+        "efun::sizeof",
+        "callbacks[0]",
+        "factory()",
+    ] {
+        for arguments in [",", ",1", "1,,", "1,,2", "1,2,,"] {
+            let code = format!("void create() {{ {callee}({arguments}); }}");
+            assert!(parse_prog(&code).await.is_err(), "{code}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn trailing_call_commas_do_not_change_parameter_or_expression_lists() {
+    for code in [
+        "void f(int x,) {}",
+        "void f(int,) ;",
+        "void create() { function f = (: [int x,] x :); }",
+        "void create() { (1,); }",
+        "void create() { f((1,),); }",
+    ] {
+        assert!(parse_prog(code).await.is_err(), "{code}");
+    }
+}
+
+#[tokio::test]
 async fn allows_extra_commas_for_array() {
     let prog = indoc! { r#"
         mixed foo = ({ 1, 2, 3, });

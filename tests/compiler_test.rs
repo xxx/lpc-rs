@@ -25,6 +25,39 @@ fn default_compiler() -> Compiler {
 }
 
 #[tokio::test]
+async fn trailing_call_commas_preserve_argument_checks() {
+    for (definition, call, diagnostic) in [
+        (
+            "int f(int a, int b) { return a+b; }",
+            "f(1,)",
+            "incorrect argument count",
+        ),
+        (
+            "int f(int a) { return a; }",
+            "f(1,2,)",
+            "incorrect argument count",
+        ),
+        (
+            "int f(int a) { return a; }",
+            r#"f("wrong",)"#,
+            "unexpected argument type",
+        ),
+        (
+            "void f(int ref a) { a++; }",
+            "f(n,)",
+            "must be passed by reference",
+        ),
+    ] {
+        let code = format!("{definition} void create() {{ int n; {call}; }}");
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains(diagnostic), "{call}: {error}");
+    }
+}
+
+#[tokio::test]
 async fn unnamed_prototypes_allow_forward_calls_to_named_definitions() {
     let code = indoc! { r#"
         #pragma strict_types

@@ -50,6 +50,31 @@ notes:
 - `#define` supports object macros, function macros, and argument stringification with `#`; see [macros](macros.md)
 - a source file that is not UTF-8 is read as Latin-1, with a warning
 
+## Function calls
+
+A nonempty argument list may end with one trailing comma:
+
+```c
+set_name("Ada",);
+room->announce("Hello",);
+callback(first, rest...,);
+callbacks[0](value,);
+```
+
+The comma adds no argument and does not change evaluation order, argument
+checking, defaults, or [spreading](argument_spreading.md). It also works after
+a [reference argument](references.md), as in `increment(ref count,)`, and in
+inherited and explicit efun calls such as `::create(value,)` and
+`efun::sizeof(text,)`.
+
+Empty calls use `f()`. Empty argument slots such as `f(,)` or `f(1,,2)` are
+invalid. Function declarations and definitions do not allow trailing commas in
+their parameter lists.
+
+In [partial application](function_type.md), `&f(1,)` still leaves an unbound
+argument slot after the bound `1`; it constructs a function value rather than
+calling `f`.
+
 ## Function prototypes
 
 Functions can be called before their definition, so prototypes are unnecessary.

@@ -8,6 +8,46 @@ use crate::interpreter::lpc_ref::LpcRef;
 const ADD3: &str = "int add3(int a, int b, int c) { return a + 10 * b + 100 * c; }\n";
 
 #[tokio::test]
+async fn trailing_call_commas_work_with_computed_and_partially_bound_functions() {
+    let result = run(
+        "",
+        &[],
+        indoc! { r#"
+        class Callback { function call; }
+        int add(int a, int b) { return a+b; }
+        function make(int bound) { return &add(bound,); }
+        mixed *create() {
+            function callback = &add(10,);
+            function *callbacks = ({ callback });
+            class Callback record = new(class Callback, call: callback);
+            return ({ callback(2,), callbacks[0](3,), make(20,)(4,), record.call(5,) });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(result, [12, 13, 24, 15].map(LpcRef::from));
+}
+
+#[tokio::test]
+async fn trailing_call_commas_preserve_computed_call_evaluation_order() {
+    let result = run(
+        "",
+        &[],
+        indoc! { r#"
+        int order;
+        function make(int n) { order = order*10+n; return (: $1*10+$2 :); }
+        int argument(int n) { order = order*10+n; return n; }
+        mixed *create() {
+            int result = make(1,)(argument(2,), argument(3,),);
+            return ({ result, order });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(result, vec![LpcRef::from(23), LpcRef::from(123)]);
+}
+
+#[tokio::test]
 async fn an_indexed_array_function_can_be_called() {
     let r = run(
         "",
