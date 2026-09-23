@@ -206,6 +206,12 @@ async fn live_objects_and_enabled_examples_cover_every_documented_apply() {
                 "missing {category}/{name} reference"
             );
             if name == "parser_handlers" {
+                for handler in ["can_cast_str_at_str", "do_cast_str_at_str"] {
+                    assert!(
+                        functions["examples/verb.c"].contains_key(handler),
+                        "missing {handler}"
+                    );
+                }
                 for family in ["can", "direct", "indirect", "do"] {
                     for suffix in ["give_obj_to_liv", "verb_rule"] {
                         let handler = format!("{family}_{suffix}");

@@ -185,6 +185,22 @@ literal becomes `word` in those tiers. Empty rules omit the slug; their
 generic forms receive `(base, typed)` or `(base, "", typed)`. Duplicate
 generated names use the earliest layout.
 
+The text example registers `cast` with `STR at STR`. Its `can_cast_str_at_str`
+and `do_cast_str_at_str` receive `(spell, target, spell_words, target_words)`:
+four strings, with each capture repeated as source text. Multiple `STR` tokens
+are allowed, including adjacent captures; each requires one or more words.
+Earlier captures take longer spans first. The example's permission accepts only
+`"spark"`, so `cast spark at dusk at tower` first refuses `"spark at dusk"`,
+then acts with `"spark"` and `"dusk at tower"`. Text-only rules call no object
+permissions. With mixed text/object rules, all captures keep their rule positions
+and the first/second object slots still select direct/indirect targets.
+
+At most 32 grammatical parses are tried per rule/input; a refusal permits the
+next split within that cap, keeping earlier effects. The first action wins;
+a runtime exception stops the search. A literal separator inside a capture is
+ordinary text. The driver's `parse_add_rule` reference has the complete
+split-selection contract.
+
 `OBJ:v`, `OBS:v`, `LIV:v`, and `LVS:v` permit visible but unreachable objects.
 Unmodified slots require reachability. Each capture keeps its own policy, so
 `OBJ at OBJ:v` still requires the first object to be reachable. The suffix changes

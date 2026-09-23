@@ -87,12 +87,29 @@ are:
 | `do_verb_word_str_word_obj` | `"read", "about", "history", "from", B, "read", "history", "book"` |
 | `do_verb_rule` | `"read", "about STR from OBJ", "history", B, "read", "history", "book"` |
 
+Multiple `STR` tokens contribute separate values and source strings. For
+`parse_add_rule("cast", "STR at STR")` and `cast spark at tower`, the layouts are:
+
+| Name | Arguments |
+|---|---|
+| `do_cast_str_at_str` | `"spark", "tower", "spark", "tower"` |
+| `do_cast_str_word_str` | `"spark", "at", "tower", "spark", "tower"` |
+| `do_verb_str_word_str` | `"cast", "spark", "at", "tower", "cast", "spark", "tower"` |
+| `do_verb_rule` | `"cast", "STR at STR", "spark", "tower", "cast", "spark", "tower"` |
+
+The `can_` family receives the same text arguments. A text-only rule makes no
+direct or indirect calls. Text captures interspersed with object captures keep
+their rule positions in every family; only object slots select permission targets.
+
 A synonym changes the later typed-verb argument, while the leading base verb
 remains `"read"`. Empty-rule generic handlers receive `(base, typed)` or
 `(base, "", typed)`. Fixed-arity functions may omit unused trailing parameters;
 named variadic collectors receive the complete tail.
 
-`can_` runs once, with every object value unresolved. `do_` runs once after
+`can_` runs once per grammatical parse tried, with every object value unresolved.
+Refusing one split leaves later splits eligible in
+[longest-first order](../../efun/parse_add_rule.md#text-captures-and-split-selection).
+`do_` runs once after
 selection and permission rechecks, with all slots filled. An `OBS` or `LVS`
 action argument is always an array, even when only one object qualifies.
 

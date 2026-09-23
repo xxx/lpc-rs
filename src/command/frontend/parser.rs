@@ -19,8 +19,6 @@ use crate::command::{
 pub enum ParserRuleError {
     /// An empty or whitespace-only verb name.
     EmptyVerb,
-    /// Two `STR` tokens.
-    TwoStrs(String),
     /// A token glued to other letters (`OBJect`).
     TokenInWord(String),
     /// An unsupported modifier, or a modifier on a text token.
@@ -36,7 +34,6 @@ impl fmt::Display for ParserRuleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParserRuleError::EmptyVerb => write!(f, "the verb must contain at least one word"),
-            ParserRuleError::TwoStrs(rule) => write!(f, "two STR tokens in '{rule}'"),
             ParserRuleError::TokenInWord(rule) => write!(f, "a token inside a word in '{rule}'"),
             ParserRuleError::Modifier(token) => write!(
                 f,
@@ -196,9 +193,6 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
             Token::Literal(_) => None,
         })
         .collect();
-    if kinds.iter().filter(|k| **k == CaptureKind::Words).count() > 1 {
-        return Err(ParserRuleError::TwoStrs(rule.to_owned()));
-    }
     if kinds.iter().filter(|k| k.is_object()).count() > 2 {
         return Err(ParserRuleError::TooManyObjects(rule.to_owned()));
     }
@@ -365,10 +359,6 @@ mod tests {
     #[test]
     fn faults_name_the_rule() {
         assert_eq!(
-            compile("say", "STR STR").unwrap_err().to_string(),
-            "two STR tokens in 'STR STR'"
-        );
-        assert_eq!(
             compile("look", "at OBJect").unwrap_err().to_string(),
             "a token inside a word in 'at OBJect'"
         );
@@ -412,5 +402,123 @@ mod tests {
         let a = compile("look", "at OBJ").unwrap();
         let b = compile("peer", "at OBJ").unwrap();
         assert!(Arc::ptr_eq(&a.compiled, &b.compiled));
+    }
+
+    fn captured_text(rule: &str, input: &str) -> Vec<Vec<String>> {
+        compile("test", rule)
+            .unwrap()
+            .compiled
+            .captures_of(input)
+            .map(|captures| captures.into_iter().map(|c| c.text).collect())
+            .collect()
+    }
+
+    #[test]
+    fn multiple_strings_try_longer_earlier_captures_first() {
+        assert_eq!(
+            captured_text("STR at STR", "spark at dusk at tower"),
+            vec![
+                vec!["spark at dusk", "tower"],
+                vec!["spark", "dusk at tower"]
+            ]
+        );
+    }
+
+    #[test]
+    fn adjacent_strings_allow_more_than_two_captures() {
+        assert_eq!(
+            captured_text("STR STR STR", "a b c d"),
+            vec![
+                vec!["a b", "c", "d"],
+                vec!["a", "b c", "d"],
+                vec!["a", "b", "c d"]
+            ]
+        );
+        assert_eq!(
+            captured_text("STR STR STR STR", "a b c d"),
+            vec![vec!["a", "b", "c", "d"]]
+        );
+    }
+
+    #[test]
+    fn every_string_requires_words_and_separators_match_exactly() {
+        for input in ["", "at", "a at", "at b", "a AT b", "a at, b"] {
+            assert!(captured_text("STR at STR", input).is_empty(), "{input:?}");
+        }
+        for input in ["", "a", "a b"] {
+            assert!(captured_text("STR STR STR", input).is_empty(), "{input:?}");
+        }
+    }
+
+    #[test]
+    fn multiple_strings_keep_unicode_spacing_and_equal_values_in_separate_slots() {
+        assert_eq!(
+            captured_text("STR at STR", "  Éclair!\t bleu at 遠い\u{2003}塔  "),
+            vec![vec!["Éclair!\t bleu", "遠い\u{2003}塔"]]
+        );
+        assert_eq!(
+            captured_text("STR at STR", "same at same"),
+            vec![vec!["same", "same"]]
+        );
+    }
+
+    #[test]
+    fn strings_do_not_count_towards_the_two_object_limit() {
+        let rule = compile("cast", "STR OBJ:v STR LVS STR").unwrap();
+        assert_eq!(
+            rule.compiled.kinds,
+            [
+                CaptureKind::Words,
+                CaptureKind::Object,
+                CaptureKind::Words,
+                CaptureKind::Living,
+                CaptureKind::Words
+            ]
+        );
+        assert_eq!(rule.can_slug, "str_obj_str_liv_str");
+        assert_eq!(rule.do_slug, "str_obj_str_lvs_str");
+        assert_eq!(
+            rule.access,
+            [
+                Access::Reachable,
+                Access::Visible,
+                Access::Reachable,
+                Access::Reachable,
+                Access::Reachable
+            ]
+        );
+        let bad = "STR OBJ STR LIV STR OBJ";
+        assert_eq!(
+            compile("cast", bad).unwrap_err(),
+            ParserRuleError::TooManyObjects(bad.into())
+        );
+    }
+
+    #[test]
+    fn multiple_strings_retain_the_default_parse_cap() {
+        let rule = compile("test", "STR STR STR").unwrap();
+        let input = "a b c d e f g h i j";
+        assert_eq!(rule.compiled.captures_of(input).count(), 32);
+        assert_eq!(
+            parse(
+                &rule.compiled.grammar,
+                input,
+                Limits {
+                    max_parses: 100,
+                    ..Limits::default()
+                }
+            )
+            .count(),
+            36
+        );
+    }
+
+    #[test]
+    fn multiple_string_patterns_share_the_cache_but_keep_their_verb() {
+        let first = compile("cast", "STR at STR").unwrap();
+        let second = compile("aim", "STR at STR").unwrap();
+        assert!(Arc::ptr_eq(&first.compiled, &second.compiled));
+        assert_eq!(first.verb, "cast");
+        assert_eq!(second.verb, "aim");
     }
 }

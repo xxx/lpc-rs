@@ -127,12 +127,6 @@
       : [];
     if (
       groups.filter(function (g) {
-        return g.kind === 'text';
-      }).length > 1
-    )
-      throw new Error('Only one STR is allowed');
-    if (
-      groups.filter(function (g) {
         return g.kind === 'object' || g.kind === 'living';
       }).length > 2
     )

@@ -38,7 +38,9 @@ returns a string. A successful search never calls that hook. If the hook
 supplies no message, results combine by severity: `-3` beats `-2` beats `-1`.
 A later silent refusal cannot downgrade an earlier unresolved object.
 
-Within one rule's attempt at the line, which may parse it several ways,
+Within one rule, the driver tries up to 32 grammatical parses in
+[longest-first capture order](parse_add_rule.md#text-captures-and-split-selection).
+If those parses all fail,
 the retained failure is whichever parse got furthest: most object slots
 resolved, ties to the earliest (see `parser_handlers`). For pair checking,
 both noun phrases count as resolved before permission checks begin. All handlers run in

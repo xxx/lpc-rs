@@ -141,10 +141,10 @@ async fn add_rule_without_init_and_bad_rules_are_errors() {
         fails(
             "",
             &[],
-            r#"mixed *create() { parse_init(); parse_add_rule("x", "STR STR"); return ({}); }"#
+            r#"mixed *create() { parse_init(); parse_add_rule("x", "OBJ OBJ OBJ"); return ({}); }"#
         )
         .await
-        .contains("parse_add_rule: two STR tokens in 'STR STR'")
+        .contains("parse_add_rule: more than two object slots in 'OBJ OBJ OBJ'")
     );
     assert!(
         fails(

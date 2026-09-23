@@ -292,8 +292,10 @@
             two example objects, at most 120 input characters and 24 tokens. The
             browser caps work at 20,000 operations per chart or derivation pass,
             trees at 32 per span, and depth at 64. These are teaching limits,
-            not driver defaults. Only the native and package capture forms
-            printed in the lessons are exercised. DGD compilation accepts the
+            not driver defaults. The fixed lessons exercise the printed capture forms.
+            The package compiler and model tests also support multiple nonempty
+            <code>STR</code> captures, including adjacent ones; the fixed lessons
+            do not demonstrate their split retries. DGD compilation accepts the
             displayed line-oriented subset and three simple regex forms.
           </p>
           <p>

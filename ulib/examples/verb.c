@@ -1,5 +1,5 @@
 /**
- * Optional grammar handlers for "give OBJ to LIV", disabled as teaching examples.
+ * Optional object and text grammar handlers, disabled as teaching examples.
  * OBJ matches an item and LIV matches a living recipient; "to" is literal.
  * create/do belong on the verb object, direct on the item, and indirect
  * on the recipient; can may live on the actor or verb object.
@@ -45,6 +45,7 @@ void create() {
     parse_init();
     parse_add_rule("give", "OBJ to LIV");
     parse_add_synonym("hand over", "give");
+    parse_add_rule("cast", "STR at STR");
 }
 
 /**
@@ -167,5 +168,24 @@ int can_give_obj_word_liv(object item, string prep, object recipient, string ite
  */
 void do_verb_obj_word_liv(string verb, object item, string prep, object recipient, string typed_verb, string item_words, string recipient_words) {
     write("The grammar matched; implement the transfer here.\n");
+}
+
+/**
+ * On the actor or verb object, require a supported spell for this text split.
+ * Both captures are nonempty; raw strings repeat their semantic text values.
+ * Longer first captures are tried first, so refusing "spark at dusk" allows
+ * a later split with spell "spark" and target "dusk at tower".
+ * These are strings; this rule calls no direct or indirect object permissions.
+ */
+int can_cast_str_at_str(string spell, string target, string spell_words, string target_words) {
+    return spell == "spark";
+}
+
+/**
+ * On the verb object, demonstrate the accepted pair of text captures.
+ * No spell lookup or target-object resolution is implied by this teaching message.
+ */
+void do_cast_str_at_str(string spell, string target, string spell_words, string target_words) {
+    write("The grammar matched " + spell + " at " + target + ".\n");
 }
 #endif

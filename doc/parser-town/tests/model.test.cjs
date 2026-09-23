@@ -158,9 +158,29 @@ test('derivations try the longest earlier capture before a shorter split', () =>
     'bob to sam',
   ]);
 });
+test('multiple package text captures preserve greedy split order and source text', () => {
+  const input = 'Éclair!  bleu at 遠い塔 at dusk';
+  const g = M.compileGroups(M.parserGroups('STR at STR'));
+  const c = recognize(g, input);
+  const m = { g, scan: { tokens: c.tokens }, engineInput: input };
+  assert.deepEqual(plain(M.trees(c).map((tree) => M.captures(m, tree).map((c) => c.text))), [
+    ['Éclair!  bleu at 遠い塔', 'dusk'], ['Éclair!  bleu', '遠い塔 at dusk'],
+  ]);
+});
+test('adjacent package text captures each require at least one word', () => {
+  const g = M.compileGroups(M.parserGroups('STR STR STR'));
+  const input = 'a b c d';
+  const c = recognize(g, input);
+  const m = { g, scan: { tokens: c.tokens }, engineInput: input };
+  assert.deepEqual(plain(M.trees(c).map((tree) => M.captures(m, tree).map((c) => c.text))), [
+    ['a b', 'c', 'd'], ['a', 'b c', 'd'], ['a', 'b', 'c d'],
+  ]);
+  for (const short of ['', 'a', 'a b']) assert.equal(M.accepted(recognize(g, short)), false);
+  assert.equal(M.accepted(recognize(M.compileGroups(M.parserGroups('STR STR STR STR')), 'a b c d')), true);
+});
 test('unsupported lesson syntax is rejected, never silently accepted', () => {
   assert.throws(() => M.nativeGroups('%i'), /lesson supports/);
-  assert.throws(() => M.parserGroups('STR STR'), /Only one STR/);
+  assert.throws(() => M.parserGroups('OBJ OBJ OBJ'), /Only two object slots/);
   assert.throws(() => M.parserGroups('OBJect'), /Token inside/);
   assert.throws(
     () => M.compileDgd('word = /.+/\nS: word'),

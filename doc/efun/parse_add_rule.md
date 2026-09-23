@@ -59,9 +59,11 @@ Tokens separated by spaces; `""` registers the bare verb alone.
 | `STR` | one or more words | the words, as a string |
 | anything else | that word, literally, case-sensitive | — |
 
-A rule may hold at most one `STR` and at most two object slots (`OBJ`,
-`OBS`, `LIV`, `LVS`, in any combination) — the first is the *direct* object,
-the second the *indirect* one. Extra whitespace between tokens is ignored.
+A rule may contain multiple `STR` captures, including adjacent ones such as
+`"STR STR STR"`. Each must match at least one word. There may be at most two
+object slots (`OBJ`, `OBS`, `LIV`, `LVS`, in any combination) — the first is
+the *direct* object, the second the *indirect* one. Text captures do not count
+towards that limit. Extra whitespace between tokens is ignored.
 
 Append `:v` to an object token to require visibility without physical
 reachability: `OBJ:v`, `OBS:v`, `LIV:v`, or `LVS:v`. For example,
@@ -72,6 +74,25 @@ ordinal/count selection and also governs phrases such as `all`.
 
 Only the single `:v` suffix is supported. Modifiers on `WRD`/`STR`, other
 suffixes, and repeated/combined modifiers are errors.
+
+### Text captures and split selection
+
+For `parse_add_rule("cast", "STR at STR")`, the line
+`cast spark at dusk at tower` admits these captures, tried in this order:
+
+1. `"spark at dusk"`, `"tower"`.
+2. `"spark"`, `"dusk at tower"`.
+
+Earlier captures take the longest spans that let the remaining rule match.
+A literal separator can also occur inside a capture. A refusal leaves later
+splits eligible before trying the next registered rule; the first split to
+reach `do_` wins. Permission effects remain visible during retries, and an
+exception stops the search.
+
+At most 32 grammatical parses are tried for one rule and input, including
+parses refused by handlers. Highly ambiguous text rules can have additional
+valid splits beyond that cap. This is a result-count limit, not a work budget.
+Capture strings retain their original case, punctuation and internal whitespace.
 
 ### Handler names and slugs
 
@@ -168,10 +189,8 @@ Raised as runtime errors, all prefixed `parse_add_rule: `:
 | `this_object()` has not called `parse_init()` | `parse_init() has not been called` |
 | empty or whitespace-only verb | `the verb must contain at least one word` |
 | unsupported modifier, or a modifier on a text token | `unsupported parser modifier in 'token'; only OBJ:v, OBS:v, LIV:v and LVS:v are supported` |
-| two `STR` tokens | `two STR tokens in 'rule'` |
 | a token glued to other letters (`OBJect`) | `a token inside a word in 'rule'` |
 | an all-caps word sharing a token's prefix (`LIVING`) | `a token inside a word in 'rule'` |
-| a word containing `'` (`bob's`) | `a quote inside a word in 'rule'` |
 | more than two object slots | `more than two object slots in 'rule'` |
 
 ### See also
