@@ -92,10 +92,10 @@ They support the driver's grammar facilities (`parse_command()` and
 | `parse_command_users()` | Extra living candidates for `LIV`/`LVS` slots, beyond local scope. Missing adds none. | Named guests from `users()`. |
 | `parser_error_message(int kind, object ob, mixed arg, int flag)` | Called only after every parser rule fails, in registration order until it returns a string. Return failure text, or `0`/`nil` to try the next retained failure. Omission supplies no message; dispatch then uses its ordinary unhandled-command fallback. `kind` selects the failure and the meaning of `arg`; `ob` is populated only for a handler refusal. | Preserve refusal text, otherwise a generic message. |
 
-Parser failure kinds are `2` non-living, `3` inaccessible, `4` ambiguous
+Valid parser failure kinds are `2` non-living, `3` inaccessible, `4` ambiguous
 (`arg` is the candidate array), `5` ordinal out of range (`arg` is the count),
 `6` a handler's refusal (`arg` is its reason), `7` an unknown phrase and `8`
-an invalid plural selection. Kinds `1` and `9` are unused in this implementation.
+an invalid plural selection.
 
 ## Object applies
 

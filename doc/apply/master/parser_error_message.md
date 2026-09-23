@@ -38,6 +38,8 @@ null value.
 
 ### Kinds
 
+Valid diagnostic kinds are 2–8.
+
 `ob` is `0` for every kind except 6, where it is the object that returned
 the reason.
 
@@ -51,7 +53,7 @@ the reason.
 | 7 | no object answers to the phrase, or aggregate filtering rejected every match without a reason | the typed phrase | 1 if the slot is a many slot (`OBS`/`LVS`) |
 | 8 | `all`, or a plural, or a count on a slot that takes only one | 0 | 0 |
 
-Kinds 1 and 9 are never raised. The driver defines no header for these numbers;
+The driver defines no header for these numbers;
 the mudlib may define named constants for the kinds it handles.
 
 For two-object rules with at most one plural slot, ordinals count live,

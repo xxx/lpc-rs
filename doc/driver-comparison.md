@@ -431,7 +431,7 @@ not every historical MudOS release. Consult its [source][fl-parser-source] and
 |---|---|---|
 | Dispatch and actor | `parse_sentence` parses for the calling object, which must have called `parse_init`. | Parses for the living `this_player()`. Registered parser rules are also reached by ordinary command dispatch after the actor's own rules decline the verb. Review actor and dispatch ownership. |
 | Articles and possessives | Recognizes built-in English words including `a`, `any`, `the`, and `my`. | Supply accepted adjectives through the vocabulary applies; these words are not automatic articles or possessive selectors. |
-| Error kinds | Defines `ERR_IS_NOT` (1) and `ERR_MANY_PATHS` (9), as well as kinds 2–8. The reviewed guard for 9 counts freshly cleared bitsets; source inspection indicates it cannot fire there. This was not execution-tested. [Guard][fl-parser-pair-limit]. | Never emits 1 or 9; a missing object phrase uses kind 7. Numeric kinds 2–8 retain those numbers, but inspect each argument contract. The driver supplies no constants header. |
+| Error kinds | `ERR_IS_NOT` (1) distinguishes a recognized noun with no matches after qualification. `ERR_MANY_PATHS` (9) is intended to reject excessive object-pair combinations. Kinds 2–8 are also defined. [Noun matching][fl-parser-noun-mismatch], [pair guard][fl-parser-pair-limit]. | Retains the numbers 2–8, leaving 1 and 9 unused. A noun with no qualifying match uses kind 7; pair searches use the existing execution deadline rather than a separate pair-count diagnostic. Inspect each argument contract. The driver supplies no constants header. |
 | Error hook and fallback | `get_the_error` calls the master with a kind-dependent argument count; a missing result becomes zero. | [`parser_error_message`](apply/master/parser_error_message.md) always receives four arguments, and runs only after all rules fail. No built-in English fallback: missing text leaves the silent result code, and command dispatch uses its ordinary failure fallback. |
 | Ambiguity modifier | Recognizes `:c` to choose one match. | Does not recognize `:c`; resolve that choice in the mudlib or adapt the rule. |
 | Debug argument | Nonzero debugging requires a `DEBUG` or `PARSE_DEBUG` build; otherwise it errors. | Accepts and ignores `debug`. |
@@ -447,6 +447,10 @@ not every historical MudOS release. Consult its [source][fl-parser-source] and
 | Verb matching | Tries progressively longer normalized word sequences as verbs. | Matches the exact first word. Multiword or normalized verb assumptions need adaptation. |
 | Synonyms | The implementation accepts `parse_add_synonym(new, old, rule)` despite its reference showing two arguments. | Also supports the optional rule filter. Review native synonym chaining and removal semantics in [`parse_add_synonym`](efun/parse_add_synonym.md) and [`parse_remove`](efun/parse_remove.md). |
 | Rule inspection | The implemented `parse_my_rules(object, string, int)` parses a command restricted to the caller's rules, returning handler arguments or executing with the flag. Its upstream reference describes a different no-argument API. | [`parse_my_rules()`](efun/parse_my_rules.md) lists the caller's registrations as `"verb rule"` strings; [`parse_dump()`](efun/parse_dump.md) lists all owners' registrations as text. Adapt calls according to their actual purpose. |
+
+The reviewed FluffOS [guard for kind 9][fl-parser-pair-limit] counts freshly
+cleared bitsets. Source inspection indicates it cannot fire there; this was
+not execution-tested.
 
 ### DGD
 
@@ -633,6 +637,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-parser-relations]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2478
 [fl-parser-handler-args]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2084
 [fl-parser-pair-limit]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2675
+[fl-parser-noun-mismatch]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L1659
 [fl-parser-spec]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.spec
 [dgd-parser-source]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/parser/parse.cpp
 [dgd-grammar-source]: https://github.com/dworkin/dgd/blob/733ea01eeeb571721c35511cb7f51a7f9d32fb6c/src/parser/grammar.cpp
