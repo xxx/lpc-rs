@@ -96,6 +96,7 @@ impl<'a> Lpc<'a> {
     /// The process a target names.
     pub(crate) fn process(&self, target: Target) -> &Arc<Process> {
         match target {
+            Target::Actor => self.actor,
             Target::Owner => self.owner,
             Target::Candidate(c) => &self.candidates[c].object,
         }
@@ -112,15 +113,29 @@ impl Ask for Lpc<'_> {
         for slot in args {
             values.push(self.value(slot));
         }
-        handlers::call(
-            self.ctx,
-            self.actor,
-            self.process(target),
-            family,
-            self.rule,
-            &values,
-        )
-        .await
+        if !self.process(target).is_live(self.ctx.txn()) {
+            return Ok(Reply::Absent);
+        }
+        for source in [target, Target::Owner] {
+            if source == Target::Owner
+                && target != Target::Owner
+                && Arc::ptr_eq(self.process(target), self.owner)
+            {
+                break;
+            }
+            let process = self.process(source);
+            if process.is_live(self.ctx.txn())
+                && let Some(value) =
+                    handlers::call(self.ctx, self.actor, process, family, self.rule, &values)
+                        .await?
+            {
+                return Ok(Reply::from_value(&value, source));
+            }
+            if target == Target::Owner {
+                break;
+            }
+        }
+        Ok(Reply::Absent)
     }
 
     async fn resolve(&mut self, kind: ResolveKind, phrase: &str) -> Result<Option<Resolved>> {

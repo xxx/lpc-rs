@@ -41,7 +41,8 @@ null value.
 Valid diagnostic kinds are 2–8.
 
 `ob` is `0` for every kind except 6, where it is the object that returned
-the reason.
+the reason. An actor permission or owner fallback therefore identifies that
+actor or owner, even when the permission concerns another noun object.
 
 | `kind` | meaning | `arg` | `flag` |
 |---|---|---|---|

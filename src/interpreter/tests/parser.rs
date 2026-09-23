@@ -1245,11 +1245,11 @@ const GENERIC_VERB: (&str, &str) = (
     indoc! { r#"
     string seen_verb; string seen_rule;
     void create() { parse_init(); parse_add_rule("poke", "OBJ"); }
-    mixed can_verb_rule(string verb, string rule, mixed o, string w) {
+    mixed can_verb_rule(string verb, string rule, mixed o, string typed, string w) {
         seen_verb = verb; seen_rule = rule;
         return 1;
     }
-    void do_verb_rule(string verb, string rule, mixed o, string w) { }
+    void do_verb_rule(string verb, string rule, mixed o, string typed, string w) { }
     string query_seen_verb() { return seen_verb; }
     string query_seen_rule() { return seen_rule; }
 "# },
@@ -1259,7 +1259,7 @@ const GENERIC_TARGET: (&str, &str) = (
     indoc! { r#"
     string *parse_command_id_list() { return ({ "thing" }); }
     string seen_verb; string seen_rule;
-    mixed direct_verb_rule(string verb, string rule, mixed o, string w) {
+    mixed direct_verb_rule(string verb, string rule, mixed o, string typed, string w) {
         seen_verb = verb; seen_rule = rule;
         return 1;
     }
@@ -1299,8 +1299,8 @@ const QUOTED_VERB: (&str, &str) = (
     indoc! { r#"
     string seen_rule;
     void create() { parse_init(); parse_add_rule("look", "at bob's OBJ"); }
-    mixed can_verb_rule(string verb, string rule, mixed o, string w) { return 1; }
-    void do_verb_rule(string verb, string rule, mixed o, string w) { seen_rule = rule + " " + file_name(o); }
+    mixed can_verb_rule(string verb, string rule, mixed o, string typed, string w) { return 1; }
+    void do_verb_rule(string verb, string rule, mixed o, string typed, string w) { seen_rule = rule + " " + file_name(o); }
     string query_seen_rule() { return seen_rule; }
 "# },
 );

@@ -50,7 +50,7 @@ Ordinary command dispatch tries the actor’s `add_action` and `add_rule` regist
 
 Changing a frontend, lesson, or checkbox starts a fresh run. Sentence edits apply with **Try** or Enter. Previous reading history survives those changes. Tour speed controls animation and dwell time only; it does not change parsing or its work counts.
 
-The package example supplies accepting `direct_` and `indirect_` handlers, including their final rechecks. The checkbox controls `can_`, because a package `do_` return value is ignored. There is only one matching example object per slot, so this tour does not demonstrate ambiguity resolution among objects.
+The package example supplies specific handlers on the verb owner and noun objects, with no actor `can_`. Its `direct_` and `indirect_` handlers accept, including their final rechecks. Every capture contributes source text after the semantic arguments; `STR` therefore appears twice in a specific handler call. The checkbox controls `can_`, because a package `do_` return value is ignored. There is only one matching example object per slot, so this tour does not demonstrate ambiguity resolution among objects.
 
 ## Controls and pacing
 
@@ -99,7 +99,7 @@ This ledger also appears in the page’s About dialog.
 
 **Assumed:** the sword has id sword and adjective red; bob is a living with id bob. Direct and indirect checks always accept. Handler accepts controls the native handler’s result, the package’s can_ result, or the DGD accept action, which returns its input array or 0. All examples use case-sensitive matching. Changing an experiment begins a fresh run.
 
-**Illustrated / omitted:** this is JavaScript, not the Rust VM. Tokenization tests regexes separately instead of using a joint DFA; spans use JavaScript character offsets instead of UTF-8 byte offsets. The model eagerly materializes bounded derivations and skips same-span cycles; Rust enumerates lazily with different limits. It does not implement general LPC actions, action memoization, the full DGD dialect, many-object selection, complete noun vocabulary or scope traversal, multiple-rule dispatch, caches, STM or I/O. Buildings, travel time, and reading stops have no performance meaning. Trust the demonstrated mechanism and values within this subset, not the animation as a benchmark.
+**Illustrated / omitted:** this is JavaScript, not the Rust VM. Tokenization tests regexes separately instead of using a joint DFA; spans use JavaScript character offsets instead of UTF-8 byte offsets. The model eagerly materializes bounded derivations and skips same-span cycles; Rust enumerates lazily with different limits. It does not implement general LPC actions, action memoization, the full DGD dialect, many-object selection, complete noun vocabulary or scope traversal, multiple-rule dispatch, handler name/target fallback, caches, STM or I/O. Buildings, travel time, and reading stops have no performance meaning. Trust the demonstrated mechanism and values within this subset, not the animation as a benchmark.
 
 Grammar slabs count productions, token boxes count retained tokens, and Earley rack heights use 0.16 grid units per unique chart item. The inspector’s bars scale to the largest current column. The counts are real; those geometric scales are illustrative. Seed items are included in total item counts but separate from the predict/scan/complete/nullable counters. Only successfully scanned tokens turn blue.
 

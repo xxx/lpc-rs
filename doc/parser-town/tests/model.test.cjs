@@ -83,6 +83,13 @@ test('handler refusal occurs outside the shared chart', () => {
   assert.match(m.calls[3], /selected pair recheck/);
   assert.match(m.calls[5], /^do_give/);
 });
+test('specific parser text handlers receive semantic text and its source phrase', () => {
+  const m = M.run({ family: 'parser', lesson: 'chat', line: 'say hello   there' });
+  assert.deepEqual(plain(m.calls), [
+    'can_say_str("hello   there", "hello   there") → 1',
+    'do_say_str("hello   there", "hello   there")',
+  ]);
+});
 test('maximal munch, rule-order ties, dropped whitespace and exact spans', () => {
   const g = M.compileGroups(M.nativeGroups('%w %w'));
   const scan = M.tokenize(g, '42  42x');

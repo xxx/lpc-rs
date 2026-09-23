@@ -16,7 +16,9 @@ use crate::command::{
 /// Whom a handler call goes to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Target {
-    /// The rule's owner: `can_` and `do_`.
+    /// The parsing actor, before owner fallback for `can_`.
+    Actor,
+    /// The rule's owner: actions and permission fallback.
     Owner,
     /// A candidate by index: `direct_`/`indirect_` and the re-ask.
     Candidate(usize),
@@ -25,7 +27,7 @@ pub(crate) enum Target {
 /// One handler argument as the core lays it out; the adapter makes the value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Slot {
-    /// A `WRD`/`STR` capture, or the typed words of an object slot.
+    /// A `WRD`/`STR` capture, or the typed words of any capture.
     Text(String),
     /// An object slot not yet chosen: `0`.
     Empty,
@@ -45,7 +47,7 @@ pub(crate) trait Ask {
     /// Called first in [`attempt`]: anything the adapter holds for one parse
     /// — `Lpc`'s minted many-slot arrays — is dropped here.
     fn begin_parse(&mut self) {}
-    /// `family`'s handler on `target` with `args`.
+    /// `family`'s handler on `target`, falling back to the owner if absent.
     async fn call(&mut self, family: Family, target: Target, args: &[Slot]) -> Result<Reply>;
     /// The candidates `phrase` names for a slot of `kind`.
     async fn resolve(&mut self, kind: ResolveKind, phrase: &str) -> Result<Option<Resolved>>;
@@ -99,7 +101,7 @@ pub(crate) fn choose(
     }
 }
 
-/// The slot values plus the typed words of the object slots, in that order:
+/// The slot values plus the typed words of all captures, in that order:
 /// what every handler family receives.
 fn with_words(values: &[Slot], words: &[Slot]) -> Vec<Slot> {
     values.iter().chain(words).cloned().collect()
@@ -110,7 +112,9 @@ fn plain_reasons(reasons: &[(usize, Reply)]) -> Vec<String> {
     reasons
         .iter()
         .filter_map(|(_, reply)| match reply {
-            Reply::Reason { text, soft: false } => Some(text.clone()),
+            Reply::Reason {
+                text, soft: false, ..
+            } => Some(text.clone()),
             _ => None,
         })
         .collect()
@@ -155,11 +159,7 @@ pub(crate) async fn attempt<A: Ask>(
     caps: &[Capture],
 ) -> Result<std::result::Result<(), Failure>> {
     ask.begin_parse();
-    let words: Vec<Slot> = caps
-        .iter()
-        .filter(|c| c.kind.is_object())
-        .map(|c| Slot::Text(c.text.clone()))
-        .collect();
+    let words: Vec<Slot> = caps.iter().map(|c| Slot::Text(c.text.clone())).collect();
     let mut values: Vec<Slot> = caps
         .iter()
         .map(|c| {
@@ -172,14 +172,14 @@ pub(crate) async fn attempt<A: Ask>(
         .collect();
 
     match ask
-        .call(Family::Can, Target::Owner, &with_words(&values, &words))
+        .call(Family::Can, Target::Actor, &with_words(&values, &words))
         .await?
     {
         Reply::No => return Ok(Err(refused(Kind::Refused, None, Arg::None, false, 0))),
-        Reply::Reason { text, .. } => {
+        Reply::Reason { text, object, .. } => {
             return Ok(Err(refused(
                 Kind::Allocated,
-                Some(Target::Owner),
+                Some(object),
                 Arg::Text(text),
                 false,
                 0,
@@ -269,9 +269,9 @@ pub(crate) async fn attempt<A: Ask>(
         }
         if qualified.is_empty() {
             return Ok(Err(match best_reason(&reasons) {
-                Some((candidate, text)) => unresolved(
+                Some((object, text)) => unresolved(
                     Kind::Allocated,
-                    Some(Target::Candidate(candidate)),
+                    Some(object),
                     Arg::Text(text),
                     false,
                     progress,
@@ -349,10 +349,10 @@ pub(crate) async fn attempt<A: Ask>(
                         chosen.len(),
                     )));
                 }
-                Reply::Reason { text, .. } => {
+                Reply::Reason { text, object, .. } => {
                     return Ok(Err(refused(
                         Kind::Allocated,
-                        Some(Target::Candidate(candidate)),
+                        Some(object),
                         Arg::Text(text),
                         false,
                         chosen.len(),
@@ -468,10 +468,12 @@ mod tests {
             Some(rest) => Reply::Reason {
                 text: rest.to_owned(),
                 soft: true,
+                object: target,
             },
             None => Reply::Reason {
                 text: text.to_owned(),
                 soft: false,
+                object: target,
             },
         };
         ((family, target), reply)
@@ -527,7 +529,7 @@ mod tests {
             ask.calls[0],
             (
                 Family::Can,
-                Target::Owner,
+                Target::Actor,
                 vec![Slot::Empty, Slot::Empty, text("swords"), text("bag")]
             )
         );
@@ -536,7 +538,7 @@ mod tests {
     #[tokio::test]
     async fn can_refusing_fails_at_progress_zero() {
         let caps = caps("OBJ", "sword");
-        let mut ask = recorded(vec![no(Family::Can, Target::Owner)], vec![]);
+        let mut ask = recorded(vec![no(Family::Can, Target::Actor)], vec![]);
         let failed = failure(&mut ask, &caps).await;
         assert_eq!(failed.kind, Kind::Refused);
         assert_eq!(failed.progress, 0);

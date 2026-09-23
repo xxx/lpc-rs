@@ -666,9 +666,9 @@
       m.captures.forEach(function (c) {
         if (c.kind === 'object' || c.kind === 'living') {
           args.push(0);
-          raw.push(c.text);
           kinds.push(c.slot);
         } else args.push(c.kind === 'number' ? Number(c.text) : c.text);
+        if (family === 'parser') raw.push(c.text);
       });
       var slug = verb === 'give' ? 'obj_to_liv' : 'str';
       if (family === 'parser') {

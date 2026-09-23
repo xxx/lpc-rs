@@ -10,7 +10,6 @@ struct Noun {
 
 struct Pair {
     objects: [usize; 2],
-    target: usize,
     reply: Reply,
 }
 
@@ -109,14 +108,12 @@ async fn check(
     let args = with_words(values, words);
     let mut pair = Pair {
         objects,
-        target: objects[0],
         reply: Reply::Yes,
     };
     for (family, object) in [Family::Direct, Family::Indirect].into_iter().zip(objects) {
         if !pair.live(ask) {
             break;
         }
-        pair.target = object;
         pair.reply = ask.call(family, Target::Candidate(object), &args).await?;
         if pair.reply != Reply::Yes {
             break;
@@ -129,18 +126,18 @@ async fn check(
 fn rejection<'a>(pairs: impl IntoIterator<Item = &'a Pair>) -> Failure {
     let mut reason = None;
     for pair in pairs {
-        if let Reply::Reason { text, soft } = &pair.reply {
+        if let Reply::Reason { text, soft, object } = &pair.reply {
             if !soft {
-                reason = Some((pair.target, text));
+                reason = Some((*object, text));
                 break;
             }
-            reason.get_or_insert((pair.target, text));
+            reason.get_or_insert((*object, text));
         }
     }
     match reason {
         Some((object, text)) => refused(
             Kind::Allocated,
-            Some(Target::Candidate(object)),
+            Some(object),
             Arg::Text(text.clone()),
             false,
             2,
@@ -247,7 +244,9 @@ pub(super) async fn select(
             tokio::task::consume_budget().await;
             if pair.objects[single] == partner
                 && pair.live(ask)
-                && let Reply::Reason { text, soft: false } = &pair.reply
+                && let Reply::Reason {
+                    text, soft: false, ..
+                } = &pair.reply
             {
                 reasons.push(text.clone());
             }

@@ -5,48 +5,91 @@ once its grammar matches a typed line, to decide whether the line is
 handled and what it does. `parse_add_rule.md` names the specific apply for
 a given rule; this page is what it points to for the rest.
 
-### The four families
+### Families and target order
 
-| family | asked of | specific name | fallback |
-|---|---|---|---|
-| `can_` | the verb object | `can_<verb>_<slug>` | `can_verb_rule(verb, rule, ...)` |
-| `direct_` | each candidate for the direct (first) object slot | `direct_<verb>_<slug>` | `direct_verb_rule(verb, rule, ...)` |
-| `indirect_` | each candidate for the indirect (second) object slot | `indirect_<verb>_<slug>` | `indirect_verb_rule(verb, rule, ...)` |
-| `do_` | the verb object | `do_<verb>_<slug>` | `do_verb_rule(verb, rule, ...)` |
+| Family | Targets, in order |
+|---|---|
+| `can_` | actor, then the object registering the rule |
+| `direct_` | candidate for the first object slot, then the rule's owner |
+| `indirect_` | candidate for the second object slot, then the rule's owner |
+| `do_` | rule's owner only |
 
-`<verb>` is always the rule's *base* verb: a `parse_add_synonym` sibling
-calls the same handlers as its original, whatever verb was typed. `<slug>`
-is described in `parse_add_rule.md`; a bare-verb rule has no slug and no
-`direct_`/`indirect_` name (`can_<verb>`, `do_<verb>` only). An object
-defining neither the specific nor the generic name for a family is treated
-as absent from it: absent `can_` counts as yes; absent `do_` leaves the
-rule unhandled (as if every handler in it had refused); a candidate absent
-from `direct_`/`indirect_` simply does not qualify.
+On each target, try all four name tiers below before considering the next
+object. An inherited handler counts as present. Identical targets are searched
+once. A candidate's generic handler takes precedence over the owner's specific
+handler; an actor's `can_` supplies the answer instead of the owner's check.
 
-The generic fallback names take two extra arguments before the ones below:
-the base verb, then the rule text exactly as `parse_add_rule` received it
-(`"OBJ to LIV"`).
+Only an absent function triggers fallback. A present handler's refusal or reason
+ends that lookup, and an exception propagates. After all eligible targets have
+been searched, absent `can_` permits the rule, absent object permissions exclude
+the candidate or pair, and absent `do_` leaves the rule unhandled.
+
+When an object permission runs on the owner, its arguments still name the
+original noun candidates. A destructed candidate cannot be accepted through
+owner fallback. All calls retain the actor as player and immediate caller.
+
+### Name tiers
+
+For base verb `read` and rule `about STR from OBJ`, search these names in order
+on each target, replacing `do_` with the relevant family prefix:
+
+| Tier | Name | Leading arguments |
+|---|---|---|
+| Specific | `do_read_about_str_from_obj` | capture values |
+| Literal words | `do_read_word_str_word_obj` | literal words and capture values in rule order |
+| Generic shape | `do_verb_word_str_word_obj` | base verb, then literal words and capture values |
+| Generic rule | `do_verb_rule` | base verb, exact registered rule text, then capture values |
+
+`WRD` contributes `wrd` to a name; `word` stands for a literal in the middle
+two tiers. Only those tiers insert literal arguments, using their registered
+spelling. [`parse_add_rule`](../../efun/parse_add_rule.md) defines capture slugs.
+Permission names use `obj`/`liv` for plural slots; action names use `obs`/`lvs`.
+
+Names and generic prefixes always use the base verb, including for synonyms.
+Duplicate generated names use their earliest tier's layout; parameter types or
+counts do not select a different tier. For example, a literal named `word` can
+make the first two names identical, in which case the specific layout wins.
+
+An empty rule tries `can_<base>`, `can_verb`, `can_verb_rule`, and the corresponding
+`do_` names. With no object slots, it makes no direct or indirect calls.
 
 ### Arguments
 
-Unchosen values described as `0` below use the selected [null value](../../lpc/null.md):
+Unchosen object values use the selected [null value](../../lpc/null.md):
 `0` in zero mode, `nil` in distinct mode.
 
-One argument per capture token, in rule order; literal words add no argument:
+Each capture contributes one semantic value:
 
 - `WRD`/`STR` — the matched text, as a string.
-- `OBJ`/`LIV` — an individual object, or `0` while unresolved.
+- `OBJ`/`LIV` — an individual object, or the null value while unresolved.
 - `OBS`/`LVS` — an individual object during pair permission checks;
   an array for `do_`. Single-object rules and rules with two plural slots
   retain the aggregate permission protocol described below.
 
-Then, one more argument per object slot (`OBJ`/`OBS`/`LIV`/`LVS`, in rule
-order), holding the words that slot's phrase was typed as — present in
-every call, resolved or not.
+After the leading arguments in the table, generic shape and generic rule
+handlers receive the typed verb, including a synonym, as returned by
+`query_verb(1)`. Every tier then receives one source string per capture in rule
+order, including `WRD` and `STR`. These strings retain the matched source text.
+Literals contribute no source-string suffix.
 
-`can_` is called once, with every object argument `0`. `do_` is called once
-after selection and permission rechecks, with all slots filled. An `OBS` or
-`LVS` action argument is always an array, even when only one object qualifies.
+For `read about history from book`, with `B` the chosen book, action arguments
+are:
+
+| Name | Arguments |
+|---|---|
+| `do_read_about_str_from_obj` | `"history", B, "history", "book"` |
+| `do_read_word_str_word_obj` | `"about", "history", "from", B, "history", "book"` |
+| `do_verb_word_str_word_obj` | `"read", "about", "history", "from", B, "read", "history", "book"` |
+| `do_verb_rule` | `"read", "about STR from OBJ", "history", B, "read", "history", "book"` |
+
+A synonym changes the later typed-verb argument, while the leading base verb
+remains `"read"`. Empty-rule generic handlers receive `(base, typed)` or
+`(base, "", typed)`. Fixed-arity functions may omit unused trailing parameters;
+named variadic collectors receive the complete tail.
+
+`can_` runs once, with every object value unresolved. `do_` runs once after
+selection and permission rechecks, with all slots filled. An `OBS` or `LVS`
+action argument is always an array, even when only one object qualifies.
 
 ### Two-object rules with at most one plural slot
 
@@ -64,7 +107,7 @@ one plural slot, such as `OBJ from OBJ`, `OBS from OBJ`, and `OBJ with OBS`.
    `indirect_` on the indirect object only if `direct_` accepts. Both arguments
    are individual objects in both calls, including a plural grammar slot.
    There are no provisional calls with a null partner. Missing either handler
-   excludes that pair.
+   on both the candidate and owner excludes that pair.
 4. Select from pairs accepted by both handlers. A singular slot with several
    compatible objects is ambiguous. A plural slot takes all compatible objects,
    or up to its requested count, in scope order. A singular phrase in a plural

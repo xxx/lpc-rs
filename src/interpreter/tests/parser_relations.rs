@@ -523,9 +523,10 @@ async fn pair_calls_preserve_capture_layout_generic_fallback_and_actor_context()
         "WRD OBJ from OBJ STR",
         r#"
         int direct_verb_rule(string verb, string rule, string style, object item,
-            object box, string tail, string item_words, string box_words) {
+            object box, string tail, string typed_verb, string style_words, string item_words, string box_words, string tail_words) {
             if (verb != "get" || rule != "WRD OBJ from OBJ STR" || style != "carefully"
-                || tail != "now" || item_words != "blade" || box_words != "box")
+                || tail != "now" || item_words != "blade" || box_words != "box"
+                || typed_verb != "take" || style_words != "carefully" || tail_words != "now")
                 throw("wrong direct arguments");
             if (this_player() != find_object("/main") || previous_object() != this_player()
                 || origin() != "driver" || query_verb() != "take") throw("wrong context");
@@ -535,8 +536,9 @@ async fn pair_calls_preserve_capture_layout_generic_fallback_and_actor_context()
     "#,
         r#"
         int indirect_verb_rule(string verb, string rule, string style, object item,
-            object box, string tail, string item_words, string box_words) {
-            if (verb != "get" || item_words != "blade" || box_words != "box")
+            object box, string tail, string typed_verb, string style_words, string item_words, string box_words, string tail_words) {
+            if (verb != "get" || item_words != "blade" || box_words != "box"
+                || typed_verb != "take" || style_words != "carefully" || tail_words != "now")
                 throw("wrong indirect arguments");
             "/verb"->note("I" + file_name(item) + file_name(box) + ";");
             return 1;
@@ -545,14 +547,15 @@ async fn pair_calls_preserve_capture_layout_generic_fallback_and_actor_context()
         r#"
         void synonyms() { parse_add_synonym("take", "get"); }
         int can_verb_rule(string verb, string rule, string style, object item,
-            object box, string tail, string item_words, string box_words) {
+            object box, string tail, string typed_verb, string style_words, string item_words, string box_words, string tail_words) {
             if (item || box || style != "carefully" || tail != "now"
-                || item_words != "blade" || box_words != "box") throw("wrong can arguments");
+                || item_words != "blade" || box_words != "box"
+                || typed_verb != "take" || style_words != "carefully" || tail_words != "now") throw("wrong can arguments");
             log += "C;";
             return 1;
         }
         void do_get_wrd_obj_from_obj_str(string style, object item, object box,
-            string tail, string item_words, string box_words) {
+            string tail, string style_words, string item_words, string box_words, string tail_words) {
             first = item; second = box; acted++;
             log += "A;";
         }
@@ -643,14 +646,12 @@ async fn two_plural_slots_keep_the_existing_aggregate_protocol() {
 }
 
 #[tokio::test]
-async fn missing_permissions_exclude_pairs_without_falling_back_to_the_verb_owner() {
+async fn missing_permissions_on_both_objects_and_owner_exclude_pairs() {
     check_with(
         "OBJ from OBJ",
         "",
         INDIRECT,
-        r#"
-        int direct_get_obj_from_obj(object item, object box) { throw("wrong permission owner"); }
-    "#,
+        "",
         r#"
         return ({ parse_sentence("get sword from box", 0, ({ a, box })), box->count(),
             "/verb"->count() });

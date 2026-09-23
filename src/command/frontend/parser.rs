@@ -55,8 +55,23 @@ pub struct ParserRule {
     pub can_slug: Ustr,
     /// The slug for `do_` names (`at_obs` for a many slot).
     pub do_slug: Ustr,
+    /// Permission slug with literal words replaced by `word`.
+    pub(crate) can_word_slug: Ustr,
+    /// Action slug with literal words replaced by `word`.
+    pub(crate) do_word_slug: Ustr,
+    /// Semantic arguments for the literal-word handler tiers.
+    pub(crate) word_args: Vec<HandlerArg>,
     /// The rule's tokens compiled as pattern groups.
     pub compiled: Arc<Compiled>,
+}
+
+/// An argument in the rule's literal-word handler layout.
+#[derive(Clone, Debug)]
+pub(crate) enum HandlerArg {
+    /// A semantic capture value by capture index.
+    Capture(usize),
+    /// The registered spelling of a literal word.
+    Literal(String),
 }
 
 const TOKENS: [(&str, CaptureKind); 6] = [
@@ -127,8 +142,7 @@ fn compiled_for(rule: &str, tokens: &[Token]) -> Result<Arc<Compiled>, ParserRul
 }
 
 /// Compile `rule` for `verb`: the tokens as pattern groups through the
-/// native builder, memoised by rule text, and both slugs; the captures'
-/// kinds are `compiled.kinds`.
+/// native builder, memoised by rule text, with handler slugs and argument layouts.
 pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
     let tokens = rule
         .split_whitespace()
@@ -148,19 +162,37 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
         return Err(ParserRuleError::TooManyObjects(rule.to_owned()));
     }
     let compiled = compiled_for(rule, &tokens)?;
-    let slug = |do_family: bool| -> Ustr {
+    let slug = |do_family: bool, words: bool| -> Ustr {
         tokens
             .iter()
-            .map(|t| slug_word(t, do_family))
+            .map(|t| match t {
+                Token::Literal(_) if words => "word".to_owned(),
+                _ => slug_word(t, do_family),
+            })
             .collect::<Vec<_>>()
             .join("_")
             .into()
     };
+    let mut capture = 0;
+    let word_args = tokens
+        .iter()
+        .map(|token| match token {
+            Token::Capture(_) => {
+                let arg = HandlerArg::Capture(capture);
+                capture += 1;
+                arg
+            }
+            Token::Literal(word) => HandlerArg::Literal(word.clone()),
+        })
+        .collect();
     Ok(ParserRule {
         verb: verb.into(),
         rule: rule.to_owned(),
-        can_slug: slug(false),
-        do_slug: slug(true),
+        can_slug: slug(false, false),
+        do_slug: slug(true, false),
+        can_word_slug: slug(false, true),
+        do_word_slug: slug(true, true),
+        word_args,
         compiled,
     })
 }

@@ -51,22 +51,31 @@ word: `obj` for `OBJ`, `liv` for `LIV`, `wrd` for `WRD`, and `str` for `STR`.
 `OBS`/`LVS` contribute `obj`/`liv` too, except in `do_` names, where they
 contribute `obs`/`lvs`. A literal word contributes itself, lowercased. The
 slug is these words joined with `_`; a bare-verb rule has no slug. It names
-four applies:
+four apply families: `can_`, `direct_`, `indirect_`, and `do_`.
 
-| where | name | fallback |
-|---|---|---|
-| the verb object | `can_<verb>_<slug>` | `can_verb_rule(verb, rule, ...)` |
-| the direct object's candidate | `direct_<verb>_<slug>` | `direct_verb_rule(verb, rule, ...)` |
-| the indirect object's candidate | `indirect_<verb>_<slug>` | `indirect_verb_rule(verb, rule, ...)` |
-| the verb object | `do_<verb>_<slug>` | `do_verb_rule(verb, rule, ...)` |
+On each eligible target, names are tried in this order:
 
-`<verb>` is always the *base* verb `parse_add_rule` registered — a
-`parse_add_synonym` sibling keeps the original's handler names, even though
-it was typed under another verb. A bare-verb rule gives `can_<verb>` and
-`do_<verb>`, with no `direct_`/`indirect_` names (it has no object slots).
-The full argument order, return values, `#` reasons, and the many-slot array
-`do_` sees are described in
-[`parser_handlers`](../apply/object/parser_handlers.md).
+1. `<family>_<verb>_<slug>`.
+2. The same name with every literal slug word replaced by `word`.
+3. The second name with the base verb replaced by `verb`.
+4. `<family>_verb_rule`.
+
+For example, `read about STR from OBJ` gives
+`do_read_about_str_from_obj`, `do_read_word_str_word_obj`,
+`do_verb_word_str_word_obj`, then `do_verb_rule`. `WRD` remains `wrd`;
+only literals become `word`. Duplicate names keep the earliest layout.
+
+`<verb>` is always the registered base verb, including for synonyms. A bare
+rule omits the slug, giving `can_<verb>`, `can_verb`, `can_verb_rule` and the
+corresponding action names. It has no direct or indirect calls.
+
+`can_` searches the actor then the rule's owner; object permissions search
+the candidate then the owner; `do_` searches only the owner. All names on one
+target precede the next target, and only absence triggers fallback.
+The middle two tiers insert literal arguments. All tiers append source text
+for every capture; generic tiers also include the typed verb before that tail.
+See [parser handlers](../apply/object/parser_handlers.md) for exact argument
+layouts, replies and selection timing.
 
 ### A worked example
 
@@ -78,10 +87,10 @@ void create() {
 ```
 
 With one matching sword and one matching Bob, typing `give sword to bob`
-calls, in order (`OBJ(sword)` stands for the resolved object; unresolved
-slots use the selected null value):
+calls these specific handlers when defined, in order (`OBJ(sword)` stands for
+the resolved object; unresolved slots use the selected null value):
 
-- `can_give_obj_to_liv(0, 0, "sword", "bob")`
+- `can_give_obj_to_liv(0, 0, "sword", "bob")` — on the actor, or owner if absent
 - `direct_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — on the sword
 - `indirect_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — on Bob,
   if the sword's direct check accepted

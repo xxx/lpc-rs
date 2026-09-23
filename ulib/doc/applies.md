@@ -115,25 +115,41 @@ These belong on the affected game object. Live examples are in
 | `parse_command_adjectiv_id_list()` | String array of adjectives for this object. | Optional: `wooden`, `small`. |
 | `inventory_visible()` | Nonzero lets the grammar parser search the object's contents. Missing defaults to true. | Optional: an open box. |
 | `inventory_accessible()` | Nonzero lets the grammar parser reach the object's contents. Missing defaults to true; this is parser reachability, not a security permission. | Optional: an open box. |
-| `parser_handlers` | Four dynamic families described below; each belongs to the verb, direct object or indirect object. | [examples/verb.c](../examples/verb.c) |
+| `parser_handlers` | Four dynamic families described below; with actor, noun-candidate and verb-owner lookup. | [examples/verb.c](../examples/verb.c) |
 
 ### Grammar handler families
 
 For `parse_add_rule("give", "OBJ to LIV")`, the example names are:
 
-| Family | Owner | Specific hook | Generic fallback |
-|---|---|---|---|
-| `can_` | Object registering the verb | `can_give_obj_to_liv` | `can_verb_rule` |
-| `direct_` | Candidate for the first object slot | `direct_give_obj_to_liv` | `direct_verb_rule` |
-| `indirect_` | Candidate for the second object slot | `indirect_give_obj_to_liv` | `indirect_verb_rule` |
-| `do_` | Object registering the verb | `do_give_obj_to_liv` | `do_verb_rule` |
+| Family | Target order | Specific hook |
+|---|---|---|
+| `can_` | Actor, then rule owner | `can_give_obj_to_liv` |
+| `direct_` | Candidate for the first object slot, then rule owner | `direct_give_obj_to_liv` |
+| `indirect_` | Candidate for the second object slot, then rule owner | `indirect_give_obj_to_liv` |
+| `do_` | Rule owner only | `do_give_obj_to_liv` |
 
-Each specific hook in this example takes
+Each target tries four tiers: specific, literal-word, generic-shape, and
+generic-rule. For the action these are `do_give_obj_to_liv`,
+`do_give_obj_word_liv`, `do_verb_obj_word_liv`, and `do_verb_rule`.
+All tiers on one target precede the next target. Only absence triggers fallback:
+an actor's can handler supplies the answer instead of the owner's check, and a
+candidate's generic permission takes precedence over the owner's specific one.
+
+The specific hook takes
 `(object item, object recipient, string item_words, string recipient_words)`.
-The generic fallback adds `string verb, string rule` before those arguments.
-The specific name wins when present; a synonym uses the original verb's name.
-Other rules have different arguments: one per grammar token, then one phrase
-string per object slot. The rule's literal `to` contributes no argument.
+The literal-word tier inserts `string prep` between item and recipient, holding
+`"to"`. The generic-shape tier adds the base verb before those semantic values
+and the typed verb before the two source phrases. The generic-rule tier receives
+`(base_verb, rule_text, item, recipient, typed_verb, item_words, recipient_words)`.
+It omits literal arguments. A synonym preserves the base verb and changes the
+typed-verb argument. The rule text retains its original whitespace.
+
+Every capture, including `WRD` and `STR`, contributes a source string after the
+semantic values (and typed verb for generic tiers). The middle two tiers also
+insert literal semantic arguments in rule order. `WRD` is named `wrd`, while a
+literal becomes `word` in those tiers. Empty rules omit the slug; their
+generic forms receive `(base, typed)` or `(base, "", typed)`. Duplicate
+generated names use the earliest layout.
 
 `can_` sees unresolved object slots as `0` (`nil` in distinct mode). For this
 two-object rule, `direct_` and `indirect_` receive both individual objects.
@@ -144,7 +160,9 @@ are checked once more before the action. Destructed objects are skipped.
 Return `1` to permit, `0` to reject, or a reason string to reject with an
 explanation. A leading `#` makes the reason soft, so a plain reason from
 another candidate takes precedence. Without `can_`, permission defaults to
-yes; without a candidate's `direct_` or `indirect_`, that candidate is excluded.
+yes; without an object permission on both the candidate and owner, that
+candidate is excluded. Owner permission arguments still name the noun objects;
+kind-6 diagnostics identify the object that actually returned the reason.
 
 `do_` runs once after acceptance and its return is ignored. Without `do_`, the
 rule is unhandled. The disabled example refuses gifts in `indirect_`, and its

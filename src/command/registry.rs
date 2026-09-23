@@ -358,13 +358,7 @@ pub(crate) mod tests {
 
     /// A parser rule for `verb` with rule text `text`, owned by `owner`.
     pub(crate) fn parser_rule(owner: &Arc<Process>, verb: &str, text: &str) -> Rule {
-        let parser = Arc::new(ParserRule {
-            verb: verb.into(),
-            rule: text.to_owned(),
-            can_slug: text.to_lowercase().replace(' ', "_").into(),
-            do_slug: text.to_lowercase().replace(' ', "_").into(),
-            compiled: crate::command::frontend::native::compile_pattern("%w").unwrap(),
-        });
+        let parser = Arc::new(crate::command::frontend::parser::compile(verb, text).unwrap());
         Rule::new(owner, verb.into(), Family::Parser(parser))
     }
 

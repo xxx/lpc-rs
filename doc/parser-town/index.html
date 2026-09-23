@@ -298,8 +298,9 @@
           </p>
           <p>
             <strong>Assumed:</strong> the sword has id sword and adjective red;
-            bob is a living with id bob. Direct and indirect checks always
-            accept. Handler accepts controls the native handler’s result, the
+            bob is a living with id bob. Specific handlers live on the verb
+            owner and noun objects, with no actor can_ handler. Direct and
+            indirect checks always accept. Handler accepts controls the native handler’s result, the
             package’s can_ result, or the DGD accept action, which returns its
             input array or 0. All examples use case-sensitive matching. Changing
             an experiment begins a fresh run.
@@ -312,8 +313,8 @@
             skips same-span cycles; Rust enumerates lazily with different
             limits. It does not implement general LPC actions, action
             memoization, the full DGD dialect, many-object selection, complete
-            noun vocabulary or scope traversal, multiple-rule dispatch, caches,
-            STM or I/O. Buildings, travel time, and reading stops have no
+            noun vocabulary or scope traversal, multiple-rule dispatch, handler
+            name/target fallback, caches, STM or I/O. Buildings, travel time, and reading stops have no
             performance meaning. Trust the demonstrated mechanism and values
             within this subset, not the animation as a benchmark.
           </p>
