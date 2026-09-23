@@ -586,6 +586,7 @@ efuns! {
     query_call_outs => {
         returns: LpcType::Mixed(true),
         arity: (1, 1),
+        args: [LpcType::Object(false) | LpcType::Int(false)],
     },
     query_command => {
         returns: LpcType::String(false),

@@ -263,8 +263,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Query a call out transactionally.
             pub fn query_call_out(&self, id: u64) -> Option<Vec<LpcRef>>;
 
-            /// Query all call outs of `owner` transactionally.
-            pub fn query_call_outs(&self, owner: &Arc<Process>) -> Vec<Vec<LpcRef>>;
+            /// Query call outs transactionally, optionally restricting their owner.
+            pub fn query_call_outs(&self, owner: Option<&Arc<Process>>) -> Vec<Vec<LpcRef>>;
 
             /// Cancel a call out transactionally.
             pub fn cancel_call_out(&self, id: u64) -> i64;

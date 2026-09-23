@@ -42,11 +42,11 @@ the ordering and rollback behavior. It does not fix an infinite loop in the
 reset itself. If either transaction times out, its runtime diagnostic names
 the interrupted source location and shows the available LPC stack.
 
-Because call outs are executed outside the user's REPL, `this_player()` will return
-0 when called from within a call out. If you need access to the player, you can either
-freeze it with a partial application, or capture it in a closure. `previous_object()`
-in the called function is the object that owns the function pointer: the one that
-called `call_out`.
+A call out starts with `this_player()` set to `nil`. If you need access to the
+player, bind it with a partial application or capture it in a closure. `previous_object()`
+in the called function is the object that owns the function pointer. This can
+differ from the object that called `call_out`, which owns the timer returned by
+`query_call_out` and `query_call_outs`.
 
 ### Examples
 

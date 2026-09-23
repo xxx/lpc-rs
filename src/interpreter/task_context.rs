@@ -571,9 +571,9 @@ impl TaskContext {
         })
     }
 
-    /// Query all call outs owned by `owner`, as in
-    /// [`TaskContext::query_call_out`].
-    pub fn query_call_outs(&self, owner: &Arc<Process>) -> Vec<Vec<LpcRef>> {
+    /// Query call outs for `owner`, or every live owner when `None`, using
+    /// the row format of [`TaskContext::query_call_out`].
+    pub fn query_call_outs(&self, owner: Option<&Arc<Process>>) -> Vec<Vec<LpcRef>> {
         let mut out = Vec::new();
         let pending = self.txn().with(|t| t.pending_call_outs().to_vec());
         for s in pending {
@@ -581,7 +581,8 @@ impl TaskContext {
                 continue;
             }
             if let Some(p) = s.process.upgrade()
-                && Arc::ptr_eq(&p, owner)
+                && owner.is_none_or(|owner| Arc::ptr_eq(&p, owner))
+                && p.is_live(self.txn())
             {
                 out.push(vec![
                     Arc::downgrade(&p).into(),
@@ -598,7 +599,8 @@ impl TaskContext {
                     continue;
                 }
                 if let Some(p) = call_out.process().upgrade()
-                    && Arc::ptr_eq(&p, owner)
+                    && owner.is_none_or(|owner| Arc::ptr_eq(&p, owner))
+                    && p.is_live(self.txn())
                 {
                     out.push(vec![
                         Arc::downgrade(&p).into(),
