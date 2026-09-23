@@ -47,7 +47,7 @@ actor or owner, even when the permission concerns another noun object.
 | `kind` | meaning | `arg` | `flag` |
 |---|---|---|---|
 | 2 | a `LIV`/`LVS` phrase matched only non-livings | the typed phrase | 1 if the slot is a many slot (`LVS`) |
-| 3 | a match exists but is not reachable (`inventory_accessible`) | the typed phrase | 1 if the slot is a many slot (`OBS`/`LVS`) |
+| 3 | an unmodified object slot has a visible but unreachable match (`inventory_accessible`) | the typed phrase | 1 if the slot is a many slot (`OBS`/`LVS`) |
 | 4 | a single slot has several equally good matches | the qualifying objects, as an array | 0 |
 | 5 | an ordinal (`"third sword"`) went past the available matches | the available count, as described below | 0 |
 | 6 | a `direct_`/`indirect_`/`can_` handler returned a reason string | the reason, with a leading `#` stripped | 0 |
@@ -57,8 +57,10 @@ actor or owner, even when the permission concerns another noun object.
 The driver defines no header for these numbers;
 the mudlib may define named constants for the kinds it handles.
 
-For two-object rules with at most one plural slot, ordinals count live,
-reachable noun matches before permissions. If both nouns resolve but every
+For two-object rules with at most one plural slot, ordinals count live noun
+matches satisfying that slot's access requirement before permissions. A `:v`
+slot includes visible but unreachable objects in that count and does not report
+kind 3 solely for their inaccessibility. If both nouns resolve but every
 pair is refused without a reason, the result is a silent `-2`, without this
 hook. Single-object rules and rules with two plural slots retain aggregate
 filtering, where ordinals count matches that passed the initial permission

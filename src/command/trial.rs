@@ -11,7 +11,7 @@ use crate::{
         parser::{self, Nickname, Rejection, RejectionCode, Verdict},
         registry::{ActorRules, Family, Rule, VerbRules},
         resolve::{LpcVocabulary, Resolver},
-        scope::neighbourhood,
+        scope::{SuppliedScope, neighbourhood},
     },
     compile_time_config::MAX_COMMAND_DEPTH,
     interpreter::{
@@ -226,7 +226,7 @@ pub(crate) async fn sentence(
     ctx: &TaskContext,
     actor: &Arc<Process>,
     line: &str,
-    scope: Option<Vec<Arc<Process>>>,
+    scope: Option<SuppliedScope>,
     nicknames: &[Nickname],
 ) -> Result<Sentence> {
     depth_guard(ctx, "parse_sentence")?;
@@ -243,7 +243,7 @@ async fn sentence_trial(
     actor: &Arc<Process>,
     line: &str,
     first_word: &str,
-    scope: Option<Vec<Arc<Process>>>,
+    scope: Option<SuppliedScope>,
     nicknames: &[Nickname],
 ) -> Result<Sentence> {
     let candidates = VerbRules::new(ctx).for_verb(first_word);

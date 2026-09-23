@@ -145,7 +145,8 @@ object *parse_command_users() {
  * arg is the phrase for 2/3/7, objects for 4, a count for 5, a reason for 6,
  * or 0 for 8; ob is the refusing object for kind 6 and otherwise 0.
  * flag marks a plural slot for 2/3/7 and is otherwise 0.
- * Pair-rule ordinals count reachable matches before permissions; aggregate rules count qualifiers.
+ * Pair-rule ordinals count matches satisfying slot access policy before permissions.
+ * :v includes visible but unreachable matches; aggregate rules count permission qualifiers.
  * Return a message, or 0 for no parser message; omission also supplies none.
  * Called only after every parser rule fails, in registration order until a
  * string is returned; a successful rule prevents all error-hook calls.

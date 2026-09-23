@@ -21,6 +21,8 @@ pub enum ParserRuleError {
     TwoStrs(String),
     /// A token glued to other letters (`OBJect`).
     TokenInWord(String),
+    /// An unsupported modifier, or a modifier on a text token.
+    Modifier(String),
     /// More than two object slots.
     TooManyObjects(String),
     /// The engine rejected the built grammar.
@@ -33,6 +35,10 @@ impl fmt::Display for ParserRuleError {
         match self {
             ParserRuleError::TwoStrs(rule) => write!(f, "two STR tokens in '{rule}'"),
             ParserRuleError::TokenInWord(rule) => write!(f, "a token inside a word in '{rule}'"),
+            ParserRuleError::Modifier(token) => write!(
+                f,
+                "unsupported parser modifier in '{token}'; only OBJ:v, OBS:v, LIV:v and LVS:v are supported"
+            ),
             ParserRuleError::TooManyObjects(rule) => {
                 write!(f, "more than two object slots in '{rule}'")
             }
@@ -61,8 +67,19 @@ pub struct ParserRule {
     pub(crate) do_word_slug: Ustr,
     /// Semantic arguments for the literal-word handler tiers.
     pub(crate) word_args: Vec<HandlerArg>,
+    /// Access requirement for each capture, in grammar order.
+    pub(crate) access: Vec<Access>,
     /// The rule's tokens compiled as pattern groups.
     pub compiled: Arc<Compiled>,
+}
+
+/// The scope requirement for a parser capture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Access {
+    /// The object must be physically reachable.
+    Reachable,
+    /// Membership in the visible scope suffices.
+    Visible,
 }
 
 /// An argument in the rule's literal-word handler layout.
@@ -85,13 +102,21 @@ const TOKENS: [(&str, CaptureKind); 6] = [
 
 /// One word of a rule: a capturing token or a literal.
 enum Token {
-    Capture(CaptureKind),
+    Capture(CaptureKind, Access),
     Literal(String),
 }
 
 fn token(word: &str, rule: &str) -> Result<Token, ParserRuleError> {
     if let Some((_, kind)) = TOKENS.iter().find(|(name, _)| *name == word) {
-        return Ok(Token::Capture(*kind));
+        return Ok(Token::Capture(*kind, Access::Reachable));
+    }
+    if let Some((name, modifier)) = word.split_once(':')
+        && let Some((_, kind)) = TOKENS.iter().find(|(token, _)| *token == name)
+    {
+        if kind.is_object() && modifier == "v" {
+            return Ok(Token::Capture(*kind, Access::Visible));
+        }
+        return Err(ParserRuleError::Modifier(word.to_owned()));
     }
     if TOKENS.iter().any(|(name, _)| word.starts_with(name)) {
         return Err(ParserRuleError::TokenInWord(rule.to_owned()));
@@ -102,8 +127,8 @@ fn token(word: &str, rule: &str) -> Result<Token, ParserRuleError> {
 /// The pattern group for a token.
 fn group_of(token: &Token) -> Group {
     match token {
-        Token::Capture(CaptureKind::Words) => Group::Text,
-        Token::Capture(kind) => Group::Capture(*kind),
+        Token::Capture(CaptureKind::Words, _) => Group::Text,
+        Token::Capture(kind, _) => Group::Capture(*kind),
         Token::Literal(word) => Group::Words(vec![word.clone()]),
     }
 }
@@ -112,16 +137,16 @@ fn group_of(token: &Token) -> Group {
 /// family, `obs`/`lvs` in the `do_` family.
 fn slug_word(token: &Token, do_family: bool) -> String {
     match token {
-        Token::Capture(CaptureKind::Items) if !do_family => "obj".to_owned(),
-        Token::Capture(CaptureKind::Living) if !do_family => "liv".to_owned(),
-        Token::Capture(CaptureKind::Object) => "obj".to_owned(),
-        Token::Capture(CaptureKind::Items) => "obs".to_owned(),
-        Token::Capture(CaptureKind::Liv) => "liv".to_owned(),
-        Token::Capture(CaptureKind::Living) => "lvs".to_owned(),
-        Token::Capture(CaptureKind::Word) => "wrd".to_owned(),
-        Token::Capture(CaptureKind::Words) => "str".to_owned(),
-        Token::Capture(CaptureKind::Number) => "num".to_owned(),
-        Token::Capture(CaptureKind::Preposition) => "prp".to_owned(),
+        Token::Capture(CaptureKind::Items, _) if !do_family => "obj".to_owned(),
+        Token::Capture(CaptureKind::Living, _) if !do_family => "liv".to_owned(),
+        Token::Capture(CaptureKind::Object, _) => "obj".to_owned(),
+        Token::Capture(CaptureKind::Items, _) => "obs".to_owned(),
+        Token::Capture(CaptureKind::Liv, _) => "liv".to_owned(),
+        Token::Capture(CaptureKind::Living, _) => "lvs".to_owned(),
+        Token::Capture(CaptureKind::Word, _) => "wrd".to_owned(),
+        Token::Capture(CaptureKind::Words, _) => "str".to_owned(),
+        Token::Capture(CaptureKind::Number, _) => "num".to_owned(),
+        Token::Capture(CaptureKind::Preposition, _) => "prp".to_owned(),
         Token::Literal(word) => word.to_lowercase(),
     }
 }
@@ -151,7 +176,7 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
     let kinds: Vec<CaptureKind> = tokens
         .iter()
         .filter_map(|t| match t {
-            Token::Capture(kind) => Some(*kind),
+            Token::Capture(kind, _) => Some(*kind),
             Token::Literal(_) => None,
         })
         .collect();
@@ -173,11 +198,18 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
             .join("_")
             .into()
     };
+    let access = tokens
+        .iter()
+        .filter_map(|token| match token {
+            Token::Capture(_, access) => Some(*access),
+            Token::Literal(_) => None,
+        })
+        .collect();
     let mut capture = 0;
     let word_args = tokens
         .iter()
         .map(|token| match token {
-            Token::Capture(_) => {
+            Token::Capture(_, _) => {
                 let arg = HandlerArg::Capture(capture);
                 capture += 1;
                 arg
@@ -193,6 +225,7 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
         can_word_slug: slug(false, true),
         do_word_slug: slug(true, true),
         word_args,
+        access,
         compiled,
     })
 }
@@ -201,6 +234,54 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
 mod tests {
     use super::*;
     use crate::command::grammar::{Limits, parse};
+
+    #[test]
+    fn visible_modifiers_keep_capture_kinds_and_handler_slugs() {
+        for token in ["OBJ", "OBS", "LIV", "LVS"] {
+            let plain = compile("show", &format!("WRD {token} to OBJ")).unwrap();
+            let visible = compile("show", &format!("WRD {token}:v to OBJ")).unwrap();
+            assert_eq!(visible.compiled.kinds, plain.compiled.kinds);
+            assert_eq!(visible.can_slug, plain.can_slug);
+            assert_eq!(visible.do_slug, plain.do_slug);
+            assert_eq!(visible.can_word_slug, plain.can_word_slug);
+            assert_eq!(visible.do_word_slug, plain.do_word_slug);
+            assert_eq!(
+                visible.access,
+                [Access::Reachable, Access::Visible, Access::Reachable]
+            );
+            assert_eq!(visible.compiled.captures_of("blue gem to bob").count(), 1);
+        }
+    }
+
+    #[test]
+    fn unsupported_modifiers_are_diagnosed_explicitly() {
+        for token in ["OBJ", "OBS", "LIV", "LVS", "WRD", "STR"] {
+            for suffix in ["", "x", "l", "p", "c", "vv", "vp", "v:"] {
+                let word = format!("{token}:{suffix}");
+                assert_eq!(
+                    compile("test", &word).unwrap_err(),
+                    ParserRuleError::Modifier(word)
+                );
+            }
+        }
+        for token in ["WRD:v", "STR:v"] {
+            assert_eq!(
+                compile("test", token).unwrap_err(),
+                ParserRuleError::Modifier(token.into())
+            );
+        }
+    }
+
+    #[test]
+    fn cached_patterns_do_not_share_access_requirements() {
+        let visible = compile("see", "OBJ:v").unwrap();
+        let reachable = compile("touch", "OBJ").unwrap();
+        let synonym = compile("view", "OBJ:v").unwrap();
+        assert_eq!(visible.access, [Access::Visible]);
+        assert_eq!(reachable.access, [Access::Reachable]);
+        assert_eq!(synonym.access, visible.access);
+        assert!(Arc::ptr_eq(&visible.compiled, &synonym.compiled));
+    }
 
     #[test]
     fn tokens_map_to_pattern_captures() {

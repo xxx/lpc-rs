@@ -46,16 +46,46 @@ Runtime exceptions propagate immediately.
 
 ### scope
 
-Without `scope`, candidates are the actor's ordinary walk: the actor, its
-environment, its own inventory, the environment's other contents, and —
-breadth-first — the contents of any candidate answering
-`inventory_visible()` truthily, reachable only while every container on its
-path answers `inventory_accessible()` truthily. Passing `scope` replaces
-that walk entirely: every object it names is a candidate, and every one of
-them is reachable, `inventory_accessible()` unconsulted. A nested array inside
-`scope` contributes its own objects (to a nesting depth of 20 — deeper is a
-runtime error); a destructed member, or one that is not an object, is
-skipped. `LIV`/`LVS` phrases also resolve over the master's
+Without `scope`, candidates are the actor, its environment, its own inventory,
+the environment's other contents, and — breadth-first — visible nested contents.
+The actor and immediate environment contribute their direct inventories without
+consulting their own inventory hooks. Other containers expose contents only when
+`inventory_visible()` is truthy; reachability is inherited while
+`inventory_accessible()` is truthy. Missing hooks count as true.
+
+An explicit array replaces that walk. Top-level objects are reachable regardless
+of their physical locations. An object immediately followed by an array supplies
+that object's contents:
+
+```lpc
+mixed *scope = ({ room, ({ box, ({ gem }), book }) });
+parse_sentence("look at gem", 0, scope);
+```
+
+Here `room` controls visibility and reachability of `box` and `book`; `box`
+also controls `gem`. The named children need not actually be in those inventories.
+A hidden parent's subtree is omitted. Visible children inherit reachability
+from their parent and its `inventory_accessible()` result. Flat lists such as
+`({ gem, book })` explicitly make those objects reachable without inventory hooks.
+
+Each nested array must immediately follow a live object, even when empty or
+inside a hidden subtree. A non-object or destructed member is skipped but breaks
+that association; consecutive child arrays have no implicit shared parent.
+Malformed structure is a runtime error. Nesting deeper than 20 is also an error,
+including cycles that exceed that depth. Duplicate objects appear once, in first
+visible occurrence order, and are reachable if any supplied visible path reaches
+them. A flat occurrence can therefore override an inaccessible nested occurrence.
+
+Array structure is snapshotted before parser callbacks. Each rule evaluates its
+scope afresh, caching each parent's inventory hook result for that rule's walk.
+Callbacks run in the current transaction with the actor as `this_player()` and
+`previous_object()`, and `origin()` is `"driver"`. A callback exception propagates;
+refusing a rule does not undo callback effects. Destructed objects are skipped,
+and a parent destructed during its inventory hooks cannot expose children.
+
+Unmodified object tokens require reachable matches; `OBJ:v`, `OBS:v`, `LIV:v`
+and `LVS:v` also admit visible but unreachable matches. Normal permissions still
+apply. `LIV`/`LVS`, with or without `:v`, also resolve over the master's
 `parse_command_users()` regardless of `scope`.
 
 ### nicknames
@@ -70,7 +100,8 @@ candidate — naming an object here does not itself add it to the scope.
 `this_player()`, or it has been destructed, or it has never called
 `enable_commands()`; `parse_sentence: the scope must be an array of
 objects` — `scope` given and not an array; `parse_sentence: the scope nests
-deeper than 20`; `parse_sentence: nicknames must be a mapping from strings
+deeper than 20`; `parse_sentence: a nested scope array must immediately follow
+a live object`; `parse_sentence: nicknames must be a mapping from strings
 to objects`. `parse_sentence` shares `command()`'s nesting limit — a rule's
 handler running `parse_sentence` of its own, and any nested `command()`,
 count together — at 16 deep, `parse_sentence: nesting deeper than 16`.

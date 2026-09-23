@@ -15,7 +15,7 @@ use crate::{
         frontend::native::CaptureKind,
         frontend::parser::ParserRule,
         resolve::{LpcVocabulary, Resolver},
-        scope::{self, Candidate},
+        scope::{self, Candidate, SuppliedScope},
     },
     interpreter::{
         PARSER_ERROR_MESSAGE,
@@ -124,17 +124,11 @@ pub(crate) async fn run(
     owner: &Arc<Process>,
     rule: &ParserRule,
     rest: &str,
-    scope: Option<Vec<Arc<Process>>>,
+    scope: Option<SuppliedScope>,
     nicknames: &[Nickname],
 ) -> Result<Verdict> {
     let candidates = match scope {
-        Some(objects) => objects
-            .into_iter()
-            .map(|object| Candidate {
-                object,
-                reachable: true,
-            })
-            .collect(),
+        Some(supplied) => supplied.walk(ctx, actor).await?,
         None => scope::walk(ctx, actor).await?,
     };
     let remote_from = candidates.len();

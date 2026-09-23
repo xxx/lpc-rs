@@ -53,8 +53,8 @@ pub(crate) trait Ask {
     async fn resolve(&mut self, kind: ResolveKind, phrase: &str) -> Result<Option<Resolved>>;
     /// Whether `candidate` is not destructed.
     fn is_live(&self, candidate: usize) -> bool;
-    /// Whether the path to `candidate` is accessible.
-    fn reachable(&self, candidate: usize) -> bool;
+    /// Whether the path to `candidate` satisfies capture `slot`'s access requirement.
+    fn accessible(&self, slot: usize, candidate: usize) -> bool;
 }
 
 /// How a slot's qualifiers become its choice.
@@ -247,7 +247,7 @@ pub(crate) async fn attempt<A: Ask>(
             if !ask.is_live(candidate) {
                 continue;
             }
-            if !ask.reachable(candidate) {
+            if !ask.accessible(index, candidate) {
                 unreachable = true;
                 continue;
             }
@@ -430,7 +430,7 @@ mod tests {
         fn is_live(&self, c: usize) -> bool {
             self.live[c]
         }
-        fn reachable(&self, c: usize) -> bool {
+        fn accessible(&self, _: usize, c: usize) -> bool {
             self.reachable[c]
         }
     }

@@ -44,12 +44,24 @@ A rule may hold at most one `STR` and at most two object slots (`OBJ`,
 `OBS`, `LIV`, `LVS`, in any combination) — the first is the *direct* object,
 the second the *indirect* one. Extra whitespace between tokens is ignored.
 
+Append `:v` to an object token to require visibility without physical
+reachability: `OBJ:v`, `OBS:v`, `LIV:v`, or `LVS:v`. For example,
+`"OBJ at OBJ:v"` requires the first object to be reachable, while the target
+only needs to be visible. The modifier does not reveal hidden contents or
+bypass living checks, permission handlers, or action policy. It applies before
+ordinal/count selection and also governs phrases such as `all`.
+
+Only the single `:v` suffix is supported. Modifiers on `WRD`/`STR`, other
+suffixes, and repeated/combined modifiers are errors.
+
 ### Handler names and slugs
 
 Each object slot and `STR`/`WRD` token, in rule order, contributes a slug
 word: `obj` for `OBJ`, `liv` for `LIV`, `wrd` for `WRD`, and `str` for `STR`.
 `OBS`/`LVS` contribute `obj`/`liv` too, except in `do_` names, where they
-contribute `obs`/`lvs`. A literal word contributes itself, lowercased. The
+contribute `obs`/`lvs`. The `:v` suffix contributes nothing to handler names
+or argument layouts; generic rule text still includes it exactly as registered.
+A literal word contributes itself, lowercased. The
 slug is these words joined with `_`; a bare-verb rule has no slug. It names
 four apply families: `can_`, `direct_`, `indirect_`, and `do_`.
 
@@ -119,7 +131,14 @@ breadth-first — the contents of any candidate answering
 `inventory_visible()` truthily, reachable only while every container on its
 path answers `inventory_accessible()` truthily. A container defining
 **neither** apply is transparent by default: visible and reachable, the
-same as a plain object with nothing to hide.
+same as a plain object with nothing to hide. The actor and its immediate
+environment contribute their direct inventories without consulting their own
+inventory hooks. A `:v` slot can select visible but unreachable contents; an
+unmodified slot cannot. Inventory hooks govern contents, not the container's
+own eligibility as a noun.
+
+[`parse_sentence`](parse_sentence.md#scope) can replace this walk with an
+explicit scope, including nested arrays describing supplied contents.
 
 ### Errors
 
@@ -128,6 +147,7 @@ Raised as runtime errors, all prefixed `parse_add_rule: `:
 | condition | text |
 |---|---|
 | `this_object()` has not called `parse_init()` | `parse_init() has not been called` |
+| unsupported modifier, or a modifier on a text token | `unsupported parser modifier in 'token'; only OBJ:v, OBS:v, LIV:v and LVS:v are supported` |
 | two `STR` tokens | `two STR tokens in 'rule'` |
 | a token glued to other letters (`OBJect`) | `a token inside a word in 'rule'` |
 | an all-caps word sharing a token's prefix (`LIVING`) | `a token inside a word in 'rule'` |

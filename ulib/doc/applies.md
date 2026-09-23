@@ -113,9 +113,26 @@ These belong on the affected game object. Live examples are in
 | `parse_command_id_list()` | String array of this object's singular names. Defining it disables `id()` fallback even when it returns no array. | Optional: `box`. |
 | `parse_command_plural_id_list()` | String array of plural names; a missing/non-array result asks the master's `parse_command_pluralize()`. | Optional: `boxes`. |
 | `parse_command_adjectiv_id_list()` | String array of adjectives for this object. | Optional: `wooden`, `small`. |
-| `inventory_visible()` | Nonzero lets the grammar parser search the object's contents. Missing defaults to true. | Optional: an open box. |
-| `inventory_accessible()` | Nonzero lets the grammar parser reach the object's contents. Missing defaults to true; this is parser reachability, not a security permission. | Optional: an open box. |
+| `inventory_visible()` | Nonzero exposes contents in the default walk or a supplied child array; it does not control the object's own name. Missing defaults to true. | Optional: an open box. |
+| `inventory_accessible()` | Nonzero lets the parser reach visible contents. Missing defaults to true; `:v` slots waive reachability but still require permission. | Optional: an open box. |
 | `parser_handlers` | Four dynamic families described below; with actor, noun-candidate and verb-owner lookup. | [examples/verb.c](../examples/verb.c) |
+
+Inventory hooks run before noun permissions, inside the current transaction,
+with the actor as `this_player()` and `previous_object()` and `origin()` set to
+`"driver"`. Exceptions propagate; refusals do not undo effects. Explicit scope
+structure is snapshotted before callbacks, and each rule walk reuses a parent's
+hook results. Later rules and parses ask afresh. A parent destructed by a hook
+cannot expose children.
+
+`parse_sentence` accepts a hierarchy such as `({ room, ({ box, ({ item }) }) })`:
+each child array belongs to its immediately preceding live object. Hidden
+subtrees are excluded; visible children inherit accessibility down the path.
+Other entries are skipped but break the parent association. Orphan/consecutive
+arrays and nesting beyond 20 are errors. Duplicate objects keep their first
+visible position and are reachable through any reachable visible occurrence.
+A flat explicit list, `({ item })`, bypasses inventory hooks and marks the object
+reachable. The default walk exempts the actor and immediate room's direct
+inventories from those roots' hooks.
 
 ### Grammar handler families
 
@@ -142,7 +159,7 @@ The literal-word tier inserts `string prep` between item and recipient, holding
 and the typed verb before the two source phrases. The generic-rule tier receives
 `(base_verb, rule_text, item, recipient, typed_verb, item_words, recipient_words)`.
 It omits literal arguments. A synonym preserves the base verb and changes the
-typed-verb argument. The rule text retains its original whitespace.
+typed-verb argument. The rule text retains its original whitespace and any `:v` modifiers.
 
 Every capture, including `WRD` and `STR`, contributes a source string after the
 semantic values (and typed verb for generic tiers). The middle two tiers also
@@ -150,6 +167,12 @@ insert literal semantic arguments in rule order. `WRD` is named `wrd`, while a
 literal becomes `word` in those tiers. Empty rules omit the slug; their
 generic forms receive `(base, typed)` or `(base, "", typed)`. Duplicate
 generated names use the earliest layout.
+
+`OBJ:v`, `OBS:v`, `LIV:v`, and `LVS:v` permit visible but unreachable objects.
+Unmodified slots require reachability. Each capture keeps its own policy, so
+`OBJ at OBJ:v` still requires the first object to be reachable. The suffix changes
+neither names nor argument layouts, and never bypasses living or permission
+checks. Other modifiers, including combined/repeated suffixes, are unsupported.
 
 `can_` sees unresolved object slots as `0` (`nil` in distinct mode). For this
 two-object rule, `direct_` and `indirect_` receive both individual objects.
@@ -179,7 +202,7 @@ Two-object rules with one `OBS`/`LVS` slot use the same individual-object
 permission arguments in both orientations. Only `do_` receives an array for
 the plural slot: accepted objects followed by plain refusal strings for that
 partner. A late refusal removes that member while preserving the others.
-Ordinals pin a reachable noun match before permissions; ordinary counts select
+Ordinals pin a noun match satisfying its slot's access requirement before permissions; ordinary counts select
 from compatible matches afterward. A late rejection does not substitute a new
 object or restart selection.
 

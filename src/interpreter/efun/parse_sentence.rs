@@ -1,16 +1,15 @@
 //! `parse_sentence`: run a line for `this_player()` over the parser
 //! package's verb-attached rules only.
 
-use std::sync::Arc;
-
 use lpc_rs_errors::Result;
 
 use crate::{
     command::{
         parser::Nickname,
+        scope::SuppliedScope,
         trial::{self, Sentence},
     },
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
 /// `parse_sentence(line, ignored, scope, nicknames)`: `1`/`0`/`-1`/`-2`/`-3`,
@@ -51,48 +50,17 @@ pub async fn parse_sentence<const N: usize>(context: &mut EfunContext<'_, N>) ->
     Ok(())
 }
 
-/// Nested-array depth cap for the scope argument, as `dump`'s
-/// `MAX_RECURSION`; a self-referential array is otherwise unbounded.
-const MAX_SCOPE_DEPTH: usize = 20;
-
-/// Register 3: `None` when absent or `NULL`; an array's live objects, with
-/// nested arrays flattened; anything else is an error.
-fn scope_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Option<Vec<Arc<Process>>>> {
+/// Register 3: a snapshot of the supplied hierarchy, or the default walk.
+fn scope_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Option<SuppliedScope>> {
     let Some(value) = context.try_arg(2).filter(|r| !r.is_null_in(context.txn())) else {
         return Ok(None);
     };
     match value {
-        LpcRef::Array(_) => flatten_objects(context, value, 0).map(Some),
+        LpcRef::Array(_) => SuppliedScope::snapshot(context.txn(), value)
+            .map(Some)
+            .map_err(|error| error.with_span(context.call_site_span())),
         _ => Err(context.runtime_error("parse_sentence: the scope must be an array of objects")),
     }
-}
-
-/// The live objects of `value`'s array, recursing into nested arrays;
-/// `depth` is this array's nesting below the scope argument itself.
-fn flatten_objects<const N: usize>(
-    context: &EfunContext<'_, N>,
-    value: &LpcRef,
-    depth: usize,
-) -> Result<Vec<Arc<Process>>> {
-    if depth > MAX_SCOPE_DEPTH {
-        return Err(context.runtime_error(format!(
-            "parse_sentence: the scope nests deeper than {MAX_SCOPE_DEPTH}"
-        )));
-    }
-    let txn = context.txn();
-    let items: Vec<LpcRef> = value.with_array(txn, |a| a.iter().cloned().collect())?;
-    let mut out = Vec::new();
-    for item in items {
-        match item {
-            LpcRef::Array(_) => out.extend(flatten_objects(context, &item, depth + 1)?),
-            other => {
-                if let Some(object) = other.live_object(txn) {
-                    out.push(object);
-                }
-            }
-        }
-    }
-    Ok(out)
 }
 
 /// Register 4: empty when absent or `NULL`; a mapping's `(string, object)`

@@ -19,6 +19,7 @@ mod parser;
 mod parser_handlers;
 mod parser_relations;
 mod parser_selection;
+mod parser_visibility;
 mod pointers;
 mod previous_object;
 mod references;

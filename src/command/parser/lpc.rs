@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
     command::{
-        frontend::parser::ParserRule,
+        frontend::parser::{Access, ParserRule},
         resolve::{Kind as ResolveKind, LpcVocabulary, Resolved, Resolver},
         scope::Candidate,
     },
@@ -146,7 +146,7 @@ impl Ask for Lpc<'_> {
         self.candidates[candidate].object.is_live(self.ctx.txn())
     }
 
-    fn reachable(&self, candidate: usize) -> bool {
-        self.candidates[candidate].reachable
+    fn accessible(&self, slot: usize, candidate: usize) -> bool {
+        self.rule.access[slot] == Access::Visible || self.candidates[candidate].reachable
     }
 }

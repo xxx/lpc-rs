@@ -880,7 +880,7 @@ const PEAR: (&str, &str) = (
 );
 
 #[tokio::test]
-async fn a_nested_scope_array_flattens_and_skips_non_objects() {
+async fn a_nested_scope_array_uses_default_parent_hooks_and_skips_non_objects() {
     let dead = ("/dead_thing.c", "");
     let r = run(
         crate::test_support::ALLOW_DESTRUCT,
@@ -930,8 +930,8 @@ async fn a_self_referential_scope_is_bounded() {
         r#"mixed *create() {
             enable_commands();
             set_this_player(this_object());
-            mixed *a = ({ 0 });
-            a[0] = a;
+            mixed *a = ({ this_object(), 0 });
+            a[1] = a;
             parse_sentence("take it", 0, a);
             return ({});
         }"#,

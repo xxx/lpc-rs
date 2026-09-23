@@ -16,6 +16,13 @@
  * Refusals leave later rules eligible; the first rule to reach do wins.
  * Error reporting waits until all rules fail, and refusals do not undo effects.
  * These samples refuse gifts and do not implement transfer or ownership.
+ * Their unmodified object tokens require reachable matches. For an observation
+ * verb, parse_add_rule("look", "at OBJ:v") permits visible but unreachable
+ * objects, still using can_look_at_obj/direct_look_at_obj/do_look_at_obj.
+ * :v also works on OBS, LIV and LVS; it changes no handler argument layout.
+ * Generic rule arguments preserve the modifier exactly as registered.
+ * A supplied scope like ({ box, ({ item }) }) applies box's inventory hooks;
+ * ({ item }) instead explicitly makes item reachable.
  * See ../doc/applies.md, "Grammar handler families", for other rule shapes.
  */
 #pragma strict_types

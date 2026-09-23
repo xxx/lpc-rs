@@ -203,7 +203,7 @@ pub(crate) fn best_reason(reasons: &[(usize, Reply)]) -> Option<(Target, String)
 pub(crate) enum Kind {
     /// A living slot's phrase matched only non-livings.
     NotLiving = 2,
-    /// A match exists but nothing on its path is `inventory_accessible()`.
+    /// An unmodified slot has visible matches but cannot reach them.
     NotAccessible = 3,
     /// Several qualifiers survived filtering with no ordinal to choose one.
     Ambig = 4,

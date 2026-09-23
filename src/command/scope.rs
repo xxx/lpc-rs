@@ -2,6 +2,10 @@
 //! use and what its native captures name) and the candidate walk (the parser
 //! package's descent through visible containers).
 
+mod supplied;
+
+pub(crate) use supplied::SuppliedScope;
+
 use std::sync::{Arc, Weak};
 
 use lpc_rs_errors::Result;

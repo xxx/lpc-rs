@@ -27,6 +27,7 @@ impl Pair {
 async fn noun(
     ask: &mut impl Ask,
     cap: &Capture,
+    index: usize,
     progress: usize,
 ) -> Result<std::result::Result<Noun, Failure>> {
     let kind = match cap.kind {
@@ -57,7 +58,7 @@ async fn noun(
             if !ask.is_live(object) {
                 return false;
             }
-            if !ask.reachable(object) {
+            if !ask.accessible(index, object) {
                 unreachable = true;
                 return false;
             }
@@ -154,11 +155,11 @@ pub(super) async fn select(
     mut values: Vec<Slot>,
     words: &[Slot],
 ) -> Result<std::result::Result<Vec<Slot>, Failure>> {
-    let direct = match noun(ask, &caps[indices[0]], 0).await? {
+    let direct = match noun(ask, &caps[indices[0]], indices[0], 0).await? {
         Ok(noun) => noun,
         Err(failure) => return Ok(Err(failure)),
     };
-    let indirect = match noun(ask, &caps[indices[1]], 1).await? {
+    let indirect = match noun(ask, &caps[indices[1]], indices[1], 1).await? {
         Ok(noun) => noun,
         Err(failure) => return Ok(Err(failure)),
     };
@@ -294,7 +295,7 @@ mod tests {
         fn is_live(&self, _: usize) -> bool {
             true
         }
-        fn reachable(&self, _: usize) -> bool {
+        fn accessible(&self, _: usize, _: usize) -> bool {
             true
         }
     }

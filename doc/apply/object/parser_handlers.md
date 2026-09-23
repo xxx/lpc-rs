@@ -44,6 +44,8 @@ on each target, replacing `do_` with the relevant family prefix:
 two tiers. Only those tiers insert literal arguments, using their registered
 spelling. [`parse_add_rule`](../../efun/parse_add_rule.md) defines capture slugs.
 Permission names use `obj`/`liv` for plural slots; action names use `obs`/`lvs`.
+The `:v` modifier changes neither names nor argument layouts; the generic rule
+argument retains it as part of the exact registered text.
 
 Names and generic prefixes always use the base verb, including for synonyms.
 Duplicate generated names use their earliest tier's layout; parameter types or
@@ -91,15 +93,25 @@ named variadic collectors receive the complete tail.
 selection and permission rechecks, with all slots filled. An `OBS` or `LVS`
 action argument is always an array, even when only one object qualifies.
 
+### Visibility and reachability
+
+Every object slot resolves within the visible scope. Unmodified slots also
+require physical reachability. A `:v` slot accepts visible but unreachable
+objects, subject to the same living and permission checks. Scope filtering
+precedes the selection protocols below; modifiers apply independently to each
+capture and do not change counts, ordinals, or plural action types. See
+[`parse_sentence`](../../efun/parse_sentence.md#scope) for supplied scope trees.
+
 ### Two-object rules with at most one plural slot
 
 This covers two singular slots and either orientation of one singular and
 one plural slot, such as `OBJ from OBJ`, `OBS from OBJ`, and `OBJ with OBS`.
 
-1. Resolve both noun phrases to live, reachable matches. An unreachable match,
-   per `inventory_accessible`, is never asked for permission.
+1. Resolve both noun phrases to live matches satisfying each slot's access
+   requirement. An unreachable match is asked for permission only for a `:v` slot.
 2. Pin explicit ordinals to those matches in scope order, before permissions.
-   `second sword` means the second reachable sword even if the first refuses.
+   `second sword` means the second sword satisfying that slot's access requirement,
+   even if the first refuses.
    If the pinned object is incompatible, the rule fails without substituting
    another object. An out-of-range ordinal reports this pre-permission count.
 3. Check each pair in scope order: the first direct match with each indirect
@@ -134,7 +146,7 @@ their ordinary diagnostics and silent unresolved result (`-3`).
 ### Single-object rules and rules with two plural slots
 
 These retain aggregate filtering and rechecks. Resolve each object slot in
-order, ask each reachable match with its own slot holding that individual
+order, ask each match satisfying its slot's access requirement with that individual
 object, and select that slot before proceeding to the next one. Earlier slots
 hold their selected values; later slots remain `0`. Ordinals count matches
 that passed this filtering.
