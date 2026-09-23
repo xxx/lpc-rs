@@ -45,6 +45,40 @@ Other modifiers, including `static`, `nosave`, `nomask`, and `varargs`, are not 
 on inherit statements. A parent's `nomask` declarations and `no_inherit` pragma
 still apply.
 
+## Functions supplied by the receiving object
+
+Inherited code can call a function defined by a sibling inherit or by the receiving
+object, without a prototype:
+
+```c
+// /lib/calculation.c
+int result() { return calculate(3); }
+
+// /objects/example.c
+inherit "/lib/calculation";
+int calculate(int value) { return value + 4; }
+```
+
+The compiler collects definitions throughout the inheritance graph before checking
+function bodies. It checks these calls against the supplying definition's argument
+and return types, argument count, defaults, and reference requirements. Bare
+function names, partially applied pointers, closures, and global initializers can
+use the same definitions. Sibling inherit order does not affect whether a name is
+available; ordinary override precedence still selects between definitions.
+
+This lookup applies only to otherwise unknown unqualified function names. Own and
+lexically inherited functions, simul-efuns, and efuns keep their existing lookup
+precedence. An inaccessible private declaration remains an error. Private
+definitions cannot supply missing names to other sources, and private imports
+retain their dispatch boundaries. Sibling globals, class names, and inherit aliases
+do not enter the calling source's lexical scope.
+
+All function bodies must resolve when the receiving object is compiled, including
+unused functions. The incomplete `/lib/calculation.c` above can be inherited, but
+compiling or loading it directly fails because it does not supply `calculate`.
+Inheritance does not load or initialize a separate parent object. A prototype
+without an implementation does not satisfy a missing function.
+
 ## Calls and aliases
 
 Plain calls use the object's overriding definition. `::name()` bypasses a local

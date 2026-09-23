@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::compiler::{
     ProgramWarnings, callee::Callee, compile_gate::CompileGate, diagnostics::Diagnostics,
-    source::CompilerSource, source_reader::SourceReader,
+    program_interface::ProgramInterface, source::CompilerSource, source_reader::SourceReader,
 };
 use derive_builder::Builder;
 use lpc_rs_core::{
@@ -21,7 +21,7 @@ use crate::{
     compiler::semantic::scope_tree::ScopeTree,
     interpreter::{
         efun::EFUN_PROTOTYPES,
-        program::{Function, InheritedProgram, Program, Region, code_pool::CodePool},
+        program::{InheritedProgram, Program, Region, code_pool::CodePool},
     },
 };
 
@@ -54,6 +54,12 @@ pub struct CompilationContext {
     /// The map of function names, to their respective prototypes.
     /// Used for checking forward references, and other things.
     pub function_prototypes: HashMap<String, FunctionPrototype>,
+
+    /// Parent declarations available before executable programs have been assembled.
+    pub(crate) inherited_interfaces: Vec<Arc<ProgramInterface>>,
+
+    /// Receiving-composition definitions used only after lexical lookup fails.
+    pub(crate) receiver_functions: HashMap<String, FunctionPrototype>,
 
     /// Everything this compilation has reported so far.
     pub diagnostics: Diagnostics,
@@ -172,12 +178,12 @@ impl CompilationContext {
         match namespace {
             CallNamespace::Local => self.function_prototypes.get(r).or_else(|| {
                 self.lookup_inherited_function(r, namespace)
-                    .map(|f| &f.prototype)
+                    .map(|(prototype, _)| prototype)
             }),
             CallNamespace::Named(ns) if ns.as_str() == EFUN => EFUN_PROTOTYPES.get(r),
             _ => self
                 .lookup_inherited_function(r, namespace)
-                .map(|f| &f.prototype),
+                .map(|(prototype, _)| prototype),
         }
     }
 
@@ -185,8 +191,33 @@ impl CompilationContext {
         &self,
         name: &str,
         namespace: &CallNamespace,
-    ) -> Option<&Function> {
-        match namespace {
+    ) -> Option<(&FunctionPrototype, bool)> {
+        if self.inherits.is_empty() && !self.inherited_interfaces.is_empty() {
+            let parents = &self.inherited_interfaces;
+            let function = match namespace {
+                CallNamespace::Local | CallNamespace::Parent => {
+                    parents.iter().rev().find_map(|parent| parent.lookup(name))
+                }
+                CallNamespace::Named(ns) if ns.as_str() == EFUN => None,
+                CallNamespace::Named(ns) if self.inherit_names.contains_key(ns.as_str()) => self
+                    .inherit_names
+                    .get(ns.as_str())
+                    .and_then(|&index| parents.get(index))
+                    .and_then(|parent| parent.lookup(name)),
+                CallNamespace::Named(ns) => parents
+                    .iter()
+                    .rev()
+                    .filter(|parent| parent.has_basename(ns.as_str()))
+                    .find_map(|parent| parent.lookup(name)),
+            };
+            return function.map(|function| {
+                (
+                    &function.prototype,
+                    function.visibility == lpc_rs_core::visibility::Visibility::Private,
+                )
+            });
+        }
+        let function = match namespace {
             CallNamespace::Local | CallNamespace::Parent => self
                 .inherits
                 .iter()
@@ -204,7 +235,8 @@ impl CompilationContext {
                 .rev()
                 .filter(|parent| parent.function_scope.has_basename(ns.as_str()))
                 .find_map(|parent| parent.lookup_function(name)),
-        }
+        };
+        function.map(|function| (&function.prototype, function.private()))
     }
 
     /// Whether this source may use the resolved local or inherited declaration.
@@ -213,12 +245,12 @@ impl CompilationContext {
             return true;
         }
         self.lookup_inherited_function(name, namespace)
-            .is_none_or(|f| !f.private())
+            .is_none_or(|(_, private)| !private)
     }
 
     /// Resolve a call by name the way a call site does: own and inherited
     /// functions, then — for a bare name only — the simul efuns, then the
-    /// efuns.
+    /// efuns, followed by otherwise missing receiving-composition functions.
     pub fn lookup_function_complete<T>(
         &self,
         name: T,
@@ -251,7 +283,10 @@ impl CompilationContext {
         {
             return Some(Callee::SimulEfun(&function.prototype));
         }
-        EFUN_PROTOTYPES.get(name).map(Callee::Efun)
+        EFUN_PROTOTYPES
+            .get(name)
+            .map(Callee::Efun)
+            .or_else(|| self.receiver_functions.get(name).map(Callee::Local))
     }
 
     pub(crate) fn valid_namespace(&self, ns: &CallNamespace) -> bool {
@@ -265,6 +300,10 @@ impl CompilationContext {
                             .inherits
                             .iter()
                             .any(|parent| parent.function_scope.has_basename(ns))
+                        || self
+                            .inherited_interfaces
+                            .iter()
+                            .any(|parent| parent.has_basename(ns))
                 }
             },
         }
@@ -336,6 +375,8 @@ impl Default for CompilationContext {
             diagnostics: Diagnostics::default(),
             scopes: ScopeTree::default(),
             function_prototypes: HashMap::new(),
+            inherited_interfaces: Vec::new(),
+            receiver_functions: HashMap::new(),
             pragmas: PragmaFlags::new(),
             strict_types_from: HashMap::new(),
             inherits: vec![],

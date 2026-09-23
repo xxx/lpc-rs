@@ -53,6 +53,8 @@ notes:
 ## Function prototypes
 
 Functions can be called before their definition, so prototypes are unnecessary.
+Inherited code can also use definitions supplied by the receiving object or a
+sibling inherit; see [receiving-object functions](inheritance.md#functions-supplied-by-the-receiving-object).
 For source compatibility, the compiler accepts prototypes with named or unnamed
 parameters, including a mixture of both:
 

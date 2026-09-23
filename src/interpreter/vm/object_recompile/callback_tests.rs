@@ -78,6 +78,54 @@ fn timer(vm: &Vm) -> u64 {
 }
 
 #[tokio::test]
+async fn receiver_supplied_calls_and_retained_closures_survive_recompilation() {
+    let consumer = r#"
+        int result() { return supply(); }
+        function snapshot() { return (: supply() :); }
+    "#;
+    let original = r#"
+        inherit "/consumer";
+        function saved;
+        int supply() { return 7; }
+        void create() { saved = snapshot(); }
+        mixed retained() { return saved(); }
+    "#;
+    let updated = r#"
+        inherit "/consumer";
+        function saved;
+        int supply() { return 9; }
+        mixed retained() { return saved(); }
+    "#;
+    let (root, mut vm, admin, target) = setup(
+        "recompile-receiver-calls",
+        original,
+        &[("consumer.c", consumer)],
+    )
+    .await;
+    assert_eq!(call(&vm, &target, "result").await, LpcRef::from(7));
+    upgrade(&root, &mut vm, &admin, updated).await;
+    vm.global_state.gc().await.unwrap().unwrap();
+    assert_eq!(call(&vm, &target, "result").await, LpcRef::from(9));
+    assert_eq!(call(&vm, &target, "retained").await, LpcRef::from(7));
+
+    std::fs::write(
+        root.join("target.c"),
+        "inherit \"/consumer\"; string supply() { return \"bad\"; }",
+    )
+    .unwrap();
+    call(&vm, &admin, "request").await;
+    let Some(VmOp::ObjectUpdate(request)) = vm.next_op() else {
+        panic!("upgrade queued");
+    };
+    vm.global_state.run_object_update(request.clone()).await;
+    let status = vm.global_state.updates.get(request.id).unwrap();
+    assert_eq!(status.state, "failed", "{}", status.error);
+    assert!(status.error.contains("return"), "{}", status.error);
+    assert_eq!(call(&vm, &target, "result").await, LpcRef::from(9));
+    assert_eq!(call(&vm, &target, "retained").await, LpcRef::from(7));
+}
+
+#[tokio::test]
 async fn retained_inherited_closures_share_compatible_class_fields_after_recompile() {
     let base = r#"
         class record { int shared, changed; int *removed; }

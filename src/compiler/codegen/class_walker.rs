@@ -134,6 +134,11 @@ impl TreeWalker for ClassWalker {
                 Self::insert_definition(&mut definitions, definition.clone(), inherit.span)?;
             }
         }
+        for (parent, inherit) in self.context.inherited_interfaces.iter().zip(&node.inherits) {
+            for definition in &parent.class_scope.definitions {
+                Self::insert_definition(&mut definitions, definition.clone(), inherit.span)?;
+            }
+        }
         for id in definitions.keys() {
             self.expose(*id);
         }

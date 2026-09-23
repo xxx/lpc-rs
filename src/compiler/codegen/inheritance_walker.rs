@@ -54,6 +54,123 @@ impl InheritanceWalker {
         Ok(())
     }
 
+    pub(crate) async fn resolve(&self, node: &InheritNode) -> Result<LpcPath> {
+        self.validate(node)?;
+        let cwd = self.context.source.inheritance_cwd();
+
+        let full_path =
+            LpcPath::new_in_game(&*node.path, cwd, self.context.config.lib_dir.as_str());
+
+        let lib_dir = self.context.config.lib_dir.as_str();
+        // An out-of-root path collapses to an empty in-game form, so the
+        // error names the directive's own text.
+        self.context
+            .config
+            .validate_in_game_path(&full_path, node.span)
+            .map_err(|_| {
+                lpc_error!(
+                    node.span,
+                    "attempt to inherit a file outside the root: `{}`",
+                    node.path
+                )
+            })?;
+        // Any inherit naming the configured auto path, explicit or not, is
+        // exempt from the loading gate.
+        let configured = self
+            .context
+            .config
+            .auto_inherit_file
+            .map(|auto| {
+                LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
+                    == full_path.source_file()
+            })
+            .unwrap_or(false);
+        if let Some(gate) = &self.context.gate
+            && !configured
+        {
+            let parent = self
+                .context
+                .config
+                .paths()
+                .source_name(&full_path.source_file())
+                .to_string();
+            let child = self.context.source.name().as_str();
+            if !gate.inherit(&parent, child).await? {
+                return Err(lpc_error!(
+                    node.span,
+                    "inherit \"{}\": permission denied",
+                    parent
+                ));
+            }
+        }
+
+        Ok(full_path)
+    }
+
+    pub(crate) fn link(&mut self, node: &InheritNode, compiled: Compiled) -> Result<()> {
+        let Compiled { program, warnings } = compiled;
+        let driver_injected = node.span.is_none()
+            && self.context.config.auto_inherit_file.is_some_and(|auto| {
+                LpcPath::new_in_game(auto.as_str(), "/", self.context.lib_dir()).source_file()
+                    == program.filename.source_file()
+            });
+        // Before `place` adds this parent's programs to the layout, or
+        // every group reads as held.
+        let held = &self.context.layout;
+        self.context.inherited_warnings.extend(
+            warnings
+                .into_iter()
+                .filter(|w| held.iter().all(|r| r.filename != w.filename)),
+        );
+
+        if program.pragmas.no_inherit() && !driver_injected {
+            return Err(lpc_error!(
+                node.span,
+                "`pragma #no_inherit` is set on {}",
+                program.filename
+            ));
+        }
+
+        // Follow CD's inherited no_shadow rule; LDMud scopes it to its unit.
+        if program.pragmas.no_shadow() {
+            self.context.pragmas.set_no_shadow(true);
+        }
+
+        if self
+            .context
+            .inherits
+            .iter()
+            .any(|x| x.filename == program.filename)
+        {
+            let err: LpcError = lpc_error!(
+                node.span,
+                "`{}` is already being inherited from",
+                program.filename
+            );
+
+            return Err(self.context.diagnostics.fail(err));
+        }
+
+        if let Some(namespace) = &node.namespace {
+            self.context
+                .inherit_names
+                .insert(namespace.to_owned(), self.context.inherits.len());
+        }
+
+        let mut program = InheritedProgram::place(
+            program,
+            &mut self.context.layout,
+            &mut self.context.num_globals,
+            node.span,
+        )
+        .map_err(|e| self.context.diagnostics.fail(e))?;
+        program.visibility = node.visibility;
+        self.check_nomask_variables(&program, node.span)?;
+        self.context.inherits.push(program);
+
+        Ok(())
+    }
+
     fn check_nomask_variables(&self, program: &InheritedProgram, span: Option<Span>) -> Result<()> {
         for symbol in program
             .global_variables
@@ -103,129 +220,18 @@ impl Pass for InheritanceWalker {
 #[async_trait]
 impl TreeWalker for InheritanceWalker {
     async fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
-        self.validate(node)?;
-
-        let cwd = self.context.source.inheritance_cwd();
-
-        let full_path =
-            LpcPath::new_in_game(&*node.path, cwd, self.context.config.lib_dir.as_str());
-
-        let lib_dir = self.context.config.lib_dir.as_str();
-        // An out-of-root path collapses to an empty in-game form, so the
-        // error names the directive's own text.
-        self.context
-            .config
-            .validate_in_game_path(&full_path, node.span)
-            .map_err(|_| {
-                lpc_error!(
-                    node.span,
-                    "attempt to inherit a file outside the root: `{}`",
-                    node.path
-                )
-            })?;
-        // Any inherit naming the configured auto path, explicit or not, is
-        // exempt from the loading gate.
-        let configured = self
-            .context
-            .config
-            .auto_inherit_file
-            .map(|auto| {
-                LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
-                    == full_path.source_file()
-            })
-            .unwrap_or(false);
-        // Only the driver's injected inherit (`Compiler::compile_string`) carries no span.
-        let driver_injected = configured && node.span.is_none();
-        if let Some(gate) = &self.context.gate
-            && !configured
-        {
-            let parent = self
-                .context
-                .config
-                .paths()
-                .source_name(&full_path.source_file())
-                .to_string();
-            let child = self.context.source.name().as_str();
-            if !gate.inherit(&parent, child).await? {
-                return Err(lpc_error!(
-                    node.span,
-                    "inherit \"{}\": permission denied",
-                    parent
-                ));
-            }
-        }
-
-        let depth = self.context.inherit_depth;
+        let full_path = self.resolve(node).await?;
         let compiler = CompilerBuilder::default()
             .config(self.context.config.clone())
             .code_pool(self.context.code_pool.clone())
-            .inherit_depth(depth + 1)
+            .inherit_depth(self.context.inherit_depth + 1)
             .gate(self.context.gate.clone())
             .source_reader(self.context.source_reader.clone())
             .diagnostic_sources(self.context.diagnostic_sources.clone())
             .simul_efuns(self.context.simul_efuns.clone())
             .build()?;
-
-        match compiler.compile_in_game_file(&full_path, node.span).await {
-            Ok(Compiled { program, warnings }) => {
-                // Before `place` adds this parent's programs to the layout, or
-                // every group reads as held.
-                let held = &self.context.layout;
-                self.context.inherited_warnings.extend(
-                    warnings
-                        .into_iter()
-                        .filter(|w| held.iter().all(|r| r.filename != w.filename)),
-                );
-
-                if program.pragmas.no_inherit() && !driver_injected {
-                    return Err(lpc_error!(
-                        node.span,
-                        "`pragma #no_inherit` is set on {}",
-                        program.filename
-                    ));
-                }
-
-                // Follow CD's inherited no_shadow rule; LDMud scopes it to its unit.
-                if program.pragmas.no_shadow() {
-                    self.context.pragmas.set_no_shadow(true);
-                }
-
-                if self
-                    .context
-                    .inherits
-                    .iter()
-                    .any(|x| x.filename == program.filename)
-                {
-                    let err: LpcError = lpc_error!(
-                        node.span,
-                        "`{}` is already being inherited from",
-                        program.filename
-                    );
-
-                    return Err(self.context.diagnostics.fail(err));
-                }
-
-                if let Some(namespace) = &node.namespace {
-                    self.context
-                        .inherit_names
-                        .insert(namespace.to_owned(), self.context.inherits.len());
-                }
-
-                let mut program = InheritedProgram::place(
-                    program,
-                    &mut self.context.layout,
-                    &mut self.context.num_globals,
-                    node.span,
-                )
-                .map_err(|e| self.context.diagnostics.fail(e))?;
-                program.visibility = node.visibility;
-                self.check_nomask_variables(&program, node.span)?;
-                self.context.inherits.push(program);
-
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
+        let compiled = compiler.compile_in_game_file(&full_path, node.span).await?;
+        self.link(node, compiled)
     }
 }
 

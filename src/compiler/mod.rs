@@ -2,13 +2,8 @@ use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 
 use ast::program_node::ProgramNode;
 use codegen::{
-    class_walker::ClassWalker,
     codegen_walker::CodegenWalker,
-    function_prototype_walker::FunctionPrototypeWalker,
-    inheritance_walker::InheritanceWalker,
-    scope_walker::ScopeWalker,
-    semantic_check_walker::SemanticCheckWalker,
-    tree_walker::{ContextHolder, Pass, apply},
+    tree_walker::{Pass, apply},
 };
 use compilation_context::CompilationContext;
 use compile_gate::CompileGate;
@@ -26,11 +21,9 @@ use preprocessor::Preprocessor;
 use source::CompilerSource;
 use source_reader::{DiskSourceReader, SourceReader};
 use tracing::instrument;
-use ustr::ustr;
 
 use crate::{
-    compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
-    interpreter::program::Program,
+    compiler::compilation_context::CompilationContextBuilder, interpreter::program::Program,
     lpc_parser,
 };
 
@@ -42,7 +35,9 @@ pub mod compile_gate;
 pub mod diagnostics;
 pub mod lexer;
 pub mod parser;
+mod prepared_program;
 pub mod preprocessor;
+mod program_interface;
 pub mod semantic;
 pub mod source;
 pub mod source_reader;
@@ -134,38 +129,38 @@ impl Compiler {
     where
         T: Into<LpcPath> + Debug + Send,
     {
-        Box::pin(async move {
-            let identity = Arc::new(CompilerSource::new(path, &self.config));
-            let name = identity.name();
+        let (identity, source) = self.read_file(path.into()).await?;
+        let warning = source
+            .latin1
+            .then(|| diagnostics::latin1_warning(identity.name().as_str(), None));
+        self.compile_source(identity, &source.text, warning).await
+    }
+
+    async fn read_file(&self, path: LpcPath) -> Result<(Arc<CompilerSource>, LpcSource)> {
+        let mut identity = Arc::new(CompilerSource::new(path, &self.config));
+        loop {
             let absolute = identity.resolved().server();
-
             let reader = self.source_reader.as_deref().unwrap_or(&DiskSourceReader);
-            let source = match reader.read(absolute).await.map(LpcSource::from_bytes) {
-                Ok(source) => source,
-                Err(e) => {
-                    return match e.kind() {
-                        ErrorKind::NotFound => {
-                            if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
-                                return Err(lpc_error!("Cannot read file `{}`: {}", name, e));
-                            }
-
-                            let dot_c = identity.input().with_extension("c");
-                            self.compile_file(dot_c).await
-                        }
-                        _ => Err(lpc_error!("Cannot read file `{}`: {}", name, e)),
-                    };
+            match reader.read(absolute).await.map(LpcSource::from_bytes) {
+                Ok(source) => return Ok((identity, source)),
+                Err(error)
+                    if error.kind() == ErrorKind::NotFound
+                        && absolute.extension().and_then(OsStr::to_str) != Some("c") =>
+                {
+                    identity = Arc::new(CompilerSource::new(
+                        identity.input().with_extension("c"),
+                        &self.config,
+                    ));
                 }
-            };
-
-            // A root file has no preprocessor yet to record its warning, so it is seeded here.
-            let warning = source.latin1.then(|| {
-                let in_game = name.as_str();
-                diagnostics::latin1_warning(in_game, None)
-            });
-
-            self.compile_source(identity, &source.text, warning).await
-        })
-        .await
+                Err(error) => {
+                    return Err(lpc_error!(
+                        "Cannot read file `{}`: {}",
+                        identity.name(),
+                        error
+                    ));
+                }
+            }
+        }
     }
 
     /// Compile the object an in-game path names: its `.c` source
@@ -300,8 +295,14 @@ impl Compiler {
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<Compiled> {
-        let (mut program_node, context) = self.analyze_source(source, code, warning).await?;
+        let (program_node, context) = self.analyze_source(source, code, warning).await?;
+        Self::generate(program_node, context).await
+    }
 
+    async fn generate(
+        mut program_node: ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Compiled> {
         let mut asm_walker: CodegenWalker = apply(&mut program_node, context, true).await?;
         let own = asm_walker.diagnostics_mut().finish()?;
         let mut warnings = std::mem::take(&mut asm_walker.context_mut().inherited_warnings);
@@ -337,55 +338,10 @@ impl Compiler {
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<(ProgramNode, CompilationContext)> {
-        let (mut program_node, context) = self.parse_source(source, code, warning).await?;
-
-        // inject the auto-inherit if it's to be used.
-        if let Some(dir) = &self.config.auto_inherit_file {
-            let lpc_dir = LpcPath::new_in_game(dir.as_str(), "/", &*self.config.lib_dir);
-            if lpc_dir.source_file() != context.source.input().source_file() {
-                let node = InheritNode {
-                    visibility: Default::default(),
-                    path: ustr(dir),
-                    namespace: None,
-                    span: None,
-                };
-
-                program_node.inherits.insert(0, node);
-            }
-        }
-
-        let context = apply::<InheritanceWalker>(&mut program_node, context, true)
-            .await?
-            .into_context();
-        let context = if context.gate.is_some() {
-            apply::<codegen::efun_override_walker::EfunOverrideWalker>(
-                &mut program_node,
-                context,
-                true,
-            )
-            .await?
-            .into_context()
-        } else {
-            context
-        };
-        let context =
-            apply::<codegen::capture_walker::CaptureWalker>(&mut program_node, context, true)
-                .await?
-                .into_context();
-        let context = apply::<ClassWalker>(&mut program_node, context, true)
-            .await?
-            .into_context();
-        let context = apply::<FunctionPrototypeWalker>(&mut program_node, context, false)
-            .await?
-            .into_context();
-        let context = apply::<ScopeWalker>(&mut program_node, context, false)
-            .await?
-            .into_context();
-        let context = apply::<SemanticCheckWalker>(&mut program_node, context, true)
-            .await?
-            .into_context();
-
-        Ok((program_node, context))
+        let prepared =
+            prepared_program::PreparedProgram::parse(self, source, code, warning).await?;
+        let receiver = prepared.interface.receiver_functions();
+        prepared.analyze(&receiver).await
     }
 
     /// Preprocess, then parse a string of code for the file at `path`
