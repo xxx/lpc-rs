@@ -47,8 +47,11 @@ examples on this page use the default `NULL_MODE=zero` unless stated otherwise.
       `int`) at index `i`, and `s[a..b]` is the substring from `a` to `b` inclusive (a
       `string`). Indexing starts at 0; negative indices and explicit `<n` indices
       count from the end. See [indexing and slices](indexing.md) for bounds and writes.
-    - `string`s can be repeated with the `*` operator, which will create a new `string` with
-      the contents of the original repeated the given number of times.
+    - `string`s can be repeated with the `*` operator and an integer count, in
+      either operand order. Zero and negative counts produce an empty string.
+      The result may not exceed 8,192 UTF-8 bytes; exceeding this limit raises
+      an error. Oversized constant expressions can be rejected during
+      compilation; dynamic overflow raises a catchable runtime error.
     - `string`s are value types in LPC. Assigning a new string does not change
       another variable holding the old value. Plain element and slice assignment
       construct a new string and rebind its owner; see [string writes](indexing.md#string-element-assignment).
