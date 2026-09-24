@@ -779,7 +779,9 @@ PrimaryExpression: ExpressionNode = {
                 v.0
             } else {
                 // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
-                let reversed = v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec();
+                let reversed = v.0.into_iter().rev()
+                    .unique_by(|(k, _)| (std::mem::discriminant(k), k.to_string()))
+                    .collect_vec();
 
                 // We have to `collect` twice because `unique_by` keeps the first duplicate, but we want
                 // to keep the last, and doing a second `rev()` in a single iterator chain applies it

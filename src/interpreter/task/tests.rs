@@ -5082,6 +5082,160 @@ mod test_instructions {
 
 /// The `bytes` value in LPC, built through `to_bytes` since there is no
 /// source literal.
+mod mixed_numeric_comparisons {
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    use super::*;
+    use crate::{
+        compiler::CompilerBuilder,
+        test_support::{run_prog_with_config, test_config},
+    };
+
+    async fn succeeds_in_both_modes(code: &str) {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(code, Arc::new(config)).await;
+            assert_eq!(task.result(), Some(1.into()), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn typed_and_mixed_operands_agree_in_values_and_both_branch_polarities() {
+        let mut checks = String::new();
+        for (index, op) in ["<", "<=", ">", ">=", "==", "!="].iter().enumerate() {
+            checks.push_str(&format!(
+                "int r{index} = x {op} y;
+                 if (r{index} != expected[{index}]) return 0;
+                 if (x {op} y) {{ if (!expected[{index}]) return 0; }}
+                 if (!(x {op} y)) {{ if (expected[{index}]) return 0; }}"
+            ));
+        }
+        let code = format!(
+            r#"
+                int forward(int x, float y, int *expected) {{ {checks} return 1; }}
+                int reverse(float x, int y, int *expected) {{ {checks} return 1; }}
+                int dynamic(mixed x, mixed y, int *expected) {{ {checks} return 1; }}
+                int create() {{
+                    int *less = ({{ 1, 1, 0, 0, 0, 1 }});
+                    int *equal = ({{ 0, 1, 0, 1, 1, 0 }});
+                    int *greater = ({{ 0, 0, 1, 1, 0, 1 }});
+                    return forward(1, 1.0, equal) && reverse(1.0, 1, equal)
+                        && forward(1, 1.5, less) && reverse(1.5, 1, greater)
+                        && forward(-1, -1.5, greater) && reverse(-1.5, -1, less)
+                        && dynamic(0, -0.0, equal) && dynamic(-0.0, 0, equal)
+                        && forward(9007199254740993, 9007199254740992.0, greater)
+                        && reverse(9007199254740992.0, 9007199254740993, less)
+                        && dynamic(9007199254740993, 9007199254740992.0, greater)
+                        && dynamic(9007199254740992.0, 9007199254740993, less)
+                        && forward(9223372036854775807, 9223372036854775808.0, less)
+                        && reverse(9223372036854775808.0, 9223372036854775807, greater)
+                        && 1 == 1.0 && 9007199254740993 > 9007199254740992.0
+                        && 9007199254740993 > 9007199254740992;
+                }}
+            "#
+        );
+        succeeds_in_both_modes(&code).await;
+    }
+
+    #[tokio::test]
+    async fn search_sort_and_extrema_use_exact_numeric_comparison() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                mixed *values = ({ 9007199254740993, 9007199254740992.0,
+                                   9007199254740992 });
+                mixed *sorted = sort_array(values);
+                mixed *descending = sort_array(values, -1);
+                return member_array(1, ({ 1.0 })) == 0
+                    && member_array(1.0, ({ 1 })) == 0
+                    && member_array(9007199254740993, ({ 9007199254740992.0 })) == -1
+                    && member_array(9007199254740992.0, values) == 1
+                    && floatp(sorted[0]) && intp(sorted[1])
+                    && sorted[2] == 9007199254740993
+                    && descending[0] == 9007199254740993
+                    && max(values) == 9007199254740993 && floatp(min(values))
+                    && intp(min(1, 1.0)) && floatp(max(1.0, 1));
+            }
+        "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn collection_keys_and_set_operations_keep_numeric_types_distinct() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                mapping m = ([ 1: "integer", 1.0: "float" ]);
+                mixed *a = ({ 1 });
+                mixed *b = ({ 1.0 });
+                mixed *groups = unique_array(({ 0, 0.0, 1, 1.0 }), (: $1 :));
+                if (sizeof(m) != 2) throw("mapping size");
+                if (m[1] != "integer" || m[1.0] != "float") throw("mapping keys");
+                if (sizeof(a & b) != 0 || sizeof(a - b) != 1 || sizeof(a | b) != 2)
+                    throw("set matching");
+                if (sizeof(groups) != 3 || !floatp(groups[0][0]))
+                    throw(sprintf("groups: %O", groups));
+                return 1 == 1.0;
+            }
+        "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn float_zero_equality_does_not_make_it_a_null_or_a_valid_string_argument() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let code = format!(
+                r#"
+                int needs_string(string value) {{ return sizeof(value); }}
+                int create() {{
+                    function f = needs_string;
+                    mixed error = catch(f(0.0));
+                    object o = clone_object("/clone_target");
+                    destruct(o);
+                    return stringp(error) && strindex(error, "expected string") >= 0
+                        && !nilp(0.0) && 0 == 0.0
+                        && (nil == 0.0) == {zero_mode}
+                        && (o == 0.0) == {zero_mode}
+                        && (0.0 == o) == {zero_mode};
+                }}
+            "#,
+                zero_mode = i32::from(mode == NullMode::Zero)
+            );
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(&code, Arc::new(config)).await;
+            assert_eq!(task.result(), Some(1.into()), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn mixed_numeric_comparison_does_not_relax_assignments_returns_or_arguments() {
+        for source in [
+            "int create() { int x = 1.5; return x; }",
+            "int create() { float x = 1; return 1; }",
+            "int create() { return 1.5; }",
+            "int f(int x) { return x; } int create() { return f(1.5); }",
+            "int create() { return 1 < \"1\"; }",
+        ] {
+            let result = CompilerBuilder::default()
+                .config(test_config())
+                .build()
+                .unwrap()
+                .compile_string("/numeric_types.c", source)
+                .await;
+            assert!(result.is_err(), "{source}");
+        }
+    }
+}
+
 mod bytes_values {
     use super::*;
     use crate::compile_time_config::MAX_CALL_STACK_SIZE;

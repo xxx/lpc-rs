@@ -21,6 +21,8 @@ With an int, the items are sorted in their natural order: ints and floats
 by value, together, and strings by content. A `direction` of `-1` sorts
 descending; any other value ascending. Two items natural order cannot
 rank against each other, such as an int and a string, are an error.
+Numeric ordering is [exact across ints and floats](../lpc/comparisons.md),
+without rounding large integers to floats.
 
 ### Examples
 

@@ -8,6 +8,8 @@ Return the index of the first element of `arr` equal to `item`, searching
 from index `start`, or `-1` when there is none. Equality is that of `==`:
 strings match by content, arrays, mappings and objects by identity, and a
 destructed object compares as the configured [null value](../lpc/null.md).
+Ints and floats match by [exact numeric value](../lpc/comparisons.md), so
+`member_array(1, ({ 1.0 }))` returns `0`.
 A `start` at or past the end finds nothing; a negative `start` is an error.
 
 For strings, search for an integer Unicode scalar value. Both `start` and the

@@ -259,6 +259,8 @@ pub fn check_binary_operation_types(
             match tuple {
                 (LpcType::Int(false), LpcType::Int(false))
                 | (LpcType::Float(false), LpcType::Float(false))
+                | (LpcType::Int(false), LpcType::Float(false))
+                | (LpcType::Float(false), LpcType::Int(false))
                 | (LpcType::String(false), LpcType::String(false))
                 | (LpcType::Bytes(false), LpcType::Bytes(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
@@ -1574,6 +1576,24 @@ mod tests {
                 )
                 .is_err()
             );
+        }
+
+        #[test]
+        fn mixed_numeric_comparisons_accept_literals_and_variables() {
+            let context = setup();
+            for op in [
+                BinaryOperation::Lt,
+                BinaryOperation::Lte,
+                BinaryOperation::Gt,
+                BinaryOperation::Gte,
+                BinaryOperation::EqEq,
+                BinaryOperation::NotEq,
+            ] {
+                assert!(float_int_literals(op, &context).is_ok());
+                assert!(int_float_literals(op, &context).is_ok());
+                assert!(float_int_vars(op, &context).is_ok());
+                assert!(int_float_vars(op, &context).is_ok());
+            }
         }
 
         #[test]

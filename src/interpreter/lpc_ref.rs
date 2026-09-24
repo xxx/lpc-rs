@@ -104,6 +104,21 @@ enum Numeric {
     Floats(LpcFloatInner, LpcFloatInner),
 }
 
+/// Compare without rounding the integer, retaining the float ordering of NaN last.
+fn cmp_int_float(integer: LpcIntInner, float: LpcFloatInner) -> Ordering {
+    let value = float.into_inner();
+    // The exclusive upper bound is exact; casting i64::MAX to f64 rounds up to it.
+    if value >= -(LpcIntInner::MIN as BaseFloat) || value.is_nan() {
+        return Ordering::Less;
+    }
+    if value < LpcIntInner::MIN as BaseFloat {
+        return Ordering::Greater;
+    }
+    integer
+        .cmp(&(value as LpcIntInner))
+        .then_with(|| LpcFloatInner::from(0.0).cmp(&LpcFloatInner::from(value.fract())))
+}
+
 /// Zero to the tolerance the float divisor checks use.
 fn is_zero(f: LpcFloatInner) -> bool {
     f.into_inner().abs() < BaseFloat::EPSILON
@@ -242,20 +257,31 @@ impl LpcRef {
     /// `==` as LPC sees it: a destructed object compares as the selected null value.
     pub(crate) fn eq_in(&self, other: &Self, txn: &TxnHandle) -> bool {
         match (self.is_dead_object(txn), other.is_dead_object(txn)) {
-            (false, false) => self == other,
+            (false, false) => self.value_eq(other),
             (true, true) => true,
-            (true, false) => other == &txn.nil(),
-            (false, true) => self == &txn.nil(),
+            (true, false) => other.value_eq(&txn.nil()),
+            (false, true) => self.value_eq(&txn.nil()),
         }
     }
 
-    /// Whether `self kind other` holds. Two values of different types are
-    /// unordered, so every ordering is false in both directions.
+    /// Value equality includes exact numeric equality across int and float types.
+    fn value_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Int(x), Self::Float(y)) | (Self::Float(y), Self::Int(x)) => {
+                cmp_int_float(x.0, y.0).is_eq()
+            }
+            _ => self == other,
+        }
+    }
+
+    /// Whether `self kind other` holds; nonnumeric pairs of different types are unordered.
     pub(crate) fn compare(&self, kind: Comparison, other: &Self, txn: &TxnHandle) -> bool {
         match kind {
             Comparison::Eq => self.eq_in(other, txn),
             Comparison::Ne => !self.eq_in(other, txn),
-            ordering => ordering.holds(self, other),
+            ordering => self
+                .natural_cmp(other)
+                .is_some_and(|result| ordering.holds(result, Ordering::Equal)),
         }
     }
 
@@ -263,12 +289,8 @@ impl LpcRef {
     /// content; `None` for any other pair.
     pub(crate) fn natural_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Some(LpcFloatInner::from(x.0 as BaseFloat).cmp(&y.0))
-            }
-            (LpcRef::Float(x), LpcRef::Int(y)) => {
-                Some(x.0.cmp(&LpcFloatInner::from(y.0 as BaseFloat)))
-            }
+            (LpcRef::Int(x), LpcRef::Float(y)) => Some(cmp_int_float(x.0, y.0)),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Some(cmp_int_float(y.0, x.0).reverse()),
             _ => self.partial_cmp(other),
         }
     }
@@ -953,6 +975,52 @@ mod tests {
                 .collect();
             assert_eq!(answers, [false, true, false, true, true, false]);
         }
+
+        #[test]
+        fn mixed_numeric_comparisons_are_exact_at_float_and_integer_boundaries() {
+            use Ordering::{Equal, Greater, Less};
+
+            let cases = [
+                (1, 1.0, Equal),
+                (1, 1.5, Less),
+                (2, 1.5, Greater),
+                (-1, -1.5, Greater),
+                (-2, -1.5, Less),
+                (0, 0.0, Equal),
+                (0, -0.0, Equal),
+                (0, BaseFloat::from_bits(1), Less),
+                (0, -BaseFloat::from_bits(1), Greater),
+                (9_007_199_254_740_991, 9_007_199_254_740_992.0, Less),
+                (9_007_199_254_740_992, 9_007_199_254_740_992.0, Equal),
+                (9_007_199_254_740_993, 9_007_199_254_740_992.0, Greater),
+                (-9_007_199_254_740_993, -9_007_199_254_740_992.0, Less),
+                (LpcIntInner::MAX, 9_223_372_036_854_775_808.0, Less),
+                (LpcIntInner::MAX, 9_223_372_036_854_774_784.0, Greater),
+                (LpcIntInner::MIN, -9_223_372_036_854_775_808.0, Equal),
+                (LpcIntInner::MIN + 1, -9_223_372_036_854_775_808.0, Greater),
+                (LpcIntInner::MIN, -9_223_372_036_854_774_784.0, Less),
+                (LpcIntInner::MIN, -9_223_372_036_854_777_856.0, Greater),
+                (LpcIntInner::MAX, BaseFloat::MAX, Less),
+                (LpcIntInner::MIN, BaseFloat::MIN, Greater),
+                (LpcIntInner::MAX, BaseFloat::INFINITY, Less),
+                (LpcIntInner::MIN, BaseFloat::NEG_INFINITY, Greater),
+                (0, BaseFloat::NAN, Less),
+            ];
+            for (integer, float, expected) in cases {
+                let i = LpcRef::from(integer);
+                let f = LpcRef::from(float);
+                for (left, right, order) in [(&i, &f, expected), (&f, &i, expected.reverse())] {
+                    assert_eq!(left.natural_cmp(right), Some(order), "{left}, {right}");
+                    for kind in Comparison::ALL {
+                        assert_eq!(
+                            under(kind, left, right),
+                            kind.holds(order, Equal),
+                            "{left} {kind} {right}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     use super::*;
@@ -1030,7 +1098,7 @@ mod tests {
             assert!(NULL.eq_in(&dead, &txn));
             assert!(dead.eq_in(&other, &txn));
             assert!(!dead.eq_in(&LpcRef::from(1), &txn));
-            assert!(!dead.eq_in(&LpcRef::from(0.0), &txn));
+            assert!(dead.eq_in(&LpcRef::from(0.0), &txn));
             assert_eq!(dead.not(&txn), LpcRef::from(1));
             assert_eq!(dead.as_lpc_type(&TxnHandle::empty()), LpcType::Int(false));
             assert_eq!(dead.to_string(), "0");

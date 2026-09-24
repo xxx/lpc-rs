@@ -4,6 +4,8 @@ Named [classes](classes.md) support shared instances, named construction,
 guarded member access, shallow copying with `copy_class()`, and native persistence.
 [Null values and `nil`](null.md) describes the configurable null representation;
 examples on this page use the default `NULL_MODE=zero` unless stated otherwise.
+[Comparisons](comparisons.md) describes exact int/float comparison and the
+type-sensitive matching used by mapping keys and array set operations.
 
 * `int`
   - Run-of-the-mill signed integers, 64 bits by default. This size is ostensibly

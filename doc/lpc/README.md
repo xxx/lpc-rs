@@ -29,6 +29,7 @@ so you can concentrate on game code while its existing code handles login.
 | When you need to… | Read |
 |---|---|
 | Distinguish absence from numeric zero | [Null values and `nil`](null.md) |
+| Compare numbers and understand collection matching | [Comparisons](comparisons.md) |
 | Store a list of items or a lookup table | [Types](types.md), especially arrays and mappings |
 | Build an array from values and other arrays | [Array literal spreading](array_spreading.md) |
 | Copy nested collections or class records | [`deep_copy`](../efun/deep_copy.md), [`copy_class`](../efun/copy_class.md) |

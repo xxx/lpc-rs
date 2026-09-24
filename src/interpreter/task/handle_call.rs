@@ -15,7 +15,7 @@ use crate::interpreter::{
     call_frame::{CallFrame, FrameReceiver},
     call_origin::CallOrigin,
     efun::{Efun, call_efun, call_efun_sync, efun_context::EfunContext},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     stm::{TxnHandle, VarId},
     task::{Task, advance::Advance},
@@ -509,7 +509,7 @@ pub(crate) fn check_arg_type(
     arg_def_span: Option<&Span>,
     function_name: &str,
 ) -> lpc_rs_errors::Result<()> {
-    if txn.null_mode() == NullMode::Zero && lpc_ref.eq_in(&NULL, txn) {
+    if txn.null_mode() == NullMode::Zero && lpc_ref.is_null_in(txn) {
         return Ok(());
     }
     let Some(arg_type) = arg_type else {

@@ -3536,6 +3536,18 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn mixed_numeric_comparisons_emit_no_diagnostics() {
+            let code = r#"
+                int compare(int i, float f) {
+                    return (i < f) + (f <= i) + (i > f) + (f >= i)
+                         + (i == f) + (f != i);
+                }
+            "#;
+            let context = walk_code(code).await.unwrap();
+            assert!(context.diagnostics.errors().is_empty());
+        }
+
+        #[tokio::test]
         async fn call_other_ignores_a_same_named_variable() {
             let code = r#"
                 object copy = "/x"->copy();
