@@ -1,22 +1,19 @@
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_string::LpcString;
 
-use super::{Task, get_location, replace_range::replace_string, set_location};
+use super::{Task, get_location, replace_range::replace_string};
 use crate::interpreter::lpc_ref::LpcRef;
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
+    // Keep string validation and allocation out of the collection store path.
     #[inline(never)]
-    pub(crate) fn handle_assign_index(
-        &mut self,
+    pub(super) fn replace_string_index(
+        &self,
+        source: &LpcString,
         value: RegisterVariant,
-        target: RegisterVariant,
         index: RegisterVariant,
-    ) -> Result<bool> {
-        let source = get_location(&self.stack, &self.context.txn, target)?;
-        let LpcRef::String(source) = &*source else {
-            self.handle_store(value, target, index)?;
-            return Ok(false);
-        };
+    ) -> Result<LpcRef> {
         let index = get_location(&self.stack, &self.context.txn, index)?;
         let LpcRef::Int(index) = &*index else {
             return Err(self.runtime_error("String index must be an integer"));
@@ -48,11 +45,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut utf8 = [0; 4];
         let replacement = scalar.encode_utf8(&mut utf8);
         let position = position as usize;
-        let result = replace_string(source.to_str(), position..position + 1, replacement)
-            .ok_or_else(|| {
-                self.runtime_error("String element assignment exceeds maximum string length")
-            })?;
-        set_location(&mut self.stack, &self.context.txn, target, result)?;
-        Ok(true)
+        replace_string(source.to_str(), position..position + 1, replacement).ok_or_else(|| {
+            self.runtime_error("String element assignment exceeds maximum string length")
+        })
     }
 }

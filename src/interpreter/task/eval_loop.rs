@@ -595,7 +595,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_index_from_end(container, distance, destination)?;
             }
             Instruction::AssignIndex(value, target, index, address) => {
-                if !self.handle_assign_index(value, target, index)? {
+                if !self.handle_store::<true>(value, target, index)? {
                     self.stack.current_frame_mut()?.set_pc(address);
                 }
             }
@@ -810,7 +810,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::Store(value_loc, container_loc, index_loc) => {
                 // r2[r3] = r1;
-                self.handle_store(value_loc, container_loc, index_loc)?;
+                self.handle_store::<false>(value_loc, container_loc, index_loc)?;
             }
             Instruction::Shl(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| Some(int_shl(x, y)), |x, y, _| x.shl(y))?;

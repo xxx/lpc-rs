@@ -456,22 +456,36 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         set_location(&mut self.stack, &self.context.txn, destination, var)
     }
 
-    #[instrument(level = "debug", skip_all)]
+    /// Store an element, returning whether string replacement requires owner writeback.
     #[inline]
-    pub(crate) fn handle_store(
+    pub(crate) fn handle_store<const REBIND_STRING: bool>(
         &mut self,
         value_loc: RegisterVariant,
         container_loc: RegisterVariant,
         index_loc: RegisterVariant,
-    ) -> lpc_rs_errors::Result<()> {
-        let container = get_location(&self.stack, &self.context.txn, container_loc)?.into_owned();
-        let index = &*get_location(&self.stack, &self.context.txn, index_loc)?;
+    ) -> lpc_rs_errors::Result<bool> {
+        let container = get_location(&self.stack, &self.context.txn, container_loc)?;
+        if REBIND_STRING && let LpcRef::String(source) = &*container {
+            let replacement = self.replace_string_index(source, value_loc, index_loc)?;
+            drop(container);
+            set_location(
+                &mut self.stack,
+                &self.context.txn,
+                container_loc,
+                replacement,
+            )?;
+            return Ok(true);
+        }
 
-        match &container {
+        let _span = tracing::debug_span!("handle_store").entered();
+        let index = get_location(&self.stack, &self.context.txn, index_loc)?;
+
+        match &*container {
             LpcRef::Array(cell) => {
                 // Read before the COW closure acquires the transaction lock.
                 let value = &*get_location(&self.stack, &self.context.txn, value_loc)?;
-                self.store_array_value(cell.id, index, value)
+                self.store_array_value(cell.id, &index, value)?;
+                Ok(false)
             }
             LpcRef::Mapping(cell) => {
                 let value = get_location(&self.stack, &self.context.txn, value_loc)?.into_owned();
@@ -481,7 +495,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.context
                     .txn
                     .with(|t| t.merge(cell.id, MergeOp::MapInsert(key, value)));
-                Ok(())
+                Ok(false)
             }
             x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
         }

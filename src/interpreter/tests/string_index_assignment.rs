@@ -181,6 +181,46 @@ async fn mixed_dispatch_preserves_each_collection_and_assignment_result() {
 }
 
 #[tokio::test]
+async fn one_mixed_store_handles_changing_reference_target_types() {
+    assert_eq!(
+        run(
+            "",
+            &[],
+            r#"
+            mixed store(mixed ref target, mixed key, mixed value) {
+                return target[key] = value;
+            }
+            mixed *create() {
+                mixed target = "abc";
+                mixed scalar = store(ref target, 1, 'é');
+                string text = target;
+                target = ({1, 2});
+                mixed array = target;
+                mixed item = store(ref target, -1, "item");
+                target = ([]);
+                mixed record = target;
+                mixed entry = store(ref target, "key", array);
+                target = "xyz";
+                store(ref target, 0, 'Z');
+                return ({text, scalar, array[1], item,
+                         record["key"] == array, entry == array, target});
+            }
+        "#
+        )
+        .await,
+        vec![
+            s("aéc"),
+            233.into(),
+            s("item"),
+            s("item"),
+            1.into(),
+            1.into(),
+            s("Zyz")
+        ]
+    );
+}
+
+#[tokio::test]
 async fn mixed_mutable_targets_do_not_rebind_a_reassigned_parent_slot() {
     assert_eq!(
         run(

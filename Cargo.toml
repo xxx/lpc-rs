@@ -134,6 +134,10 @@ harness = false
 name = "bench_source_cache"
 harness = false
 
+[[bench]]
+name = "bench_index_assignment"
+harness = false
+
 [workspace]
 members = [
     "lpc-rs-asm",
