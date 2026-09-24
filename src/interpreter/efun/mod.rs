@@ -1297,6 +1297,11 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
+    nilp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1451,6 +1456,7 @@ mod tests {
         assert!(!Efun::find_object.suspends());
         assert!(!Efun::this_object.suspends());
         assert!(!Efun::intp.suspends());
+        assert!(!Efun::nilp.suspends());
     }
 
     /// `Efun`'s discriminants are the table positions `CallEfun` carries.
@@ -1666,6 +1672,7 @@ mod tests {
                 "snoop",
                 "query_snoop",
                 "query_snooping",
+                "nilp",
             ]
         );
     }

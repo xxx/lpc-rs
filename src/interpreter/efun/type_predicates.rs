@@ -1,5 +1,5 @@
 //! The type predicates (`intp`, `floatp`, ...): 1 when the one argument is
-//! that variant, else 0.
+//! that type or configured null value, else 0.
 
 use lpc_rs_errors::Result;
 
@@ -45,7 +45,7 @@ pub fn functionp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()>
     type_predicate(context, |r| matches!(r, LpcRef::Function(_)))
 }
 
-/// `intp`: 1 if the argument is an int (a null object is one).
+/// `intp`: 1 if the argument is an int, including null objects in zero mode.
 pub fn intp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Int(_)))
 }
@@ -53,6 +53,13 @@ pub fn intp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 /// `mappingp`: 1 if the argument is a mapping.
 pub fn mappingp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Mapping(_)))
+}
+
+/// `nilp`: 1 if the argument is the configured null value or a destructed object.
+pub fn nilp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    let result = context.arg(0).is_null_in(context.txn());
+    context.return_efun_result(LpcRef::from(result));
+    Ok(())
 }
 
 /// `objectp`: 1 if the argument is a live object.
@@ -70,8 +77,172 @@ pub fn stringp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
 
-    use crate::{interpreter::vm::Vm, test_support::test_config};
+    use crate::{
+        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        test_support::{TempLib, test_config},
+    };
+
+    #[tokio::test]
+    async fn nilp_observes_null_mode_without_accepting_other_false_or_empty_values() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let root = TempLib::new("nilp-values");
+            let vm = Vm::new(
+                ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .null_mode(mode)
+                    .build()
+                    .unwrap(),
+            );
+            let result = vm
+                .initialize_process_from_code(
+                    "/test.c",
+                    r#"
+                class empty {}
+                int *create() {
+                    function predicate = nilp;
+                    return ({ nilp(nil), nilp(0), nilp(0.0), nilp(-0.0), nilp(1),
+                        nilp(""), nilp(({})), nilp(([])), nilp(to_bytes("", "utf8")),
+                        nilp(new(class empty)), nilp(this_object()), nilp(predicate),
+                        predicate(nil), evaluate(nilp, nil), predicate(0) });
+                }
+            "#,
+                )
+                .await
+                .unwrap();
+            let zero = i64::from(mode == NullMode::Zero);
+            result
+                .result()
+                .unwrap()
+                .with_array(result.context.txn(), |values| {
+                    assert_eq!(
+                        values,
+                        &[1, zero, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, zero][..],
+                        "{mode}"
+                    );
+                })
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn nilp_tests_values_independently_of_membership_and_argument_presence() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let root = TempLib::new("nilp-absence");
+            let vm = Vm::new(
+                ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .null_mode(mode)
+                    .build()
+                    .unwrap(),
+            );
+            let code = r#"
+                mixed defaulted(mixed value = "default") { return value; }
+                int supplied(mixed *args...) { return sizeof(args); }
+                varargs int omitted(mixed value) { return nilp(value); }
+                int create() {
+                    mapping m = ([ "nil": nil, "zero": 0 ]);
+                    mixed value;
+                    return nilp(value) && nilp(find_object("/missing"))
+                        && nilp(m["missing"]) && nilp(m["nil"])
+                        && nilp(m["zero"]) == ZERO
+                        && !has_key(m, "missing") && has_key(m, "nil") && has_key(m, "zero")
+                        && defaulted() == "default" && nilp(defaulted(nil))
+                        && nilp(defaulted(0)) == ZERO && omitted()
+                        && supplied() == 0 && supplied(nil) == 1 && supplied(0) == 1;
+                }
+            "#
+            .replace("ZERO", if mode == NullMode::Zero { "1" } else { "0" });
+            let result = vm
+                .initialize_process_from_code("/test.c", &code)
+                .await
+                .unwrap();
+            assert_eq!(result.result(), Some(LpcRef::from(1)), "{mode}");
+        }
+    }
+
+    #[tokio::test]
+    async fn nilp_observes_transactional_destruction_rollback_commit_and_gc() {
+        use crate::interpreter::task::{
+            apply_function::apply_function_by_name, task_template::TaskTemplate,
+        };
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let root = TempLib::new("nilp-destruct");
+            let vm = Vm::new(
+                ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .null_mode(mode)
+                    .build()
+                    .unwrap(),
+            );
+            vm.initialize_process_from_code(
+                "/secure/master.c",
+                "int valid_destruct(object o, object c, string p) { return 1; }",
+            )
+            .await
+            .unwrap();
+            vm.initialize_process_from_code("/victim.c", "void create() {}")
+                .await
+                .unwrap();
+            let result = vm
+                .initialize_process_from_code(
+                    "/test.c",
+                    r#"
+                object victim = find_object("/victim");
+                void abort_destruct() { destruct(victim); throw(nilp(victim) ? "dead" : "live"); }
+                int check() { return nilp(victim) && !objectp(victim); }
+                int create() { return !nilp(victim) && objectp(victim); }
+                int destroy() { destruct(victim); return check(); }
+            "#,
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.result(), Some(LpcRef::from(1)), "{mode}");
+            let aborted = apply_function_by_name(
+                "abort_destruct",
+                &[],
+                result.context.process.clone(),
+                TaskTemplate::from(vm.global_state.clone()),
+                Some(5000),
+            )
+            .await
+            .unwrap()
+            .unwrap_err();
+            assert!(aborted.to_string().contains("dead"), "{aborted}");
+            for function in ["create", "destroy"] {
+                let checked = apply_function_by_name(
+                    function,
+                    &[],
+                    result.context.process.clone(),
+                    TaskTemplate::from(vm.global_state.clone()),
+                    Some(5000),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                assert_eq!(checked, LpcRef::from(1), "{mode}, {function}");
+            }
+            for collect in [false, true] {
+                if collect {
+                    vm.global_state.gc().await.unwrap().unwrap();
+                }
+                let checked = apply_function_by_name(
+                    "check",
+                    &[],
+                    result.context.process.clone(),
+                    TaskTemplate::from(vm.global_state.clone()),
+                    Some(5000),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                assert_eq!(checked, LpcRef::from(1), "{mode}, gc={collect}");
+            }
+        }
+    }
 
     /// Every variant in a typed and a `mixed` slot, plus a null object in
     /// each; `PRED` is the predicate under test.

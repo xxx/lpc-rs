@@ -9,6 +9,8 @@
 | `nil == 0` | True | False |
 | `!nil` | `1` | `1` |
 | `intp(nil)` | `1` | `0` |
+| `nilp(nil)` | `1` | `1` |
+| `nilp(0)` | `1` | `0` |
 | `typeof(nil)` | `1` (`T_INT`) | `10` (`T_NIL`) |
 | Missing mapping entry | `0` | `nil` |
 | Missing object or function result | `0` | `nil` |
@@ -29,6 +31,8 @@ functions, classes, and arrays. It does not fit scalar `int` or `float`.
 Numeric `0` is an ordinary integer and loses its special exemption from type
 checks. Arithmetic on nil raises an error. Use `value == nil` to test absence;
 `!value` also accepts numeric zero and `0.0`.
+[`nilp(value)`](../efun/nilp.md) tests the selected null value in either mode;
+it rejects float `0.0`, including in zero mode.
 
 ```c
 mixed absent = nil;

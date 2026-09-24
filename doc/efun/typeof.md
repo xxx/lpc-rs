@@ -46,4 +46,4 @@ if (typeof(x) == T_STRING) {
 ### See also
 
 `intp`, `floatp`, `stringp`, `objectp`, `arrayp`, `mappingp`, `functionp`, `bytesp`,
-[`classp`](classp.md)
+[`classp`](classp.md), [`nilp`](nilp.md)
