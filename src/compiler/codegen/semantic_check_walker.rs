@@ -321,15 +321,36 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let ExpressionNode::BinaryOp(BinaryOpNode {
             op: BinaryOperation::Index,
+            l,
             r,
             ..
         }) = &*node.lhs
             && matches!(**r, ExpressionNode::Range(_))
         {
-            return Err(self
-                .context
-                .diagnostics
-                .fail(lpc_error!(node.span, "Slice assignment is not supported")));
+            let assignable = match &**l {
+                ExpressionNode::Var(_) | ExpressionNode::Member(_) => true,
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    op: BinaryOperation::Index,
+                    r,
+                    ..
+                }) => !matches!(**r, ExpressionNode::Range(_)),
+                _ => false,
+            };
+            if !assignable {
+                return Err(self.context.diagnostics.fail(lpc_error!(
+                    node.span,
+                    "Slice assignment requires an assignable array target"
+                )));
+            }
+            for operand in [&**l, &*node.rhs] {
+                let type_ = node_type(operand, &self.context)?;
+                if !type_.is_array() && type_ != LpcType::Mixed(false) {
+                    return Err(self.context.diagnostics.fail(lpc_error!(
+                        operand.span(),
+                        "Slice assignment requires arrays, found `{type_}`"
+                    )));
+                }
+            }
         }
 
         let left_type = node_type(&node.lhs, &self.context)?;
@@ -984,7 +1005,7 @@ impl TreeWalker for SemanticCheckWalker {
                         return Err(self.context.diagnostics.fail(err));
                     }
 
-                    // A slice is a value, not a place.
+                    // Slices support replacement, not element stepping.
                     if let ExpressionNode::BinaryOp(BinaryOpNode {
                         op: BinaryOperation::Index,
                         r,

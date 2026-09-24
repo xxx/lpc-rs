@@ -120,6 +120,79 @@ sscanf("42", "%d", items[-1]); // items[<1] also works here
 
 Out-of-bounds writes raise an error and do not change an element. Writes use
 transactional array storage with shared array references. Indexed string and
-bytes writes are unsupported. A slice is a value, not an assignable location;
-slice assignment, stepping a slice, and using a slice as an efun output argument
-are rejected.
+bytes writes are unsupported.
+
+### Array slice assignment
+
+`items[start..end] = replacement` replaces the inclusive range with the elements
+of another array. The replacement may be shorter, longer, or empty. Both operands
+must be arrays; a `mixed` value is checked at runtime. Known array types follow
+the usual assignment checks.
+
+Every slice assignment constructs a **new shallow array** and assigns it back
+to the target, including equal-length replacements and empty operations. Other
+references to the old outer array retain its contents. Nested arrays, mappings,
+objects, and class instances remain shared.
+
+```c
+int *items = ({ 10, 20, 30 });
+int *old = items;
+items[1..1] = ({ 40, 50 }); // items is ({ 10, 40, 50, 30 })
+                         // old is still ({ 10, 20, 30 })
+items[0..0] = ({});        // delete the first element
+items[<1..] = ({ 60 });    // replace the last element
+```
+
+The owner must be an assignable variable, class member, or indexed slot:
+`history[0..0] = ({})`, `state.history[0..0] = ({})`, and
+`records["history"][0..0] = ({})` are supported. A slice of a temporary array,
+such as `make_array()[0..0] = ({})`, has no owner to rebind and is rejected.
+The assignment expression returns the RHS array, not the complete new array.
+
+### Write bounds
+
+Slice writes validate their bounds; they do not clip like slice reads. Resolve
+negative indices and `<` distances using the original array's length, then
+require `0 <= start <= end + 1 <= length`. The end remains inclusive. Omitting
+the start means zero; omitting the end means `length - 1`.
+
+When `start == end + 1`, the range is empty and the replacement is inserted at
+`start`. Larger reversed ranges and endpoints outside the permitted interval
+raise errors. Bounds must be integers, even when the array is empty.
+
+```c
+int *items = ({ 10, 30 });
+items[1..0] = ({ 20 });                  // insert between 10 and 30
+items[sizeof(items)..] = ({ 40 });       // append; items[<0..] also works
+items[0..<sizeof(items) + 1] = ({ 5 });   // insert before the first element
+int *empty = ({});
+empty[0..] = ({ 10 });                   // insert into an empty array
+```
+
+`items[0..-1]` replaces the whole array: ordinary `-1` denotes the last element.
+It does not describe an empty prefix. An explicit reverse end of
+`<sizeof(items) + 1` resolves to the position just before the first element.
+An explicit reverse end of `<0` is past the last element and is invalid for a
+write, even though a read slice clips it.
+
+### Evaluation and cost
+
+Slice assignment evaluates the RHS first, captures the owner and its array,
+then evaluates the start and end from left to right. Each expression runs once.
+Receiver, index, and RHS values are retained if a later expression reassigns the
+variables that supplied them. Array contents are read after operand evaluation,
+so element mutations performed by those expressions are visible to the replacement.
+
+The new array is written to the captured owner. Reassigning the owner's variable
+during bound evaluation does not change which original array supplies the prefix
+and suffix; the final write replaces that variable's value. For indexed slots and
+class members, writeback uses the captured container or instance.
+
+Invalid operands or bounds leave the target unchanged by the slice operation;
+side effects from evaluating its operands still follow normal `catch` behavior.
+Publication and retries use the ordinary transaction rules. Constructing the
+result takes linear time and space in its length; repeated front deletion can
+therefore take quadratic time when draining an array.
+
+Only plain array slice `=` is supported. Compound slice assignments, `++`, `--`,
+slice output arguments, and string/bytes slice assignments are rejected.

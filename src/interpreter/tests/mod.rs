@@ -30,6 +30,7 @@ mod reverse_indexing;
 mod security;
 mod shadows;
 mod simul_efuns;
+mod slice_assignment;
 mod spreading;
 mod virtual_objects;
 

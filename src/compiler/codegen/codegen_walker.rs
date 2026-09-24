@@ -733,6 +733,81 @@ impl CodegenWalker {
         Ok(())
     }
 
+    fn save_result(&mut self, span: Option<Span>) -> RegisterVariant {
+        let saved = self.register_counter.next().unwrap().as_local();
+        push_instruction!(self, Instruction::Copy(self.current_result, saved), span);
+        saved
+    }
+
+    async fn emit_slice_assignment(
+        &mut self,
+        owner: &mut ExpressionNode,
+        range: &mut RangeNode,
+        rhs: &mut ExpressionNode,
+        span: Option<Span>,
+    ) -> Result<()> {
+        rhs.visit(self).await?;
+        let replacement = self.save_result(rhs.span());
+        let array = self.register_counter.next().unwrap().as_local();
+        let writeback = match owner {
+            ExpressionNode::Var(_) => {
+                owner.visit(self).await?;
+                let location = self.current_result;
+                push_instruction!(self, Instruction::Copy(location, array), span);
+                Instruction::Copy(array, location)
+            }
+            ExpressionNode::Member(member) => {
+                let receiver = self.member_target(member).await?;
+                push_instruction!(
+                    self,
+                    Instruction::MemberLoad(receiver, member.name, array),
+                    span
+                );
+                Instruction::MemberStore(array, receiver, member.name)
+            }
+            ExpressionNode::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                l,
+                r,
+                ..
+            }) => {
+                l.visit(self).await?;
+                let container = self.save_result(l.span());
+                self.current_result = self.emit_index(container, r).await?;
+                let key = self.save_result(r.span());
+                push_instruction!(self, Instruction::Load(container, key, array), span);
+                Instruction::Store(array, container, key)
+            }
+            _ => return Err(lpc_bug!(span, "invalid slice assignment target")),
+        };
+        let (start, start_from_end) = if let Some(expr) = &mut *range.l {
+            let (value, reverse) = self.emit_index_bound(expr).await?;
+            self.current_result = value;
+            (self.save_result(expr.span()), reverse)
+        } else {
+            (self.constant(LpcConstant::Int(0), span)?, false)
+        };
+        let (end, end_from_end) = if let Some(expr) = &mut *range.r {
+            self.emit_index_bound(expr).await?
+        } else {
+            (self.constant(LpcConstant::Int(-1), span)?, false)
+        };
+        let direction = match (start_from_end, end_from_end) {
+            (true, true) => Some(ReverseRange::Both),
+            (true, false) => Some(ReverseRange::Start),
+            (false, true) => Some(ReverseRange::End),
+            (false, false) => None,
+        };
+        push_instruction!(
+            self,
+            Instruction::ReplaceRange(direction, array, start, end, replacement),
+            span
+        );
+        push_instruction!(self, writeback, span);
+        self.current_result = replacement;
+        Ok(())
+    }
+
     /// Emit a numbered label with prefix `T`, tracking the current count.
     fn new_label<T>(&mut self, prefix: T) -> String
     where
@@ -1488,6 +1563,18 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        if let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            l,
+            r,
+            ..
+        }) = &mut *node.lhs
+            && let ExpressionNode::Range(range) = &mut **r
+        {
+            return self
+                .emit_slice_assignment(l, range, &mut node.rhs, node.span)
+                .await;
+        }
         if let ExpressionNode::Member(member) = &mut *node.lhs {
             let receiver = self.member_target(member).await?;
             node.rhs.visit(self).await?;

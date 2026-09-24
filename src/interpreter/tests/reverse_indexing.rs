@@ -445,12 +445,8 @@ async fn reverse_marker_is_only_syntax_for_subscript_bounds() {
 }
 
 #[tokio::test]
-async fn reverse_slices_cannot_be_assigned_or_stepped() {
+async fn reverse_slices_cannot_be_stepped_or_used_as_output_arguments() {
     for (statement, diagnostic) in [
-        (
-            "a[<2..<1] = ({ 4, 5 });",
-            "Slice assignment is not supported",
-        ),
         ("a[<2..<1]++;", "Expected `int`"),
         (
             "sscanf(\"42\", \"%d\", a[<2..<1]);",

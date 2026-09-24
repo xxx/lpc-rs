@@ -163,8 +163,10 @@ impl Flow {
     ) -> Self {
         let mut operands = local_operands(func, instruction);
         let def = match *instruction {
-            // Bumped in place, so the operand stays a read as well.
-            Instruction::Inc(register) | Instruction::Dec(register) => local_index(register),
+            // Written in place, so the operand stays a read as well.
+            Instruction::Inc(register)
+            | Instruction::Dec(register)
+            | Instruction::ReplaceRange(_, register, _, _, _) => local_index(register),
             Instruction::PopulateArgv(register, _, _) | Instruction::CatchStart(register, _) => {
                 take_dest(&mut operands, register)
             }

@@ -1045,6 +1045,15 @@ AssignmentExpression: ExpressionNode = {
     <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> =>? {
         let span = Span::combine(lhs.span(), rhs.span());
 
+        if op != AssignmentOperation::Simple
+            && let ExpressionNode::BinaryOp(BinaryOpNode { op: BinaryOperation::Index, r, .. }) = &lhs
+            && matches!(**r, ExpressionNode::Range(_))
+        {
+            return Err(ParseError::User {
+                error: lpc_error!(span, "Compound slice assignment is not supported"),
+            });
+        }
+
         if matches!(lhs, ExpressionNode::Member(_)) && op != AssignmentOperation::Simple {
             let binary = BinaryOperation::try_from(op).expect("compound assignment operation");
             return Ok(guard(ExpressionNode::CompoundAssignment(CompoundAssignmentNode {

@@ -8,6 +8,7 @@ mod handle_call_fp;
 mod handle_call_other;
 mod handle_data;
 mod location;
+mod replace_range;
 pub mod task_template;
 
 #[cfg(test)]

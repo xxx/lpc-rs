@@ -594,6 +594,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::IndexFromEnd(container, distance, destination) => {
                 self.handle_index_from_end(container, distance, destination)?;
             }
+            Instruction::ReplaceRange(direction, array, start, end, replacement) => {
+                self.handle_replace_range(direction, array, start, end, replacement)?;
+            }
             Instruction::Range(r1, r2, r3, r4) | Instruction::RangeFromEnd(_, r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
 

@@ -356,12 +356,22 @@ pub enum Instruction {
         RegisterVariant,
         RegisterVariant,
     ),
+
+    /// Replace an inclusive array range with a fresh shallow array in the same register.
+    /// Operands are endpoint directions, the in/out array, start, end, and replacement.
+    ReplaceRange(
+        Option<ReverseRange>,
+        RegisterVariant,
+        RegisterVariant,
+        RegisterVariant,
+        RegisterVariant,
+    ),
 }
 
 impl Instruction {
     /// The register this instruction writes its value into, when that dest
     /// is retargetable. `None` for everything else: calls write r0
-    /// implicitly, `Inc`/`Dec` modify in place, `CatchStart`'s register is
+    /// implicitly, `Inc`/`Dec`/`ReplaceRange` modify in place, `CatchStart`'s register is
     /// rebuilt as a Local at runtime, `PopulateArgv`'s is argv's home, and
     /// `NewUpvalue` binds a cell rather than writing a value.
     pub fn dest_register(&self) -> Option<RegisterVariant> {
@@ -417,6 +427,7 @@ impl Instruction {
             | Self::Ret
             | Self::MemberStore(_, _, _)
             | Self::Guard(_, _)
+            | Self::ReplaceRange(_, _, _, _, _)
             | Self::Store(_, _, _) => None,
         }
     }
@@ -475,6 +486,9 @@ impl Instruction {
             Self::IndexFromEnd(a0, a1, a2) => Self::IndexFromEnd(f(a0), f(a1), f(a2)),
             Self::RangeFromEnd(kind, a0, a1, a2, a3) => {
                 Self::RangeFromEnd(kind, f(a0), f(a1), f(a2), f(a3))
+            }
+            Self::ReplaceRange(kind, a0, a1, a2, a3) => {
+                Self::ReplaceRange(kind, f(a0), f(a1), f(a2), f(a3))
             }
             Self::Load(a0, a1, a2) => Self::Load(f(a0), f(a1), f(a2)),
             Self::LoadMappingKey(a0, a1, a2) => Self::LoadMappingKey(f(a0), f(a1), f(a2)),
@@ -559,7 +573,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 52;
+    pub const COUNT: usize = 53;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -615,6 +629,7 @@ impl Instruction {
         "member_store",
         "guard",
         "aconst_spread",
+        "replace_range",
     ];
 
     /// This variant's dense index, `0..Self::COUNT`, in declaration order.
@@ -672,6 +687,7 @@ impl Instruction {
             Self::MemberStore(..) => 49,
             Self::Guard(..) => 50,
             Self::AConstSpread(..) => 51,
+            Self::ReplaceRange(..) => 52,
         }
     }
 
@@ -814,6 +830,23 @@ impl Display for Instruction {
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "{} {r1}, {r2}, {r3}, {r4}", self.mnemonic())
+            }
+            Instruction::ReplaceRange(kind, array, first, last, replacement) => {
+                let start = if kind.is_some_and(ReverseRange::start_from_end) {
+                    "<"
+                } else {
+                    ""
+                };
+                let end = if kind.is_some_and(ReverseRange::end_from_end) {
+                    "<"
+                } else {
+                    ""
+                };
+                write!(
+                    f,
+                    "{} {array}, {start}{first}, {end}{last}, {replacement}",
+                    self.mnemonic()
+                )
             }
             Instruction::Ret => f.write_str(self.mnemonic()),
             Instruction::Shl(r1, r2, r3) => {
@@ -1050,6 +1083,7 @@ mod tests {
             MemberStore(r(), r(), ustr("field")),
             Guard(r(), TypeIndex(0)),
             AConstSpread(ArgList(0), r()),
+            ReplaceRange(None, r(), r(), r(), r()),
         ]
     }
 
@@ -1098,6 +1132,7 @@ mod tests {
         );
         assert_eq!(Negate(r(), d).dest_register(), Some(d));
         assert_eq!(Range(r(), r(), r(), d).dest_register(), Some(d));
+        assert_eq!(ReplaceRange(None, r(), r(), r(), d).dest_register(), None);
         assert_eq!(Sizeof(r(), d).dest_register(), Some(d));
         assert_eq!(
             FunctionPtrConst {
@@ -1113,7 +1148,7 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 24);
+        assert_eq!(none_count, 25);
         for i in [
             Call(ustr("f"), ArgList(0)),
             CallEfun(0, ArgList(0)),
