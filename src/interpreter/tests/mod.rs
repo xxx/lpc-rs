@@ -32,6 +32,7 @@ mod shadows;
 mod simul_efuns;
 mod slice_assignment;
 mod spreading;
+mod string_slice_assignment;
 mod virtual_objects;
 
 use lpc_rs_utils::config::Config;

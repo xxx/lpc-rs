@@ -339,15 +339,17 @@ impl TreeWalker for SemanticCheckWalker {
             if !assignable {
                 return Err(self.context.diagnostics.fail(lpc_error!(
                     node.span,
-                    "Slice assignment requires an assignable array target"
+                    "Slice assignment requires an assignable array or string target"
                 )));
             }
             for operand in [&**l, &*node.rhs] {
                 let type_ = node_type(operand, &self.context)?;
-                if !type_.is_array() && type_ != LpcType::Mixed(false) {
+                if !type_.is_array()
+                    && !matches!(type_, LpcType::Mixed(false) | LpcType::String(false))
+                {
                     return Err(self.context.diagnostics.fail(lpc_error!(
                         operand.span(),
-                        "Slice assignment requires arrays, found `{type_}`"
+                        "Slice assignment requires arrays or strings, found `{type_}`"
                     )));
                 }
             }

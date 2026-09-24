@@ -548,9 +548,8 @@ async fn mixed_operands_require_arrays_in_both_null_modes() {
 }
 
 #[tokio::test]
-async fn known_nonarrays_and_incompatible_array_types_are_rejected() {
+async fn unsupported_slice_operands_and_incompatible_array_types_are_rejected() {
     for (code, diagnostic) in [
-        (r#"string a="abc"; a[0..0]="x";"#, "requires arrays"),
         (
             r#"bytes a=to_bytes("abc","UTF-8"); a[0..0]=({1});"#,
             "requires arrays",
@@ -581,7 +580,9 @@ async fn replacement_requires_an_assignable_owner() {
             "int *make() {{ return ({{1,2}}); }} void create() {{ int *a=({{1,2}}); {owner}[0..0]=({{9}}); }}"
         )).await.unwrap_err();
         assert!(
-            error.to_string().contains("assignable array target"),
+            error
+                .to_string()
+                .contains("assignable array or string target"),
             "{owner}: {error}"
         );
     }

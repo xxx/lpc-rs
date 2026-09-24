@@ -748,22 +748,22 @@ impl CodegenWalker {
     ) -> Result<()> {
         rhs.visit(self).await?;
         let replacement = self.save_result(rhs.span());
-        let array = self.register_counter.next().unwrap().as_local();
+        let value = self.register_counter.next().unwrap().as_local();
         let writeback = match owner {
             ExpressionNode::Var(_) => {
                 owner.visit(self).await?;
                 let location = self.current_result;
-                push_instruction!(self, Instruction::Copy(location, array), span);
-                Instruction::Copy(array, location)
+                push_instruction!(self, Instruction::Copy(location, value), span);
+                Instruction::Copy(value, location)
             }
             ExpressionNode::Member(member) => {
                 let receiver = self.member_target(member).await?;
                 push_instruction!(
                     self,
-                    Instruction::MemberLoad(receiver, member.name, array),
+                    Instruction::MemberLoad(receiver, member.name, value),
                     span
                 );
-                Instruction::MemberStore(array, receiver, member.name)
+                Instruction::MemberStore(value, receiver, member.name)
             }
             ExpressionNode::BinaryOp(BinaryOpNode {
                 op: BinaryOperation::Index,
@@ -775,8 +775,8 @@ impl CodegenWalker {
                 let container = self.save_result(l.span());
                 self.current_result = self.emit_index(container, r).await?;
                 let key = self.save_result(r.span());
-                push_instruction!(self, Instruction::Load(container, key, array), span);
-                Instruction::Store(array, container, key)
+                push_instruction!(self, Instruction::Load(container, key, value), span);
+                Instruction::Store(value, container, key)
             }
             _ => return Err(lpc_bug!(span, "invalid slice assignment target")),
         };
@@ -800,7 +800,7 @@ impl CodegenWalker {
         };
         push_instruction!(
             self,
-            Instruction::ReplaceRange(direction, array, start, end, replacement),
+            Instruction::ReplaceRange(direction, value, start, end, replacement),
             span
         );
         push_instruction!(self, writeback, span);

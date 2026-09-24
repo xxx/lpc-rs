@@ -357,8 +357,8 @@ pub enum Instruction {
         RegisterVariant,
     ),
 
-    /// Replace an inclusive array range with a fresh shallow array in the same register.
-    /// Operands are endpoint directions, the in/out array, start, end, and replacement.
+    /// Replace an inclusive array or string range with a new value in the same register.
+    /// Operands are endpoint directions, the in/out value, start, end, and replacement.
     ReplaceRange(
         Option<ReverseRange>,
         RegisterVariant,
