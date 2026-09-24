@@ -273,7 +273,7 @@ pub(crate) async fn sentence(
     .await
 }
 
-/// Parse only the caller's registrations, with an explicit actor for every callback.
+/// Parse only the caller's registrations, retaining the context's selected command giver.
 pub(crate) async fn owned_sentence(
     ctx: TaskContext,
     actor: &Arc<Process>,
@@ -282,7 +282,6 @@ pub(crate) async fn owned_sentence(
     completion: Completion,
 ) -> Result<Sentence> {
     depth_guard(&ctx, "parse_my_rules")?;
-    ctx.this_player.store(Some(actor.clone()));
     let first_word = line.split_whitespace().next().unwrap_or("");
     let _frame = Frame::push(&ctx, line, first_word);
     sentence_trial(

@@ -8,6 +8,7 @@
  * The vocabulary hooks serve parse_command() and the grammar parser used by
  * parse_sentence(); they do not change ulib's add_action() commands.
  * Parser efun callbacks retain the invoking LPC frames behind the actor's caller entry.
+ * Parser callbacks use the selected command giver as this_player(), defaulting to the actor.
  * Command vocabulary uses the actor as player/caller; parse_command keeps its entering player.
  * See ../doc/applies.md, "Master applies", for the complete hook index.
  */

@@ -28,8 +28,9 @@ A handler that refuses outright — `0` or distinct `nil`, no reason string —
 never reaches this apply; there is nothing to describe.
 
 The apply runs in the current transaction, after all failed rules' handler
-effects. `this_player()` and `previous_object()` are the actor, `origin()` is
-`"driver"`. `query_verb()` reports this failure's canonical matched phrase,
+effects. `this_player()` is the selected command giver, defaulting to the actor;
+parser efuns can select another object or null. `previous_object()` is the actor
+and `origin()` is `"driver"`. `query_verb()` reports this failure's canonical matched phrase,
 including a synonym; `query_verb(1)` preserves that phrase's raw input span,
 including internal whitespace. `query_command()` remains the original line.
 Nested commands or parses restore that outer context when they return.

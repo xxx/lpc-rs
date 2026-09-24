@@ -1,6 +1,6 @@
 # parse_my_rules
 
-`mixed parse_my_rules(object actor, string line, [int execute = 0])`
+`mixed parse_my_rules(object actor, string line, [int execute = 0], [object command_giver = actor])`
 
 Parses `line` using only `this_object()`'s registered parser rules, for the
 explicit `actor`. The actor must be alive and have called `enable_commands()`;
@@ -77,10 +77,22 @@ The explicit actor supplies the normal
 Permissions and object selection use the normal handler protocol in both modes.
 
 All parser callbacks, including scope, vocabulary, permissions, actions and
-error reporting, see `actor` as `this_player()` and `previous_object()`, with
-`origin()` equal to `"driver"`. Verb queries describe the current matched
-phrase; `query_command()` holds the whole line. The surrounding player and
-command context is restored on return or exception, including nested parses
+error reporting, see `command_giver` as `this_player()` and `actor` as immediate
+`previous_object()`, with `origin()` equal to `"driver"`. Omitting the giver
+selects the actor; explicit `nil` clears it. Any live object can be the giver,
+including an unconnected user or NPC; a destructed giver becomes null. Wrong
+non-null types are errors, including integer zero in distinct-null mode.
+Selecting a giver preserves the task's interactive provenance. Each callback
+starts with the selected giver, so callback-local `set_this_player()` changes
+do not leak to later callbacks.
+
+```lpc
+mixed args = parse_my_rules(body, line, 0, user);
+```
+
+The rule owner remains the object executing the efun, independently of both
+identities. Verb queries describe the current matched phrase; `query_command()`
+holds the whole line. The surrounding player and command context is restored on return or exception, including nested parses
 for a different actor.
 
 The caller chain behind the actor retains the object invoking this efun and
@@ -96,6 +108,8 @@ of 16 with `command()` and `parse_sentence()`.
 ### Errors
 
 Invalid or nonliving actors raise `parse_my_rules: the actor is not a living`.
+An invalid command giver raises
+`parse_my_rules: the command giver must be an object or null`.
 A non-string line raises `parse_my_rules: the line must be a string`; a
 non-integer execution flag raises `parse_my_rules: execute must be an int`.
 Excessive nesting raises `parse_my_rules: nesting deeper than 16`.

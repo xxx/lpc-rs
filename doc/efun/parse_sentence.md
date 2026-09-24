@@ -1,13 +1,17 @@
 # parse_sentence
 
-`mixed parse_sentence(string line, [int debug = 0], [object *scope = 0], [mapping nicknames = ([])])`
+```text
+mixed parse_sentence(string line, [int debug = 0],
+                     [object *scope = nil], [mapping nicknames = nil],
+                     [object actor = this_player()],
+                     [object command_giver = actor])
+```
 
-Runs `line` for `this_player()` over the parser package's verb-attached
-rules only — not `this_player()`'s own `add_action`/`add_rule` rules, no
-`process_input` pre-hook, and no dispatcher fallback — and returns a result
-code without delivering anything to anyone. `this_player()` must be alive
-and have called `enable_commands()`; otherwise a runtime error. `debug` is
-accepted and ignored.
+Runs `line` for `actor` over the parser package's verb-attached rules and
+returns a result code without delivering anything. The actor defaults to the
+entering `this_player()` and must be alive and command-enabled. Its own
+`add_action`/`add_rule` rules, the `process_input` pre-hook and dispatcher
+fallback are outside this search. `debug` is accepted and ignored.
 
 Registered verbs match leading whole words, with case and punctuation preserved
 and Unicode whitespace treated as separators. The longest matching phrase is
@@ -55,9 +59,29 @@ own failed phrase's context. Nested commands restore the surrounding context.
 
 ### Callback context
 
-Scope, vocabulary, permission, action and error callbacks see the actor as
-`this_player()` and immediate `previous_object()`, with `origin()` equal to
-`"driver"`. Behind the actor, the caller chain retains the object invoking this
+The actor selects the default scope and actor permission target. The command
+giver supplies `this_player()` in scope, vocabulary, permission, action and error
+callbacks. It defaults to the actor; an explicit `nil` clears it. A giver may be
+any live object, including an unconnected user or NPC, and need not be living
+or related to the actor. A destructed giver becomes null. Wrong non-null types
+are errors, including integer zero in distinct-null mode. An explicitly null
+or destructed actor is an error. Identities are validated before callbacks.
+
+```lpc
+parse_sentence(line, 0, nil, nil, body, user);
+parse_sentence(line, 0, nil, nil, npc, nil);
+```
+
+Selection does not replace the task's interactive provenance: `this_interactive()`
+keeps its existing entry-player and connection rules. Each callback starts with
+the selected giver; its own `set_this_player()` affects its nested work without
+changing later callbacks or the surrounding player. A nested parse selects its
+own identities, with an omitted giver defaulting to its selected actor. Normal
+return, refusal and exceptions restore the surrounding player and command frame.
+Callback effects still follow the current transaction's catch and rollback rules.
+
+Callbacks keep the actor as immediate `previous_object()` and report `"driver"`
+from `origin()`. Behind the actor, the caller chain retains the object invoking this
 efun and its external callers. For `main -> bridge -> owner -> parse_sentence`,
 a callback sees `({ actor, owner, bridge, main })` from `previous_object(-1)`.
 Equal adjacent objects are retained, including when the actor invokes the efun.
@@ -104,10 +128,11 @@ them. A flat occurrence can therefore override an inaccessible nested occurrence
 
 Array structure is snapshotted before parser callbacks. Each rule evaluates its
 scope afresh, caching each parent's inventory hook result for that rule's walk.
-Callbacks run in the current transaction with the actor as `this_player()` and
-`previous_object()`, and `origin()` is `"driver"`. A callback exception propagates;
-refusing a rule does not undo callback effects. Destructed objects are skipped,
-and a parent destructed during its inventory hooks cannot expose children.
+Callbacks run in the current transaction with the selected command giver as
+`this_player()`, the actor as `previous_object()`, and `"driver"` as `origin()`.
+A callback exception propagates; refusing a rule does not undo callback effects.
+Destructed objects are skipped, and a parent destructed during its inventory
+hooks cannot expose children.
 
 Unmodified object tokens require reachable matches; `OBJ:v`, `OBS:v`, `LIV:v`
 and `LVS:v` also admit visible but unreachable matches. Normal permissions still
@@ -124,10 +149,12 @@ candidate — naming an object here does not itself add it to the scope.
 
 `parse_sentence: this_player() is not a living` — there is no
 `this_player()`, or it has been destructed, or it has never called
-`enable_commands()`; `parse_sentence: the scope must be an array of
-objects` — `scope` given and not an array; `parse_sentence: the scope nests
-deeper than 20`; `parse_sentence: a nested scope array must immediately follow
-a live object`; `parse_sentence: nicknames must be a mapping from strings
+`enable_commands()`. An invalid explicit actor raises
+`parse_sentence: the actor is not a living`. An invalid giver raises
+`parse_sentence: the command giver must be an object or null`.
+`parse_sentence: the scope must be an array of objects` — `scope` given and not
+an array; `parse_sentence: the scope nests deeper than 20`;
+`parse_sentence: a nested scope array must immediately follow a live object`; `parse_sentence: nicknames must be a mapping from strings
 to objects`. `parse_sentence`, `parse_my_rules` and `command()` share a nesting
 limit of 16; exceeding it here raises `parse_sentence: nesting deeper than 16`.
 

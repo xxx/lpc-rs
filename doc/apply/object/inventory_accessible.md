@@ -19,13 +19,14 @@ inaccessibility rather than kind 7 (no matching noun). A `:v` token allows those
 visible matches to proceed to normal permissions. It does not reveal hidden
 contents or grant permission to perform the action.
 
-Called in the current transaction with the actor as `this_player()` and
-`previous_object()`, and `origin()` set to `"driver"`. Explicit scope structure
-is snapshotted before callbacks; a parent's hook result is reused within each
+Called in the current transaction with the selected command giver as
+`this_player()` and the actor as `previous_object()`, with `origin()` set to
+`"driver"`. Explicit scope structure is snapshotted before callbacks; a parent's hook result is reused within each
 rule's walk. Later rules and parses ask afresh. Exceptions propagate and hook
 effects remain if a rule refuses. In an explicit scope walk, a parent destructed
 during the hook cannot expose its supplied children.
 
+The giver defaults to the actor; parser efuns can select another object or null.
 Parser efun calls retain the invoking LPC frames behind the actor; see
 [callback context](../../efun/parse_sentence.md#callback-context).
 

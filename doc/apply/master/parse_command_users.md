@@ -10,8 +10,9 @@ reachable; it is never offered to an `OBJ`/`OBS` phrase in the same rule.
 Anything else in the result is dropped; undefined, or a result that is not
 an array, adds nobody.
 
-For calls from `parse_sentence` or `parse_my_rules`, the invoking LPC frames
-remain behind the actor; see
+For calls from `parse_sentence` or `parse_my_rules`, `this_player()` is the
+selected command giver (defaulting to the actor), and the invoking LPC frames
+remain behind the actor's immediate caller entry; see
 [callback context](../../efun/parse_sentence.md#callback-context).
 
 ### See also

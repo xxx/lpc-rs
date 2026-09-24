@@ -18,6 +18,7 @@
  * when executing, or the first accepted parse when returning arguments.
  * Error reporting waits until all phrases fail, and refusals do not undo effects.
  * Parser efun callbacks retain the invoking LPC frames behind the actor's caller entry.
+ * Parser callbacks use the selected command giver as this_player(), defaulting to the actor.
  * "hand over" below uses give's methods; query_verb() reports "hand over".
  * query_verb(1) and generic typed-verb arguments preserve the whole typed phrase.
  * Whitespace in registered keys is normalized; case and punctuation stay exact.
@@ -53,7 +54,7 @@ void create() {
 /**
  * On the actor, or the verb object if absent there, permit an attempt.
  * item and recipient are both 0 here; the two *_words strings are available
- * for checks that do not need resolved objects, and this_player() is the actor.
+ * for checks that do not need resolved objects; previous_object() identifies the actor.
  * Return 1 to continue, 0 to refuse, or a reason string from a mixed-return
  * version; when no can tier exists on either target, permission defaults
  * to yes, as this simple example does explicitly.
@@ -69,14 +70,14 @@ int can_give_obj_to_liv(object item, object recipient, string item_words, string
  * Each possible pair is checked before selection, then selected pairs are rechecked.
  * Return 1 to qualify, 0 to reject, or a reason string from a mixed-return
  * version; without any direct tier on this item or the owner, it is excluded.
- * Requiring the item to be carried by this_player() permits only held gifts.
+ * Requiring the item to be carried by the actor permits only held gifts.
  */
 int direct_give_obj_to_liv(object item, object recipient, string item_words, string recipient_words) {
-    return environment(this_object()) == this_player();
+    return environment(this_object()) == previous_object();
 }
 
 /**
- * On a living recipient, decide whether it accepts the item from this_player().
+ * On a living recipient, decide whether it accepts the item from the actor, previous_object().
  * item is the gift being checked and recipient is this living; the *_words
  * strings hold the typed phrases, and selected pairs are rechecked afterward.
  * This hook runs only if the pair's direct check accepts and both objects survive.
@@ -92,7 +93,7 @@ mixed indirect_give_obj_to_liv(object item, object recipient, string item_words,
 /**
  * On the verb object, perform the action after all permission hooks accept.
  * item and recipient are now resolved objects; the *_words strings preserve
- * the phrases used to select them, and this_player() remains the actor.
+ * the phrases used to select them, and this_player() is the selected command giver.
  * The return value is ignored: reject an action in can/direct/indirect,
  * because reaching do marks the rule handled even if it returns 0.
  * Omitting all do tiers leaves the rule unhandled; this example only prints
@@ -192,14 +193,15 @@ void do_cast_str_at_str(string spell, string target, string spell_words, string 
 }
 
 /**
- * Parse only this verb object's rules for an explicit living actor.
+ * Parse only this verb object's rules for an explicit living actor and command giver.
+ * Pass the actor as giver for ordinary commands, a separate user, or nil for no giver.
  * Permissions still run, but no action is required or called.
  * Success returns ({ base, rule, captures..., typed_verb, source_strings... });
  * failure returns a parser status or message, without delivering it.
  * For "cast spark at tower", captures are "spark" and "tower"; the helper
  * returns them for another consumer without printing the action's message.
  */
-mixed match_text(object actor, string line) {
-    return parse_my_rules(actor, line);
+mixed match_text(object actor, string line, object command_giver) {
+    return parse_my_rules(actor, line, 0, command_giver);
 }
 #endif

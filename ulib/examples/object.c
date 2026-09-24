@@ -4,6 +4,7 @@
  * This disabled example supplies vocabulary and parser access, not a complete
  * container: it has no open/close state or item-transfer commands.
  * Parser efun vocabulary and inventory callbacks retain invoking LPC frames behind the actor.
+ * Parser callbacks use the selected command giver as this_player(), defaulting to the actor.
  * Command vocabulary uses the actor as player/caller; parse_command keeps its entering player.
  * See ../doc/applies.md, "Object applies", for the complete hook index.
  */
@@ -63,7 +64,7 @@ string *parse_command_adjectiv_id_list() {
  * This controls finding contents, not whether an action may reach them.
  * The parser also uses this answer for a supplied child array after this object;
  * a flat explicit list bypasses inventory hooks. A :v token cannot reveal hidden contents.
- * Calls use the actor as this_player()/previous_object(), with driver origin,
+ * Calls use the selected giver as this_player() and actor as previous_object(), with driver origin,
  * in the current transaction; each explicit rule walk reuses the hook result.
  */
 int inventory_visible() {

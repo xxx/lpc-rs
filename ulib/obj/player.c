@@ -129,6 +129,7 @@ mixed process_input(string line) {
  * either hook this body contributes no object-specific noun matches.
  * The master's shared ids do not apply to this fallback.
  * Command matching supplies the actor as player/caller; parse_command keeps its entering player.
+ * Parser efuns can select a separate command giver for this_player().
  */
 int id(string phrase) {
     if (!name) {

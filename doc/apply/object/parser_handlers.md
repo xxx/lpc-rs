@@ -32,7 +32,8 @@ References to action execution below apply to ordinary dispatch,
 
 When an object permission runs on the owner, its arguments still name the
 original noun candidates. A destructed candidate cannot be accepted through
-owner fallback. All calls retain the actor as player and immediate caller.
+owner fallback. All calls retain the actor as immediate caller and the selected
+command giver as player.
 For `parse_sentence` and `parse_my_rules`, the invoking LPC frames remain
 behind the actor; see [callback context](../../efun/parse_sentence.md#callback-context).
 
@@ -205,14 +206,18 @@ offered to that hook, in the same trial order, until it returns a string. Permis
 `do_` run in the current transaction: a refusal does not undo earlier writes
 or output. A runtime exception stops selection and propagates to the caller.
 
-All four families run with `this_player()` and `previous_object()` set to the
-actor and `origin()` set to `"driver"`. `query_verb()` is the canonical matched
-phrase, including a synonym; `query_verb(1)` preserves its raw input span.
+All four families run with the selected command giver as `this_player()`, the
+actor as `previous_object()`, and `"driver"` as `origin()`. The giver defaults to
+the actor; parser efuns can select another object or explicit null.
+`query_verb()` is the canonical matched phrase, including a synonym; `query_verb(1)` preserves its raw input span.
 Handler names and generic prefixes use the base verb. Scope and vocabulary hooks
 see the same matched context, and each deferred error hook sees its own failed
 phrase. Nested commands restore the surrounding context on return or exception.
-For `parse_my_rules`, the actor is its explicit argument, even when the caller's
-ambient `this_player()` is different or absent.
+`parse_sentence` defaults the actor to the entering player and accepts an
+explicit override; `parse_my_rules` requires the actor argument. The actor
+continues to determine scope and actor permission lookup independently of the
+giver. Each callback starts with the selected giver, and selecting a giver does
+not replace the task's interactive provenance.
 
 ### The many-slot array
 

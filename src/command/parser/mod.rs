@@ -19,7 +19,7 @@ use crate::{
     },
     interpreter::{
         PARSER_ERROR_MESSAGE,
-        apply::{apply_on, as_actor},
+        apply::{apply_nested, as_actor},
         lpc_ref::LpcRef,
         process::Process,
         task_context::TaskContext,
@@ -104,7 +104,7 @@ impl Rejection {
         else {
             return Ok(None);
         };
-        match apply_on(ctx, as_actor(ctx, actor), &master, actor, function, &args).await? {
+        match apply_nested(ctx, as_actor(ctx, actor), &master, function, &args).await? {
             LpcRef::String(message) => Ok(Some(message.to_string())),
             _ => Ok(None),
         }

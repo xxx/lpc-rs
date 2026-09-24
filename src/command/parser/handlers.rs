@@ -9,7 +9,7 @@ use super::{RejectionCode, attempt::Target};
 use crate::{
     command::frontend::parser::{HandlerArg, ParserRule},
     interpreter::{
-        apply::{apply_on, as_actor, diagnostics},
+        apply::{apply_nested, as_actor, diagnostics},
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
@@ -179,16 +179,9 @@ pub(crate) async fn call(
             continue;
         };
         let args = tier.arguments(ctx, rule, args);
-        return apply_on(
-            ctx,
-            as_actor(ctx, actor),
-            target,
-            actor,
-            function.clone(),
-            &args,
-        )
-        .await
-        .map(Some);
+        return apply_nested(ctx, as_actor(ctx, actor), target, function.clone(), &args)
+            .await
+            .map(Some);
     }
     Ok(None)
 }

@@ -81,8 +81,9 @@ They support the driver's grammar facilities (`parse_command()`,
 `parse_sentence()` and `parse_my_rules()`). Install only the vocabulary your game
 needs.
 
-In callbacks from `parse_sentence` and `parse_my_rules`, `previous_object()`
-is the actor, followed by the object invoking the efun and its external callers.
+In callbacks from `parse_sentence` and `parse_my_rules`, `this_player()` is the
+selected command giver, defaulting to the actor. `previous_object()` is the actor,
+followed by the object invoking the efun and its external callers.
 Stack inspection also retains local and inherited frames, with no function
 metadata for the actor's driver entry. This applies to vocabulary, inventory,
 permission, action and error callbacks; equal adjacent callers are retained.
@@ -132,8 +133,8 @@ These belong on the affected game object. Live examples are in
 | `parser_handlers` | Four dynamic families described below; with actor, noun-candidate and verb-owner lookup. | [examples/verb.c](../examples/verb.c) |
 
 Inventory hooks run before noun permissions, inside the current transaction,
-with the actor as `this_player()` and `previous_object()` and `origin()` set to
-`"driver"`. Exceptions propagate; refusals do not undo effects. Explicit scope
+with the selected command giver as `this_player()`, the actor as
+`previous_object()`, and `origin()` set to `"driver"`. Exceptions propagate; refusals do not undo effects. Explicit scope
 structure is snapshotted before callbacks, and each rule walk reuses a parent's
 hook results. Later rules and parses ask afresh. A parent destructed by a hook
 cannot expose children.
@@ -253,9 +254,18 @@ or calling any `do_`. The `match_text` helper in `examples/verb.c` demonstrates
 this for text captures. The result is `({ base, rule, captures..., typed_verb,
 source_strings... })`; failures use the same status codes or error messages as
 `parse_sentence`, without delivering them. A third argument of nonzero executes
-normally and returns 1. The explicit living actor supplies scope and every
-callback's player/caller context; nested calls restore the surrounding context.
-The invoking LPC caller chain remains behind the actor in every callback.
+normally and returns 1. The explicit living actor supplies scope, actor
+permission lookup and immediate caller identity. A fourth argument selects the
+command giver returned by callback `this_player()`; omission uses the actor and
+explicit nil clears it. The example's `match_text(actor, line, command_giver)`
+keeps the owner, actor and command giver separate.
+`parse_sentence(line, 0, scope, nicknames, actor, command_giver)` accepts the same
+separation, with an omitted actor defaulting to the entering player. The actor
+must be living; the giver may be any live object or null. A destructed giver
+becomes null, and wrong non-null types are errors. Selection does not replace
+the task's interactive provenance. Callback-local player changes do not affect
+later callbacks, and nested calls restore the surrounding player and command
+frame. The invoking LPC caller chain remains behind the actor in every callback.
 Returning arguments still runs permissions and retains their effects.
 
 Two-object rules with one `OBS`/`LVS` slot use the same individual-object

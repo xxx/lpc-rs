@@ -4,10 +4,14 @@ use lpc_rs_errors::Result;
 
 use crate::{
     command::{parser::Completion, trial},
-    interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef},
+    interpreter::{
+        efun::{efun_context::EfunContext, parser_context},
+        lpc_int::LpcInt,
+        lpc_ref::LpcRef,
+    },
 };
 
-/// `parse_my_rules(actor, line, execute = 0)` uses the explicit actor for every callback.
+/// Parse the owner's rules with independently selected actor and command giver.
 pub async fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(actor) = context.arg(0).live_object(context.txn()) else {
         return Err(context.runtime_error("parse_my_rules: the actor is not a living"));
@@ -24,8 +28,7 @@ pub async fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) ->
         _ => return Err(context.runtime_error("parse_my_rules: execute must be an int")),
     };
     let owner = context.process().clone();
-    let mut task_context = context.task_context().clone();
-    task_context.callers = Some(context.chain());
+    let task_context = parser_context::invocation(context, &actor, 3, "parse_my_rules")?;
     let outcome = Box::pin(trial::owned_sentence(
         task_context,
         &actor,

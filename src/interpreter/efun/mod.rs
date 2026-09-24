@@ -84,6 +84,7 @@ pub(crate) mod parse_refresh;
 pub(crate) mod parse_remove;
 pub(crate) mod parse_sentence;
 pub(crate) mod parse_string;
+mod parser_context;
 pub(crate) mod present;
 pub(crate) mod previous_object;
 pub(crate) mod query_call_out;
@@ -552,8 +553,8 @@ efuns! {
     },
     parse_my_rules [async] => {
         returns: LpcType::Mixed(false),
-        arity: (3, 1),
-        args: [LpcType::Object(false), LpcType::String(false), LpcType::Int(false)],
+        arity: (4, 2),
+        args: [LpcType::Object(false), LpcType::String(false), LpcType::Int(false), LpcType::Object(false)],
     },
     parse_refresh => {
         returns: LpcType::Void,
@@ -565,12 +566,14 @@ efuns! {
     },
     parse_sentence [async] => {
         returns: LpcType::Mixed(false),
-        arity: (4, 3),
+        arity: (6, 5),
         args: [
             LpcType::String(false),
             LpcType::Int(false),
             LpcType::Object(true),
             LpcType::Mapping(false),
+            LpcType::Object(false),
+            LpcType::Object(false),
         ],
     },
     parse_string [async] => {
