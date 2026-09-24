@@ -20,6 +20,10 @@ function; where the driver supplies an object, such as a `call_out`'s
 pointer owner or a command's actor, that object occupies the corresponding
 position. A boot entry has no caller.
 
+`parse_sentence` and `parse_my_rules` callbacks retain the invoking LPC frames
+behind the actor's driver-supplied position, including local and inherited
+calls. See [parser callback context](parse_sentence.md#callback-context).
+
 An efun pointer such as `calling_object` sees the frame that fired it.
 
 ### Examples

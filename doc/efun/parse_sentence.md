@@ -53,6 +53,23 @@ argument contain its original input span, including internal whitespace.
 `query_command()` retains the whole line. Each deferred error hook receives its
 own failed phrase's context. Nested commands restore the surrounding context.
 
+### Callback context
+
+Scope, vocabulary, permission, action and error callbacks see the actor as
+`this_player()` and immediate `previous_object()`, with `origin()` equal to
+`"driver"`. Behind the actor, the caller chain retains the object invoking this
+efun and its external callers. For `main -> bridge -> owner -> parse_sentence`,
+a callback sees `({ actor, owner, bridge, main })` from `previous_object(-1)`.
+Equal adjacent objects are retained, including when the actor invokes the efun.
+
+`calling_object`, `calling_function` and `calling_program` also retain local
+and inherited frames. The actor occupies the first position without a calling
+function or program; the captured invoking frames follow it. An efun pointer
+adds its owner before the frame that fired it, with no function metadata for
+the owner entry. Nested parser calls retain the outer callback's frames and
+restore its context on return or exception. The same rules apply to
+[`parse_my_rules`](parse_my_rules.md).
+
 ### scope
 
 Without `scope`, candidates are the actor, its environment, its own inventory,

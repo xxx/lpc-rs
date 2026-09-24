@@ -19,6 +19,9 @@ walk reuses a parent's result. Later rules and later parses ask afresh.
 Exceptions propagate; refusing a rule does not undo hook effects. In an explicit
 scope walk, destruction of the parent during the hook prevents descent.
 
+Parser efun calls retain the invoking LPC frames behind the actor; see
+[callback context](../../efun/parse_sentence.md#callback-context).
+
 ### See also
 
 [`inventory_accessible`](inventory_accessible.md),

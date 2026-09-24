@@ -24,8 +24,10 @@ pub async fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) ->
         _ => return Err(context.runtime_error("parse_my_rules: execute must be an int")),
     };
     let owner = context.process().clone();
+    let mut task_context = context.task_context().clone();
+    task_context.callers = Some(context.chain());
     let outcome = Box::pin(trial::owned_sentence(
-        context.task_context(),
+        task_context,
         &actor,
         &owner,
         line.to_str(),

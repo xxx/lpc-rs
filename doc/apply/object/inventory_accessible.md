@@ -26,6 +26,9 @@ rule's walk. Later rules and parses ask afresh. Exceptions propagate and hook
 effects remain if a rule refuses. In an explicit scope walk, a parent destructed
 during the hook cannot expose its supplied children.
 
+Parser efun calls retain the invoking LPC frames behind the actor; see
+[callback context](../../efun/parse_sentence.md#callback-context).
+
 ### See also
 
 [`inventory_visible`](inventory_visible.md),

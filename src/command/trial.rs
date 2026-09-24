@@ -238,17 +238,17 @@ impl Sentence {
 /// does: the same transaction, depth limit and command state as
 /// `dispatch`, but no pre-hook, no fallback, nothing delivered.
 pub(crate) async fn sentence(
-    ctx: &TaskContext,
+    ctx: TaskContext,
     actor: &Arc<Process>,
     line: &str,
     scope: Option<SuppliedScope>,
     nicknames: &[Nickname],
 ) -> Result<Sentence> {
-    depth_guard(ctx, "parse_sentence")?;
+    depth_guard(&ctx, "parse_sentence")?;
     let first_word = line.split_whitespace().next().unwrap_or("").to_owned();
-    let _frame = Frame::push(ctx, line, &first_word);
+    let _frame = Frame::push(&ctx, line, &first_word);
     sentence_trial(
-        ctx,
+        &ctx,
         actor,
         line,
         None,
@@ -263,14 +263,13 @@ pub(crate) async fn sentence(
 
 /// Parse only the caller's registrations, with an explicit actor for every callback.
 pub(crate) async fn owned_sentence(
-    ctx: &TaskContext,
+    ctx: TaskContext,
     actor: &Arc<Process>,
     owner: &Arc<Process>,
     line: &str,
     completion: Completion,
 ) -> Result<Sentence> {
-    depth_guard(ctx, "parse_my_rules")?;
-    let ctx = ctx.clone();
+    depth_guard(&ctx, "parse_my_rules")?;
     ctx.this_player.store(Some(actor.clone()));
     let first_word = line.split_whitespace().next().unwrap_or("");
     let _frame = Frame::push(&ctx, line, first_word);

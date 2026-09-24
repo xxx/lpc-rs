@@ -17,6 +17,7 @@
  * Refusals leave later rules and shorter phrases eligible; the first do wins
  * when executing, or the first accepted parse when returning arguments.
  * Error reporting waits until all phrases fail, and refusals do not undo effects.
+ * Parser efun callbacks retain the invoking LPC frames behind the actor's caller entry.
  * "hand over" below uses give's methods; query_verb() reports "hand over".
  * query_verb(1) and generic typed-verb arguments preserve the whole typed phrase.
  * Whitespace in registered keys is normalized; case and punctuation stay exact.

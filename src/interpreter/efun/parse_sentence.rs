@@ -24,11 +24,13 @@ pub async fn parse_sentence<const N: usize>(context: &mut EfunContext<'_, N>) ->
     };
     let scope = scope_arg(context)?;
     let nicknames = nicknames_arg(context)?;
+    let mut task_context = context.task_context().clone();
+    task_context.callers = Some(context.chain());
 
     // Boxed to stay out of `call_efun`'s unboxed future union, which every
     // efun call pays for.
     let outcome = Box::pin(trial::sentence(
-        context.task_context(),
+        task_context,
         &actor,
         line.to_str(),
         scope,

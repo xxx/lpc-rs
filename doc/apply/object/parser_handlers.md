@@ -33,6 +33,8 @@ References to action execution below apply to ordinary dispatch,
 When an object permission runs on the owner, its arguments still name the
 original noun candidates. A destructed candidate cannot be accepted through
 owner fallback. All calls retain the actor as player and immediate caller.
+For `parse_sentence` and `parse_my_rules`, the invoking LPC frames remain
+behind the actor; see [callback context](../../efun/parse_sentence.md#callback-context).
 
 ### Name tiers
 

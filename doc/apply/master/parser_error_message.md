@@ -35,6 +35,10 @@ including internal whitespace. `query_command()` remains the original line.
 Nested commands or parses restore that outer context when they return.
 Exceptions from this apply propagate to the caller.
 
+For parser efun calls, the invoking LPC frames remain behind the actor even
+during deferred reporting; see
+[callback context](../../efun/parse_sentence.md#callback-context).
+
 Diagnostic arguments retain the failure's phrase, reason, count, or candidate
 references as recorded while trying its rule. Later handlers can change those
 objects before reporting; references to destructed objects read as the selected

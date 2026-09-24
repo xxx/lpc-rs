@@ -16,6 +16,7 @@ mod nosave;
 mod parse_command;
 mod parse_string;
 mod parser;
+mod parser_callers;
 mod parser_handlers;
 mod parser_multiword;
 mod parser_relations;

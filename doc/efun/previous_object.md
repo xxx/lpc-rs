@@ -25,6 +25,11 @@ parser rule's handler) sees the actor, `init` sees the living that moved,
 and a task the driver starts on its own (boot, login, a connection event)
 sees 0. A destructed previous object is 0.
 
+Callbacks from `parse_sentence` and `parse_my_rules` retain the object invoking
+the efun and its external callers behind the actor. Thus `previous_object(1)`
+names the invoking object, even if it is also the actor; equal adjacent entries
+are preserved. See [parser callback context](parse_sentence.md#callback-context).
+
 A pointer runs as its owner. Firing one is a door, so an efun pointer such
 as `previous_object` answers the object that fired it; an object a
 pointer call creates sees the owner, then the firer — the owner twice when

@@ -81,6 +81,12 @@ They support the driver's grammar facilities (`parse_command()`,
 `parse_sentence()` and `parse_my_rules()`). Install only the vocabulary your game
 needs.
 
+In callbacks from `parse_sentence` and `parse_my_rules`, `previous_object()`
+is the actor, followed by the object invoking the efun and its external callers.
+Stack inspection also retains local and inherited frames, with no function
+metadata for the actor's driver entry. This applies to vocabulary, inventory,
+permission, action and error callbacks; equal adjacent callers are retained.
+
 | Apply and arguments | Result and omission | Optional example |
 |---|---|---|
 | `parse_command_id_list()` | String array of shared singular names; absent means none. | `({ "thing" })` |
@@ -242,6 +248,7 @@ source_strings... })`; failures use the same status codes or error messages as
 `parse_sentence`, without delivering them. A third argument of nonzero executes
 normally and returns 1. The explicit living actor supplies scope and every
 callback's player/caller context; nested calls restore the surrounding context.
+The invoking LPC caller chain remains behind the actor in every callback.
 Returning arguments still runs permissions and retains their effects.
 
 Two-object rules with one `OBS`/`LVS` slot use the same individual-object

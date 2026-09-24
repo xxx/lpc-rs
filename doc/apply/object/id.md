@@ -8,6 +8,10 @@ the phrase names this object. The object handles adjectives and plurals
 itself. The master's shared ids (`it`, `thing`) do not apply to an object
 resolved through `id()`.
 
+For calls from `parse_sentence` or `parse_my_rules`, the invoking LPC frames
+remain behind the actor; see
+[callback context](../../efun/parse_sentence.md#callback-context).
+
 ### See also
 
 `parse_command`, `parse_command_id_list`

@@ -83,6 +83,11 @@ phrase; `query_command()` holds the whole line. The surrounding player and
 command context is restored on return or exception, including nested parses
 for a different actor.
 
+The caller chain behind the actor retains the object invoking this efun and
+its external callers; stack inspection also retains local and inherited
+frames. See [`parse_sentence`'s callback context](parse_sentence.md#callback-context)
+for the ordering, repeated objects and efun-pointer behavior.
+
 Argument mode still runs permission and vocabulary code in the current
 transaction. Refusals and caught exceptions do not undo callback effects.
 Runtime exceptions propagate immediately. Nested calls share the depth limit
