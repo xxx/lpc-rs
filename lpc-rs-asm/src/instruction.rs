@@ -366,12 +366,17 @@ pub enum Instruction {
         RegisterVariant,
         RegisterVariant,
     ),
+
+    /// Assign an indexed value, replacing the container register when it is a string.
+    /// Operands are RHS, in/out container, index, and the address skipping owner writeback
+    /// after an ordinary array or mapping store.
+    AssignIndex(RegisterVariant, RegisterVariant, RegisterVariant, Address),
 }
 
 impl Instruction {
     /// The register this instruction writes its value into, when that dest
     /// is retargetable. `None` for everything else: calls write r0
-    /// implicitly, `Inc`/`Dec`/`ReplaceRange` modify in place, `CatchStart`'s register is
+    /// implicitly, `Inc`/`Dec`/`ReplaceRange`/`AssignIndex` modify in place, `CatchStart`'s register is
     /// rebuilt as a Local at runtime, `PopulateArgv`'s is argv's home, and
     /// `NewUpvalue` binds a cell rather than writing a value.
     pub fn dest_register(&self) -> Option<RegisterVariant> {
@@ -427,6 +432,7 @@ impl Instruction {
             | Self::Ret
             | Self::MemberStore(_, _, _)
             | Self::Guard(_, _)
+            | Self::AssignIndex(_, _, _, _)
             | Self::ReplaceRange(_, _, _, _, _)
             | Self::Store(_, _, _) => None,
         }
@@ -508,6 +514,9 @@ impl Instruction {
             Self::Shl(a0, a1, a2) => Self::Shl(f(a0), f(a1), f(a2)),
             Self::Shr(a0, a1, a2) => Self::Shr(f(a0), f(a1), f(a2)),
             Self::Sizeof(a0, a1) => Self::Sizeof(f(a0), f(a1)),
+            Self::AssignIndex(a0, a1, a2, address) => {
+                Self::AssignIndex(f(a0), f(a1), f(a2), address)
+            }
             Self::Store(a0, a1, a2) => Self::Store(f(a0), f(a1), f(a2)),
             Self::Sub(a0, a1, a2) => Self::Sub(f(a0), f(a1), f(a2)),
             Self::Xor(a0, a1, a2) => Self::Xor(f(a0), f(a1), f(a2)),
@@ -521,6 +530,7 @@ impl Instruction {
         F: FnOnce(Address) -> Address,
     {
         match self {
+            Self::AssignIndex(x, y, z, a) => Self::AssignIndex(x, y, z, f(a)),
             Self::CatchStart(r, a) => Self::CatchStart(r, f(a)),
             Self::Jcmp(kind, x, y, a) => Self::Jcmp(kind, x, y, f(a)),
             Self::Jmp(a) => Self::Jmp(f(a)),
@@ -573,7 +583,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 53;
+    pub const COUNT: usize = 54;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -630,6 +640,7 @@ impl Instruction {
         "guard",
         "aconst_spread",
         "replace_range",
+        "assign_index",
     ];
 
     /// This variant's dense index, `0..Self::COUNT`, in declaration order.
@@ -688,6 +699,7 @@ impl Instruction {
             Self::Guard(..) => 50,
             Self::AConstSpread(..) => 51,
             Self::ReplaceRange(..) => 52,
+            Self::AssignIndex(..) => 53,
         }
     }
 
@@ -831,6 +843,13 @@ impl Display for Instruction {
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "{} {r1}, {r2}, {r3}, {r4}", self.mnemonic())
             }
+            Instruction::AssignIndex(value, target, index, address) => {
+                write!(
+                    f,
+                    "{} {value}, {target}, {index}, {address}",
+                    self.mnemonic()
+                )
+            }
             Instruction::ReplaceRange(kind, array, first, last, replacement) => {
                 let start = if kind.is_some_and(ReverseRange::start_from_end) {
                     "<"
@@ -954,12 +973,12 @@ mod tests {
     }
 
     #[test]
-    fn six_variants_carry_an_address() {
+    fn seven_variants_carry_an_address() {
         let carriers = every_variant()
             .iter()
             .filter(|i| i.address().is_some())
             .count();
-        assert_eq!(carriers, 6);
+        assert_eq!(carriers, 7);
     }
 
     #[test]
@@ -1084,6 +1103,7 @@ mod tests {
             Guard(r(), TypeIndex(0)),
             AConstSpread(ArgList(0), r()),
             ReplaceRange(None, r(), r(), r(), r()),
+            AssignIndex(r(), r(), r(), Address(0)),
         ]
     }
 
@@ -1133,6 +1153,7 @@ mod tests {
         assert_eq!(Negate(r(), d).dest_register(), Some(d));
         assert_eq!(Range(r(), r(), r(), d).dest_register(), Some(d));
         assert_eq!(ReplaceRange(None, r(), r(), r(), d).dest_register(), None);
+        assert_eq!(AssignIndex(r(), d, r(), Address(0)).dest_register(), None);
         assert_eq!(Sizeof(r(), d).dest_register(), Some(d));
         assert_eq!(
             FunctionPtrConst {
@@ -1148,7 +1169,7 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 25);
+        assert_eq!(none_count, 26);
         for i in [
             Call(ustr("f"), ArgList(0)),
             CallEfun(0, ArgList(0)),

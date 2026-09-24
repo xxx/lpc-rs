@@ -13,7 +13,7 @@ second-to-last, and so on.
 
 `value[<n]` explicitly selects the position `length - n`. For a positive
 distance within the collection, **`value[-n]` and `value[<n]` select the same
-element**, for both reads and array writes. You can use negative indices for
+element**, for reads and supported writes. You can use negative indices for
 ordinary access from the end; `<` is another supported spelling.
 
 For `items = ({ 10, 20, 30 })`:
@@ -120,7 +120,52 @@ sscanf("42", "%d", items[-1]); // items[<1] also works here
 
 Out-of-bounds writes raise an error and do not change an element. Writes use
 transactional array storage with shared array references. Indexed string and
-bytes writes are unsupported.
+bytes writes have different rules, described below.
+
+### String element assignment
+
+`text[index] = scalar` replaces one Unicode scalar and assigns the new string
+back to its owner. The RHS must be an integer from `0` through `0x10ffff`, excluding
+the surrogate range `0xd800` through `0xdfff`. Character literals are integers:
+
+```c
+string text = "aé😀";
+string old = text;
+int result = (text[1] = '中'); // text is "a中😀"; result is 20013
+text[<1] = '!';              // text is "a中!"; old is still "aé😀"
+text[-1] = 0;               // replace the last scalar with NUL
+```
+
+Indices follow string reads, counting Unicode scalars rather than bytes or
+grapheme clusters. Combining marks and emoji joiners occupy separate positions.
+Negative indices and explicit reverse indices are supported. The index must
+select an existing scalar: empty strings, out-of-range positions and `<0` raise
+errors. Element assignment cannot append. A zero RHS writes NUL without
+truncating the suffix; a string RHS such as `"x"` is not converted to its code.
+
+The result must fit within **8,192 UTF-8 bytes**, including unchanged replacements.
+A wider scalar may grow the string; a narrower one may shrink an oversized input
+into the limit. Invalid values, indices and oversized results fail before the
+owner is written. The expression returns the integer RHS.
+
+Owners can be variables, captured variables, reference parameters, class members
+or indexed slots. For example, `rows[y][x] = '#'` replaces the string in the
+captured row slot. Other references to the old string keep their contents, while
+aliases of `rows` see its updated slot. A temporary string has no owner to rebind
+and cannot receive an element assignment.
+
+Evaluation runs once in this order: RHS, owner and its string value, then index.
+Captured values survive later operand reassignments, and publication and retries
+follow the ordinary transaction rules. Replacement scans the source and copies
+the result; repeated edits can take quadratic time. Use `map` for a whole-string
+transformation that can build the result once.
+
+A `mixed` receiver is checked at runtime. Strings use replacement and owner
+rebinding; arrays and mappings keep their ordinary shared mutations without
+rewriting the parent slot. Temporary arrays and mappings remain writable through
+their shared references. Only plain `=` supports strings; compound writes,
+`++`, `--`, element references and efun output arguments remain unsupported.
+Bytes writes are unsupported.
 
 ### Array slice assignment
 
@@ -230,5 +275,4 @@ front deletion or repeated single-position replacements can take quadratic time;
 use `map` for string transformations that can build the result once.
 
 Only plain array and string slice `=` is supported. Compound slice assignments,
-`++`, `--`, slice output arguments, indexed string writes, and bytes writes are
-unsupported.
+`++`, `--`, slice output arguments and bytes writes are unsupported.

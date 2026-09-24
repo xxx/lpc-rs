@@ -739,15 +739,11 @@ impl CodegenWalker {
         saved
     }
 
-    async fn emit_slice_assignment(
+    async fn capture_assignment_owner(
         &mut self,
         owner: &mut ExpressionNode,
-        range: &mut RangeNode,
-        rhs: &mut ExpressionNode,
         span: Option<Span>,
-    ) -> Result<()> {
-        rhs.visit(self).await?;
-        let replacement = self.save_result(rhs.span());
+    ) -> Result<(RegisterVariant, Instruction)> {
         let value = self.register_counter.next().unwrap().as_local();
         let writeback = match owner {
             ExpressionNode::Var(_) => {
@@ -778,8 +774,57 @@ impl CodegenWalker {
                 push_instruction!(self, Instruction::Load(container, key, value), span);
                 Instruction::Store(value, container, key)
             }
-            _ => return Err(lpc_bug!(span, "invalid slice assignment target")),
+            _ => return Err(lpc_bug!(span, "invalid assignment owner")),
         };
+        Ok((value, writeback))
+    }
+
+    async fn emit_index_assignment(
+        &mut self,
+        owner: &mut ExpressionNode,
+        index: &mut ExpressionNode,
+        rhs: &mut ExpressionNode,
+        span: Option<Span>,
+    ) -> Result<()> {
+        rhs.visit(self).await?;
+        let (replacement, value, writeback) = if matches!(owner, ExpressionNode::Var(_))
+            && matches!(index, ExpressionNode::Int(_) | ExpressionNode::Var(_))
+        {
+            // A literal or variable index cannot reassign the RHS or owner.
+            let replacement = self.current_result;
+            owner.visit(self).await?;
+            (replacement, self.current_result, None)
+        } else {
+            let replacement = self.save_result(rhs.span());
+            let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
+            (replacement, value, Some(writeback))
+        };
+        let index = self.emit_index(value, index).await?;
+        let end = self.new_label("index-assignment-end");
+        self.schedule_backpatch(&end, self.current_address())?;
+        push_instruction!(
+            self,
+            Instruction::AssignIndex(replacement, value, index, Address(0)),
+            span
+        );
+        if let Some(writeback) = writeback {
+            push_instruction!(self, writeback, span);
+        }
+        self.insert_label(end, self.current_address());
+        self.current_result = replacement;
+        Ok(())
+    }
+
+    async fn emit_slice_assignment(
+        &mut self,
+        owner: &mut ExpressionNode,
+        range: &mut RangeNode,
+        rhs: &mut ExpressionNode,
+        span: Option<Span>,
+    ) -> Result<()> {
+        rhs.visit(self).await?;
+        let replacement = self.save_result(rhs.span());
+        let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
         let (start, start_from_end) = if let Some(expr) = &mut *range.l {
             let (value, reverse) = self.emit_index_bound(expr).await?;
             self.current_result = value;
@@ -1573,6 +1618,23 @@ impl TreeWalker for CodegenWalker {
         {
             return self
                 .emit_slice_assignment(l, range, &mut node.rhs, node.span)
+                .await;
+        }
+        if !node.is_compound
+            && let ExpressionNode::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                l,
+                r,
+                ..
+            }) = &mut *node.lhs
+            && l.has_assignment_owner()
+            && matches!(
+                node_type(l, &self.context)?,
+                LpcType::String(false) | LpcType::Mixed(false)
+            )
+        {
+            return self
+                .emit_index_assignment(l, r, &mut node.rhs, node.span)
                 .await;
         }
         if let ExpressionNode::Member(member) = &mut *node.lhs {
@@ -3400,6 +3462,7 @@ mod tests {
             insert_symbol(&mut walker, sym);
 
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode {
                     name: ustr("marf"),
                     span: None,
@@ -3438,6 +3501,7 @@ mod tests {
             insert_symbol(&mut walker, sym);
 
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
                 rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
                 span: None,
@@ -3471,6 +3535,7 @@ mod tests {
             insert_symbol(&mut walker, sym);
 
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
                     r: Box::new(ExpressionNode::from(1)),
@@ -5080,6 +5145,7 @@ mod tests {
                 }))),
                 condition: Some(ExpressionNode::Var(var.clone())),
                 incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
+                    is_compound: false,
                     lhs: Box::new(ExpressionNode::Var(var.clone())),
                     rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(var.clone())),

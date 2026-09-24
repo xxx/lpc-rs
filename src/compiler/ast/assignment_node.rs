@@ -86,6 +86,9 @@ impl Display for AssignmentOperation {
 /// A node representing an assignment.
 #[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub struct AssignmentNode {
+    /// Whether this assignment was desugared from a compound operator.
+    pub is_compound: bool,
+
     /// left-hand side
     pub lhs: Box<ExpressionNode>,
 

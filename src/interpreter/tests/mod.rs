@@ -32,6 +32,7 @@ mod shadows;
 mod simul_efuns;
 mod slice_assignment;
 mod spreading;
+mod string_index_assignment;
 mod string_slice_assignment;
 mod virtual_objects;
 

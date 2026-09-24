@@ -408,6 +408,7 @@ fn compound_assignment_decompose() {
     };
 
     let expected = ExpressionNode::Assignment(AssignmentNode {
+        is_compound: true,
         lhs: Box::new(ExpressionNode::Var(VarNode {
             name: ustr("a"),
             span: Some(Span::new(0, 16..17)),

@@ -2,6 +2,7 @@ use lpc_rs_core::mangle::Mangle;
 use lpc_rs_core::null_mode::NullMode;
 mod advance;
 pub mod apply_function;
+mod assign_index;
 pub mod eval_loop;
 mod handle_call;
 mod handle_call_fp;

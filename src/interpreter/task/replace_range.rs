@@ -107,31 +107,40 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 "Invalid string slice assignment range: {start}..{end} for length {count}"
             ))
         })?;
-        let (prefix, suffix) = if ascii {
-            (&text[..range.start], &text[range.end..])
-        } else {
-            let mut chars = text.chars();
-            if range.start != 0 {
-                chars.nth(range.start - 1);
-            }
-            let prefix = &text[..text.len() - chars.as_str().len()];
-            if !range.is_empty() {
-                chars.nth(range.len() - 1);
-            }
-            (prefix, chars.as_str())
-        };
-        let len = prefix
-            .len()
-            .checked_add(replacement.len())
-            .and_then(|len| len.checked_add(suffix.len()))
-            .filter(|len| *len <= MAX_STRING_LENGTH)
-            .ok_or_else(|| {
-                self.runtime_error("String slice assignment exceeds maximum string length")
-            })?;
-        let mut result = String::with_capacity(len);
-        result.push_str(prefix);
-        result.push_str(replacement.to_str());
-        result.push_str(suffix);
-        Ok(LpcRef::from(result))
+        replace_string(text, range, replacement.to_str()).ok_or_else(|| {
+            self.runtime_error("String slice assignment exceeds maximum string length")
+        })
     }
+}
+
+/// Replace a validated scalar interval without allocating intermediate substrings.
+pub(super) fn replace_string(
+    text: &str,
+    range: std::ops::Range<usize>,
+    replacement: &str,
+) -> Option<LpcRef> {
+    let ascii = text.is_ascii();
+    let (prefix, suffix) = if ascii {
+        (&text[..range.start], &text[range.end..])
+    } else {
+        let mut chars = text.chars();
+        if range.start != 0 {
+            chars.nth(range.start - 1);
+        }
+        let prefix = &text[..text.len() - chars.as_str().len()];
+        if !range.is_empty() {
+            chars.nth(range.len() - 1);
+        }
+        (prefix, chars.as_str())
+    };
+    let len = prefix
+        .len()
+        .checked_add(replacement.len())?
+        .checked_add(suffix.len())
+        .filter(|len| *len <= MAX_STRING_LENGTH)?;
+    let mut result = String::with_capacity(len);
+    result.push_str(prefix);
+    result.push_str(replacement);
+    result.push_str(suffix);
+    Some(LpcRef::from(result))
 }

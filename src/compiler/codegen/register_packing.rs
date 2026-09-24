@@ -166,6 +166,7 @@ impl Flow {
             // Written in place, so the operand stays a read as well.
             Instruction::Inc(register)
             | Instruction::Dec(register)
+            | Instruction::AssignIndex(_, register, _, _)
             | Instruction::ReplaceRange(_, register, _, _, _) => local_index(register),
             Instruction::PopulateArgv(register, _, _) | Instruction::CatchStart(register, _) => {
                 take_dest(&mut operands, register)

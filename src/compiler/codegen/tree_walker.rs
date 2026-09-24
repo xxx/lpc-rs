@@ -987,6 +987,7 @@ mod tests {
         #[tokio::test]
         async fn assignment_visits_lhs_then_rhs() {
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: var("a").into(),
                 rhs: var("b").into(),
                 span: None,

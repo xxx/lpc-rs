@@ -594,6 +594,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::IndexFromEnd(container, distance, destination) => {
                 self.handle_index_from_end(container, distance, destination)?;
             }
+            Instruction::AssignIndex(value, target, index, address) => {
+                if !self.handle_assign_index(value, target, index)? {
+                    self.stack.current_frame_mut()?.set_pc(address);
+                }
+            }
             Instruction::ReplaceRange(direction, array, start, end, replacement) => {
                 self.handle_replace_range(direction, array, start, end, replacement)?;
             }

@@ -50,7 +50,8 @@ examples on this page use the default `NULL_MODE=zero` unless stated otherwise.
     - `string`s can be repeated with the `*` operator, which will create a new `string` with
       the contents of the original repeated the given number of times.
     - `string`s are value types in LPC. Assigning a new string does not change
-      another variable holding the old value. Indexed string writes are unsupported.
+      another variable holding the old value. Plain element and slice assignment
+      construct a new string and rebind its owner; see [string writes](indexing.md#string-element-assignment).
     - Examples:
       ```c
       string x = "hello";

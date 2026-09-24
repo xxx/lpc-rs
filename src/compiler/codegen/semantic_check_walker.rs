@@ -327,16 +327,7 @@ impl TreeWalker for SemanticCheckWalker {
         }) = &*node.lhs
             && matches!(**r, ExpressionNode::Range(_))
         {
-            let assignable = match &**l {
-                ExpressionNode::Var(_) | ExpressionNode::Member(_) => true,
-                ExpressionNode::BinaryOp(BinaryOpNode {
-                    op: BinaryOperation::Index,
-                    r,
-                    ..
-                }) => !matches!(**r, ExpressionNode::Range(_)),
-                _ => false,
-            };
-            if !assignable {
+            if !l.has_assignment_owner() {
                 return Err(self.context.diagnostics.fail(lpc_error!(
                     node.span,
                     "Slice assignment requires an assignable array or string target"
@@ -352,6 +343,29 @@ impl TreeWalker for SemanticCheckWalker {
                         "Slice assignment requires arrays or strings, found `{type_}`"
                     )));
                 }
+            }
+        }
+
+        if let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            l,
+            r,
+            ..
+        }) = &*node.lhs
+            && !matches!(**r, ExpressionNode::Range(_))
+            && node_type(l, &self.context)? == LpcType::String(false)
+        {
+            if node.is_compound {
+                return Err(self.context.diagnostics.fail(lpc_error!(
+                    node.span,
+                    "Compound indexed string assignment is not supported"
+                )));
+            }
+            if !l.has_assignment_owner() {
+                return Err(self.context.diagnostics.fail(lpc_error!(
+                    node.span,
+                    "Indexed string assignment requires an assignable target"
+                )));
             }
         }
 
@@ -1190,6 +1204,7 @@ mod tests {
         #[tokio::test]
         async fn validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
                 span: None,
@@ -1213,6 +1228,7 @@ mod tests {
         #[tokio::test]
         async fn always_allows_0() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
                 span: None,
@@ -1236,6 +1252,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_differing_types() {
             let mut node = ExpressionNode::from(AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
                 span: None,
@@ -1272,6 +1289,7 @@ mod tests {
             let var_node = VarNode::new("foo");
 
             let mut assignment_node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(var_node)),
                 rhs: Box::new(ExpressionNode::from("foobar")),
                 span: None,
@@ -1312,6 +1330,7 @@ mod tests {
             let var_node = VarNode::new("foo");
 
             let mut assignment_node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(var_node)),
                 rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(vec![1, 2, 3])),
@@ -1357,6 +1376,7 @@ mod tests {
             let var_node = VarNode::new("foo");
 
             let mut assignment_node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(var_node)),
                 rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(vec![1, 2, 3])),

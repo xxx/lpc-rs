@@ -14,7 +14,7 @@ use crate::compiler::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNodeTrait, SpannedNode},
-        binary_op_node::BinaryOpNode,
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
         capture_node::CaptureNode,
         cast_node::CastNode,
@@ -67,6 +67,21 @@ pub enum ExpressionNode {
     Array(ArrayNode),
     Mapping(MappingNode),
     Operator(OperatorNode),
+}
+
+impl ExpressionNode {
+    /// Whether this expression names an owner that can receive a replacement value.
+    pub(crate) fn has_assignment_owner(&self) -> bool {
+        match self {
+            Self::Var(_) | Self::Member(_) => true,
+            Self::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                r,
+                ..
+            }) => !matches!(**r, Self::Range(_)),
+            _ => false,
+        }
+    }
 }
 
 macro_rules! delegated_traits {
@@ -299,6 +314,7 @@ mod tests {
     #[test]
     fn test_from_assignment_node() {
         let node = AssignmentNode {
+            is_compound: false,
             lhs: Box::new(VarNode::new("adsf").into()),
             rhs: Box::new(IntNode::new(324).into()),
             span: None,

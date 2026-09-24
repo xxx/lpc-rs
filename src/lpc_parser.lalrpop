@@ -1095,6 +1095,7 @@ AssignmentExpression: ExpressionNode = {
         };
 
         Ok(guard(ExpressionNode::Assignment(AssignmentNode {
+            is_compound: op != AssignmentOperation::Simple,
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
             span,

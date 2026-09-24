@@ -501,7 +501,7 @@ async fn temporary_strings_and_compound_slices_remain_unassignable() {
 }
 
 #[tokio::test]
-async fn indexed_string_writes_stepping_and_output_arguments_remain_unsupported() {
+async fn indexed_string_stepping_and_output_arguments_remain_unsupported() {
     assert_eq!(
         run(
             "",
@@ -509,13 +509,12 @@ async fn indexed_string_writes_stepping_and_output_arguments_remain_unsupported(
             r#"
         mixed *create(){
             string text="abc";
-            return ({stringp(catch(text[0]=120)),stringp(catch(text[0]+=1)),
-                stringp(catch(text[0]++)),stringp(catch(sscanf("120","%d",text[0]))),text});
+            return ({stringp(catch(text[0]++)),stringp(catch(sscanf("120","%d",text[0]))),text});
         }
     "#
         )
         .await,
-        vec![1.into(), 1.into(), 1.into(), 1.into(), s("abc")]
+        vec![1.into(), 1.into(), s("abc")]
     );
 }
 
