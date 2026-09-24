@@ -498,6 +498,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let is_living = process.commands_enabled(self.txn());
         let environment = Process::environment_of(self.txn(), &process);
         forget_destruct(self.txn(), &process);
+        self.txn()
+            .with(|t| crate::interpreter::snooping::retire_object(t, &process));
         let connection = self
             .txn()
             .with(|t| t.read_connection(process.connection.id));

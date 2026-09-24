@@ -76,6 +76,10 @@ pub struct Config {
     #[builder(setter(into), default = "DEFAULT_MAX_PENDING_OUTPUT")]
     pub max_pending_output: usize,
 
+    /// Bytes queued or in flight to one snoop observer; must be positive.
+    #[builder(setter(into), default = "65536")]
+    pub max_pending_snoop: usize,
+
     /// Seconds between garbage-collection passes; `0` disables them.
     #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
     pub gc_interval: u64,
@@ -150,6 +154,9 @@ impl ConfigBuilder {
     /// Validate include paths, listener settings, and TLS private-material placement.
     pub fn build(self) -> Result<Config> {
         let mut config = self.build_config()?;
+        if config.max_pending_snoop == 0 {
+            return Err(lpc_error!("MAX_PENDING_SNOOP must be positive"));
+        }
         config.system_include_dirs =
             in_game_include_dirs(&config.system_include_dirs, config.lib_dir.as_str())?;
         if !config.telnet_enabled && config.tls.is_none() {
@@ -261,6 +268,15 @@ impl ConfigBuilder {
                 .or_else(|| env.get("MAX_PENDING_OUTPUT"))
                 .map(|x| x.parse::<usize>().unwrap())
                 .or(self.max_pending_output),
+            max_pending_snoop: env
+                .get("LPC_MAX_PENDING_SNOOP")
+                .or_else(|| env.get("MAX_PENDING_SNOOP"))
+                .map(|x| {
+                    x.parse::<usize>()
+                        .map_err(|e| lpc_error!("invalid MAX_PENDING_SNOOP: {e}"))
+                })
+                .transpose()?
+                .or(self.max_pending_snoop),
             gc_interval: env
                 .get("LPC_GC_INTERVAL")
                 .or_else(|| env.get("GC_INTERVAL"))
@@ -408,6 +424,39 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn snoop_budget_is_positive_and_configurable() {
+        assert_eq!(Config::default().max_pending_snoop, 65536);
+        assert!(
+            ConfigBuilder::default()
+                .max_pending_snoop(0usize)
+                .build()
+                .is_err()
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("snoop.env");
+        for key in ["LPC_MAX_PENDING_SNOOP", "MAX_PENDING_SNOOP"] {
+            fs::write(&path, format!("{key}=1234\n")).unwrap();
+            assert_eq!(
+                ConfigBuilder::default()
+                    .load_env(Some(&path))
+                    .await
+                    .unwrap()
+                    .build()
+                    .unwrap()
+                    .max_pending_snoop,
+                1234
+            );
+        }
+        fs::write(&path, "MAX_PENDING_SNOOP=bad\n").unwrap();
+        assert!(
+            ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .is_err()
+        );
+    }
 
     #[tokio::test]
     async fn null_mode_is_loaded_from_the_config_file() {

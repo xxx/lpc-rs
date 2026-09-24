@@ -122,6 +122,7 @@ pub(crate) mod set_this_player;
 pub(crate) mod shadow;
 pub(crate) mod shutdown;
 pub(crate) mod sizeof;
+pub(crate) mod snoop;
 pub(crate) mod sort_array;
 pub(crate) mod source_cache_stats;
 pub(crate) mod sprintf;
@@ -1281,6 +1282,21 @@ efuns! {
         arity: (2, 1),
         args: [LpcType::String(false) | LpcType::Function(false), LpcType::Int(false)],
     },
+    snoop [async] => {
+        returns: LpcType::Object(false),
+        arity: (2, 1),
+        args: [LpcType::Object(false), LpcType::Object(false)],
+    },
+    query_snoop [async in snoop] => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    query_snooping [async in snoop] => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1647,6 +1663,9 @@ mod tests {
                 "restore_value",
                 "store_variable",
                 "get_char",
+                "snoop",
+                "query_snoop",
+                "query_snooping",
             ]
         );
     }

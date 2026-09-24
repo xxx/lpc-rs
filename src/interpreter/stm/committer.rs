@@ -422,6 +422,7 @@ impl Committer {
                             | WorldValue::Class(_)
                             | WorldValue::Mapping(_)
                             | WorldValue::Image(_)
+                            | WorldValue::Snoop(_)
                     )
             })
             .map(|(var_id, _)| *var_id)
@@ -456,6 +457,7 @@ impl Committer {
                 work.push(MarkWork::Process(process.clone()));
             }
             WorldValue::Image(image) => work.push(MarkWork::Image(image.clone())),
+            WorldValue::Snoop(_) => {}
             WorldValue::Connection(maybe_connection) => {
                 if let Some(connection) = maybe_connection
                     && let Some(input_to) = connection.input_to()

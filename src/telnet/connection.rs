@@ -74,7 +74,7 @@ impl Snapshot {
 }
 
 /// A connection from a user. The binding module and the `Exec` flush write
-/// its body, the loop its `input_to`; nothing else writes it.
+/// its body; the loop writes its input callback and cached snoop registration.
 #[derive(Debug)]
 pub struct Connection {
     /// The address of the client.
@@ -91,6 +91,9 @@ pub struct Connection {
 
     /// The callback for the next line or character.
     input_to: ArcSwapOption<InputTo>,
+
+    snoop: ArcSwapOption<crate::interpreter::snooping::Registration>,
+    has_snoop: AtomicBool,
 
     /// The loop's mirror of the session, for readers that never see it.
     snapshot: ArcSwap<Snapshot>,
@@ -113,6 +116,30 @@ pub struct Connection {
 }
 
 impl Connection {
+    pub(crate) fn set_snoop(
+        &self,
+        registration: Option<Arc<crate::interpreter::snooping::Registration>>,
+    ) {
+        let active = registration.is_some();
+        self.snoop.store(registration);
+        self.has_snoop.store(active, Ordering::Release);
+    }
+
+    pub(crate) fn stop_snoop(&self, id: crate::interpreter::stm::VarId) {
+        if self.snoop.load().as_ref().is_some_and(|r| r.id == id) {
+            self.set_snoop(None);
+        }
+    }
+
+    pub(crate) fn observe(&self, text: &str, direction: &'static str, newline: bool) {
+        if !self.has_snoop.load(Ordering::Acquire) {
+            return;
+        }
+        if let Some(registration) = self.snoop.load().as_ref() {
+            registration.capture(text, direction, newline);
+        }
+    }
+
     /// Creates a new [`Connection`].
     pub fn new(address: SocketAddr, connection_tx: UnboundedSender<ConnectionOp>) -> Self {
         Self {
@@ -121,6 +148,8 @@ impl Connection {
             process: ArcSwapOption::from(None),
             tx: connection_tx,
             input_to: ArcSwapOption::from(None),
+            snoop: ArcSwapOption::from(None),
+            has_snoop: AtomicBool::new(false),
             snapshot: ArcSwap::default(),
             dead: AtomicBool::new(false),
             logged_in: AtomicBool::new(false),

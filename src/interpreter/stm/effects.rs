@@ -80,6 +80,8 @@ static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 pub(crate) enum Effect {
     /// A line for the in-game debug log (where unreceived `write`s go).
     DebugLog(String),
+    /// Stop a committed registration and wake its delivery worker.
+    StopSnoop(Arc<crate::interpreter::snooping::Registration>),
     /// A warning emitted only by the committed attempt.
     Warning(String),
 
@@ -260,6 +262,7 @@ impl Effect {
     pub(crate) async fn flush(self, global_state: &GlobalState) {
         match self {
             Self::DebugLog(msg) => global_state.config.debug_log(msg).await,
+            Self::StopSnoop(registration) => registration.close(),
             Self::Warning(msg) => {
                 tracing::warn!("{msg}");
                 global_state
@@ -480,6 +483,9 @@ impl std::fmt::Debug for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DebugLog(msg) => f.debug_tuple("DebugLog").field(msg).finish(),
+            Self::StopSnoop(registration) => {
+                f.debug_tuple("StopSnoop").field(&registration.id).finish()
+            }
             Self::Warning(msg) => f.debug_tuple("Warning").field(msg).finish(),
             Self::Socket { op, .. } => f.debug_tuple("Socket").field(op).finish(),
             Self::InsertObject { key, .. } => f.debug_tuple("InsertObject").field(key).finish(),

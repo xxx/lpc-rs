@@ -81,6 +81,10 @@ pub enum SeedArg {
 /// The function a [`TaskSeed`] enters.
 #[derive(Debug, Clone)]
 pub enum SeedEntry {
+    /// A connection observation revalidated against each attempt's world.
+    Snoop(Arc<crate::interpreter::snooping::Registration>),
+    /// Retire a failed observation without entering LPC.
+    RetireSnoop(Arc<crate::interpreter::snooping::Registration>),
     /// An idle apply whose eligibility is checked again in each attempt.
     CleanUp,
     /// A function resolved before the task began.
@@ -114,6 +118,8 @@ impl SeedEntry {
     fn name(&self) -> &str {
         match self {
             Self::CleanUp => crate::interpreter::CLEAN_UP,
+            Self::Snoop(_) => crate::interpreter::RECEIVE_SNOOP,
+            Self::RetireSnoop(_) => "snoop_cleanup",
             Self::Function(function)
             | Self::SystemInitializer(function)
             | Self::Callback { function, .. } => function.name().as_ref(),
@@ -433,6 +439,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// nothing in the chain defines runs nothing, leaving no result.
     async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
         let (process, function) = match &seed.entry {
+            SeedEntry::Snoop(registration) => {
+                if registration.is_closed() || !self.context.txn().with(|t| registration.valid(t)) {
+                    return Ok(());
+                }
+                let function =
+                    crate::interpreter::snooping::handler(self.context.txn(), &seed.process)?;
+                (seed.process.clone(), function)
+            }
+            SeedEntry::RetireSnoop(registration) => {
+                self.context
+                    .txn()
+                    .with(|t| crate::interpreter::snooping::retire(t, registration));
+                return Ok(());
+            }
             SeedEntry::CleanUp => {
                 let process = &seed.process;
                 let interval = self.context.config().clean_up_interval;

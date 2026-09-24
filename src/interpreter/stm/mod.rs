@@ -375,6 +375,15 @@ impl Transaction {
         self.read_value(var_id)?.into_process()
     }
 
+    pub(crate) fn write_snoop(
+        &mut self,
+        var_id: VarId,
+        registration: Arc<crate::interpreter::snooping::Registration>,
+    ) {
+        self.changeset
+            .write(var_id, WorldValue::Snoop(registration));
+    }
+
     /// Write the connection-binding cell: the `Connection` attached to a
     /// `Process`, or `None` to clear it. The `Connection` is held strongly so
     /// it stays alive between this write and the commit that makes it

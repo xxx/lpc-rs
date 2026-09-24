@@ -91,6 +91,9 @@ pub struct Process {
     /// module.
     pub connection: SVar<Connection>,
 
+    /// Allocated only when this object participates in snooping.
+    pub(crate) snoop: OnceLock<Box<crate::interpreter::snooping::Slots>>,
+
     /// The cell marking that the initializer has run; a rejected
     /// initialization rolls it back with the globals.
     pub initialized: SVar<LpcRef>,
@@ -133,6 +136,7 @@ impl Default for Process {
             cleanup: None,
             name: ObjectName::File,
             connection: SVar::new(),
+            snoop: OnceLock::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
@@ -171,6 +175,7 @@ impl Process {
             created: chrono::Utc::now().timestamp(),
             name,
             connection: SVar::new(),
+            snoop: OnceLock::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
@@ -421,7 +426,7 @@ impl Process {
         txn.with(|t| self.is_live_in(t))
     }
 
-    fn is_live_in(&self, t: &mut Transaction) -> bool {
+    pub(crate) fn is_live_in(&self, t: &mut Transaction) -> bool {
         self.cell.get().is_none_or(|&cell| {
             if t.is_removed(cell) {
                 return false;
@@ -550,6 +555,12 @@ impl Process {
                 self.shadow.shadowing.id,
                 self.image_cell.id,
             ])
+            .chain(
+                self.snoop
+                    .get()
+                    .into_iter()
+                    .flat_map(|s| [s.incoming, s.outgoing]),
+            )
             .collect()
     }
 

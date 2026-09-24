@@ -107,6 +107,7 @@ impl GlobalState {
         let unbound = match connection.body() {
             Some(body) => {
                 let mut attempt = DetachBody {
+                    global_state: self,
                     connection: connection.clone(),
                     process: body.clone(),
                     attempt: None,
@@ -169,9 +170,25 @@ impl AttemptBody for AttachBody {
         let mut txn = Transaction::new(live.inner.clone());
         txn.set_origin(&self.process, "attach");
 
+        if let Some(old) = self.connection.body()
+            && !Arc::ptr_eq(&old, &self.process)
+            && txn
+                .read_connection(old.connection.id)
+                .is_some_and(|held| Arc::ptr_eq(&held, &self.connection))
+        {
+            crate::interpreter::snooping::retire_target(&mut txn, &old);
+            txn.write_connection(old.connection.id, None);
+        }
+
         // The connection currently bound to `process`; the handover
         // displaces it.
         let previous = txn.read_connection(self.process.connection.id);
+        if !previous
+            .as_ref()
+            .is_some_and(|held| Arc::ptr_eq(held, &self.connection))
+        {
+            crate::interpreter::snooping::retire_target(&mut txn, &self.process);
+        }
         txn.write_connection(self.process.connection.id, Some(self.connection.clone()));
 
         txn.record_effect(Effect::Exec {
@@ -213,7 +230,8 @@ impl AttemptBody for AttachBody {
 
 /// One attempt of [`GlobalState::detach`]: clear the body's cell if it
 /// holds this connection. `held` reports whether it did.
-struct DetachBody {
+struct DetachBody<'a> {
+    global_state: &'a GlobalState,
     connection: Arc<Connection>,
     process: Arc<Process>,
     attempt: Option<Transaction>,
@@ -221,7 +239,7 @@ struct DetachBody {
 }
 
 #[async_trait::async_trait]
-impl AttemptBody for DetachBody {
+impl AttemptBody for DetachBody<'_> {
     fn origin(&self) -> Option<crate::interpreter::stm::CommitOrigin> {
         Some(crate::interpreter::stm::CommitOrigin::new(
             &self.process,
@@ -244,6 +262,7 @@ impl AttemptBody for DetachBody {
             .read_connection(self.process.connection.id)
             .is_some_and(|held| Arc::ptr_eq(&held, &self.connection));
         if self.held {
+            crate::interpreter::snooping::retire_target(&mut txn, &self.process);
             txn.write_connection(self.process.connection.id, None);
         }
         self.attempt = Some(txn);
@@ -266,11 +285,7 @@ impl AttemptBody for DetachBody {
     }
 
     async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
-        debug_assert!(
-            effects.is_empty(),
-            "detach delivered {} effects",
-            effects.len()
-        );
+        flush_effects(self.global_state, effects).await;
         Ok(())
     }
 }

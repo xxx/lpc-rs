@@ -136,6 +136,11 @@ int valid_exec(string program, object new_body, object old_body) {
     return 0;
 }
 
+/** Deny observation and live relationship queries; ulib has no snoop service. */
+int valid_snoop(object caller, object observer, object target, string operation, string program) {
+    return 0;
+}
+
 /**
  * Authorise caller inspecting target's globals with variable_info(target).
  * program is the source defining the inspection request; the operation can

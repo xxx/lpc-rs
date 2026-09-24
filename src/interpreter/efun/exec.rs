@@ -74,6 +74,10 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         let previous = txn.with(|t| t.read_connection(new_ob.connection.id));
 
         // Both writes land in the changeset and commit with this task.
+        txn.with(|t| {
+            crate::interpreter::snooping::retire_target(t, &old_ob);
+            crate::interpreter::snooping::retire_target(t, &new_ob);
+        });
         txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
         txn.with(|t| t.write_connection(old_ob.connection.id, None));
 

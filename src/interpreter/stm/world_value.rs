@@ -37,6 +37,8 @@ pub(crate) enum WorldValue {
     Connection(Option<Arc<Connection>>),
     /// A living's rule list: what it can command.
     Rules(RuleList),
+    /// A snoop relationship, shared by its two endpoint cells.
+    Snoop(Arc<crate::interpreter::snooping::Registration>),
 }
 
 impl WorldValue {
@@ -55,6 +57,7 @@ impl WorldValue {
             | Self::Process(_)
             | Self::Image(_)
             | Self::Connection(_)
+            | Self::Snoop(_)
             | Self::Rules(_) => {
                 unreachable!("a payload or identity var read through a slot access")
             }

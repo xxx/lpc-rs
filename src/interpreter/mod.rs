@@ -11,6 +11,7 @@ pub(crate) mod file_view;
 pub mod function_type;
 pub(crate) mod json;
 pub(crate) mod save_format;
+pub mod snooping;
 
 pub mod lpc_array;
 pub mod lpc_class;
@@ -47,6 +48,10 @@ pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 pub const MODIFY_COMMAND: &str = "modify_command";
 /// Master apply: whether the calling program may `exec` (`doc/apply/master/valid_exec.md`).
 pub const VALID_EXEC: &str = "valid_exec";
+/// Master apply: authorizes snoop attachment, removal and inspection.
+pub const VALID_SNOOP: &str = "valid_snoop";
+/// Observer apply: receives decoded input or output from a snooped connection.
+pub const RECEIVE_SNOOP: &str = "receive_snoop";
 /// Master apply: whether calling code may destroy an object (`doc/apply/master/valid_destruct.md`).
 pub const VALID_DESTRUCT: &str = "valid_destruct";
 /// Master apply: whether calling code may inspect another object's globals.

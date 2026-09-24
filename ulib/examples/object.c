@@ -86,4 +86,14 @@ int inventory_visible() {
 int inventory_accessible() {
     return 1;
 }
+
+/**
+ * Optional observer callback: a fresh driver task with no player or previous object.
+ * This interactive-observer example forwards accepted text explicitly to its own socket.
+ * Hidden input is excluded; callback failure or queue overflow ends observation.
+ * The live master denies attachments, so this example requires a trusted service policy.
+ */
+void receive_snoop(string text, object target, string direction) {
+    write_socket("[" + direction + "] " + text);
+}
 #endif
