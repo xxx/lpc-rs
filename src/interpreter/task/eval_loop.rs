@@ -121,6 +121,45 @@ fn store_nonlocal_integer(
     frame.set_int(txn, location, value)
 }
 
+#[inline(always)]
+fn execute_integer_action(
+    frame: &mut CallFrame,
+    txn: &TxnHandle,
+    action: IntegerAction,
+) -> lpc_rs_errors::Result<()> {
+    match action {
+        IntegerAction::Store(RegisterVariant::Local(reg), value) => {
+            frame.set_int(txn, RegisterVariant::Local(reg), value)?;
+        }
+        IntegerAction::Store(location, value) => {
+            store_nonlocal_integer(frame, txn, location, value)?;
+        }
+        IntegerAction::Branch(taken, address) => {
+            if taken {
+                frame.set_pc(address);
+            }
+        }
+    }
+    Ok(())
+}
+
+// Keep span storage and cleanup outside the untraced instruction loop.
+#[inline(never)]
+fn execute_traced_integer_action(
+    frame: &mut CallFrame,
+    txn: &TxnHandle,
+    instruction: Instruction,
+    action: IntegerAction,
+) -> lpc_rs_errors::Result<()> {
+    let span = tracing::debug_span!("step");
+    let _guard = span.enter();
+    trace!("about to evaluate: {}", instruction);
+    frame.inc_pc();
+    #[cfg(feature = "opcode-profile")]
+    crate::interpreter::opcode_profile::record(&instruction);
+    execute_integer_action(frame, txn, action)
+}
+
 /// Keep one frame borrowed until an instruction needs the full dispatcher.
 #[inline(never)]
 fn run_integer_frame(
@@ -137,33 +176,17 @@ fn run_integer_frame(
         };
 
         *left -= 1;
-        let span;
-        let _guard;
         if tracing::level_enabled!(tracing::Level::DEBUG)
             || tracing::if_log_enabled!(tracing::Level::DEBUG, { true } else { false })
         {
-            span = tracing::debug_span!("step");
-            _guard = span.enter();
-        }
-        trace!("about to evaluate: {}", instruction);
-        #[cfg(feature = "opcode-profile")]
-        let counted_instruction = *instruction;
-        frame.inc_pc();
-        #[cfg(feature = "opcode-profile")]
-        crate::interpreter::opcode_profile::record(&counted_instruction);
-
-        match action {
-            IntegerAction::Store(RegisterVariant::Local(reg), value) => {
-                frame.set_int(txn, RegisterVariant::Local(reg), value)?;
-            }
-            IntegerAction::Store(location, value) => {
-                store_nonlocal_integer(frame, txn, location, value)?;
-            }
-            IntegerAction::Branch(taken, address) => {
-                if taken {
-                    frame.set_pc(address);
-                }
-            }
+            execute_traced_integer_action(frame, txn, *instruction, action)?;
+        } else {
+            #[cfg(feature = "opcode-profile")]
+            let counted_instruction = *instruction;
+            frame.inc_pc();
+            #[cfg(feature = "opcode-profile")]
+            crate::interpreter::opcode_profile::record(&counted_instruction);
+            execute_integer_action(frame, txn, action)?;
         }
     }
     Ok(())
@@ -980,6 +1003,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn integer_slices_match_single_steps_for_global_and_upvalue_writes() {
+        use crate::interpreter::{bank::RefBank, stm::VarId};
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "int result; void create() {}", |_| true).await;
+        let [r0, r1] = [0, 1].map(|i| Register(i).as_local());
+        let g0 = Register(0).as_global();
+        let u0 = Register(0).as_upvalue();
+        let frame = task.stack.current_frame_mut().unwrap();
+        frame.registers = RefBank::new(vec![2.into(), 3.into()]);
+        frame.upvalue_ptrs = (&[VarId::new()][..]).into();
+        let function = Arc::make_mut(&mut frame.function);
+        function.instructions = vec![
+            Instruction::Add(r0, r1, g0),
+            Instruction::Mul(r0, r1, u0),
+            Instruction::Copy(g0, r0),
+            Instruction::Copy(u0, r1),
+            Instruction::Sub(r1, r0, g0),
+            Instruction::Copy(r0, u0),
+            Instruction::Jmp(Address(0)),
+        ];
+        function.debug_spans.resize(7, None);
+        let dispatchers = [
+            tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default()),
+            tracing::Dispatch::new(tracing_subscriber::registry()),
+        ];
+
+        for dispatcher in &dispatchers {
+            let mut actual = task.clone();
+            let mut reference = task.clone();
+            actual.context.txn = TxnHandle::empty();
+            reference.context.txn = TxnHandle::empty();
+            tracing::dispatcher::with_default(dispatcher, || {
+                for count in [1, 2, 3, 7, 19] {
+                    let mut budget = count;
+                    assert!(matches!(
+                        actual.run_slice(&mut budget).unwrap(),
+                        Slice::Budget
+                    ));
+                    for _ in 0..count {
+                        assert!(matches!(reference.step().unwrap(), Step::Next));
+                    }
+                    let frame = actual.stack.current_frame().unwrap();
+                    let expected = reference.stack.current_frame().unwrap();
+                    assert_eq!(budget, 0);
+                    assert_eq!(frame.pc(), expected.pc());
+                    assert_eq!(frame.registers, expected.registers);
+                    for location in [g0, u0] {
+                        assert_eq!(
+                            frame.get_location(&actual.context.txn, location).unwrap(),
+                            expected
+                                .get_location(&reference.context.txn, location)
+                                .unwrap(),
+                        );
+                    }
+                }
+            });
+        }
+    }
+
+    #[tokio::test]
+    async fn traced_integer_write_error_exits_the_step_span() {
+        use crate::interpreter::bank::RefBank;
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "void create() {}", |_| true).await;
+        let r0 = Register(0).as_local();
+        let frame = task.stack.current_frame_mut().unwrap();
+        frame.registers = RefBank::new(vec![1.into()]);
+        let function = Arc::make_mut(&mut frame.function);
+        function.instructions = vec![Instruction::Copy(r0, Register(0).as_constant())];
+        function.debug_spans.resize(1, None);
+        let _disabled = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
+
+        tracing::subscriber::with_default(tracing_subscriber::registry(), || {
+            let caller = tracing::info_span!("caller");
+            let _entered = caller.enter();
+            let mut budget = 3;
+            let error = task.run_slice(&mut budget).err().unwrap();
+            assert!(error.is_bug());
+            assert_eq!(budget, 2);
+            assert_eq!(task.stack.current_frame().unwrap().pc(), 1);
+            assert_eq!(tracing::Span::current().id(), caller.id());
+        });
+    }
+
+    #[tokio::test]
     async fn integer_and_general_instructions_each_emit_one_step_span() {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -987,13 +1097,41 @@ mod tests {
             Subscriber,
             span::{Attributes, Id},
         };
-        use tracing_subscriber::{Layer, layer::Context, prelude::*};
+        use tracing_subscriber::{Layer, layer::Context, prelude::*, registry::LookupSpan};
 
-        struct Steps(Arc<AtomicUsize>);
-        impl<S: Subscriber> Layer<S> for Steps {
+        #[derive(Default)]
+        struct Counts {
+            spans: AtomicUsize,
+            entries: AtomicUsize,
+            exits: AtomicUsize,
+            events: AtomicUsize,
+        }
+        struct Steps(Arc<Counts>);
+        impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for Steps {
             fn on_new_span(&self, attrs: &Attributes<'_>, _: &Id, _: Context<'_, S>) {
                 if attrs.metadata().name() == "step" {
-                    self.0.fetch_add(1, Ordering::Relaxed);
+                    self.0.spans.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
+                if ctx.span(id).unwrap().name() == "step" {
+                    self.0.entries.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            fn on_exit(&self, id: &Id, ctx: Context<'_, S>) {
+                if ctx.span(id).unwrap().name() == "step" {
+                    self.0.exits.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+                if event.metadata().target() == module_path!().trim_end_matches("::tests")
+                    && *event.metadata().level() == tracing::Level::TRACE
+                {
+                    assert_eq!(ctx.event_span(event).unwrap().name(), "step");
+                    self.0.events.fetch_add(1, Ordering::Relaxed);
                 }
             }
         }
@@ -1011,8 +1149,10 @@ mod tests {
             Instruction::Ret,
         ];
         function.debug_spans.resize(5, None);
-        let count = Arc::new(AtomicUsize::new(0));
+        let count = Arc::new(Counts::default());
         let subscriber = tracing_subscriber::registry().with(Steps(count.clone()));
+        // Keep callsite interest dispatch-specific while other tests run without a subscriber.
+        let _disabled = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
         let mut budget = 9;
 
         let result = tracing::subscriber::with_default(subscriber, || task.run_slice(&mut budget));
@@ -1024,6 +1164,14 @@ mod tests {
         } else {
             0
         };
-        assert_eq!(count.load(Ordering::Relaxed), expected);
+        assert_eq!(count.spans.load(Ordering::Relaxed), expected);
+        assert_eq!(count.entries.load(Ordering::Relaxed), expected);
+        assert_eq!(count.exits.load(Ordering::Relaxed), expected);
+        let expected_events = if tracing::Level::TRACE <= tracing::level_filters::STATIC_MAX_LEVEL {
+            5
+        } else {
+            0
+        };
+        assert_eq!(count.events.load(Ordering::Relaxed), expected_events);
     }
 }
