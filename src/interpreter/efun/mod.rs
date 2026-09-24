@@ -976,6 +976,11 @@ efuns! {
         arity: 1,
         args: [number()],
     },
+    round [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
     set_bit [in bits] => {
         returns: LpcType::String(false),
         arity: 2,
@@ -1610,6 +1615,7 @@ mod tests {
                 "sqrt",
                 "floor",
                 "ceil",
+                "round",
                 "set_bit",
                 "clear_bit",
                 "test_bit",
