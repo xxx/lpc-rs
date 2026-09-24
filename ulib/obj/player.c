@@ -128,6 +128,7 @@ mixed process_input(string line) {
  * The parser uses id() only when parse_command_id_list() is absent; without
  * either hook this body contributes no object-specific noun matches.
  * The master's shared ids do not apply to this fallback.
+ * Command matching supplies the actor as player/caller; parse_command keeps its entering player.
  */
 int id(string phrase) {
     if (!name) {

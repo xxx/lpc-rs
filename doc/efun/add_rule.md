@@ -52,6 +52,10 @@ that order — through the identification protocol described in
 `parse_command`; a line whose noun captures name nothing under any parse
 passes to the next rule.
 
+Vocabulary callbacks and the handler use the command's actor as `this_player()`
+and immediate `previous_object()`. See
+[`command`'s callback context](command.md#callback-context).
+
 `query_verb()` inside the handler reports the verb alternative the player
 typed. Rules registered from `init()` last until the player leaves the
 registering object's presence; `disable_commands()` and `destruct` remove

@@ -87,6 +87,13 @@ Stack inspection also retains local and inherited frames, with no function
 metadata for the actor's driver entry. This applies to vocabulary, inventory,
 permission, action and error callbacks; equal adjacent callers are retained.
 
+For `command(line, actor)`, both native patterns and parser rules run vocabulary
+with the actor as `this_player()` and immediate caller, just like permissions
+and actions. The surrounding player is restored on return or exception;
+selecting an actor does not replace the task's interactive provenance. A direct
+`parse_command()` call instead keeps the entering player and uses the object
+invoking that efun as its immediate caller.
+
 | Apply and arguments | Result and omission | Optional example |
 |---|---|---|
 | `parse_command_id_list()` | String array of shared singular names; absent means none. | `({ "thing" })` |

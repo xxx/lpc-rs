@@ -13,6 +13,10 @@ inventory (depth-first, a container's contents right behind it), or an
 array of objects taken in order (non-objects and destructed members are
 skipped). `cmd` or `pattern` empty or not a string returns 0.
 
+Vocabulary callbacks retain the entering `this_player()`; this efun does not
+select a command actor from `scope`. Their immediate caller is the object
+invoking the efun, and `origin()` is `"driver"`.
+
 ### The pattern
 
 The dialect of `add_rule` without its leading verb: elements separated by

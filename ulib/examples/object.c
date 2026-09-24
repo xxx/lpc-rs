@@ -4,6 +4,7 @@
  * This disabled example supplies vocabulary and parser access, not a complete
  * container: it has no open/close state or item-transfer commands.
  * Parser efun vocabulary and inventory callbacks retain invoking LPC frames behind the actor.
+ * Command vocabulary uses the actor as player/caller; parse_command keeps its entering player.
  * See ../doc/applies.md, "Object applies", for the complete hook index.
  */
 #pragma strict_types

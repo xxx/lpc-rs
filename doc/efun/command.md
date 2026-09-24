@@ -21,6 +21,23 @@ registration order within each phrase and shorter-phrase fallback. See
 A handler may run `command()` of its own, nested at most 16 deep; deeper is a
 runtime error.
 
+### Callback context
+
+Callbacks see `living` as `this_player()` and immediate `previous_object()`,
+with `origin()` equal to `"driver"`. This includes vocabulary used by native
+`add_rule` patterns and parser-package rules: object ids, adjectives, plurals,
+`id()` fallback, and the master's shared lists, numerals and pluralization.
+Permissions and actions use the same actor context even when the entering
+`this_player()` is another object or null.
+
+Selecting the actor does not change the task's interactive provenance:
+`this_interactive()` continues to follow its existing entry-player and
+connection rules. Each callback starts with the actor as player; a callback's
+`set_this_player()` affects its nested work without changing later callbacks.
+Nested commands select their own actors and restore the surrounding player and
+command frame on return or exception. Caught callback effects still follow
+the current transaction's rules.
+
 ### Examples
 
 ```c

@@ -115,6 +115,18 @@ pub(crate) async fn run(
     line: &str,
     first_word: &str,
 ) -> Result<bool> {
+    let actor_context = ctx
+        .this_player
+        .load()
+        .as_ref()
+        .is_none_or(|player| !Arc::ptr_eq(player, actor))
+        .then(|| {
+            // Boxed to keep the owned context out of command dispatch's future.
+            let ctx = Box::new(ctx.clone());
+            ctx.this_player.store(Some(actor.clone()));
+            ctx
+        });
+    let ctx = actor_context.as_deref().unwrap_or(ctx);
     let scope = neighbourhood(ctx.txn(), actor);
     let candidates = ActorRules::new(ctx.txn(), actor).matching(first_word, &scope);
 
