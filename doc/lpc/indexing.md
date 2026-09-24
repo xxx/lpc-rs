@@ -156,9 +156,11 @@ and cannot receive an element assignment.
 
 Evaluation runs once in this order: RHS, owner and its string value, then index.
 Captured values survive later operand reassignments, and publication and retries
-follow the ordinary transaction rules. Replacement scans the source and copies
-the result; repeated edits can take quadratic time. Use `map` for a whole-string
-transformation that can build the result once.
+follow the ordinary transaction rules. An unchanged replacement still validates
+its operands and writes to its owner, but reuses the immutable string storage.
+Changed replacements scan the source and copy the result; repeated edits can
+take quadratic time. Use `map` for a whole-string transformation that can build
+the result once.
 
 A `mixed` receiver is checked at runtime. Strings use replacement and owner
 rebinding; arrays and mappings keep their ordinary shared mutations without

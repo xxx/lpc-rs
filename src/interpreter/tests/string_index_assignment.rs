@@ -30,6 +30,60 @@ async fn scalar_replacement_rebinds_the_owner_and_preserves_aliases() {
 }
 
 #[tokio::test]
+async fn unchanged_replacements_still_write_to_captured_owners() {
+    assert_eq!(
+        run(
+            "",
+            &[],
+            r#"
+            string text="abc";
+            mapping record=(["text":"abc"]);
+            class Box {string text;} class Box box=new(class Box,text:"abc");
+            int change_text(){text="other";return 1;}
+            int change_slot(){record["text"]="other";return 1;}
+            int change_member(){box.text="other";return 1;}
+            mixed *create(){
+                int result=(text[change_text()]='b');
+                record["text"][change_slot()]='b';
+                box.text[change_member()]='b';
+                return ({text,record["text"],box.text,result});
+            }
+        "#
+        )
+        .await,
+        vec![s("abc"), s("abc"), s("abc"), 98.into()]
+    );
+}
+
+#[tokio::test]
+async fn unchanged_unicode_and_nul_replacements_still_enforce_byte_limits() {
+    assert_eq!(
+        run(
+            "",
+            &[],
+            r#"
+            mixed *create(){
+                string text="abé😀";text[1]=0;string old=text;
+                text[0]='a';text[1]=0;text[-2]='é';text[<1]=128512;
+                string large=sprintf("%8192s","é"), snapshot=large;
+                int error=stringp(catch(large[<1]='é'));
+                return ({text,old,text==old,sizeof(text),error,large==snapshot});
+            }
+        "#
+        )
+        .await,
+        vec![
+            s("a\0é😀"),
+            s("a\0é😀"),
+            1.into(),
+            4.into(),
+            1.into(),
+            1.into()
+        ]
+    );
+}
+
+#[tokio::test]
 async fn combining_marks_joiners_and_nuls_are_individual_scalars() {
     assert_eq!(
         run(

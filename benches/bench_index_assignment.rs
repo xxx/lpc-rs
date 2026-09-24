@@ -52,6 +52,16 @@ const SOURCE: &str = r#"
         for (int i = 0; i < n; i++) text[2] = 'x';
         return text[2];
     }
+    int changing_string_character(int n) {
+        string text = "a" * 64;
+        for (int i = 0; i < n; i++) text[32] = 'x' + (i % 2);
+        return text[32];
+    }
+    int changing_unicode_character(int n) {
+        mixed text = "😀" * 16;
+        for (int i = 0; i < n; i++) text[8] = 'é' + (i % 2);
+        return text[8];
+    }
 "#;
 
 fn indexed_stores(c: &mut Criterion) {
@@ -82,6 +92,8 @@ fn indexed_stores(c: &mut Criterion) {
         ("captured_mapping", WRITES as i64 - 1),
         ("string_character", 120),
         ("unicode_character", 120),
+        ("changing_string_character", 121),
+        ("changing_unicode_character", 234),
     ] {
         let function = process
             .initial_program()

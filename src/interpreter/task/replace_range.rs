@@ -120,19 +120,30 @@ pub(super) fn replace_string(
     replacement: &str,
 ) -> Option<LpcRef> {
     let ascii = text.is_ascii();
-    let (prefix, suffix) = if ascii {
-        (&text[..range.start], &text[range.end..])
+    let range = if ascii {
+        range
     } else {
         let mut chars = text.chars();
         if range.start != 0 {
             chars.nth(range.start - 1);
         }
-        let prefix = &text[..text.len() - chars.as_str().len()];
+        let start = text.len() - chars.as_str().len();
         if !range.is_empty() {
             chars.nth(range.len() - 1);
         }
-        (prefix, chars.as_str())
+        start..text.len() - chars.as_str().len()
     };
+    replace_string_bytes(text, range, replacement)
+}
+
+/// Replace a validated UTF-8 byte interval without allocating intermediate substrings.
+#[inline]
+pub(super) fn replace_string_bytes(
+    text: &str,
+    range: std::ops::Range<usize>,
+    replacement: &str,
+) -> Option<LpcRef> {
+    let (prefix, suffix) = (&text[..range.start], &text[range.end..]);
     let len = prefix
         .len()
         .checked_add(replacement.len())?

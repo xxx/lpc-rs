@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::Result;
-use lpc_rs_utils::lpc_string::LpcString;
+use lpc_rs_utils::{lpc_string::LpcString, string::MAX_STRING_LENGTH};
 
-use super::{Task, get_location, replace_range::replace_string};
+use super::{Task, get_location, replace_range::replace_string_bytes};
 use crate::interpreter::lpc_ref::LpcRef;
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -10,7 +12,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline(never)]
     pub(super) fn replace_string_index(
         &self,
-        source: &LpcString,
+        source: &Arc<LpcString>,
         value: RegisterVariant,
         index: RegisterVariant,
     ) -> Result<LpcRef> {
@@ -18,7 +20,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let LpcRef::Int(index) = &*index else {
             return Err(self.runtime_error("String index must be an integer"));
         };
-        let len = source.char_count() as i128;
+        let text = source.to_str();
+        let ascii = text.is_ascii();
+        let len = if ascii {
+            text.len()
+        } else {
+            text.chars().count()
+        } as i128;
         let position = if index.0 < 0 {
             len + i128::from(index.0)
         } else {
@@ -42,10 +50,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .ok_or_else(|| {
                 self.runtime_error("Invalid Unicode scalar in string element assignment")
             })?;
+        let position = position as usize;
+        let (range, unchanged) = if ascii {
+            (
+                position..position + 1,
+                char::from(text.as_bytes()[position]) == scalar,
+            )
+        } else {
+            let mut chars = text.chars();
+            if position != 0 {
+                chars.nth(position - 1);
+            }
+            let start = text.len() - chars.as_str().len();
+            let unchanged = chars.next() == Some(scalar);
+            (start..text.len() - chars.as_str().len(), unchanged)
+        };
+        if unchanged && text.len() <= MAX_STRING_LENGTH {
+            return Ok(LpcRef::String(Arc::clone(source)));
+        }
         let mut utf8 = [0; 4];
         let replacement = scalar.encode_utf8(&mut utf8);
-        let position = position as usize;
-        replace_string(source.to_str(), position..position + 1, replacement).ok_or_else(|| {
+        replace_string_bytes(text, range, replacement).ok_or_else(|| {
             self.runtime_error("String element assignment exceeds maximum string length")
         })
     }
