@@ -2,13 +2,14 @@
 
 `mixed regmatch(string text, string pattern, int flags = 0, int start = 0)`
 
-Return the first substring matching `pattern` at or after `start`, or integer
-`0` when there is no match. A successful empty match returns `""`.
+Return the first substring matching `pattern` at or after `start`, or the
+[configured null value](../lpc/null.md) when there is no match. A successful
+empty match returns `""`.
 
 With `RE_MATCH_SUBS`, return an array containing the full match, each capture
 group in opening-parenthesis order, and an integer continuation index:
 `({ match, group1, group2, ..., next_start })`. A group that did not participate
-is `0`; a group that matched an empty string is `""`.
+is the configured null value; a group that matched an empty string is `""`.
 
 `start` and `next_start` are zero-based Unicode character offsets in the original
 text. `start` must be between `0` and `sizeof(text)`, inclusive. Searching from an
@@ -39,6 +40,9 @@ Invalid patterns, unsupported flag bits, wrong argument types, and out-of-range
 start indices raise runtime errors. The pattern is compiled once per call.
 
 ### Examples
+
+These results use the default zero mode. In distinct mode, missing matches and
+unmatched groups are `nil`.
 
 ```c
 #define RE_MATCH_SUBS 0x1000
