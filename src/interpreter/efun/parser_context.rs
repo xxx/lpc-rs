@@ -29,8 +29,7 @@ pub(super) fn invocation<const N: usize>(
             }
         }
     };
-    let mut invocation = context.task_context().clone();
+    let mut invocation = context.task_context().clone_with_player(giver);
     invocation.callers = Some(context.chain());
-    invocation.this_player.store(giver);
     Ok(invocation)
 }

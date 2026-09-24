@@ -788,16 +788,15 @@ impl TaskContext {
     pub fn tx(&self) -> Sender<VmOp> {
         self.global_state.tx.clone()
     }
-}
 
-impl Clone for TaskContext {
-    fn clone(&self) -> Self {
+    /// Clone with an independent player slot, preserving the original entry player.
+    pub(crate) fn clone_with_player(&self, player: Option<Arc<Process>>) -> Self {
         Self {
             global_state: self.global_state.clone(),
             process: self.process.clone(),
             result: TaskResult::new(),
             system_view: self.system_view.clone(),
-            this_player: ArcSwapAny::from(self.this_player.load_full()),
+            this_player: ArcSwapAny::from(player),
             entry_player: ArcSwapAny::from(self.entry_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             chain_count: self.chain_count,
@@ -806,6 +805,12 @@ impl Clone for TaskContext {
             command: self.command.clone(),
             callers: self.callers.clone(),
         }
+    }
+}
+
+impl Clone for TaskContext {
+    fn clone(&self) -> Self {
+        self.clone_with_player(self.this_player.load_full())
     }
 }
 
@@ -849,6 +854,54 @@ mod tests {
         let c = result_test_ctx();
         c.set_result(LpcRef::from(1i64)).unwrap();
         c.set_result(LpcRef::from(2i64)).unwrap();
+    }
+
+    #[test]
+    fn cloned_player_changes_preserve_the_parent_and_entry_player() {
+        let parent = result_test_ctx();
+        let entering_player = parent.process.clone();
+        let selected_player = result_test_ctx().process;
+        parent.this_player.store(Some(entering_player.clone()));
+        parent.entry_player.store(Some(entering_player.clone()));
+
+        let scoped = parent.clone_with_player(Some(selected_player.clone()));
+        let nested = scoped.clone();
+        scoped.this_player.store(None);
+
+        assert!(Arc::ptr_eq(
+            &parent.this_player.load_full().unwrap(),
+            &entering_player
+        ));
+        assert!(Arc::ptr_eq(
+            &nested.this_player.load_full().unwrap(),
+            &selected_player
+        ));
+        assert!(Arc::ptr_eq(
+            &scoped.entry_player.load_full().unwrap(),
+            &entering_player
+        ));
+        assert!(Arc::ptr_eq(
+            &nested.entry_player.load_full().unwrap(),
+            &entering_player
+        ));
+    }
+
+    #[test]
+    fn cloned_null_player_preserves_entry_without_inheriting_later_changes() {
+        let parent = result_test_ctx();
+        let entering_player = parent.process.clone();
+        parent.this_player.store(Some(entering_player.clone()));
+        parent.entry_player.store(Some(entering_player.clone()));
+
+        let scoped = parent.clone_with_player(None);
+        parent.this_player.store(Some(result_test_ctx().process));
+        parent.entry_player.store(None);
+
+        assert!(scoped.this_player.load_full().is_none());
+        assert!(Arc::ptr_eq(
+            &scoped.entry_player.load_full().unwrap(),
+            &entering_player
+        ));
     }
 
     #[test]
