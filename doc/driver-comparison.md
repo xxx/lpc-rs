@@ -303,7 +303,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md) and [`replace_string`](efun/replace_string.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures] and [reference arguments][ld-refs]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], and [`copy` with `PACKAGE_CONTRIB`][fl-copy]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
 | Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
-| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md); configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
+| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md) and [inherit](apply/master/valid_inherit.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
@@ -578,9 +578,9 @@ File policies need the native argument order:
 permission decisions; a returned pathname does not redirect native file access.
 Preserve the master-self exemption and the security daemon's restore exemption
 without treating them as general load permission. Native paths are already
-canonical. Compiler includes have no executing caller and require an explicit
-policy; denying them until the security bootstrap is ready avoids recursive
-attempts to load the policy daemon. See
+canonical. Compiler includes pass nil as their explicit caller argument and
+require an explicit policy. Keep the bootstrap dependency grants narrow, then
+apply the [source authorization policy below](#lima-source-authorization). See
 [`valid_read`](apply/master/valid_read.md),
 [`valid_write`](apply/master/valid_write.md),
 [`valid_load`](apply/master/valid_load.md) and
@@ -607,8 +607,8 @@ under native [slice semantics](lpc/indexing.md). This termination fix does not
 adapt the virtual factory contract: native
 [`compile_object`](apply/master/compile_object.md) requires a blueprint path,
 whereas Lima returns a configured object. Preserve constructor and instance
-state when porting those factories. General load/inherit policy, lifecycle
-permissions, factory adaptation and user login remain separate porting work.
+state when porting those factories. Lifecycle permissions, factory adaptation
+and user login remain separate porting work.
 
 #### Lima security initialization
 
@@ -661,7 +661,45 @@ and its enumerated header dependencies. Permit its bootstrap `file_size` probes
 only for the two save paths, alongside the existing restore exemption. A direct
 call to the daemon's `query_privilege()` loads it while preserving initialization
 errors that `load_object` would turn into null; authorize that specific
-`call_other` load. Broader loading and inheritance remain separate policy work.
+`call_other` load. Once the daemon is available, use the source policy below.
+
+#### Lima source authorization
+
+Source authorization was reviewed on **24 September 2026** at the listed
+FluffOS revision and Lima revision above; the adapted master was exercised on
+lpc-rs in both null modes on **25 September 2026**. This is upstream source
+review and native execution, not cross-driver execution or a complete Lima boot.
+FluffOS's [file loader][fl-source-load] and [include reader][fl-source-include]
+pass the master as the caller to [file permission checks][fl-file-permission].
+Lima's master-self exemption therefore permits those reads. The optional
+[`inherit_program` hook][fl-inherit-grammar] preserves default behavior when
+absent, as in Lima. With `PACKAGE_UIDS`, loading additionally requires an
+effective user; this does not describe every build's complete access policy.
+
+After security initialization, use Lima's source read protections for native
+`valid_load`, `valid_inherit`, and `valid_read` requests whose function is
+`"include"`. Check them through the real security daemon with the preserved
+requester chain. This deliberately enforces read restrictions that the
+upstream master exemption bypasses. Retain the actual master's startup
+authority, without granting it to every object or inherited function defined
+under `/secure`. An include's `program` names its immediate includer, which
+can be another header; its location must not substitute for the loader's
+authority. Lima's `preload` is already private and cannot be invoked by an
+ordinary remote LPC call.
+
+Shared modules such as `m_access` must remain inheritable by less-privileged
+objects. Lima caps `set_privilege` and `unguarded` to the receiving object's
+write protection, so inheriting code does not confer its source owner's
+privilege. This policy depends on retaining object-based checks; adding grants
+based solely on an inherited `program` path requires revisiting inheritance
+permission. See [Lima's access module][lima-access] and
+[security daemon][lima-security].
+
+Keep [`compile_string`](efun/compile_string.md)'s identity write check separate
+from source read permission. Also distinguish cold loading from runtime access:
+calls to resident objects and clones of resident prototypes do not ask
+`valid_load` again. Load permission does not authorize destruction or other
+lifecycle operations; review those policies independently.
 
 #### Lima JSON helpers
 
@@ -1042,3 +1080,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-security]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/secure_d.c
 [lima-access]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_access.c
 [lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
+[fl-source-load]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/simulate.cc#L479-L487
+[fl-source-include]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/lexer_utils.cc#L2224-L2251
+[fl-file-permission]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/file.cc#L642-L675
