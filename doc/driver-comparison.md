@@ -565,6 +565,51 @@ save import still require further driver support. See [class support](lpc/classe
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
 | Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
 
+#### Lima master startup
+
+Lima's [master][lima-master] and [preload list][lima-preload] were reviewed on
+**24 September 2026** at `eefaff66adcae9b01e16059574c925b0d63e70a1`.
+The adapted master and complete simul library were exercised on lpc-rs in both
+null modes. This establishes the tested startup contracts, not a complete Lima
+boot or execution on FluffOS.
+
+File policies need the native argument order:
+`(string path, string func, object caller, string program)`. Return integer
+permission decisions; a returned pathname does not redirect native file access.
+Preserve the master-self exemption and the security daemon's restore exemption
+without treating them as general load permission. Native paths are already
+canonical. Compiler includes have no executing caller and require an explicit
+policy; denying them until the security bootstrap is ready avoids recursive
+attempts to load the policy daemon. See
+[`valid_read`](apply/master/valid_read.md),
+[`valid_write`](apply/master/valid_write.md),
+[`valid_load`](apply/master/valid_load.md) and
+[`valid_inherit`](apply/master/valid_inherit.md).
+
+Lima's `preload` catches `load_object` without checking its result. Native
+[`load_object`](efun/load_object.md) returns the configured null on failure:
+test the returned object and report the failed path. An error in one
+[`preload`](apply/master/preload.md) does not prevent later entries from running.
+The reviewed list's `/secure/obj/shell` entry must be `/obj/secure/shell`.
+
+Replace the master's structured-trace formatter with the native
+[`error_handler`](apply/master/error_handler.md) mapping's rendered `diagnostic`;
+do not expect `program`, `file`, `line`, `trace` or a caught-error argument.
+`standard_trace` can retain its mudlib call shape while returning that diagnostic.
+Use `this_interactive()` for the initiating user and retain wizard-only detail.
+Store the error independently of optional log, user and channel delivery, and
+avoid loading services from the error handler. The driver also logs uncaught
+errors independently. The old `log_error` method is not a native compiler hook.
+
+For virtual ancestor searches, stop when the final slash is at index zero:
+`path[0..idx - 1]` otherwise becomes `path[0..-1]`, which retains the whole path
+under native [slice semantics](lpc/indexing.md). This termination fix does not
+adapt the virtual factory contract: native
+[`compile_object`](apply/master/compile_object.md) requires a blueprint path,
+whereas Lima returns a configured object. Preserve constructor and instance
+state when porting those factories. Security-daemon startup, lifecycle
+permissions, factory adaptation and user login remain separate porting work.
+
 #### Lima JSON helpers
 
 Lima's [JSON simul module][lima-json] uses byte buffers and the encoding efuns
@@ -940,3 +985,5 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [fl-text-encoding]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/encoding.cc
 [lima-json]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/json.c
+[lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
+[lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
