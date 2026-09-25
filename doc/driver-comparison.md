@@ -607,8 +607,61 @@ under native [slice semantics](lpc/indexing.md). This termination fix does not
 adapt the virtual factory contract: native
 [`compile_object`](apply/master/compile_object.md) requires a blueprint path,
 whereas Lima returns a configured object. Preserve constructor and instance
-state when porting those factories. Security-daemon startup, lifecycle
+state when porting those factories. General load/inherit policy, lifecycle
 permissions, factory adaptation and user login remain separate porting work.
+
+#### Lima security initialization
+
+Lima's [security daemon][lima-security] and [`m_access`][lima-access] were
+reviewed on **24 September 2026** at
+`eefaff66adcae9b01e16059574c925b0d63e70a1`. The adapted daemon, full simuls and
+master were exercised together on lpc-rs in both null modes, using Lima's
+`SENSIBLE_MODIFIERS` configuration. This is native execution and upstream source
+review, not cross-driver execution or a complete Lima boot.
+
+Convert the daemon's bound save/log callbacks to native partial application:
+`unguarded(1, &save_object(path))` and `&write_file(path, text)`.
+`(: save_object, path :)` is a native comma-expression closure that returns
+`path` without saving. Use `m_delete` for the discarded-result mapping removals,
+empty mapping literals for the two capacity-only allocations, and `deep_copy`
+for returned access trees. Those trees use string keys. The daemon's clone
+guard can inspect the `#` suffix in `file_name(this_object())`; that check does
+not authorize cloning. See [function values](lpc/function_type.md),
+[`m_delete`](efun/m_delete.md), [`deep_copy`](efun/deep_copy.md), and
+[`file_name`](efun/file_name.md).
+
+Initialize both `m_access` privilege fields explicitly to integer `0`, even in
+distinct-null mode. Zero is a privilege level; nullable results use `nil`.
+Return an integer predicate from `query_is_wizard`, and reject non-string,
+non-integer inputs in `valid_privilege`. In the hierarchy's suffix comparison,
+use `strindex(suffix, prefix) == 0` alongside the existing owner and length
+checks: an empty prefix makes the original slice end at `-1`, selecting the
+whole suffix under native [indexing](lpc/indexing.md).
+
+Validate all six restored mappings, nested access/privilege structures, and
+both directions of domain membership before completing initialization. A
+successful `restore_object` does not mean every field was present or correctly
+typed. Accept explicit empty access maps and zero/nil child sentinels, but abort
+on missing fields, invalid structure, or malformed save text while preserving
+the primary and backup files. Create defaults only when both save paths are
+absent; a backup without its primary requires deliberate recovery. Keep
+initialization idempotent so a later `create()` call cannot reload live policy.
+See [`restore_object`](efun/restore_object.md) and [save format](save-format.md).
+
+The `delete_wizard` instruction-budget preflight needs no native replacement:
+uncaught errors and execution timeouts abort database changes, pending saves
+and log output. A caught ordinary exception retains prior changes; `catch`
+does not create a rollback boundary. The two save files are separate
+commit-time writes, not a crash-atomic pair. See
+[`save_object`](efun/save_object.md) and [`catch`](efun/catch.md).
+
+Initialize the daemon before ordinary preloads with narrow, explicit master
+grants: the daemon source for master-originated loading, its `m_access` inherit,
+and its enumerated header dependencies. Permit its bootstrap `file_size` probes
+only for the two save paths, alongside the existing restore exemption. A direct
+call to the daemon's `query_privilege()` loads it while preserving initialization
+errors that `load_object` would turn into null; authorize that specific
+`call_other` load. Broader loading and inheritance remain separate policy work.
 
 #### Lima JSON helpers
 
@@ -986,4 +1039,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-text-encoding]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/encoding.cc
 [lima-json]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/json.c
 [lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
+[lima-security]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/secure_d.c
+[lima-access]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_access.c
 [lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
