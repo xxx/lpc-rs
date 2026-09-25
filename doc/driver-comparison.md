@@ -48,6 +48,13 @@ FluffOS class assembly/disassembly and byte-file reads were source-reviewed on
 byte transfer. No cross-driver execution was performed.
 [Class conversion][fl-class-assembly], [file reads][fl-byte-read-range].
 
+FluffOS text encoding was source-reviewed on **24 September 2026** at the listed
+revision, with core `string_encode` / `string_decode` and ICU converters.
+Lima's JSON simul helpers were reviewed at its pinned revision below; they are
+mudlib code, not the FluffOS JSON package. Runtime comparisons exercised the
+adapted Lima helpers and native efuns on lpc-rs, without cross-driver execution.
+[Encoding source][fl-text-encoding], [Lima helpers][lima-json].
+
 Mixed numeric comparisons were source-reviewed on **24 September 2026** at
 that FluffOS revision. The core operators use native C++ int/float comparison,
 which promotes the integer; no optional package is required. This is source
@@ -549,6 +556,7 @@ save import still require further driver support. See [class support](lpc/classe
 | String mapping | Calls the callback with each byte up to the first NUL. A nonzero integer result replaces that byte through a `char` conversion; zero or a non-integer result preserves it. Supports function pointers and named callbacks. [Implementation][fl-map-string], [reference][fl-map-reference]. | [`map`](efun/map.md) passes integer Unicode scalars and requires valid integer scalar results. Zero inserts NUL; invalid results raise errors before the next callback. Use explicit identity returns for missing table entries and `foreach` for void callbacks used for side effects. Update byte-indexed translation tables and named callback syntax; native callbacks use function values. |
 | Text length | String length and ordinary indexing use extended grapheme clusters. [Strings][fl-strings]. The string overloads of `member_array` and `map` operate on bytes; see above. | String lengths and positions use Unicode scalar values. A combining sequence or multi-code-point emoji can therefore occupy several positions. [Types](lpc/types.md), [length implementation](../lpc-rs-utils/src/lpc_string.rs). |
 | Binary values | Mutable `buffer` values, including indexed/range assignment. [Buffers][fl-buffer]. | Immutable `bytes`, with explicit text/byte conversions. Buffer mutation and implicit conversions need adaptation. [Types](lpc/types.md). |
+| Text encoding | `string_encode(text, encoding)` returns a buffer; `string_decode(buffer, encoding)` returns a string. ICU supplies the converters; the reviewed decoder trims trailing zero bytes while more than one byte remains before converting. [Implementation][fl-text-encoding]. | Use [`to_bytes`](efun/to_bytes.md) and [`to_text`](efun/to_text.md) with an explicit encoding. Native support is UTF-8 and Latin-1, rejects invalid input, and preserves NULs. Byte offsets and Unicode scalar offsets differ; decode complete sequences. Audit other encodings and error handling separately. |
 | Byte-file reads used as text | `read_bytes` returns zero on read failure or EOF; successful reads return a string after replacing invalid UTF-8. The underlying read seeks by byte offset and enforces the configured transfer limit. [Wrapper][fl-byte-read], [sanitizer][fl-utf8-sanitize], [range read][fl-byte-read-range]. | [`read_bytes`](efun/read_bytes.md) returns immutable bytes or configured nil at EOF; missing files and permission failures raise errors. Use explicit [`to_text`](efun/to_text.md) decoding. For a UTF-8 tail helper, find LF boundaries in bytes and decode the selected suffix once: decoding arbitrary chunks can split characters. Count unterminated final lines, preserve blank lines and delimiters, and handle empty files explicitly. Piped command input is already text and must not be passed as a path. Native range reads currently materialize the whole file before slicing, so a chunk loop does not provide bounded-memory tailing. |
 | Regular expressions | Traditional `regexp` and separate `pcre_*` efuns. [Implementation][fl-regexp], [PCRE reference][fl-pcre]. | Rust `regex` syntax; no `pcre_*` API, look-around or back-references. [Reference](efun/regexp.md). |
 | `save_object` options | File form returns `1` for success, `0` for failure; flags control saving zero values and compression; a no-file form returns data. [Reference][fl-save]. | Requires a path, returns the path and saves zero-valued globals. No flag or no-file form. Permission/serialisation errors raise errors; delivery failures after commit are logged. [Reference](efun/save_object.md). |
@@ -556,6 +564,37 @@ save import still require further driver support. See [class support](lpc/classe
 | Named global reads and writes | `fetch_variable(name, object?)` and `store_variable(name, value, object?)` default to the current object. Lookup takes the first match, searching inherits before the object's own globals. The implementation rejects a private match on a foreign target; it does not enforce the reference's public-only description. Self-access includes private globals, and `nosave` globals remain accessible. The setter copies the value without a declared-type check. [References][fl-fetch-variable], [setter][fl-store-variable], [implementation][fl-named-globals], [lookup][fl-global-lookup], [assignment][fl-global-assignment]. | Read through [`variable_info`](efun/variable_info.md); no native `fetch_variable` is needed for a name lookup. The native setter takes the target **first**, requires a live object, and accepts an optional exact declaring-source path. Duplicate names require that selector; it does not choose the first match. Writes check retained types, configured nil semantics and scalar class identity. Foreign writes require [`valid_store_variable`](apply/master/valid_store_variable.md), including public fields, separately from inspection permission. Update argument order, duplicate-name handling, type assumptions, and master policy together. |
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
 | Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
+
+#### Lima JSON helpers
+
+Lima's [JSON simul module][lima-json] uses byte buffers and the encoding efuns
+above. Its encoder skips non-string mapping keys, substitutes `null` for
+unsupported values and cyclic interior references, and accepts an optional
+recursion-bookkeeping argument. Those are mudlib policies, not general FluffOS
+JSON guarantees.
+
+Remove this module's inherit to expose native [`json_encode`](efun/json_encode.md)
+and [`json_decode`](efun/json_decode.md), then retire the unused source after
+checking downstream callers. Bare calls and function pointers use the efuns;
+explicit calls to the old module and the encoder's second argument need changes.
+A conversion-only port still needs parser and escaping repairs: execution on
+lpc-rs reproduced incorrect backslash handling, acceptance of malformed JSON,
+NUL truncation and an 8,192-byte concatenation limit from the appended sentinel.
+Renaming the encoding calls alone does not fix those behaviors.
+
+Native encoding turns numeric mapping keys into text, rejects other non-string
+keys, and encodes bytes as arrays of integers. Unsupported values and cycles
+raise errors. Numeric and textual keys can collide after conversion; the last
+value wins. Decoding enforces JSON syntax, resolves escapes, rejects trailing
+NULs, and converts integers outside the native integer range to floats, which
+may lose precision. The `-0` token retains floating negative zero.
+
+JSON booleans decode to integer 1/0 and encode back as numbers. JSON null becomes
+the [configured null](lpc/null.md): zero mode loses its distinction from integer
+zero; distinct nil encodes as `null`. Code requiring the old coercion or filtering
+policies should implement them explicitly around the native efuns. The inventory
+found no external JSON-helper consumers in the reviewed Lima tree; downstream
+applications may have their own contracts.
 
 #### FluffOS parser package
 
@@ -898,3 +937,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-byte-read]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc#L1707-L1728
 [fl-byte-read-range]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/file.cc#L492-L565
 [fl-utf8-sanitize]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/strutils.cc#L46
+
+[fl-text-encoding]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/encoding.cc
+[lima-json]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/json.c

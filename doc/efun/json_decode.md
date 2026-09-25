@@ -8,7 +8,8 @@ Parse JSON `text` into a value.
 - An array becomes an array.
 - A string becomes a string, escapes resolved.
 - A number written without a fraction or exponent becomes an int; any other
-  number, and an integer too large for an int, becomes a float.
+  number, and an integer too large for an int, becomes a float. The token `-0`
+  is an exception: it becomes floating negative zero.
 - `true` becomes 1; `false` becomes 0.
 - `null` becomes the selected [null value](../lpc/null.md): `0` in zero mode,
   `nil` in distinct mode.
