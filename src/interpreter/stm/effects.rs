@@ -211,6 +211,21 @@ pub(crate) enum PendingFileOp {
 }
 
 impl Effect {
+    /// Whether this effect changes `server`, without copying its payload.
+    pub(crate) fn affects_file(&self, server: &std::path::Path) -> bool {
+        match self {
+            Self::WriteFile { path, .. }
+            | Self::AppendFile { path, .. }
+            | Self::RemoveFile { path }
+            | Self::WriteBytes { path, .. }
+            | Self::ReplaceChars { path, .. }
+            | Self::CreateDir { path }
+            | Self::RemoveDir { path } => path.server() == server,
+            Self::Rename { path, to } => path.server() == server || to.server() == server,
+            _ => false,
+        }
+    }
+
     /// This effect's change to the file at `server`, if it touches it.
     pub(crate) fn pending_file_op(&self, server: &std::path::Path) -> Option<PendingFileOp> {
         match self {

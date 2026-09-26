@@ -752,6 +752,10 @@ unsuffixed save name and suffixed probe. Missing and empty saves retain defaults
 malformed saves must abort initialization. See [`file_size`](efun/file_size.md)
 and the [restoration contract](efun/restore_object.md).
 
+An ordinary native `file_size` probe reads metadata without opening the contents;
+pending changes to that path use the task's file view. A nonnegative size does
+not prove the save's contents can be read, so retain the restore-first ordering.
+
 Make `lima_save` private and `nosave`, and `set_lima_save` protected. The routing
 choice belongs to constructor configuration: saved values must not redirect
 later writes, and remote callers must not toggle it. On a mud named `LIMA`,

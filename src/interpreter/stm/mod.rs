@@ -460,6 +460,11 @@ impl Transaction {
         self.effects.push(effect);
     }
 
+    /// Whether this attempt has recorded any changes to the file at `server`.
+    pub(crate) fn has_pending_file_ops(&self, server: &std::path::Path) -> bool {
+        self.effects.iter().any(|e| e.affects_file(server))
+    }
+
     /// This attempt's recorded changes to the file at `server`, in order.
     pub(crate) fn pending_file_ops(&self, server: &std::path::Path) -> Vec<PendingFileOp> {
         self.effects

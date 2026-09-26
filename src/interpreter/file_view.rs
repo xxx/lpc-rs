@@ -25,7 +25,7 @@ impl SourceReader for TransactionSourceReader {
     }
 
     async fn kind(&self, path: &Path) -> std::io::Result<SourceKind> {
-        if self.0.with(|t| t.pending_file_ops(path).is_empty()) {
+        if !self.0.with(|t| t.has_pending_file_ops(path)) {
             return DiskSourceReader.kind(path).await;
         }
         match read_through(&self.0, path).await? {
