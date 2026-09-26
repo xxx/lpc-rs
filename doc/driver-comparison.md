@@ -37,6 +37,13 @@ FluffOS master lookup and replacement during destruction were source-reviewed on
 package; no cross-driver execution was performed. [Getter][fl-master-getter],
 [destruction][fl-master-destruct].
 
+FluffOS object restoration and saved-string encoding were source-reviewed on
+**26 September 2026** at the listed revision. These are core persistence paths;
+compressed saves additionally require `HAVE_ZLIB`. Lima's shared daemon module
+uses uncompressed saves. The port was exercised on lpc-rs in both null modes;
+no FluffOS execution was performed. [Restore reference][fl-restore-object],
+[persistence implementation][fl-object-persistence].
+
 FluffOS stack inspection and function-pointer owner frames were source-reviewed
 on **24 September 2026** at the listed revision. These are core paths without
 optional package requirements; no cross-driver execution was performed.
@@ -560,6 +567,8 @@ save import still require further driver support. See [class support](lpc/classe
 | Byte-file reads used as text | `read_bytes` returns zero on read failure or EOF; successful reads return a string after replacing invalid UTF-8. The underlying read seeks by byte offset and enforces the configured transfer limit. [Wrapper][fl-byte-read], [sanitizer][fl-utf8-sanitize], [range read][fl-byte-read-range]. | [`read_bytes`](efun/read_bytes.md) returns immutable bytes or configured nil at EOF; missing files and permission failures raise errors. Use explicit [`to_text`](efun/to_text.md) decoding. For a UTF-8 tail helper, find LF boundaries in bytes and decode the selected suffix once: decoding arbitrary chunks can split characters. Count unterminated final lines, preserve blank lines and delimiters, and handle empty files explicitly. Piped command input is already text and must not be passed as a path. Native range reads currently materialize the whole file before slicing, so a chunk loop does not provide bounded-memory tailing. |
 | Regular expressions | Traditional `regexp` and separate `pcre_*` efuns. [Implementation][fl-regexp], [PCRE reference][fl-pcre]. | Rust `regex` syntax; no `pcre_*` API, look-around or back-references. [Reference](efun/regexp.md). |
 | `save_object` options | File form returns `1` for success, `0` for failure; flags control saving zero values and compression; a no-file form returns data. [Reference][fl-save]. | Requires a path, returns the path and saves zero-valued globals. No flag or no-file form. Permission/serialisation errors raise errors; delivery failures after commit are logged. [Reference](efun/save_object.md). |
+| `restore_object` options | The optional flag `1` preserves globals omitted from the file; otherwise non-static globals are cleared before restoration. [Reference][fl-restore-object]. | Takes only the path and always preserves omitted globals. Remove flag `1`; code relying on the upstream clearing default needs explicit initialization. Permission refusal raises an error; a missing or unreadable file returns `0`. [Reference](efun/restore_object.md). |
+| Saved-file migration | The reader skips `#` lines, decodes unescaped carriage returns inside strings as newlines, and reads positional `(/.../)` class records. [Implementation][fl-object-persistence]. | Headers need removal, string values need decoding and re-encoding, and classes need nominal identities and typed named fields. Header removal alone does not establish equivalence. See the [native format](save-format.md) and [Lima persistence notes](#lima-daemon-persistence). |
 | Value serialization | `save_variable(mixed)` returns a string and `restore_variable(string)` reads one, using the driver's object-save format. [Save][fl-save-variable], [restore][fl-restore-variable]. | Use [`save_value`](efun/save_value.md) and [`restore_value`](efun/restore_value.md). They use the native [save format](save-format.md), including class and bytes encodings and configured nil handling. Renaming calls does not establish compatibility with existing saved strings; audit and migrate persisted data separately. Cross-driver data interchange is **not checked**. |
 | Named global reads and writes | `fetch_variable(name, object?)` and `store_variable(name, value, object?)` default to the current object. Lookup takes the first match, searching inherits before the object's own globals. The implementation rejects a private match on a foreign target; it does not enforce the reference's public-only description. Self-access includes private globals, and `nosave` globals remain accessible. The setter copies the value without a declared-type check. [References][fl-fetch-variable], [setter][fl-store-variable], [implementation][fl-named-globals], [lookup][fl-global-lookup], [assignment][fl-global-assignment]. | Read through [`variable_info`](efun/variable_info.md); no native `fetch_variable` is needed for a name lookup. The native setter takes the target **first**, requires a live object, and accepts an optional exact declaring-source path. Duplicate names require that selector; it does not choose the first match. Writes check retained types, configured nil semantics and scalar class identity. Foreign writes require [`valid_store_variable`](apply/master/valid_store_variable.md), including public fields, separately from inspection permission. Update argument order, duplicate-name handling, type assumptions, and master policy together. |
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
@@ -700,6 +709,53 @@ from source read permission. Also distinguish cold loading from runtime access:
 calls to resident objects and clones of resident prototypes do not ask
 `valid_load` again. Load permission does not authorize destruction or other
 lifecycle operations; review those policies independently.
+
+#### Lima daemon persistence
+
+Lima's [`m_daemon_data` module][lima-daemon-data] was reviewed on
+**26 September 2026** at the pinned Lima revision above, with
+`SENSIBLE_MODIFIERS` enabled. The adapted module, real master, full simuls and
+security daemon were exercised together on lpc-rs in both null modes. This is
+native execution and upstream source review, not cross-driver execution or a
+complete Lima boot.
+
+Pass `this_object()` to `file_name`, give `create` an explicit `void` result,
+and use native bound calls for saving, restoring and measuring the save file.
+The original comma-expression callbacks silently skip persistence: the save
+callback returns a path, and the size callback returns a string whose comparison
+with integer zero is false. Drop `restore_object`'s flag `1`; native restoration
+already preserves omitted values. See [function values](lpc/function_type.md),
+[`file_name`](efun/file_name.md), and [`restore_object`](efun/restore_object.md).
+
+Attempt restoration before probing file size. A size-first guard mistakes a
+read refusal for a missing save and can start a daemon with defaults that later
+overwrite unread data. Propagate restore errors; after a false result, permit
+defaults only when the suffixed file probe returns `-1`, and reject directories
+or other filesystem failures. This depends on consistent read policy for the
+unsuffixed save name and suffixed probe. Missing and empty saves retain defaults;
+malformed saves must abort initialization. See [`file_size`](efun/file_size.md)
+and the [restoration contract](efun/restore_object.md).
+
+Make `lima_save` private and `nosave`, and `set_lima_save` protected. The routing
+choice belongs to constructor configuration: saved values must not redirect
+later writes, and remote callers must not toggle it. On a mud named `LIMA`,
+the default `/data/lima/daemons` write protection is stricter than the ordinary
+daemon privilege. Configure an explicit directory grant when using that root;
+retain the object's privilege ceiling. Save parent directories must exist.
+Prototype names strip a terminal `_d`; clone names retain `_d#N` and use separate
+save paths. See [Lima's security policy][lima-security] and
+[`save_object`](efun/save_object.md).
+
+All ten bundled saves have incompatible headers. Four (`alias`, `body`, `guild`
+and `money`) also contain positional classes that need schema-aware migration.
+The apparent class marker in `soul.o` is quoted text; that file instead exposes
+the newline-encoding difference. Decode saved strings using the source format
+and encode them in the native format, preserving escaped literal carriage
+returns. Normalizing whole-file line endings can split a saved record. Parsing
+success does not validate a daemon's state or prove complete data equivalence.
+Keep schema checks with the concrete daemon and preserve original saves until
+migration is validated. [Bundled data][lima-data], [source string codec][fl-object-persistence],
+[native format](save-format.md).
 
 #### Lima JSON helpers
 
@@ -898,6 +954,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-pragma-compiler]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/compiler.cc
 [fl-callouts]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/call_out.cc
 [fl-save]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/save_object.md
+[fl-restore-object]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/restore_object.md
+[fl-object-persistence]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/object.cc
 [fl-save-variable]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/general/save_variable.md
 [fl-restore-variable]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/general/restore_variable.md
 [fl-fetch-variable]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/contrib/fetch_variable.md
@@ -1079,6 +1137,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
 [lima-security]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/secure_d.c
 [lima-access]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_access.c
+[lima-daemon-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_daemon_data.c
+[lima-data]: https://github.com/limalib/lima/tree/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data
 [lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
 [fl-source-load]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/simulate.cc#L479-L487
 [fl-source-include]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/lexer_utils.cc#L2224-L2251
