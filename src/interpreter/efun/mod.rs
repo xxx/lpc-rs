@@ -139,6 +139,7 @@ pub(crate) mod this_player;
 pub(crate) mod throw;
 pub(crate) mod time;
 pub(crate) mod transaction_stats;
+pub(crate) mod trim;
 pub(crate) mod type_of;
 pub(crate) mod type_predicates;
 pub(crate) mod unique_array;
@@ -1252,6 +1253,11 @@ efuns! {
         arity: (3, 1),
         args: [LpcType::String(false), LpcType::String(false) | LpcType::Int(false), LpcType::Int(false)],
     },
+    trim => {
+        returns: LpcType::String(false),
+        arity: (3, 2),
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false) | LpcType::Int(false)],
+    },
     evaluate => {
         returns: LpcType::Mixed(false),
         arity: (1, 0, ellipsis),
@@ -1668,6 +1674,7 @@ mod tests {
                 "classp",
                 "replace_string",
                 "strindex",
+                "trim",
                 "evaluate",
                 "origin",
                 "has_key",
