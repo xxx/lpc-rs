@@ -790,6 +790,33 @@ remove obsolete groups with a `foreach` loop instead of collecting unused
 callback results. Whole-daemon validation must still check saved state and
 initialization; replacing these names alone does not establish a complete boot.
 
+#### Lima copying callers
+
+Lima's remaining `copy` calls were reviewed on **26 September 2026** at the
+pinned revisions, with `PACKAGE_CONTRIB` enabled for FluffOS. Native tests cover
+adapted group/task getters, the migrated method table, and extracted class,
+socket-table and hook callers; no cross-driver execution was performed.
+Use [`deep_copy`](efun/deep_copy.md) for these snapshots and working copies.
+String and numeric table keys retain their comparisons. FTP's socket-object
+keys and references also retain identity, as do hook callbacks; copying a
+callback does not isolate its captured state. [FTP][lima-ftp],
+[hooks][lima-hooks], [upstream copying][fl-copy].
+
+This adopts native graph semantics for arbitrary nested values in task
+attributes, effect arguments and other open payloads. Mutable container keys
+are copied; lookup with the original key no longer finds them. Repeated
+references remain shared within each independent copy, and cycles are retained.
+Callers needing a related key and table should copy them together. This does
+not make recursive mudlib traversals cycle-safe or promise that cyclic values
+can be saved. [Task daemon][lima-task], [effects][lima-effects].
+
+Keep each getter's contract explicit. In the reviewed task daemon,
+`query_attributes` copies the attribute table, but `query_attribute` returns
+the selected value directly. Likewise, `query_tasks()` copies the full task
+tree, while `query_tasks(id)` returns that task's live subtask array.
+Renaming the existing copy calls does not change those direct-return branches.
+[Task getters][lima-task].
+
 #### Lima JSON helpers
 
 Lima's [JSON simul module][lima-json] uses byte buffers and the encoding efuns
@@ -1178,6 +1205,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-crafting]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/crafting_d.c#L770-L773
 [lima-party]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/party_d.c#L128-L140
 [lima-newsdata]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c#L136-L158
+[lima-ftp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/ftp_d.c
+[lima-hooks]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/hooks.c
+[lima-task]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/task_d.c
+[lima-effects]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/living/effects.c
 [lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
 [fl-source-load]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/simulate.cc#L479-L487
 [fl-source-include]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/lexer_utils.cc#L2224-L2251
