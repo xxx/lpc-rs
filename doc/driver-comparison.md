@@ -757,6 +757,16 @@ Keep schema checks with the concrete daemon and preserve original saves until
 migration is validated. [Bundled data][lima-data], [source string codec][fl-object-persistence],
 [native format](save-format.md).
 
+Preserve saved numeric zeros explicitly when migrating. The two bundled guild
+records contain ten zero-valued fields declared `string *`. Keeping those zeros
+makes their native class records valid in zero mode but invalid in distinct-null
+mode. Supporting the latter requires a deliberate schema or value conversion;
+the migration must not silently reinterpret these zeros as `nil`. The other
+nine bundled saves can be converted without this class-field conflict. The
+reviewed migration retains existing content anomalies, including invalid dates
+and inconsistent guild keys, for separate data cleanup. [Guild schema][lima-guild],
+[class save validation](save-format.md#class-records).
+
 #### Lima JSON helpers
 
 Lima's [JSON simul module][lima-json] uses byte buffers and the encoding efuns
@@ -1139,6 +1149,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-access]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_access.c
 [lima-daemon-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_daemon_data.c
 [lima-data]: https://github.com/limalib/lima/tree/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data
+[lima-guild]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/guild_d.c
 [lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
 [fl-source-load]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/simulate.cc#L479-L487
 [fl-source-include]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/lexer_utils.cc#L2224-L2251
