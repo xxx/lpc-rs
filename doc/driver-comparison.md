@@ -166,6 +166,12 @@ at the listed FluffOS revision. Both are core efuns without optional package
 requirements; no cross-driver execution was performed.
 [Declarations][fl-core-spec], [implementations][fl-type-predicates].
 
+Mapping deletion and mapping callbacks were source-reviewed on
+**26 September 2026** at the listed FluffOS revision. They are core efuns
+without optional package requirements. Lima adaptations were exercised on
+lpc-rs; no cross-driver execution was performed.
+[Deletion][fl-map-delete], [callbacks][fl-mapping-transform].
+
 Type inspection was source-reviewed on **24 September 2026** at the listed
 FluffOS revision. `typeof` is a core efun without an optional-package
 requirement; its string result was reviewed without cross-driver execution.
@@ -559,6 +565,8 @@ save import still require further driver support. See [class support](lpc/classe
 | Rounding | `round(float)` in `PACKAGE_MATH` returns a float using the C math rounding operation, with halfway values rounded away from zero. [Declaration][fl-math-spec], [implementation][fl-round]. | [`round(int \| float)`](efun/round.md) also returns a float and rounds halfway values away from zero, alongside [`floor`](efun/floor.md) and [`ceil`](efun/ceil.md). Integer arguments are promoted to float and can lose precision at large magnitudes. Use `to_int(round(value))` where a declared integer result is required; native typing does not implicitly convert the result to int. |
 | String membership search | `member_array(integer, text, start)` searches bytes from a byte offset. A negative start or one beyond the byte length raises an error. Search stops at NUL, and integer zero can match the terminator. [Implementation][fl-member-string]. | [`member_array`](efun/member_array.md) searches integer Unicode scalars using scalar offsets. A negative start raises an error; a start at or past the end returns `-1`. Zero matches only actual NUL data, and search continues past embedded NULs. Review byte offsets, especially around file I/O. The optional fourth flags argument is unsupported. |
 | Array mapping and filtering | `map_array` and `filter_array` alias `map` and `filter` with array declarations. Callbacks can be function values or method names, with an optional receiver for named methods; extra arguments follow the element. [Declarations][fl-core-spec], [dispatch][fl-array-callbacks]. | Use [`map`](efun/map.md) and [`filter`](efun/filter.md) with function values. Translate `(: name :)` to `name`, bound literals to `&name(args)`, and named-method calls to function values for the intended receiver. Native `filter` accepts arrays and mappings; string filtering needs an explicit loop or character-array conversion. No native aliases are provided. |
+| Mapping deletion | `map_delete(mapping, key)` removes an entry in place and returns void. [Declaration][fl-core-spec], [implementation][fl-map-delete]. | Use [`m_delete`](efun/m_delete.md) when the result is discarded. It removes the entry in place but returns the same mapping, so a wrapper that promises void should discard its result. Missing keys are harmless. |
+| Mapping callbacks | `map_mapping` aliases `map`; callbacks receive the key, value, then extra arguments. Entries are traversed through the hash table. [Declaration][fl-core-spec], [implementation][fl-mapping-transform]. | Use [`map`](efun/map.md) with function values to produce new values under the same keys, or [`foreach`](lpc/foreach.md) for side effects. Native traversal follows insertion order. Review callbacks whose outcome depends on order, especially inversion of mappings with repeated values. |
 | Array callback edge cases | Empty arrays skip callback setup. `filter` accepts non-integer results, including `0.0`. Both loops read live array slots; `filter` copies an accepted slot after its callback returns. [Map][fl-map-array], [filter][fl-filter-array], [zero test][fl-filter-zero]. | Native callbacks must be function values even for empty inputs. `filter` uses native truthiness, rejecting `0.0`, nil and dead objects. Both efuns snapshot the input slots before callbacks; nested mutable values remain shared. Audit callbacks that edit the traversed array. Array `map` retains every callback result, including configured nil from void functions; use `foreach` when only side effects are wanted. |
 | String mapping | Calls the callback with each byte up to the first NUL. A nonzero integer result replaces that byte through a `char` conversion; zero or a non-integer result preserves it. Supports function pointers and named callbacks. [Implementation][fl-map-string], [reference][fl-map-reference]. | [`map`](efun/map.md) passes integer Unicode scalars and requires valid integer scalar results. Zero inserts NUL; invalid results raise errors before the next callback. Use explicit identity returns for missing table entries and `foreach` for void callbacks used for side effects. Update byte-indexed translation tables and named callback syntax; native callbacks use function values. |
 | Text length | String length and ordinary indexing use extended grapheme clusters. [Strings][fl-strings]. The string overloads of `member_array` and `map` operate on bytes; see above. | String lengths and positions use Unicode scalar values. A combining sequence or multi-code-point emoji can therefore occupy several positions. [Types](lpc/types.md), [length implementation](../lpc-rs-utils/src/lpc_string.rs). |
@@ -766,6 +774,21 @@ nine bundled saves can be converted without this class-field conflict. The
 reviewed migration retains existing content anomalies, including invalid dates
 and inconsistent guild keys, for separate data cleanup. [Guild schema][lima-guild],
 [class save validation](save-format.md#class-records).
+
+#### Lima mapping helper callers
+
+The reviewed `map_delete` callers discard their results, so they can use
+`m_delete`; replace `mapp` with `mappingp` as well, including inherited modules.
+Lima's [crafting daemon][lima-crafting] can count its material lists with
+`map(materials, (: sizeof($2) :))`, preserving the input lists. Its
+[party daemon][lima-party] uses `map_mapping` only to populate an inverse
+mapping; use `foreach (mixed key, mixed value in map) new_map[value] = key`.
+Duplicate values still collapse to one key, but the last inserted source entry
+now wins. Party access-level ties therefore need an explicit policy if the
+selected member matters. The [user news module][lima-newsdata] can likewise
+remove obsolete groups with a `foreach` loop instead of collecting unused
+callback results. Whole-daemon validation must still check saved state and
+initialization; replacing these names alone does not establish a complete boot.
 
 #### Lima JSON helpers
 
@@ -1150,6 +1173,11 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-daemon-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_daemon_data.c
 [lima-data]: https://github.com/limalib/lima/tree/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data
 [lima-guild]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/guild_d.c
+[fl-map-delete]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc#L932-L950
+[fl-mapping-transform]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/mapping.cc#L1040-L1078
+[lima-crafting]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/crafting_d.c#L770-L773
+[lima-party]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/party_d.c#L128-L140
+[lima-newsdata]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c#L136-L158
 [lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
 [fl-source-load]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/simulate.cc#L479-L487
 [fl-source-include]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/lexer_utils.cc#L2224-L2251
