@@ -835,8 +835,71 @@ non-commands in an earlier search directory still shadow later commands.
 Command caches refresh explicitly; filesystem changes are not watched.
 Prepared pipelines with real CMD_D lookup reject invalid rules/arguments/options
 before any handler or redirection I/O. Lookup may still load command objects.
-Full wish persistence, modal input and additional command-handler adaptations
-remain separate work.
+The [shell persistence adaptation](#lima-shell-persistence) handles registered
+state and save files; full wish input and additional command handlers remain
+separate work.
+
+#### Lima shell persistence
+
+Reviewed 27 September 2026 against the pinned [M_SAVE][lima-save-module],
+[shell][lima-shell] and [wish][lima-wish] sources. Execution checks use the LPC
+adaptation in both null modes, with `__SENSIBLE_MODIFIERS__` and
+`EVERYTHING_SAVES` defined and the adapted master/simul-efuns. These are native
+execution tests with receiving-object fixtures, not cross-driver or full-login
+tests.
+
+Use inherited self-inspection through [`variable_info`](efun/variable_info.md),
+explicit-self [`store_variable`](efun/store_variable.md), and
+[`save_value`](efun/save_value.md)/[`restore_value`](efun/restore_value.md).
+The adaptation resolves registered names uniquely, including private and
+`nosave` declarations, and preserves declared types and nominal class identity.
+Missing or ambiguous names fail. Simul-efun wrappers would be foreign callers
+and require master authorization; inheritance preserves self access.
+
+Call protected `add_save` locally: `this_object()->add_save(...)` cannot invoke
+it. Register bare callbacks, validate their returned names, discard zero/nil
+omissions, and deduplicate registrations. Keep the registry protected and return
+a detached array. Restore only registered fields, rejecting unknown fields and
+metadata. The shell uses protected M_SAVE inheritance to hide its raw save/load
+entry points; the general module's public restore interface still requires its
+receiving object to choose an appropriate caller policy.
+
+Initialize shell registrations before restore and avoid repeating setup at
+every save. Invoke file operations inside the `unguarded` thunks, clear
+`save_info` with nil, and route edits to the real `save_me` method. Restore alias
+temporary data before rebuilding aliases from the daemon defaults. Reconstruct
+named bindings and module dispatch from saved names; native
+[`functions`](efun/functions.md) already returns public names for another object.
+Use bound function pointers for dispatch rather than attempting to serialize
+closures. The alias daemon also needs native class-member dots.
+
+Decode string inputs before dispatching mapping or positional data. Validate
+inventory structure before applying fields or cloning children, including a
+nesting bound. The adaptation accepts decoded child payloads, repairing the
+legacy loader's string/array mismatch. It retains sticky recursive saving and
+the existing restore-depth convention: mapping roots use level 1 to attach
+children without moving the root; positional restores move the root for any
+nonzero level. Ordinary recursive saving includes living children, while
+`save_things_to_string` excludes living direct children. Native clone/load
+permissions still apply. Caught type errors can retain earlier writes; an
+uncaught error aborts the task. Structural checks do not create a savepoint.
+
+Execution checks cover actual file writes and a VM restart with aliases, shell
+variables and named bindings, along with rejected external persistence calls.
+Protected shell-save paths round-trip while direct user file reads/writes are
+refused.
+Full wish still has separate callback/type/input adaptations. Shell removal is
+also blocked until the master supplies an appropriate
+[`valid_destruct`](apply/master/valid_destruct.md) policy; this migration does
+not grant destruction permission.
+
+Existing `save_info` and `saved_items` contain serialized values inside saved
+strings. Converting an outer `.o` file does not convert those nested payloads.
+The [bundled save migration](#lima-daemon-persistence) does not cover player
+shell/body saves, and this snapshot provides no authentic examples. Convert
+such data explicitly with known class schemas. Native-encoded positional tests
+do not establish foreign save-string compatibility; numeric zero is not
+implicitly converted to nil for distinct-mode reference fields.
 
 #### Lima file metadata
 
@@ -1552,3 +1615,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-command-stdio]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/cmd/stdio.c
 
 [lima-command-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/cmd_d.c
+
+[lima-save-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_save.c
+[lima-shell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell.c
