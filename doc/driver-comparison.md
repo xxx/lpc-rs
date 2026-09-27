@@ -892,8 +892,9 @@ refused.
 The [destruction adaptation](#lima-destruction-and-shell-shutdown) also exercises
 owner-driven shell removal and restoration after restarting the VM. The
 [wizard-shell adaptation](#lima-wizard-shell-startup-and-colours) extends this to
-full wish. Real modal input and full user logout, including body and mailbox
-cleanup, remain separate work.
+full wish. The [modal-input adaptation](#lima-modal-input-stack) covers its
+registered input callbacks; full user login/logout, including body and mailbox
+cleanup, remains separate work.
 
 Existing `save_info` and `saved_items` contain serialized values inside saved
 strings. Converting an outer `.o` file does not convert those nested payloads.
@@ -1018,8 +1019,48 @@ create new driver file or regex capabilities.
 The shell still needs broader expansion, saved-value and public-mutator policy
 review. In particular, variable updates retain their existing save-before-hook
 ordering: catching a hook failure can leave the changed value and save intact.
-Full user compilation, modal stack handling and body/logout integration remain
-separate adaptations.
+The [modal stack adaptation](#lima-modal-input-stack) covers input dispatch.
+Full user compilation and body/logout integration remain separate adaptations.
+
+#### Lima modal input stack
+
+Reviewed **27 September 2026** against the pinned [input stack][lima-inputsys]
+and [input forwarding module][lima-input-forwarding]. Native execution checks
+use both null modes, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES` and the adapted
+master/simul/security policy. A fixture user inherits the real input stack;
+checks execute the callbacks registered with its native connection and include
+full wish dispatch. This exercises mudlib dispatch and committed registrations,
+not a network login or FluffOS execution.
+
+Pass `secure` directly to [`input_to`](efun/input_to.md) and
+[`get_char`](efun/get_char.md), and register the bare `dispatch_modal_input`
+function. The legacy `secure | 2` hides ordinary input because any nonzero native
+argument means no-echo. The legacy `(: dispatch_modal_input :)` expression
+returns a function instead of processing input. Use nil for absent typed class
+and callback values. For dead-handler pruning, inspect
+[`function_info(callback)["owner"]`](efun/function_info.md); native `functionp`
+is a predicate, without the `FP_OWNER_DESTED` bit.
+
+Return integer `1` from [`process_input`](apply/living/process_input.md) after
+modal dispatch. An omitted return lets the same line reach native command
+actions afterward. Validate or rebuild an empty stack before examining its lock
+or routing `!` escapes. The adaptation limits escapes to unlocked line handlers;
+character input, including `!`, remains data.
+
+Keep a one-shot handler's dispatch position before popping it so `modal_pass`
+reaches the immediately underlying handler. Stop at the bottom, skip dead owners
+while bubbling, and clear the dispatch position afterward. Popping past dead
+entries should notify the resumed handler once. During `clear_input_stack`,
+discard dead entries and send live handlers their existing `-1` cancellation
+without resuming handlers or creating a replacement shell. Ordinary and escaped
+callback errors both recapture input; caught errors retain their earlier writes.
+
+These changes retain the existing public stack-mutator authority. `modal_pop`
+and `modal_func` still rely on the normal post-dispatch recapture, or an explicit
+`modal_recapture` when used outside dispatch, to update the pending input mode
+and echo setting. Clearing the mudlib stack is not native input cancellation.
+Full login, terminal negotiation hooks, body/logout ownership and character-shell
+key bindings remain separate work.
 
 #### Lima file metadata
 
@@ -1747,3 +1788,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-input-forwarding]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_input.c
 [lima-xterm]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/xterm256_d.c
 [lima-ansi]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/ansi_d.c
+[lima-inputsys]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/inputsys.c
