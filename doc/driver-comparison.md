@@ -1237,9 +1237,82 @@ Idle timeout, pre-body quit, player-context restoration and retained input
 after a registry failure are exercised with the real user and menu. Successful
 manual/automatic entry uses explicit registry and user-entry fixtures to check
 the selected name, filename and subsequent modal input; it does not load a
-body. The who dispatch check also uses a command fixture. The real USER_D still
-fails compilation at `fetch_variable`. Character creation, complete body entry,
-bodyful logout and actual player-command integration remain separate work.
+body. The who dispatch check also uses a command fixture. The previous USER_D
+compile failure remains a negative control; the
+[user-data adaptation](#lima-user-data-and-character-ownership) advances real
+entry to the body's compilation blockers. Character creation, complete body
+entry, bodyful logout and actual player-command integration remain separate work.
+
+#### Lima user data and character ownership
+
+Reviewed **27 September 2026** against the pinned [USER_D][lima-user-daemon],
+[user body records][lima-user-bodies], [login][lima-login],
+[body switching][lima-body-switching] and [body][lima-body] sources. Native
+checks use both null modes, `USE_USER_MENU`, `__SENSIBLE_MODIFIERS__` and
+`EVERYTHING_SAVES`, with the adapted master/simul/security policy. The reviewed
+configuration also enables `AUTO_WIZ`. Upstream behavior is source-reviewed;
+these are native execution checks, without upstream driver execution.
+
+Replace USER_D's bound variable reflection with guarded accessors on the user
+and body objects. Those accessors inspect their own globals through
+[`variable_info`](efun/variable_info.md), reject missing or ambiguous declarations,
+and use [`store_variable`](efun/store_variable.md) with the declaring program.
+Accept calls only from the actual USER_D object and copy mutable values at the
+boundary. USER_D retains its caller privilege checks and field allowlists.
+This requires no blanket master permission to inspect or modify other objects.
+Primary and backup users use the same accessors; live body access is tested with
+an explicit fixture because the real body still does not compile.
+
+Read offline records with [`restore_map`](efun/restore_map.md) and replace them
+with [`save_map`](efun/save_map.md), using paths without the save extension.
+Preserve unrelated entries and numeric zero, and let malformed records fail
+before replacement. Validate assignments equally online and offline: password,
+plan and wizard-position values are strings or configured nil; failures are nil
+or arrays of two-element integer/string records. `save_map` has no object
+declaration against which to check a field. Online assignments retain the former
+setter's in-memory behavior and do not implicitly call `save_me`. These checks
+use native save files, without importing foreign save formats.
+
+Keep account and character identities separate. Account fields accept either
+an account name or its registered character; body fields require the character
+name. A body query must select that character's save path or a live body whose
+name and link match, rather than whichever body its account currently uses.
+Do not silently pick among multiple live account objects or a saved name that
+identifies both an account and another account's character. This adaptation
+raises explicit ambiguity errors; full simultaneous-login/reconnect policy
+remains separate work. Names at these APIs must be canonical lowercase letters
+and digits, beginning with a letter.
+
+Treat the registry as a character ownership index. Validate its saved structure
+and reject duplicate ownership when loading, preserving the file for repair.
+Lookup uses the registered character name, without the old visible-body/nickname
+fallback. Registration requires an owning interactive user object or privileged
+caller, and a matching body record in the account. It rejects another owner's
+character and names colliding with another account. Existing corrupt or ambiguous
+records require repair rather than an automatic choice of owner. Removal checks
+authority and ownership too; a privileged save helper alone is insufficient.
+
+Route menu mutations through the user. The user stages a new body record,
+registers it, restores its previous mapping if registration fails, and saves
+after success. Return a deep copy from `query_bodies`; restrict menu mutations to
+the owning user's trusted menu or its own code, and accept metadata refreshes
+only from the attached body. Removing a character clears its selected entry
+and saves the updated account, while refusing to remove the
+currently attached character. Use bound native callbacks for file and last-login
+cleanup. Login registers `query_userid()` as the owner instead of registering the
+character as a second account; repeated registration of the same owner is a
+no-op. Use `objectp` filtering for body enumeration so distinct nil does not
+survive subtraction of integer zero.
+
+This migration does not resolve full body entry or cleanup. The real human race
+still fails at `stat_roll_mods`, and the standard body has earlier inherited
+compile blockers. The retained audit reproduces failed entry recovery in the
+auto-wizard/first-admin route. With a body fixture, ordinary user cleanup and
+link-dead expiry can fail destruction authorization; scoped authority for the
+owned body succeeds, but a throwing cleanup still leaves the user attached.
+Those remain explicit integration tasks, including the policy for partial
+effects when an error is caught. The fixtures do not establish body persistence,
+reconnect or a complete playable login.
 
 #### Lima file metadata
 
@@ -1978,3 +2051,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-user-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/messages.c
 [lima-menu-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/config/user_menu.h
 [lima-user-bodies]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/bodies.c
+[lima-body-switching]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/sw_body.c
+[lima-body]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body.c
