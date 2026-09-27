@@ -45,6 +45,11 @@ performed. [Reference][fl-clonep], [declaration][fl-core-spec].
 The Lima object-caller and state-scheduling adaptations below were reviewed on
 **26 September 2026** at its listed revision and exercised on lpc-rs in both
 null modes. No FluffOS execution was performed.
+Lima's command base and stdio adaptations were also reviewed on that date at
+its listed revision, with `SENSIBLE_MODIFIERS` enabled and function profiling
+disabled. The four object commands were exercised with the adapted master and
+simul-efuns in both null modes, using fixture shell/user objects. This is not a
+complete shell or Lima boot. [Command base][lima-command-base], [stdio][lima-command-stdio].
 FluffOS clone enumeration was source-reviewed on **24 September 2026** at the
 listed revision. The core efun has no optional-package requirement. Filename
 grouping and insertion order come from source review, with no cross-driver
@@ -707,6 +712,53 @@ writes made before the error; it does not roll back just the failed object's
 changes. A whole-transaction abort still rolls back the tick, and the native
 repeating timer remains scheduled. This is an explicit queue failure policy,
 not automatic recovery for externally cancelled timers.
+
+#### Lima command dispatch and stdio
+
+Lima's [command base][lima-command-base] calls `main` with four arguments, or
+with two during resend, while many concrete commands declare a private handler
+with fewer parameters. Native [receiving-object resolution](lpc/inheritance.md#functions-supplied-by-the-receiving-object)
+requires a visible implementation and checks calls against its definition;
+ignored prototypes cannot supply a private child handler. Making `main`
+protected and padding its arguments still leaves array handlers incompatible
+with the base's raw-string dispatch branch.
+
+Use a protected four-slot adapter in each command and route the base's calls
+through it. The adapter calls the existing private handler with its declared
+arguments; for a one-argument handler:
+
+```c
+protected varargs void dispatch_main(mixed arg, mixed flags,
+                                    mixed input, mixed implode_info) {
+    main(arg);
+}
+```
+
+`varargs` permits the omitted slots during resend. Pass `nil` for missing
+stdin. The adapter preserves `origin() == "local"`, the object caller and the
+current player, but adds a local frame: caller-function/program inspection
+inside `main` identifies the adapter and its source. An `evaluate(main, ...)`
+callback instead reports `"function_pointer"` in the handler. Keep private
+handlers and protected adapters hidden from external calls, and retain the
+shell and resend guards. See [origin](efun/origin.md),
+[caller inspection](efun/calling_program.md) and
+[variadic parameters](lpc/variadic_parameters.md).
+
+In [stdio][lima-command-stdio], use `nil` for nullable strings, pending command
+metadata and the optional `more` continuation. Share the normal/raw initialization
+path so each invocation clears its buffer, redirect target, flags and pending
+metadata. Native [`explode`](efun/explode.md) retains a trailing empty element;
+before passing split output to Lima's line-oriented `more`, remove exactly that
+last element when the buffer ends in a newline. Preserve other empty lines,
+file output and pipeline payloads.
+
+Combined file redirection and piping still need a coordinated Lima parser
+adaptation: its scan compares the entire argument array with `"|"`, allowing
+later tokens into the filename. Changing only that comparison loses later
+stages of ordinary pipelines. Separately, native `rm` currently misses a file
+created earlier in the same transaction because it checks physical metadata;
+file creation, append and overwrite across committed invocations were exercised.
+Neither limitation is resolved by the command adapters.
 
 #### Lima file metadata
 
@@ -1415,3 +1467,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-domain-objects]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/domain_d.c
 [lima-heartbeat-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/adm/dist/config.mud#L114-L115
 [lima-stateful-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_stateful.c
+
+[lima-command-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/cmd.c
+[lima-command-stdio]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/cmd/stdio.c
