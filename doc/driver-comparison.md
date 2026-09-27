@@ -788,10 +788,55 @@ that view. The retained `cat` file-argument loop still needs an EOF adaptation:
 [`read_file`](efun/read_file.md) can return `nil` in distinct mode, which its
 `!= 0` check does not reject.
 
-Pipeline execution uses the adapted module with fixture lookup/shell/user
-objects, real master/simul-efuns and temporary cat/print dispatch adapters.
-Full wish and CMD_D retain independent compilation blockers, so this does not
-establish complete shell startup, expansion, command discovery or Lima boot.
+Pipeline execution is exercised with both fixture lookup and the adapted
+CMD_D, fixture shell/user objects, real master/simul-efuns and protected command
+adapters. Full wish still has independent compilation blockers, so this does
+not establish complete shell startup, expansion or Lima boot.
+
+#### Lima command discovery and argument rules
+
+Reviewed 27 September 2026 against the pinned [CMD_D][lima-command-daemon] and
+[getopt][lima-shell-getopt] sources. Execution checks use the LPC adaptation
+with `LPC_NULL_MODE=zero` and `distinct`, `__SENSIBLE_MODIFIERS__` defined,
+and the adapted master/simul-efuns. These are not cross-driver execution tests.
+
+Parenthesize assignments inside logical conditions, use native class member
+dots and nullable `nil` values, and declare `query_cmds` as `string *`. Replace
+`(: cache_dir :)`, `(: is_file :)` and `(: is_directory :)` with bare function
+names: native closures containing a name return its function value instead of
+calling it. See [function values](lpc/function_type.md).
+
+The adaptation normalizes directory keys, refreshes command names and rules
+together, and removes stale rules/names after their files disappear. Absolute
+and wildcard command lookups load the directory's rules before decoding
+arguments, including on first use. Otherwise the original behavior depends on
+whether a search-path lookup has already populated that cache. Cache refresh
+treats missing or metadata-hidden directories as unavailable: [`file_size`](efun/file_size.md)
+returns the same sentinel for absence and refusal. Directory listing and rule
+read errors propagate. Detect `Cmd_rules` through the authorized directory
+listing and read it with ordinary authorization; a separate metadata refusal
+must not disable its rules. See [`get_dir`](efun/get_dir.md) and
+[`read_file`](efun/read_file.md).
+
+Build each rule completely before installing it. A no-argument rule has an
+empty prototype, and extra arguments produce a usage error. Invalid descriptors
+remain explicit errors for the affected command; they must not fall back to
+raw dispatch. The adaptation reports the rule path and line at lookup without
+loading the news daemon. Duplicate definitions still use the last entry, with
+a warning at refresh. Usage expansion applies to descriptors, not command
+names. Unknown options and missing values stop dispatch; a lone `-` is an
+ordinary argument and `--` ends option parsing. Quoted empty values are retained;
+`:` cannot be supplied as an option. Absent raw arguments use native nil, while omitted typed slots follow the configured null mode.
+
+Retain the existing numeric-prefix parsing, greedy plural handling and
+optional-tail convention for this migration. All slots from the first optional
+one onward can be omitted, even if later descriptors lack brackets. Existing
+non-commands in an earlier search directory still shadow later commands.
+Command caches refresh explicitly; filesystem changes are not watched.
+Prepared pipelines with real CMD_D lookup reject invalid rules/arguments/options
+before any handler or redirection I/O. Lookup may still load command objects.
+Full wish persistence, modal input and additional command-handler adaptations
+remain separate work.
 
 #### Lima file metadata
 
@@ -1505,3 +1550,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wish]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/wish.c
 [lima-shell-getopt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/getopt.c
 [lima-command-stdio]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/cmd/stdio.c
+
+[lima-command-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/cmd_d.c
