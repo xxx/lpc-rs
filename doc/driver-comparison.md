@@ -790,8 +790,9 @@ that view. The retained `cat` file-argument loop still needs an EOF adaptation:
 
 Pipeline execution is exercised with both fixture lookup and the adapted
 CMD_D, fixture shell/user objects, real master/simul-efuns and protected command
-adapters. Full wish still has independent compilation blockers, so this does
-not establish complete shell startup, expansion or Lima boot.
+adapters. The [wizard-shell adaptation](#lima-wizard-shell-startup-and-colours)
+also exercises command dispatch through full wish; complete expansion and Lima
+boot remain separate work.
 
 #### Lima command discovery and argument rules
 
@@ -889,9 +890,10 @@ variables and named bindings, along with rejected external persistence calls.
 Protected shell-save paths round-trip while direct user file reads/writes are
 refused.
 The [destruction adaptation](#lima-destruction-and-shell-shutdown) also exercises
-owner-driven shell removal and restoration after restarting the VM. Full wish
-still has separate callback/type/input adaptations; full user logout includes
-additional body and mailbox cleanup.
+owner-driven shell removal and restoration after restarting the VM. The
+[wizard-shell adaptation](#lima-wizard-shell-startup-and-colours) extends this to
+full wish. Real modal input and full user logout, including body and mailbox
+cleanup, remain separate work.
 
 Existing `save_info` and `saved_items` contain serialized values inside saved
 strings. Converting an outer `.o` file does not convert those nested payloads.
@@ -962,6 +964,62 @@ retain that destruction. The wrapper adds no savepoint. Other public removal
 methods still need their own caller policy, and controller/child relationships
 such as user/body, mailbox and socket ownership need separate review. Do not
 infer those permissions from being a daemon or living under `/secure`.
+
+#### Lima wizard shell startup and colours
+
+Reviewed **27 September 2026** against the pinned [wish][lima-wish],
+[base shell][lima-shell], [prompt][lima-shell-prompt],
+[history][lima-shell-history], [input forwarding][lima-input-forwarding],
+[XTERM256_D][lima-xterm] and [ANSI_D][lima-ansi] sources. Native execution checks
+use both null modes, `__SENSIBLE_MODIFIERS__` and `EVERYTHING_SAVES`, the adapted
+master/simul/security policy, and full wish. The user fixture captures modal
+callbacks; these checks do not establish real modal input, login or FluffOS
+execution.
+
+Qualify `shell::create()` and `shell::setup_for_save()` explicitly. Native
+[`::name()` resolution](lpc/inheritance.md#calls-and-aliases) selects
+the last parent defining the name. In wish, the unqualified constructor selects
+the prompt module, leaving the shell owner unset; unqualified save setup selects
+shellvars, omitting alias and binding registrations. Keep the explicit prompt
+constructor and shellvars registration as well. Restart checks distinguish
+successful variable saves from preservation of the full shell state.
+
+Replace unbound `(: name :)` callbacks with bare function names. Under native
+[function syntax](lpc/function_type.md), the former returns a function value
+from an expression closure. In this shell it leaves input commands unexecuted,
+returns a function instead of a prompt, and builds a path of function values.
+Apply the correction to the shell bindings, tokenizer, path and prompt hooks,
+variable expansion and completion. Expression closures containing actual calls
+retain their purpose.
+
+Declare the cached command path and its query result as arrays, use nil for
+failed argument expansion, and declare M_INPUT's no-echo argument as an integer.
+The history command must accept the argument array supplied by shell dispatch.
+Install path hooks and wizard/admin defaults before parent preparation, and
+rebuild the cached path from restored values. Preserve custom path order;
+admin extension should not add duplicates on repeated preparation. Empty or nil
+paths clear the cache, non-string array entries are filtered, and other saved
+path values fail explicitly. The adaptation also accepts empty prompts.
+
+Default shell variables load both colour daemons. For their two fixed patterns,
+use the existing `reg_assoc` simul and native [`regexp`](efun/regexp.md) over a
+one-element array for match predicates. Replace ANSI_D's constant anonymous
+callbacks with native expression closures. This adapts these patterns rather
+than supplying a general PCRE API. Checks cover plain, ANSI, xterm and vt100
+output, custom translations and unknown colour names; recognized but unknown
+Pinkfish names are stripped instead of inserting nil into the output parts.
+
+Trim colour-data lines before parsing: the shipped client-mode file uses CRLF,
+which otherwise leaves modes such as `"xterm\r"`. Require a supported default
+mode and complete, valid numeric tables. Missing files retain native read
+errors; malformed rows fail daemon initialization. Table validation does not
+create new driver file or regex capabilities.
+
+The shell still needs broader expansion, saved-value and public-mutator policy
+review. In particular, variable updates retain their existing save-before-hook
+ordering: catching a hook failure can leave the changed value and save intact.
+Full user compilation, modal stack handling and body/logout integration remain
+separate adaptations.
 
 #### Lima file metadata
 
@@ -1684,3 +1742,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-overrides]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/overrides.c
 [lima-user-shell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/shell.c
 [lima-memcheck]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/memcheck_d.c
+[lima-shell-prompt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/prompt.c
+[lima-shell-history]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/history.c
+[lima-input-forwarding]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_input.c
+[lima-xterm]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/xterm256_d.c
+[lima-ansi]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/ansi_d.c
