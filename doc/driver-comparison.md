@@ -1020,7 +1020,8 @@ The shell still needs broader expansion, saved-value and public-mutator policy
 review. In particular, variable updates retain their existing save-before-hook
 ordering: catching a hook failure can leave the changed value and save intact.
 The [modal stack adaptation](#lima-modal-input-stack) covers input dispatch.
-Full user compilation and body/logout integration remain separate adaptations.
+[Login admission](#lima-login-admission) covers full user compilation;
+body/logout integration remains separate work.
 
 #### Lima modal input stack
 
@@ -1059,9 +1060,9 @@ These changes retain the existing public stack-mutator authority. `modal_pop`
 and `modal_func` still rely on the normal post-dispatch recapture, or an explicit
 `modal_recapture` when used outside dispatch, to update the pending input mode
 and echo setting. Clearing the mudlib stack is not native input cancellation.
-[Login admission](#lima-login-admission) is covered separately. Terminal
-negotiation hooks, body/logout ownership and character-shell key bindings remain
-separate work.
+[Login admission](#lima-login-admission) and
+[terminal metadata](#lima-terminal-metadata) are covered separately.
+Body/logout ownership and character-shell key bindings remain separate work.
 
 #### Lima login admission
 
@@ -1112,12 +1113,13 @@ Compile and allocate the menu before removing the login handler. Catch startup
 errors, dispose of the newly allocated menu through the existing guarded
 privilege helper, stop the shell, cancel timers and close with a generic notice.
 Do not let modal recovery turn an unsuccessful handoff into a shell prompt.
-Checks cover the real menu's compile failure and a fixture that fails after
-pushing input. A working fixture checks successful input transfer, including
-clients without terminal reports using the
-[terminal adapter](#lima-terminal-metadata).
-The real menu and body entry remain unfinished. Existing login timeouts remain
-in force until the body handoff cancels them.
+Checks retain the previous menu compile failure as a negative control and use
+a fixture that fails after pushing input. Successful authentication now cancels
+the user's login timers before starting the menu; a password timeout must not
+close an authenticated user browsing character choices. The
+[player menu adaptation](#lima-player-menu-and-frames) covers real menu startup
+and input, including clients without terminal reports using the
+[terminal adapter](#lima-terminal-metadata). Body entry remains unfinished.
 
 The [GMCP adapter][lima-user-gmcp] can read
 [`query_connection(this_object())["gmcp"]`](efun/query_connection.md) and split
@@ -1131,7 +1133,7 @@ The port removes the user daemon's periodic Telnet NOP scheduling and its user
 method. There is no native mudlib API for sending that command, and writing text
 does not substitute for a Telnet command. This disables Lima's application
 keepalive; restoring it requires a separate transport feature.
-Further user-daemon, menu and body dependencies still prevent full startup.
+Further user-daemon and body dependencies still prevent full startup.
 
 #### Lima terminal metadata
 
@@ -1140,8 +1142,10 @@ Reviewed 27 September 2026 against the pinned [input system][lima-inputsys],
 `USE_USER_MENU` enabled; the reviewed FluffOS configuration defaults
 `enable gmcp` to `0`. Upstream behavior was reviewed in source. Native tests use
 real loopback Telnet connections in both null modes with Lima's full
-master/simul/security and user objects. Successful menu handoff uses a fixture;
-complete gameplay login and upstream execution remain untested.
+master/simul/security and user objects. Terminal-negotiation handoff tests use
+a menu fixture; a separate [player menu test](#lima-player-menu-and-frames)
+exercises the real menu over Telnet. Complete gameplay login and upstream
+execution remain untested.
 
 Read terminal metadata from
 [`query_connection(this_object())`](efun/query_connection.md). Lima's
@@ -1183,6 +1187,59 @@ U+00F1 encodes as UTF-8 text and cannot substitute for the `ff f1` control
 command. Keeping idle connections alive and disconnecting idle players are
 separate policies; this migration adds neither a keepalive API nor a periodic
 sender.
+
+#### Lima player menu and frames
+
+Reviewed **27 September 2026** against the pinned [frame module][lima-frame],
+[menu library][lima-menu], [player menu][lima-player-menu],
+[player shell][lima-pshell] and [user messages][lima-user-messages]. The reviewed
+[configuration][lima-menu-config] enables `USE_USER_MENU`, with auto-login after
+10 seconds and a 300-second menu idle timeout. Native checks use both null
+modes, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES` and the adapted
+master/simul/security objects. They include real authenticated menu input and
+quit over loopback Telnet; upstream execution remains untested.
+
+Use native `.field` class access, bare callbacks and `&handler(arguments)` for
+bound arguments. Parenthesize the class cast before accessing its fields and
+assign before negating a menu choice. Pass just the comparator to
+[`sort_array`](efun/sort_array.md). Frame section data contains nested arrays;
+declare it accordingly instead of as `string *`. Convert `floor` results to
+integers explicitly, keep frame output accumulators as strings, and use nil
+for typed absence. Test the `simplify` preference by truthiness: comparing an
+unset preference with integer zero incorrectly enables it in distinct mode.
+
+For frame colouring, use the existing `reg_assoc` simul with native
+[`regexp`](efun/regexp.md). Escape literal hyphens when building the character
+set from frame glyphs: native `--` means set subtraction and the ASCII frame
+contains repeated hyphens. Return the original output when the effective
+gradient is empty, avoiding colour-reset tags between ordinary characters.
+Checks cover all five shipped frame styles, selected widths and colours. This
+adapts the frame patterns without adding a PCRE API.
+
+Bind each menu timer to its user explicitly. The callback verifies that the
+user still exists and is interactive, sets that user as current player for
+the operation, and restores the previous context on both success and error.
+A vanished owner retires the menu. Schedule the idle timer after menu startup;
+schedule auto-login only for a selected character. Activity cancels auto-login
+and replaces the idle timer, using IDs from
+[`query_call_outs`](efun/query_call_outs.md). This keeps menu policy in the
+mudlib; native call-outs still start without a current player.
+
+Reject character entry with no selection before accessing the registry. Use
+the user's actual [`query_fname` accessor][lima-user-bodies] for the selected
+body file. Selection and removal share normalized name lookup and bounded
+numeric indices; malformed and overflowing choices leave the menu usable.
+Bind the who action's command key explicitly. Both manual and automatic entry
+use the same handoff path, with registry access before removing the menu input
+handler.
+
+Idle timeout, pre-body quit, player-context restoration and retained input
+after a registry failure are exercised with the real user and menu. Successful
+manual/automatic entry uses explicit registry and user-entry fixtures to check
+the selected name, filename and subsequent modal input; it does not load a
+body. The who dispatch check also uses a command fixture. The real USER_D still
+fails compilation at `fetch_variable`. Character creation, complete body entry,
+bodyful logout and actual player-command integration remain separate work.
 
 #### Lima file metadata
 
@@ -1914,3 +1971,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/login.c
 [lima-user-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/user_d.c
 [lima-user-gmcp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/gmcp.c
+[lima-frame]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_frame.c
+[lima-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/menu.c
+[lima-player-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/usermenu/usermenu.c
+[lima-pshell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/pshell.c
+[lima-user-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/messages.c
+[lima-menu-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/config/user_menu.h
+[lima-user-bodies]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/bodies.c
