@@ -49,7 +49,10 @@ Lima's command base and stdio adaptations were also reviewed on that date at
 its listed revision, with `SENSIBLE_MODIFIERS` enabled and function profiling
 disabled. The four object commands were exercised with the adapted master and
 simul-efuns in both null modes, using fixture shell/user objects. This is not a
-complete shell or Lima boot. [Command base][lima-command-base], [stdio][lima-command-stdio].
+complete shell or Lima boot. The coordinated pipeline adaptation was exercised
+on the same date using its actual parser module and fixture command lookup.
+[Command base][lima-command-base], [stdio][lima-command-stdio],
+[shell][lima-wish], [tokenizer][lima-shell-getopt].
 FluffOS clone enumeration was source-reviewed on **24 September 2026** at the
 listed revision. The core efun has no optional-package requirement. Filename
 grouping and insertion order come from source review, with no cross-driver
@@ -752,15 +755,43 @@ before passing split output to Lima's line-oriented `more`, remove exactly that
 last element when the buffer ends in a newline. Preserve other empty lines,
 file output and pipeline payloads.
 
-Combined file redirection and piping still need a coordinated Lima parser
-adaptation: its scan compares the entire argument array with `"|"`, allowing
-later tokens into the filename. Changing only that comparison loses later
-stages of ordinary pipelines. This parser limitation remains after the command
-adapters. Native [`rm`](efun/rm.md) now sees files created earlier in the same
-task, allowing Lima stdio to create, append and overwrite one target before
-commit. That sequence was exercised in both null modes, as well as across
-committed invocations. Pending-entry checks use exact paths; ancestor-directory
-moves and changes through aliases remain outside that view.
+Adapt [wish's pipeline parsing][lima-wish] together with the
+[tokenizer][lima-shell-getopt] and stdio. The original stdio scan compares the
+whole argument array with `"|"`, allowing later tokens into filenames; changing
+only that comparison loses subsequent pipeline stages. The shell also searches
+for input redirection across stage boundaries and removes tokens without their
+spacing. Its intended empty prefixes need explicit empty strings/arrays because
+native [negative slice endpoints](lpc/indexing.md) count from the end.
+
+The exercised LPC adaptation prepares all stages before running handlers or
+performing redirect I/O. It retains complete pipe tails and pairs argument
+spacing with each stage. It allows one input file on the first stage and one
+overwrite/append target on the last. Empty stages/paths, duplicate redirects,
+file output plus a pipe, and pipe input plus an input file are rejected. Quoted
+and escaped filenames are decoded; unquoted filename words still join with
+single spaces. Ordinary argument spelling and the literal-space delimiter
+policy are retained. This is the adaptation's grammar, not a FluffOS guarantee.
+
+A public read-only `query_no_redirection()` on CMD lets preflight recognize raw
+commands: they consume the remaining text literally, including operators and
+unfinished quotes. Normal stages reject unfinished quotes/escapes. Lookup can
+load commands during preflight; syntax validation is not a guarantee of no
+lookup effects. Runtime I/O exceptions remain uncaught by the pipeline so an
+abort can discard scheduled effects. Native [`catch`](efun/catch.md) retains
+earlier writes if its caller catches the error and commits normally.
+
+Native [`rm`](efun/rm.md) sees files created earlier in the same task, allowing
+stdio and prepared pipelines to create, append and overwrite one target before
+commit. Both null modes and committed invocations are exercised. Pending-entry
+checks use exact paths; ancestor-directory moves and aliases remain outside
+that view. The retained `cat` file-argument loop still needs an EOF adaptation:
+[`read_file`](efun/read_file.md) can return `nil` in distinct mode, which its
+`!= 0` check does not reject.
+
+Pipeline execution uses the adapted module with fixture lookup/shell/user
+objects, real master/simul-efuns and temporary cat/print dispatch adapters.
+Full wish and CMD_D retain independent compilation blockers, so this does not
+establish complete shell startup, expansion, command discovery or Lima boot.
 
 #### Lima file metadata
 
@@ -1471,4 +1502,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-stateful-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_stateful.c
 
 [lima-command-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/cmd.c
+[lima-wish]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/wish.c
+[lima-shell-getopt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/getopt.c
 [lima-command-stdio]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/cmd/stdio.c
