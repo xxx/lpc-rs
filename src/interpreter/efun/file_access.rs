@@ -9,7 +9,7 @@ use lpc_rs_errors::{LpcError, Result};
 use crate::interpreter::{
     apply::valid_apply,
     efun::efun_context::EfunContext,
-    file_view::{self, Seen},
+    file_view::{self, EntryKind, Seen},
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -44,6 +44,16 @@ impl FileAccess {
     /// The path's contents after this task's earlier file effects.
     pub(crate) async fn read<const N: usize>(&self, context: &EfunContext<'_, N>) -> Result<Seen> {
         file_view::read_through(context.txn(), self.path.server())
+            .await
+            .map_err(|e| self.error(context, e))
+    }
+
+    /// The pending entry kind, without following a leaf symlink or reading its contents.
+    pub(crate) async fn entry_kind<const N: usize>(
+        &self,
+        context: &EfunContext<'_, N>,
+    ) -> Result<EntryKind> {
+        file_view::entry_kind(context.txn(), self.path.server())
             .await
             .map_err(|e| self.error(context, e))
     }

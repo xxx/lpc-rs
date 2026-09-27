@@ -14,6 +14,10 @@ use crate::{
     interpreter::stm::{PendingFileOp, TxnHandle},
 };
 
+mod entry;
+
+pub(crate) use entry::{EntryKind, PendingEntryView, entry_kind};
+
 /// Compiler inputs include the loading attempt's pending file changes.
 #[derive(Debug)]
 pub(crate) struct TransactionSourceReader(pub(crate) TxnHandle);
