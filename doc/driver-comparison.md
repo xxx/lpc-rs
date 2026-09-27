@@ -1059,8 +1059,77 @@ These changes retain the existing public stack-mutator authority. `modal_pop`
 and `modal_func` still rely on the normal post-dispatch recapture, or an explicit
 `modal_recapture` when used outside dispatch, to update the pending input mode
 and echo setting. Clearing the mudlib stack is not native input cancellation.
-Full login, terminal negotiation hooks, body/logout ownership and character-shell
-key bindings remain separate work.
+[Login admission](#lima-login-admission) is covered separately. Terminal
+negotiation hooks, body/logout ownership and character-shell key bindings remain
+separate work.
+
+#### Lima login admission
+
+Reviewed 27 September 2026 against the pinned [Lima login][lima-login],
+[master][lima-master] and [user daemon][lima-user-daemon], with `USE_USER_MENU`
+enabled. Native checks use both null modes, the actual master/simul/security
+objects, full primary and backup users, and committed input callbacks. They
+cover admission and password handling; no complete game login or FluffOS
+execution is established.
+
+Match the native applies: `connect(string remote_ip, int remote_port)` returns
+the user object, and `logon(string remote_ip, int remote_port)` returns integer
+`1` to accept the connection. A void logon can print its prompt and then be
+rejected. Lima's old unused `connect(int port)` parameter does not itself block
+this version's dynamic apply, but its annotation misrepresents the supplied
+arguments. See [connect](apply/master/connect.md) and
+[logon](apply/special/logon.md).
+
+Convert bound login, userinfo, save/restore and switching callbacks to
+`&handler(arguments)`; use bare names for unbound callbacks. Native
+`(: handler, arguments :)` is a comma-expression closure, which can leave input
+and timeout handlers inert. Enumerate current-object
+[`query_call_outs`](efun/query_call_outs.md) and cancel each row's ID at index
+four where Lima requests no-argument cancellation. The password prompt must
+replace the name timer; rejection and timeout must remove the user's timers.
+
+Call-outs have no current player. A timeout notice sent through Lima's `write`
+wrapper therefore misses the connection. Use [`write_socket`](efun/write_socket.md)
+from the user object for that notice and its former `receive` output calls.
+Apply the same account/callback adaptations to `user_bak`, so the master's
+fallback actually works when the primary user fails compilation.
+
+Pass a one-element array to native [`regexp`](efun/regexp.md) and test the
+result's size for scalar name checks. The Banish daemon also needs native
+`.item` class-field access. Tests cover invalid names, name/site ban entries,
+registered-user site exceptions, new password confirmation, saved-account
+restoration and rejection after three incorrect passwords.
+
+The initial port accepts fresh passwords and stored SHA-512 `$6$` records.
+Unsupported or structurally malformed records receive a password-reset notice
+and the connection closes without rewriting the account. Hashing errors reject
+the password. This is the port's account policy; native
+[`crypt`](efun/crypt.md) supports additional Unix formats. Legacy MudOS hashes
+require a separate reset or verification/upgrade path; renaming `oldcrypt` is
+insufficient. See [stored passwords](#stored-passwords).
+
+Compile and allocate the menu before removing the login handler. Catch startup
+errors, dispose of the newly allocated menu through the existing guarded
+privilege helper, stop the shell, cancel timers and close with a generic notice.
+Do not let modal recovery turn an unsuccessful handoff into a shell prompt.
+Checks cover the real menu's compile failure and a fixture that fails after
+pushing input. A working fixture, with terminal metadata supplied explicitly,
+checks successful input transfer; the real menu, player-shell terminal defaults
+and body entry remain unfinished. Existing login timeouts remain in force until
+the body handoff cancels them.
+
+The [GMCP adapter][lima-user-gmcp] can read
+[`query_connection(this_object())["gmcp"]`](efun/query_connection.md) and split
+the old message at its first space for native
+[`send_gmcp`](efun/send_gmcp.md). Empty messages are ignored and package-only
+messages use an empty payload. Native disabled-state checks and a metadata
+fixture validate framing; they do not establish negotiated GMCP or hook delivery.
+
+The port removes the user daemon's periodic Telnet NOP scheduling and its user
+method. There is no native mudlib API for sending that command, and writing text
+does not substitute for a Telnet command. This disables Lima's application
+keepalive pending the terminal/transport review; no placeholder sender is shipped.
+Further user-daemon, menu and body dependencies still prevent full startup.
 
 #### Lima file metadata
 
@@ -1789,3 +1858,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-xterm]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/xterm256_d.c
 [lima-ansi]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/ansi_d.c
 [lima-inputsys]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/inputsys.c
+[lima-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/login.c
+[lima-user-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/user_d.c
+[lima-user-gmcp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/gmcp.c
