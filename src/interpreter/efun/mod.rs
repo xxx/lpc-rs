@@ -72,6 +72,7 @@ pub(crate) mod notify_fail;
 pub(crate) mod object_clones;
 pub(crate) mod object_time;
 pub(crate) mod object_update;
+pub(crate) mod objects;
 pub(crate) mod origin;
 pub(crate) mod papplyv;
 pub(crate) mod parse_add_rule;
@@ -1154,6 +1155,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
+    objects => { returns: LpcType::Object(true) },
     hash_string => {
         returns: LpcType::String(false),
         arity: 2,
@@ -1652,6 +1654,7 @@ mod tests {
                 "function_name",
                 "regmatch",
                 "object_clones",
+                "objects",
                 "hash_string",
                 "load_object",
                 "function_object",

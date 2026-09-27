@@ -55,7 +55,7 @@ pub(crate) use retry::{
 };
 #[cfg(test)]
 pub(crate) use retry::{RetryStats, run_attempts};
-pub(crate) use snapshot::Snapshot;
+pub(crate) use snapshot::{ObjectChange, Snapshot};
 pub(crate) use world_value::WorldValue;
 
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -232,7 +232,44 @@ impl Transaction {
     /// strongly so the object stays alive between this write and the commit
     /// that makes it resolvable (the physical map is applied after commit).
     pub(crate) fn write_process(&mut self, var_id: VarId, process: Arc<Process>) {
+        self.changeset
+            .object_changes
+            .push(ObjectChange::new(&process, true));
         self.changeset.write(var_id, WorldValue::Process(process));
+    }
+
+    pub(crate) fn remove_object(&mut self, var_id: VarId, process: Arc<Process>) {
+        self.changeset
+            .object_changes
+            .push(ObjectChange::new(&process, false));
+        self.drop_var(var_id);
+    }
+
+    /// Bootstrap objects have no committed identity cell until their first removal.
+    pub(crate) fn bootstrap_object_is_live(&self, process: &Process) -> bool {
+        if !self.joinable {
+            return true;
+        }
+        let filename = process.filename();
+        let key = if filename.starts_with('/') {
+            filename
+        } else {
+            ObjectSpace::with_leading_slash(&filename).into()
+        };
+        self.snapshot.objects.get(key.as_ref()).map_or_else(
+            || process.cell.get().is_none(),
+            |current| std::ptr::eq(current.as_ref(), process),
+        )
+    }
+
+    /// Loaded objects from this snapshot with the attempt's own placements applied.
+    pub(crate) fn objects(&mut self) -> impl Iterator<Item = Arc<Process>> {
+        self.track_read(self.snapshot.object_membership);
+        let mut objects = self.snapshot.objects.clone();
+        for change in &self.changeset.object_changes {
+            change.apply(&mut objects);
+        }
+        objects.into_iter().map(|(_, process)| process)
     }
 
     pub(crate) fn write_image(
@@ -761,7 +798,7 @@ pub(crate) fn txn_undo_insert(
     let key = object_space.process_key(process);
     let var_id = *process.cell.get_or_init(|| object_space.cell_id(&key));
     txn.with(|t| {
-        t.drop_var(var_id);
+        t.remove_object(var_id, process.clone());
         if process.is_clone() {
             let clones = process.image_in(t).program.clones.id;
             t.merge(

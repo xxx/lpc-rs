@@ -759,3 +759,29 @@ async fn nested_efun_and_composed_applies_work_in_an_upgraded_owner() {
         );
     }
 }
+
+#[tokio::test]
+async fn enumeration_keeps_identities_without_conflicting_on_recompilation() {
+    let (root, mut vm, admin) = setup("recompile-enumeration").await;
+    let mut live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let mut reader = Transaction::new(live.inner.clone());
+    let before: Vec<_> = reader.objects().collect();
+    std::fs::write(root.join("target.c"), UPDATED).unwrap();
+    let status = run(&mut vm, &admin).await;
+    assert_eq!(status.state, "succeeded", "{}", status.error);
+    let fresh = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let after: Vec<_> = Transaction::new(fresh.inner.clone()).objects().collect();
+    assert_eq!(before.len(), after.len());
+    assert!(
+        before
+            .iter()
+            .all(|old| after.iter().any(|new| Arc::ptr_eq(old, new)))
+    );
+    live.disarm();
+    assert!(
+        commit_changeset(&vm.global_state.committer_tx, reader.take_changeset())
+            .await
+            .unwrap()
+            .is_ok()
+    );
+}

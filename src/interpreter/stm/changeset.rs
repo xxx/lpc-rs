@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use ahash::{AHashMap, AHashSet};
+use thin_vec::ThinVec;
 
 use crate::interpreter::{
     lpc_array::LpcArray,
@@ -75,6 +76,7 @@ pub(crate) struct Changeset {
     entries: AHashMap<VarId, Entry>,
     pub(crate) origin: Option<Arc<CommitOrigin>>,
     pub(crate) system_publications: Vec<SystemPublication>,
+    pub(crate) object_changes: ThinVec<super::snapshot::ObjectChange>,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +109,7 @@ impl Changeset {
             entries: AHashMap::new(),
             origin: None,
             system_publications: Vec::new(),
+            object_changes: ThinVec::new(),
         }
     }
 

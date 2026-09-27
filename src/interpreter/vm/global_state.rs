@@ -100,13 +100,15 @@ impl GlobalState {
     {
         let conf = config.into();
         let (committer_tx, commit_watch, committer_handle) = Self::spawn_committer(conf.null_mode);
+        let object_space = Arc::new(ObjectSpace::new(conf.clone()));
+        object_space.set_committer(committer_tx.clone());
 
         let attempt_runner = Arc::new(stm::AttemptRunner::new(
             committer_tx.clone(),
             Some(commit_watch),
         ));
         Self {
-            object_space: Arc::new(ObjectSpace::new(conf.clone())),
+            object_space,
             config: conf,
             call_outs: RwLock::new(CallOuts::new(tx.clone())),
             tx,
@@ -157,6 +159,7 @@ impl GlobalState {
         let handle =
             std::thread::spawn(move || committer.run_with_rejections(loop_tx, rx, rejections));
         state.committer_tx = committer_tx;
+        state.object_space.set_committer(state.committer_tx.clone());
         state.committer_handle = Some(handle);
         state
     }

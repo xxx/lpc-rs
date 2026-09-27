@@ -16,6 +16,9 @@ still returns the clones of its own program version.
 `request_object_recompile` upgrades a prototype and this entire group together,
 preserving their identities and membership.
 
+Use [`objects()`](objects.md) to list all loaded objects, including prototypes
+and clones from other program versions.
+
 ```c
 object sword = clone_object("/obj/sword");
 object *swords = object_clones(sword);

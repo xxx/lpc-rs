@@ -17,7 +17,7 @@ use crate::{
         lpc_ref::LpcRef,
         process::Process,
         program::Program,
-        stm::{SVar, VarId},
+        stm::{CommitProtocol, SVar, VarId},
     },
     util::process_builder::{compile_process_from_code, log_warnings},
 };
@@ -59,9 +59,14 @@ pub struct ObjectSpace {
 
     /// Invalidates readers of bootstrap fixtures when system objects change.
     pub(crate) system_revision: SVar<LpcRef>,
+    bootstrap_tx: ArcSwapAny<Option<Arc<flume::Sender<CommitProtocol>>>>,
 }
 
 impl ObjectSpace {
+    pub(crate) fn set_committer(&self, tx: flume::Sender<CommitProtocol>) {
+        self.bootstrap_tx.store(Some(Arc::new(tx)));
+    }
+
     delegate! {
         to self.processes {
             /// Get the number of objects in the space
@@ -263,6 +268,11 @@ impl ObjectSpace {
     {
         let process = process.into();
         process.physical.store(true, Ordering::Release);
+        if let Some(tx) = object_space.bootstrap_tx.load().as_ref() {
+            let _ = tx.send(CommitProtocol::BootstrapObject(
+                crate::interpreter::stm::ObjectChange::new(&process, true),
+            ));
+        }
         object_space.apply_insert(&object_space.process_key(&process), process);
     }
 
@@ -289,6 +299,7 @@ impl Default for ObjectSpace {
             master_object: ArcSwapAny::from(None),
             verb_rules: SVar::new(),
             system_revision: SVar::new(),
+            bootstrap_tx: ArcSwapAny::from(None),
         }
     }
 }

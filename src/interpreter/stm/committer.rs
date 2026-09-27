@@ -100,6 +100,8 @@ struct CommittedWrite {
 pub(crate) enum CommitProtocol {
     /// Start a transaction against the current world state.
     Start { reply: flume::Sender<LiveSnapshot> },
+    /// Register a physical bootstrap placement without creating an object cell.
+    BootstrapObject(super::snapshot::ObjectChange),
     /// Commit a changeset to the world state
     Commit {
         changeset: Changeset,
@@ -274,6 +276,14 @@ impl Committer {
 
     fn dispatch(&mut self, msg: CommitProtocol, tx: &flume::Sender<CommitProtocol>) -> bool {
         match msg {
+            CommitProtocol::BootstrapObject(change) => {
+                let mut changeset = Changeset::new(self.snapshot.version());
+                changeset.object_changes.push(change);
+                self.publish(changeset, false);
+                if self.live_versions.is_empty() {
+                    self.evict_old_versions();
+                }
+            }
             CommitProtocol::Start { reply } => {
                 // Count before hand-out: a failed reply drops the
                 // LiveSnapshot, which self-releases.
@@ -588,11 +598,19 @@ impl Committer {
             });
         }
 
-        let written_vars = changeset.touched_vars();
+        self.publish(changeset, true);
+        Ok(())
+    }
+
+    fn publish(&mut self, mut changeset: Changeset, transaction: bool) {
+        let mut written_vars = changeset.touched_vars();
+        if !changeset.object_changes.is_empty() {
+            written_vars.insert(self.snapshot.object_membership);
+        }
         if written_vars.is_empty() {
             // Conflict-free read-only changeset: no new version, no history.
             self.stats.read_only_commit();
-            return Ok(());
+            return;
         }
 
         let new_version = Version::new();
@@ -613,10 +631,10 @@ impl Committer {
                 origin,
             },
         );
-        self.stats.commit();
+        if transaction {
+            self.stats.commit();
+        }
         self.commit_watch.send_replace(new_version);
-
-        Ok(())
     }
 }
 

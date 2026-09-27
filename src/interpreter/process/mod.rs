@@ -427,15 +427,16 @@ impl Process {
     }
 
     pub(crate) fn is_live_in(&self, t: &mut Transaction) -> bool {
-        self.cell.get().is_none_or(|&cell| {
-            if t.is_removed(cell) {
-                return false;
-            }
-            match t.read_object(cell) {
-                Some(current) => std::ptr::eq(current.as_ref(), self),
-                None => self.physical.load(Ordering::Acquire),
-            }
-        })
+        let Some(&cell) = self.cell.get() else {
+            return !self.physical.load(Ordering::Acquire) || t.bootstrap_object_is_live(self);
+        };
+        if t.is_removed(cell) {
+            return false;
+        }
+        match t.read_object(cell) {
+            Some(current) => std::ptr::eq(current.as_ref(), self),
+            None => self.physical.load(Ordering::Acquire) && t.bootstrap_object_is_live(self),
+        }
     }
 
     /// Whether the initializer has run, read through `txn` and tracked.

@@ -518,7 +518,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
         ActorRules::new(self.txn(), &process).clear();
         self.txn().with(|t| {
-            t.drop_var(var_id);
+            t.remove_object(var_id, process.clone());
             t.mark_presence_changed();
             if process.is_clone() {
                 let clones = process.image_in(t).program.clones.id;
