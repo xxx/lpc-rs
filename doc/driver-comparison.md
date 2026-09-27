@@ -355,7 +355,7 @@ across all five drivers; the broader rows describe differences within each area.
 | File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`rm`](efun/rm.md) checks its task's pending entry changes without reading contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
 | Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
-| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md) and [inherit](apply/master/valid_inherit.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
+| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
 | Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
@@ -888,10 +888,10 @@ Execution checks cover actual file writes and a VM restart with aliases, shell
 variables and named bindings, along with rejected external persistence calls.
 Protected shell-save paths round-trip while direct user file reads/writes are
 refused.
-Full wish still has separate callback/type/input adaptations. Shell removal is
-also blocked until the master supplies an appropriate
-[`valid_destruct`](apply/master/valid_destruct.md) policy; this migration does
-not grant destruction permission.
+The [destruction adaptation](#lima-destruction-and-shell-shutdown) also exercises
+owner-driven shell removal and restoration after restarting the VM. Full wish
+still has separate callback/type/input adaptations; full user logout includes
+additional body and mailbox cleanup.
 
 Existing `save_info` and `saved_items` contain serialized values inside saved
 strings. Converting an outer `.o` file does not convert those nested payloads.
@@ -900,6 +900,68 @@ shell/body saves, and this snapshot provides no authentic examples. Convert
 such data explicitly with known class schemas. Native-encoded positional tests
 do not establish foreign save-string compatibility; numeric zero is not
 implicitly converted to nil for distinct-mode reference fields.
+
+#### Lima destruction and shell shutdown
+
+Reviewed on **27 September 2026** at the pinned Lima revision: the
+[destruction wrapper][lima-overrides], [master][lima-master],
+[shell][lima-shell] and [user shell lifecycle][lima-user-shell]. The wrapper and
+master routines are unconditional in that snapshot. Native execution checks
+use both null modes, the adapted master/simul/security daemon, and actual shell
+inheritance with `__SENSIBLE_MODIFIERS__` and `EVERYTHING_SAVES` defined. No
+FluffOS execution or complete Lima login/logout is claimed.
+
+Native [`destruct`](efun/destruct.md) requires
+[`valid_destruct`](apply/master/valid_destruct.md), including for self-removal.
+Through a simul wrapper the native caller is the simul object, and the defining
+program is the wrapper source. An immediate-caller-equals-target policy therefore
+rejects the wrapper's zero-argument self-removal. Recover the original requester
+from the trusted bridge's caller chain; do not grant the simul unrestricted
+foreign-removal permission.
+
+Lima's original wrapper catches `remove()` errors and proceeds to native
+destruction. Its shell rejects cleanup from callers other than its owner or
+local code. Simply authorizing the bridge can therefore discard the shell after
+a cleanup refusal, without its final save. [Wrapper][lima-overrides],
+[shell guard][lima-shell].
+
+The adaptation checks permission before cleanup and again at native removal.
+Its master helper `valid_destruct_request(target)` accepts only the exact live
+simul caller and derives the requester; this helper is mudlib code, not a new
+driver apply. The native hook checks actual caller identity and the bridge's
+exact defining source. Ordinary self-removal is permitted, while foreign
+removal uses the target's write protection and Lima's full security call chain.
+The master, simul and security daemon still require privilege 1 for self-removal:
+the master's public `remove()` must not turn a foreign request into an unchecked
+self request. [Master][lima-master], [security policy][lima-security].
+
+Propagate cleanup errors instead of forcing removal afterward. Missing cleanup
+methods and cleanup return values retain their existing behavior. Preserve
+argument omission: call `ob->remove()` when no second wrapper argument was
+supplied, and forward an explicit argument unchanged. This preserves native
+integer or declared parameter defaults; explicit nil does not request a default.
+The update convention `destruct(ob, 1)` still forwards integer 1.
+
+Keep the existing owner-driven `shell_ob->remove()` path. An ordinary owner
+calling `destruct(shell)` is still a foreign request, and the wrapper does not
+impersonate the owner during cleanup. The migrated path saves protected shell
+state, removes the shell and restores aliases, variables and bindings after a
+VM restart. Tests also cover inherited calls, function pointers, self-removal
+from timers, privilege refusals and permission changes during cleanup.
+
+The master preload hook must also allow a constructor to finish by destroying
+its object. Use a path call with an empty method name to load without requiring
+a surviving object; compile and initializer errors still propagate. Lima's
+[memory-check daemon][lima-memcheck] intentionally retires during construction
+when `__CHECK_MEMORY__` is undefined. A nil `load_object` result alone cannot
+distinguish successful retirement from failed initialization.
+
+A caught error retains earlier transaction effects; an uncaught error rolls
+them back. If cleanup destroys itself before throwing, an outer catch can
+retain that destruction. The wrapper adds no savepoint. Other public removal
+methods still need their own caller policy, and controller/child relationships
+such as user/body, mailbox and socket ownership need separate review. Do not
+infer those permissions from being a daemon or living under `/secure`.
 
 #### Lima file metadata
 
@@ -1618,3 +1680,7 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-save-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_save.c
 [lima-shell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell.c
+
+[lima-overrides]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/overrides.c
+[lima-user-shell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/shell.c
+[lima-memcheck]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/memcheck_d.c
