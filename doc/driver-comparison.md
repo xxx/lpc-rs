@@ -1113,23 +1113,76 @@ errors, dispose of the newly allocated menu through the existing guarded
 privilege helper, stop the shell, cancel timers and close with a generic notice.
 Do not let modal recovery turn an unsuccessful handoff into a shell prompt.
 Checks cover the real menu's compile failure and a fixture that fails after
-pushing input. A working fixture, with terminal metadata supplied explicitly,
-checks successful input transfer; the real menu, player-shell terminal defaults
-and body entry remain unfinished. Existing login timeouts remain in force until
-the body handoff cancels them.
+pushing input. A working fixture checks successful input transfer, including
+clients without terminal reports using the
+[terminal adapter](#lima-terminal-metadata).
+The real menu and body entry remain unfinished. Existing login timeouts remain
+in force until the body handoff cancels them.
 
 The [GMCP adapter][lima-user-gmcp] can read
 [`query_connection(this_object())["gmcp"]`](efun/query_connection.md) and split
 the old message at its first space for native
 [`send_gmcp`](efun/send_gmcp.md). Empty messages are ignored and package-only
-messages use an empty payload. Native disabled-state checks and a metadata
-fixture validate framing; they do not establish negotiated GMCP or hook delivery.
+messages use an empty payload. Native disabled-state and negotiated socket
+checks validate framing; see [terminal metadata](#lima-terminal-metadata) for
+the incoming hook contract and its fixture coverage.
 
 The port removes the user daemon's periodic Telnet NOP scheduling and its user
 method. There is no native mudlib API for sending that command, and writing text
 does not substitute for a Telnet command. This disables Lima's application
-keepalive pending the terminal/transport review; no placeholder sender is shipped.
+keepalive; restoring it requires a separate transport feature.
 Further user-daemon, menu and body dependencies still prevent full startup.
+
+#### Lima terminal metadata
+
+Reviewed 27 September 2026 against the pinned [input system][lima-inputsys],
+[GMCP module][lima-user-gmcp] and [FluffOS transport][fl-telnet]. Lima has
+`USE_USER_MENU` enabled; the reviewed FluffOS configuration defaults
+`enable gmcp` to `0`. Upstream behavior was reviewed in source. Native tests use
+real loopback Telnet connections in both null modes with Lima's full
+master/simul/security and user objects. Successful menu handoff uses a fixture;
+complete gameplay login and upstream execution remain untested.
+
+Read terminal metadata from
+[`query_connection(this_object())`](efun/query_connection.md). Lima's
+`terminal_type(string)` and raw `telnet_suboption(string)` callbacks are not
+native applies, so their cached values otherwise remain unset. Its colour table
+uses client names: prefer `"client_name"`, fall back to `"terminal_type"`,
+lowercase the name and strip a space-separated version suffix. Return
+`"unknown"` when neither is available. Keep the second TTYPE emulation name and
+MTTS capabilities separate from the client name; an MTTS reply must not become
+the name used for colour defaults.
+
+The native [`window_size`](apply/special/window_size.md) apply already delivers
+NAWS dimensions correctly. Reading `"cols"` and `"rows"` directly also works
+and avoids maintaining a second cache. Preserve Lima's configured defaults
+(79 columns and 40 rows here) for each zero dimension and for an unconnected
+object. Its original `width || DEFAULT_SCREEN_WIDTH` expression already
+preserves the selected value; no logical-operator workaround is needed.
+
+Derive Lima's `utf8()` from a case-insensitive `UTF-8` or `UTF8` charset
+agreement. This port does not infer it from MTTS or assume that UTF-8 guarantees
+emoji rendering. Unknown charset keeps conservative emoji defaults. The
+driver always sends UTF-8 text, and its charset metadata retains the last
+agreement after CHARSET negotiation is disabled. TTYPE withdrawal clears its
+names and capability fields. Getters follow live metadata, while late reports
+leave initialized shell preferences unchanged. Tests cover both negotiation
+before authentication and delayed reports after shell initialization.
+
+For GMCP, query the negotiated flag instead of depending on FluffOS's
+`gmcp_enable()` callback. Native incoming
+[`gmcp(string package, string payload)`](apply/special/gmcp.md) receives two
+arguments; the reviewed FluffOS hook receives one combined string. A fixture
+checks delivery with modal name input pending, the user as current player and
+no previous object. Lima's current module has no inbound handler. A future
+handler must account for messages arriving before authentication.
+
+NEW-ENVIRON is refused, leaving Lima's unused environment cache empty. The
+application Telnet NOP scheduler remains disabled. Text containing U+00FF and
+U+00F1 encodes as UTF-8 text and cannot substitute for the `ff f1` control
+command. Keeping idle connections alive and disconnecting idle players are
+separate policies; this migration adds neither a keepalive API nor a periodic
+sender.
 
 #### Lima file metadata
 
