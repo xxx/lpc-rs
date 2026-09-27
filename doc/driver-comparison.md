@@ -39,6 +39,12 @@ at the listed revision, with core `F_OBJECTS` enabled. Visibility additionally
 depends on `F_SET_HIDE`, and result size on runtime `__MAX_ARRAY_SIZE__`. These
 are source findings, not cross-driver execution. [Declaration][fl-core-spec],
 [implementation][fl-objects-implementation], [visibility][fl-object-enumeration].
+The FluffOS `clonep` reference was reviewed on **26 September 2026** at the
+same revision, with the core efun enabled; no cross-driver execution was
+performed. [Reference][fl-clonep], [declaration][fl-core-spec].
+The Lima object-caller and state-scheduling adaptations below were reviewed on
+**26 September 2026** at its listed revision and exercised on lpc-rs in both
+null modes. No FluffOS execution was performed.
 FluffOS clone enumeration was source-reviewed on **24 September 2026** at the
 listed revision. The core efun has no optional-package requirement. Filename
 grouping and insertion order come from source review, with no cross-driver
@@ -576,7 +582,8 @@ save import still require further driver support. See [class support](lpc/classe
 | Constructor arguments | `clone_object(path, ...)` forwards extra arguments to the new object's `create`. [Reference][fl-clone]. | `clone_object` forwards extra arguments after global initialisation. Constructors also run without arguments when loading prototypes; use defaults or handle `0`. Supplied declared arguments are type-checked. [Reference](efun/clone_object.md). |
 | Timer handles | Reserves `0` for invalid handles; handles combine a counter with the current game tick. [Implementation][fl-callouts]. | Timer IDs start at `1` per VM. Store the returned handle; its numeric value need not match FluffOS or be consecutive. [Reference](efun/call_out.md). |
 | Timer inspection | `call_out_info()` returns rows of owner, string callback label, and seconds remaining in the reviewed implementation; function pointers are rendered as labels. [Implementation][fl-callouts]. | Use [`query_call_outs(-1)`](efun/query_call_outs.md) for all owners, or pass an object for an owner-specific query. Native rows contain scheduling owner, function pointer, milliseconds remaining, milliseconds between repeats, and ID. The query includes the current transaction's schedules and excludes its cancellations. An LPC helper can project the first three fields, converting callbacks with [`function_name`](efun/function_name.md) and durations with `remaining_ms < 0 ? 0 : remaining_ms / 1000`; the fourth native field is a repeat interval, not callback data. Bare-name grouping combines differently bound callbacks with the same name. A `my_call_outs`-style simul can query `previous_object()` directly, but must return an empty array for a missing caller: a nil selector queries the simul itself. Preserve `-1` for a missing timer in name-lookup helpers. If scheduling wrappers hide callbacks inside closures, retain the original name separately or query a reliably maintained timer ID. |
-| Whole-object enumeration | `objects()` accepts optional function or local-method-name filtering; the result is capped by `__MAX_ARRAY_SIZE__`. With `F_SET_HIDE`, visibility depends on caller status or `valid_hide`. Callback filtering can reorder entries. [Reference][fl-objects], [implementation][fl-objects-implementation], [visibility][fl-object-enumeration]. | [`objects()`](efun/objects.md) takes no arguments and returns all transaction-visible loaded objects without truncation or an ordering guarantee. Use `filter(objects(), predicate)` for selection, with native truthiness and callback behavior; use `foreach` when only side effects are wanted. There is no corresponding hidden-object category. An LPC method-name wrapper must bind the original caller explicitly. |
+| Whole-object enumeration | `objects()` accepts optional function or local-method-name filtering; the result is capped by `__MAX_ARRAY_SIZE__`. With `F_SET_HIDE`, visibility depends on caller status or `valid_hide`. Callback filtering can reorder entries. [Reference][fl-objects], [implementation][fl-objects-implementation], [visibility][fl-object-enumeration]. | [`objects()`](efun/objects.md) takes no arguments and returns all transaction-visible loaded objects without truncation or an ordering guarantee. Use `filter(objects(), predicate)` for selection, with native truthiness and callback behavior; use `foreach` when only side effects are wanted. Initialize missing counters before incrementing them in distinct-null mode. For clone counts, exclude prototypes explicitly: subtracting one undercounts when the prototype is absent. There is no corresponding hidden-object category. An LPC method-name wrapper must bind the original caller explicitly. |
+| Clone predicate | `clonep()` defaults to the current object; an explicit argument succeeds only for an object carrying the driver's clone flag. [Reference][fl-clonep]. | An LPC helper can inspect the terminal `#<digits>` suffix from [`file_name`](efun/file_name.md) when the mudlib reserves that naming convention for clones. That convention is a mudlib constraint, not a native restriction on ordinary source filenames. For exact classification without it, test membership in [`object_clones(ob)`](efun/object_clones.md), which allocates the clone group's array. A simul helper should default an omitted argument to `previous_object()` while returning `0` for explicit nil, destructed objects and other nonobjects. |
 | Clone enumeration | `children(path)` includes the loaded prototype and surviving clones sharing its base filename, in insertion order, even across prototype destruction and replacement. [Reference][fl-children], [object table][fl-children-table]. | [`object_clones(object)`](efun/object_clones.md) excludes the prototype, groups clones by compiled program version, and returns newest first. A mudlib helper can use `find_object(path)`, add the loaded prototype, and reverse the clone order. That helper cannot discover old groups through a missing or replacement prototype. Filtering [`objects()`](efun/objects.md) by base filename can find those groups, but does not reproduce insertion ordering. Audit reload, cleanup, uniqueness and registry-recovery code; in-place recompilation preserves the current group but does not merge earlier groups. |
 | Master lookup and reload | `master()` returns the current master object, or zero if absent; the getter does not load it. Destructing the master attempts to load and install a replacement before removing the old object. [Getter][fl-master-getter], [destruction][fl-master-destruct]. | A mudlib `master()` helper can return [`find_object(MASTER_OB)`](efun/find_object.md), provided the rooted mudlib constant matches the driver's configured `MASTER_OBJECT`. A mismatched path can return an unrelated object, so this agreement matters for identity-based security checks. Simul-efun initialization precedes the master: do not cache the initial missing result. Native [`destruct`](efun/destruct.md) does not recreate the master, and a subsequent lookup cannot reload it. Adapt reload commands to queued [`request_object_recompile("master")`](efun/request_object_recompile.md), including authorization and later status checks with [`query_object_recompile`](efun/query_object_recompile.md); it preserves state and identity and does not rerun `create()`. |
 | Live recompilation | `recompile_object` updates the prototype and its clones; inheritors need separate updates. [Reference][fl-reload]. | Use `request_object_recompile` and inspect its queued result with `query_object_recompile`; other tools need `valid_recompile` permission to read the status. Migration matches declaring source, name and exact type; compatible named callbacks rebind and closures retain their original code and captures. System selectors support state-preserving master/simul-efun upgrades. Active shadow chains and changes to cleanup eligibility are refused. [Reference](efun/request_object_recompile.md). |
@@ -665,6 +672,41 @@ retaining the previous saved file does not restore the previous live index.
 caught, but file-delivery failures after commit are logged by the driver.
 This bookkeeping does not provide recovery for externally cancelled timers or
 an aborted transaction that never reaches this completion routine.
+
+#### Lima object enumeration and state scheduling
+
+Lima's full-list `objects()` calls can use the native efun directly. Convert
+predicate calls to `filter(objects(), predicate)`. `objcount` only uses its
+callback to increment counters, so use a `foreach` with explicit integer
+initialization instead. Domain spawn limits should count clones directly,
+including surviving clones whose prototype was removed or replaced.
+[Object callers][lima-state-objects], [domain counts][lima-domain-objects].
+
+State queue entries are pairs of a target and extra data; their containing
+arrays need `mixed *` declarations. Resolve path jobs when due: an empty match
+set removes the job, while multiple matches must remain queued as concrete
+targets until processed. Process timestamps oldest first, preserve future jobs
+and unfinished work at the processing limit, and remove each current job before
+calling it so callback additions and cancellations remain effective. Duplicate
+checks must compare actual targets rather than collapsing different clones with
+the same base name. Queue membership and ownership queries should inspect the
+target slot, excluding objects present only in callback data.
+[Reviewed state daemon][lima-state-objects].
+
+Replace this daemon's heartbeat with a named repeating
+[`call_out`](efun/call_out.md). A two-second initial delay and repeat interval
+match [Lima's reviewed heartbeat configuration][lima-heartbeat-config]. Keep
+the timer ID in a `nosave` integer and prevent recursive ticks from bypassing
+the processing limit. The stateful module's deferred registration also needs
+`call_out(internal_add_to_queue, 0)` in place of its string callback.
+[Stateful module][lima-stateful-module].
+
+The adaptation catches and reports each failed update, removes that job and
+continues with the remaining queue. Native [`catch`](efun/catch.md) retains
+writes made before the error; it does not roll back just the failed object's
+changes. A whole-transaction abort still rolls back the tick, and the native
+repeating timer remains scheduled. This is an explicit queue failure policy,
+not automatic recovery for externally cancelled timers.
 
 #### Lima file metadata
 
@@ -1367,3 +1409,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-objects]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/objects.md
 [fl-objects-implementation]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/array.cc#L2102-L2169
 [fl-object-enumeration]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/object.cc#L2253-L2288
+
+[fl-clonep]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/clonep.md
+[lima-state-objects]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/state_d.c
+[lima-domain-objects]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/domain_d.c
+[lima-heartbeat-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/adm/dist/config.mud#L114-L115
+[lima-stateful-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_stateful.c
