@@ -24,6 +24,12 @@ Global timer inspection in FluffOS was source-reviewed on **22 and 24 September 
 at the listed revision, with its core call-out efuns enabled. The inspected
 implementation returns three fields per timer; no cross-driver execution was
 performed. [Implementation][fl-callouts], [declaration][fl-core-spec].
+Timer argument forwarding and lookup were additionally reviewed on
+**26 September 2026** at the listed FluffOS revision. These are core efuns;
+[Lima's configuration][lima-timer-config] enables `this_player in call_out`.
+The event/help adaptations below were exercised on lpc-rs in both null modes,
+without FluffOS execution or a timing comparison.
+[Scheduling][fl-callout-reference], [lookup][fl-find-callout].
 FluffOS snooping was source-reviewed on **24 September 2026** at the listed
 revision, with `NO_SNOOP` undefined and `receive snoop` enabled (as in the
 reviewed Lima configuration). Callback and relationship behavior below comes
@@ -332,6 +338,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md) and [inherit](apply/master/valid_inherit.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
+| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
@@ -597,6 +604,60 @@ save import still require further driver support. See [class support](lpc/classe
 | Named global reads and writes | `fetch_variable(name, object?)` and `store_variable(name, value, object?)` default to the current object. Lookup takes the first match, searching inherits before the object's own globals. The implementation rejects a private match on a foreign target; it does not enforce the reference's public-only description. Self-access includes private globals, and `nosave` globals remain accessible. The setter copies the value without a declared-type check. [References][fl-fetch-variable], [setter][fl-store-variable], [implementation][fl-named-globals], [lookup][fl-global-lookup], [assignment][fl-global-assignment]. | Read through [`variable_info`](efun/variable_info.md); no native `fetch_variable` is needed for a name lookup. The native setter takes the target **first**, requires a live object, and accepts an optional exact declaring-source path. Duplicate names require that selector; it does not choose the first match. Writes check retained types, configured nil semantics and scalar class identity. Foreign writes require [`valid_store_variable`](apply/master/valid_store_variable.md), including public fields, separately from inspection permission. Update argument order, duplicate-name handling, type assumptions, and master policy together. |
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
 | Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
+
+#### Lima event and help timers
+
+Arguments after FluffOS's `call_out` delay are callback data. Native
+[`call_out`](efun/call_out.md) instead takes a repeat interval as argument three:
+a positive number silently enables repetition, while a string raises an error.
+Bind data explicitly, as in `call_out(&process_dir(pathname), delay)` for Lima's
+help traversal. Known callbacks without bound arguments use bare names, such
+as `call_out(run_scheduler, delay)`. [Upstream contract][fl-callout-reference].
+
+For a single self-rescheduling job such as Lima's event scheduler, replace
+`find_call_out("run_scheduler") == -1` with
+`!query_call_out(scheduler_id)` and store the ID returned by scheduling. Declare
+the handle `nosave`: it belongs to the current VM. Native one-shots are removed
+before the callback executes, so the firing callback can schedule its successor.
+The query also sees schedules and cancellations made earlier in the same
+transaction. Keep the check after the scheduler's work so a direct invocation
+still refreshes events while retaining the existing pending timer. This assumes
+that all scheduling of this job updates that handle; it is not a general
+replacement for name-based lookup. [Native query](efun/query_call_out.md),
+[upstream lookup][fl-find-callout].
+
+Retain self-rescheduling one-shots when that is the source's lifetime policy.
+A native repeating timer survives errors thrown by a callback that started;
+an uncaught error in a one-shot removes that firing and rolls back an attempted
+reschedule. Repeating timers therefore change failure behavior as well as how
+manual invocations interact with the schedule. [Native contract](efun/call_out.md).
+
+Native callbacks start without `this_player()`. Help already retains its
+initiator and can notify that object directly. Use `nil` when clearing the
+object or returning an absent topic array, and `!topics` to detect an
+uninitialized index in either null mode. Other timer callers that depend on
+saved player context need their own adaptation; an ordinary simul wrapper also
+changes timer ownership. [Callback context](efun/call_out.md),
+[null modes](lpc/null.md).
+
+Review completion bookkeeping when moving incremental scans to native
+transactions. Help's completion used to run only from a directory callback,
+leaving a flat help tree unsaved; an exception before its counter decrement
+could also strand the busy state. Use shared completion for the root scan and
+directory callbacks, record catchable scan failures, and let queued work drain
+before releasing the busy state. Save only a successful index; a failed scan
+should retain the previous save and report failure. Also catch completion
+notification errors so they cannot undo the final decrement. The reviewed
+source is [Lima's help daemon][lima-help-timers].
+
+[`catch`](efun/catch.md) preserves writes and effects made before a caught error,
+so directory callbacks already scheduled during a failed scan still need their
+counter entries. Partial in-memory results remain visible until another rebuild;
+retaining the previous saved file does not restore the previous live index.
+[`save_object`](efun/save_object.md) permission and serialization errors can be
+caught, but file-delivery failures after commit are logged by the driver.
+This bookkeeping does not provide recovery for externally cancelled timers or
+an aborted transaction that never reaches this completion routine.
 
 #### Lima file metadata
 
@@ -1080,6 +1141,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-pragma-lexer]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/lexer_utils.cc
 [fl-pragma-compiler]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/compiler.cc
 [fl-callouts]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/call_out.cc
+[fl-callout-reference]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/calls/call_out.md
+[fl-find-callout]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/system/find_call_out.md
+[lima-help-timers]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/help_d.c
+[lima-timer-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/adm/dist/config.mud#L226-L229
 [fl-save]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/save_object.md
 [fl-restore-object]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/objects/restore_object.md
 [fl-object-persistence]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/object.cc
