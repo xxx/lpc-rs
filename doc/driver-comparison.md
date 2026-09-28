@@ -2086,10 +2086,57 @@ their `do_wield(ob, 0, 1)` calls. Full weapon objects, inventory movement, parse
 dispatch, live body entry, full combat and alternate wield modes remain
 unvalidated; flags and several receiving callbacks are controlled in the tests.
 
-Adversary compilation advances to [limb armour][lima-armour-limbs]: applying
-`sizeof` to a class and typed-zero returns/assignments. Body compilation retains
-the separate skill-setter mismatch, and `std/weapon.c` still needs adaptation of
-its `object::ob_state()` inherited-call spelling.
+Adversary compilation next needs the [limb armour adaptations below](#lima-limb-armour).
+Body compilation retains the separate skill-setter mismatch, and `std/weapon.c`
+still needs adaptation of its `object::ob_state()` inherited-call spelling.
+
+#### Lima limb armour
+
+Reviewed and exercised **28 September 2026** against pinned
+[limb armour][lima-armour-limbs] and its [wear records][lima-wear-info], using
+distinct nil, `ARMOUR_LIMBS`, `HEALTH_LIMBS`, `BLOW_TYPES` and `PULSE_HEART_BEAT`,
+with skills enabled and limb shields disabled. No upstream execution is claimed.
+
+Use nil for absent records, objects and arrays, including array sentinels used
+to filter absent armour. Remove the legacy `sizeof(wi) == 2` upgrade: native
+[`sizeof`](efun/sizeof.md) does not measure class layouts, and compatible
+[class field views](lpc/classes.md) already provide an added `secondary` field.
+Checks save a native two-field record, restore it in a fresh VM with the current
+definition, and verify that old fields survive while `secondary` initially reads
+nil. This does not import foreign-driver class saves or reinterpret integer zero.
+
+Repair layer and coverage bookkeeping alongside the nil changes. `remove_item`
+must clear the field matching the item, preserving the other layer and unrelated
+covering items. Delete a limb record only when both layers and its additional
+coverage are empty. Clear the item's recorded coverage across the mapping;
+consulting its current `also_covers()` list can leave obsolete coverage behind.
+Removal then needs no coverage-provider callback.
+
+Make `update_cover` preserve the order of items that still cover a limb, remove
+obsolete coverage, and add each newly covered limb once. Ignore unworn items
+and skip coverage entries where the item already occupies a primary or secondary
+slot, avoiding duplicate damage-sink calls. Primary wear needs only one call to
+`also_covers()`; its original extra call discards the result. Traverse
+`keys(armours)` when pruning records, since [mapping iteration](lpc/foreach.md)
+retains the live collection and its initial length.
+
+Checks cover layer preservation, shared and changing coverage, duplicate/self
+coverage, callback counts and errors, and real limb-health/body definitions.
+The event-consumer method is extracted unchanged from
+[the blows module][lima-combat-blows]; item callbacks and several receiving
+methods are controlled. Caught wear errors can retain an assigned slot; a failed
+coverage refresh preserves the existing coverage because the provider runs
+before reconciliation. Uncaught errors roll back writes, including removal
+followed by a later error. No general callback recovery policy is added.
+
+Generic underlayers still try only the right limb, and low-level wear eligibility
+is unchanged. Full [wearable objects][lima-wearable], worn flags, stat hooks,
+inventory movement, parser dispatch, live body entry, scheduled combat and
+alternate armour modes remain unvalidated. The wearable module still has
+integer returns in void methods; `std/armour.c` also needs adaptation of its
+`object::mudlib_setup()` inherited-call spelling. Adversary compilation advances
+to missing `set_heart_beat` calls in the selected
+[pulse module][lima-combat-pulse].
 
 #### Lima file metadata
 
@@ -2893,3 +2940,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wield-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wield.c
 [lima-dualwield-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/dualwield.c
 [lima-armour-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/limbs.c
+[lima-wear-info]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/wear_info.c
+[lima-wearable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wearable.c
