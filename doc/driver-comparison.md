@@ -1305,10 +1305,11 @@ no-op. Use `objectp` filtering for body enumeration so distinct nil does not
 survive subtraction of integer zero.
 
 This migration does not resolve full body entry or cleanup. The object foundation
-adaptation below resolves the human race's `stat_roll_mods` visibility error,
-but container compilation still blocks the body. The retained audit reproduces
-failed entry recovery in the
-auto-wizard/first-admin route. With a body fixture, ordinary user cleanup and
+adaptation below resolves the human race's `stat_roll_mods` visibility error.
+The container and message adaptations advance compilation to the remaining
+[body dependencies](#lima-message-composition-and-delivery). Retained checks
+reproduce failed entry recovery in the auto-wizard/first-admin route. With a
+body fixture, ordinary user cleanup and
 link-dead expiry can fail destruction authorization; scoped authority for the
 owned body succeeds, but a throwing cleanup still leaves the user attached.
 Those remain explicit integration tasks, including the policy for partial
@@ -1443,8 +1444,59 @@ changes are covered. A caught error after an extension partially updates
 relation bookkeeping preserves those writes and can leave them inconsistent
 with physical position. An uncaught error rolls back the move. Extensions that
 catch such failures need their own recovery; the adaptation adds no savepoint.
-Body compilation now reaches `std/modules/m_messages.c`. Reset/spawn, full
-descriptions and light propagation, body entry and persistence remain open.
+The message-module adaptation below advances body compilation further.
+Reset/spawn, full descriptions and light propagation, body entry and persistence
+remain open.
+
+#### Lima message composition and delivery
+
+Reviewed **27 September 2026** against the pinned [message module][lima-messages],
+[living message wrapper][lima-living-messages], [grammar][lima-message-grammar]
+and [string helpers][lima-message-strings]. Native checks use both null modes
+and the container configuration above, with the adapted master/simul layer.
+These are source review and native execution checks, without upstream driver
+execution.
+
+Pass `nil` explicitly as the second argument to the module's two `format_list`
+calls; the existing simul uses its default `and` separator. In observer calls
+to `compose_message`, use `nil` for the absent viewer. Give the `has` and `done`
+mapping counters a numeric default before incrementing them:
+`has[key] = (has[key] || 0) + 1;`. Missing mapping entries are nil in distinct
+mode, where arithmetic on nil raises an error. Preserve counts rather than
+replacing them with boolean flags: the public object-rendering helpers accept
+an existing tracking mapping. [Native null rules](lpc/null.md).
+
+Retain the existing mudlib grammar and pluralizer. Native checks cover actor,
+target and observer perspectives, pronouns, articles, repeated objects, lists,
+alternatives, punctuation and newlines. Delivery checks combine the actual
+message, container and living grammar modules with fixture names and receivers.
+They exercise nested inventories, participant exclusion, callback arguments and
+message flags; an attached native channel receives one rendered action without
+invoking `catch_tell`. These fixtures do not establish real-body or client
+formatting behavior.
+
+The compatibility changes preserve several existing message-module limitations.
+`filtered_inform` does not apply its filter to array observers; its room form
+filters the room before propagation, rather than each descendant. `inform`
+deduplicates participants but not array observers, and a self-targeted
+`targetted_action` can repeat delivery to the actor and its inventory. Repeated
+object lists retain their names because their tracking key changes during
+rendering. Review these behaviors separately when using those forms.
+[Source][lima-messages].
+
+Guard the environment lookup when using `filtered_simple_action` outside the
+world. Passing a missing environment to native `all_inventory` selects the
+current object, so an orphan's contents can receive the action twice. Also
+review `query_msg`'s declared `string` result alongside its callers and
+prototypes: the registry can hold arrays of alternatives.
+
+Body compilation now reaches [`std/living/effects.c`][lima-message-effects],
+where an arrow field access needs review. Default message lookup remains blocked
+by the [message daemon's][lima-message-daemon] dependency on
+[`m_colours`][lima-message-colours], which assigns a `floor` float result to an
+integer. Default-registry tests use an explicit daemon fixture; a separate real
+lookup confirms the blocker. Message-file loading, full body entry and combat
+remain unvalidated.
 
 #### Lima file metadata
 
@@ -2199,3 +2251,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-container-user]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user.c
 [fl-container-userp]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L2928-L2936
 [fl-container-exec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/interactive.cc#L3-L29
+[lima-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_messages.c
+[lima-living-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/living/messages.c
+[lima-message-grammar]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_grammar.c
+[lima-message-strings]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/string.c
+[lima-message-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/messages_d.c
+[lima-message-effects]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/living/effects.c
+[lima-message-colours]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_colours.c
