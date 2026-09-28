@@ -1742,8 +1742,8 @@ references. Target selection prunes destroyed, ghost and unreachable opponents
 through the real inventory helpers.
 
 Both `stop_fight()` and `stop_fight(nil)` notify opponents and clear all targets.
-The [corpse module][lima-combat-corpses]'s literal `stop_fight(0)` still needs
-caller adaptation. Reciprocal `stop_hitting_me` uses
+Adapt the corpse caller as described under [corpse handling](#lima-corpse-handling).
+Reciprocal `stop_hitting_me` uses
 [`previous_object`](efun/previous_object.md) to remove the caller's combat link;
 it leaves remote pulse cleanup to that object's combat loop. A stale secondary
 entry also keeps the initiating pulse active after a specific-target stop until
@@ -1952,12 +1952,49 @@ extracted from the skill daemon, with controlled skill names and receiving
 callbacks. Full skill-daemon behavior, body entry, actual advancement/health,
 combat and scheduled setup remain unvalidated.
 
-Compilation then exposes separate callers needing adaptation: corpse handling
-passes `0` to the object parameter of `stop_fight` and a string callback to
-`call_out`; the body overrides the two-argument monster `set_skill` with a
-three-argument setter whose final argument is training points. The runtime body
-guard does not remove that static argument-count check.
-[Corpse callers][lima-combat-corpses], [body setter][lima-body-skills].
+Compilation then exposes the [corpse callers below](#lima-corpse-handling) and a
+separate body signature mismatch. The [body setter][lima-body-skills] overrides
+the two-argument monster `set_skill` with a three-argument setter whose final
+argument is training points. The runtime body guard does not remove that static
+argument-count check.
+
+#### Lima corpse handling
+
+Reviewed and exercised **28 September 2026** against the pinned
+[corpse death module][lima-combat-corpses], using distinct nil, `DEATH_CORPSES`,
+`HEALTH_LIMBS`, default Lima stats and skills enabled. Player equipment dropping
+is disabled in the reviewed configuration. No upstream execution is claimed.
+
+Change `stop_fight(0)` to `stop_fight(nil)` and `call_out("remove", 1)` to
+[`call_out(remove, 1)`](efun/call_out.md). The first supplies the object-typed
+stop-all argument; the second schedules the receiving object's named removal
+function after one second. Existing native APIs suffice.
+
+Preserve the order: stop fights, stop attacking, emit the death message, clear
+effects, delegate corpse production, then schedule removal. The targeting
+module already stops attacking during stop-all, so the explicit call repeats
+that action. Direct `drop_corpse` only clears effects and delegates to the loot
+daemon; it does not stop combat or schedule removal. The default death message
+is installed by [adversary setup][lima-adversary], rather than the
+[message storage module][lima-death-messages].
+
+Caught callback failures retain earlier writes and skip later work. Uncaught
+errors restore the native attempt, including opponents, effects and their
+previous timer. Effect end-hook errors caught by `clear_effects` still allow
+loot and removal. A later removal failure rolls back that callback alone and
+retires its one-shot timer. Repeated death calls remain unguarded and can
+duplicate loot calls and timers; these caller adaptations add no recovery or
+duplicate-death policy.
+
+Checks exercise the adopted targeting and effects modules, controlled loot and
+receiving callbacks, explicit native timer dispatch, and destruction through
+the adopted wrapper. Full corpse production, inventory transfer, decay, actual
+message delivery, body/health death entry and full combat remain unvalidated.
+The [loot daemon][lima-loot-daemon] still fails on assignment syntax in its
+meat/pelt conditional. The [corpse object][lima-corpse-object]'s three-argument
+`mudlib_setup` also conflicts with [decay][lima-decay]'s zero-argument definition.
+Adversary compilation advances to class-field arrow access in
+[limb health][lima-health-limbs].
 
 #### Lima file metadata
 
@@ -2748,3 +2785,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
 [lima-body-skills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/skills.c
+[lima-adversary]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary.c
+[lima-death-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/death_messages.c
+[lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
+[lima-corpse-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/corpse.c
+[lima-decay]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_decay.c
+[lima-health-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/limbs.c
