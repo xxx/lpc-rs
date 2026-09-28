@@ -1884,14 +1884,44 @@ Hook sums retain their existing callback behavior: caught errors preserve
 earlier mutations, and uncaught errors roll back the native attempt.
 
 Checks exercise the base through inheritance and inclusion with real hooks and
-the colour daemon. The [default Lima stats module][lima-stats] also initializes
-with controlled numeric matrix and skill callbacks, but still needs follow-up:
-an existing bonus during initialization reads an absent derived score, direct
-modifier reset leaves derived scores cached until recomputation, and child
-getter overrides retain direct mapping reads. Full body, combat, saved-stat
-migration and alternate stat systems remain unvalidated. Body compilation now
-reaches the float-to-int `max_skill` assignment in the
-[monster setup module][lima-monster-setup].
+the colour daemon. The default Lima module also needs the
+[initialization and reset changes below](#lima-default-stats).
+
+#### Lima default stats
+
+Reviewed and exercised **28 September 2026** against the pinned
+[default stats module][lima-stats], using distinct nil, `BODY_STATS_LIMA`,
+skills enabled and introductions disabled. No upstream execution is claimed.
+
+Reuse the adapted base's numeric readers in the child's getters, calculations
+and modifier updates. The child's direct mapping reads otherwise bypass the
+base's nil defaults. Default transformation matrices and constant vectors also
+need explicit numeric zeros: [`allocate`](efun/allocate.md) fills arrays with
+nil in this configuration. Receivers must still call `internal_setup` before
+calculating derived scores.
+
+Override `reset_stat_increases` to clear and seed modifiers, then call
+`recompute_derived`, which refreshes bonuses after computing pure derived
+scores. Calling the inherited reset first refreshes too early. Without this
+change, a bonus active during initialization reads an absent derived score;
+resetting modifiers later leaves derived scores stale. Initialize through the
+new reset once and remove the redundant recomputation and refresh calls.
+This reduces initialization from three passes over the four base-stat bonus
+tags to one, with derived scores available to the callbacks.
+
+Preserve the existing coefficients, skill contributions and integer rounding.
+The `+5000` before division by `10000` rounds negative adjustments asymmetrically;
+separately rounded `stat_component` results can also differ from the combined
+score. Each component still queries all four bonus tags. Caught errors retain
+preceding mutations, while uncaught errors roll back the native attempt.
+Invalid roll-adjustment totals still raise after clearing stats and the cache.
+
+Checks cover inherited/included composition, real hooks and colour formatting,
+controlled skill callbacks, and the adversary's matrix/vector provider functions
+with controlled racial callbacks. Full body entry, combat, saved-stat migration,
+complete skill integration, introductions and alternate stat systems remain
+unvalidated. Body compilation still reaches the float-to-int `max_skill`
+assignment in the [monster setup module][lima-monster-setup].
 
 #### Lima file metadata
 
