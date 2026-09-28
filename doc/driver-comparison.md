@@ -1920,8 +1920,44 @@ Checks cover inherited/included composition, real hooks and colour formatting,
 controlled skill callbacks, and the adversary's matrix/vector provider functions
 with controlled racial callbacks. Full body entry, combat, saved-stat migration,
 complete skill integration, introductions and alternate stat systems remain
-unvalidated. Body compilation still reaches the float-to-int `max_skill`
-assignment in the [monster setup module][lima-monster-setup].
+unvalidated. Monster setup also needs the
+[explicit skill-point conversion below](#lima-monster-setup).
+
+#### Lima monster setup
+
+Reviewed and exercised **28 September 2026** against the pinned
+[monster setup module][lima-monster-setup], using distinct nil, `BODY_STATS_LIMA`,
+skills enabled and `MAX_SKILL_VALUE=10000`. No upstream execution is claimed.
+
+Wrap the complete interpolated skill-point expression in
+[`to_int`](efun/to_int.md) before assigning it to `max_skill`. The expression
+produces a float, while the cache and monster `set_skill` parameter are integers.
+This makes truncation toward zero explicit; an LPC type-assertion cast does not
+convert the value. Keep the floating calculation and rank boundaries unless a
+balance change is intended. With the reviewed table, levels 1 through 5 use the
+`level * 10` fallback, and level 6 yields 19 after truncation. These are native
+port observations, not a claim about upstream implicit assignment conversion.
+
+The existing nonzero cache persists across level changes; zero calculations
+leave the fallback uncached. Native `||` already preserves the selected point
+value. Setup retains its order: query skills and ranks, check for a player body,
+initialize stats, set armour/damage, assign skills, update maximum health and
+heal. The outer `setup_monster` wrapper checks for a body before querying skills.
+Caught callback errors preserve earlier writes and cache state; uncaught errors
+roll back the native attempt.
+
+Checks cover levels 1 through 100, inherited/included composition, and real
+adversary skills with the adapted stats and hooks. Rank-provider functions are
+extracted from the skill daemon, with controlled skill names and receiving
+callbacks. Full skill-daemon behavior, body entry, actual advancement/health,
+combat and scheduled setup remain unvalidated.
+
+Compilation then exposes separate callers needing adaptation: corpse handling
+passes `0` to the object parameter of `stop_fight` and a string callback to
+`call_out`; the body overrides the two-argument monster `set_skill` with a
+three-argument setter whose final argument is training points. The runtime body
+guard does not remove that static argument-count check.
+[Corpse callers][lima-combat-corpses], [body setter][lima-body-skills].
 
 #### Lima file metadata
 
@@ -2711,3 +2747,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-stats-filter-mapping]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/mapping.cc#L1024-L1107
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
+[lima-body-skills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/skills.c
