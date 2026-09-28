@@ -504,11 +504,10 @@ mod tests {
         commit_object_cell(&gs, process.clone()).await.unwrap();
         ObjectSpace::insert_process_physical(&gs.object_space, process.clone());
 
-        // Commit a destruct: drop the cell, but never flush the physical
-        // removal, leaving the destruct window open.
+        // Commit destruction without flushing the physical removal.
         let mut live = start_txn(&gs.committer_tx).await.unwrap();
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
-        txn.with(|t| t.drop_var(cell_id));
+        txn.with(|t| t.remove_object(cell_id, process.clone()));
         let changeset = txn.with(|t| t.take_changeset());
         live.disarm(); // the commit carries the release
         let commit = commit_changeset(&gs.committer_tx, changeset).await.unwrap();

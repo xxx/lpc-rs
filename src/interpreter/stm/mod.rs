@@ -731,10 +731,10 @@ impl Default for TxnHandle {
     }
 }
 
-/// Find the object at `path` in the committed world seen by `txn`. An
-/// object with no cell (bootstrap, created outside any transaction) is found
-/// in the physical map; once a cell exists, only the cell counts, so a
-/// committed-but-unflushed destruct reads as a miss.
+/// Find the object at `path` in the world seen by `txn`. Bootstrap objects
+/// with no cell are found in the physical map. An allocated but empty cell
+/// falls back to snapshot membership, so an aborted first removal preserves
+/// the object and a committed-but-unflushed removal remains absent.
 pub(crate) fn txn_find_object(
     txn: &TxnHandle,
     object_space: &ObjectSpace,
@@ -749,7 +749,10 @@ pub(crate) fn txn_find_object(
             if t.is_removed(var_id) {
                 return ObjectLookup::Removed;
             }
-            match t.read_object(var_id) {
+            match t
+                .read_object(var_id)
+                .or_else(|| t.snapshot.objects.get(key.as_str()).cloned())
+            {
                 Some(process) => ObjectLookup::Found(process),
                 None => ObjectLookup::NotCreated,
             }

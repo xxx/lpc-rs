@@ -1389,6 +1389,10 @@ when a new object takes its path. These native guarantees are covered separately
 from the object-foundation migration; they do not adapt Lima's relation or
 capacity bookkeeping.
 
+Native [`find_object`](efun/find_object.md) also restores the same object after
+an uncaught destruction error rolls back, including bootstrap objects. Catching
+the error keeps the destruction; a committed removal stays absent from lookup.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line

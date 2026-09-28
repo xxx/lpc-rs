@@ -102,12 +102,11 @@ impl Default for TaskResult {
 /// and `compile_string` requests may recreate a `Removed` name.
 #[derive(Debug)]
 pub enum ObjectLookup {
-    /// Live for this attempt — its cell holds it, or the physical map does
-    /// (objects created outside any transaction: bootstrap, `clone_object`).
+    /// Live for this attempt, including bootstrap objects without a cell value.
     Found(Arc<Process>),
     /// This attempt destructed it.
     Removed,
-    /// No cell exists.
+    /// No object exists at the path in this attempt's view.
     NotCreated,
 }
 
