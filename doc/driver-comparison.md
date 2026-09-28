@@ -1377,9 +1377,9 @@ Execution checks cover actual object initialization and cloning, independent
 clone state, names, flags, descriptions, hook folding and destroyed owners,
 fractional mass/value, attached-connection delivery and simple self-removal.
 Removal has no environment or inventory, and message checks use native
-connection channels. Real container mass/capacity types, inventory predicates
-and message delivery still block body compilation. These checks do not establish
-body entry, full object/body persistence, movement, cleanup or reconnect.
+connection channels. Container behavior is covered separately below. These
+foundation checks do not establish body entry, full object/body persistence,
+movement, cleanup or reconnect.
 
 For inventory emptiness checks, `sizeof(all_inventory(container))` counts live
 members, including immediately after a destruction in the same transaction.
@@ -1392,6 +1392,59 @@ capacity bookkeeping.
 Native [`find_object`](efun/find_object.md) also restores the same object after
 an uncaught destruction error rolls back, including bootstrap objects. Catching
 the error keeps the destruction; a committed removal stays absent from lookup.
+
+#### Lima containers
+
+Reviewed **27 September 2026** against the pinned [container][lima-container],
+[movement][lima-container-move] and [user object][lima-container-user] sources.
+Native checks use both null modes, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES`,
+`BODY_STATS_LIMA`, `USE_MASS`, `METRIC` and `USE_SKILLS`, with `USE_SIZE`
+disabled. The size-based configuration needs separate validation. These are
+source review and native execution checks, without upstream driver execution.
+
+In `std/container.c`, return `nil` for an absent relation alias and `0.0` for
+an invalid relation's floating capacity. Declare `query_mass()` and the
+`receive_object()` mass/capacity temporaries as `float`; maximum capacities
+remain integers. Replace the `first_inventory` emptiness check with
+`sizeof(all_inventory(this_object()))`. This constructs an array and visits
+the inventory, so its work grows with the number of members.
+
+For the reviewed string messages, implement `do_receive()` with
+`if (interactive(this_object())) write_socket(msg);`. This preserves silent
+noninteractive delivery and bypasses `catch_tell` under the existing master
+policy. Native checks cover all four message entry points, nested propagation,
+exclusion arrays, sound gates and forwarded message types/payloads. Attached
+connection channels exercise delivery; a real body's `do_receive` override
+and network lifecycle need separate checks.
+
+In `destruct_if_useless()`, use `link && link->is_user()` to protect containers
+holding bodies linked to Lima account objects, including disconnected accounts.
+This deliberately uses the [mudlib role][lima-container-user]. FluffOS's
+`F_USERP` reads `O_ONCE_INTERACTIVE`; `F_EXEC` transfers that flag to the new connection owner
+and clears it on the old one. Those core paths were reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0`, separately from the overview revision.
+[Predicate][fl-container-userp], [connection transfer][fl-container-exec].
+The role check also protects a never-connected Lima user and does not protect
+an arbitrary interactive object without `is_user()`. Native checks cover both
+differences and the real user object before attachment and after detachment,
+using a minimal body fixture. Full `net_dead`, cleanup scheduling and reconnect
+remain unvalidated.
+
+The reviewed container still has an empty integer `query_total_capacity()`
+method, so contained weight contributes zero to `query_mass()`. Set an explicit
+canonical default relation: `set_relations()` does not set the first relation
+as default, and `set_default_relation(alias)` retains the alias string. Forced
+`release_object(target, 1)` also returns before deleting the relation entry;
+capacity queries prune that entry after destruction. These existing mudlib
+behaviors are preserved by the adaptation. [Source][lima-container].
+
+Ordinary moves, fractional capacity limits, refusals, aliases and relation
+changes are covered. A caught error after an extension partially updates
+relation bookkeeping preserves those writes and can leave them inconsistent
+with physical position. An uncaught error rolls back the move. Extensions that
+catch such failures need their own recovery; the adaptation adds no savepoint.
+Body compilation now reaches `std/modules/m_messages.c`. Reset/spawn, full
+descriptions and light propagation, body entry and persistence remain open.
 
 #### Lima file metadata
 
@@ -2141,3 +2194,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-object-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/vsupport.c
 [fl-object-receive]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L1750-L1773
 [fl-object-receive-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec
+[lima-container]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/container.c
+[lima-container-move]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/move.c
+[lima-container-user]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user.c
+[fl-container-userp]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L2928-L2936
+[fl-container-exec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/interactive.cc#L3-L29
