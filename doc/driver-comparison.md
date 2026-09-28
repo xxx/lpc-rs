@@ -1679,8 +1679,50 @@ spell and material actions using Lima's `this_body()` still need their caller
 context adapted. The checks exercise the real module, hooks and native timers
 with controlled receiving objects, not full spell/material execution or combat.
 
-Body/adversary/human compilation now reaches `std/adversary/condition.c:123`,
-where integer `stance_impact` receives `1.2`. Full body entry remains unvalidated.
+The [condition adaptation](#lima-combat-condition) handles the next module's
+numeric contract, callbacks, condition display and ammunition cleanup.
+
+#### Lima combat condition
+
+Reviewed **27 September 2026** against the pinned [condition module][lima-combat-condition]
+and [drunkenness constants][lima-drunk]. Native checks use distinct nil with
+`BLOW_TYPES`, `HEALTH_LIMBS`, `WIELD_LIMBS`, `FORMULA_SKILLS` and
+`PULSE_HEART_BEAT`; no upstream execution is claimed.
+
+Declare `stance_impact` as a float initialized to `1.0`, and use
+[`to_float`](efun/to_float.md) for the header's mixed integer/float constants.
+Convert the final difficulty with `to_int(period * 10 * stance_impact)` when
+passing it to the integer `test_skill` argument. Mixed arithmetic already
+promotes the integer operand; assignments and function arguments retain their
+type rules. Converting the factor to integer first would discard its fractional
+effect. Duration is clamped to 5–30 before this calculation.
+
+Supply `"and"` to `format_list` in the condition display, and pass bare
+`message_filter` callbacks to the four filtered action calls. The original
+`(: message_filter :)` returns a function value under native semantics, so its
+truthy result ignores the recipient's filtering decision.
+
+Use `readied = filter(readied, objectp)` for ammunition cleanup. Subtracting
+`({nil})` removes literal nil entries but leaves destroyed object references:
+array set operations use [collection matching](lpc/comparisons.md#collection-matching),
+while scalar equality treats a destroyed object as nil. The live-object filter
+also sees destruction in the current transaction. Preserve cleanup on addition,
+deduplication and ordering; `query_readied` returns an independent array whose
+objects remain shared.
+
+Several existing behaviors remain separate mudlib work. The 50–79 drunkenness
+band reuses the 1.2 factor despite the header defining a separate factor of 2.
+`wake_up()` targets a literal `"vital"` limb, absent from the reviewed
+[saved body definitions][lima-body-definitions], so it clears sleep without
+applying a new stun. Urgent prone/stunned checks precede wake attempts; a later
+short stun can shorten an existing deadline; and disarm uses the stance skill's
+learning cap. The adaptation preserves these policies.
+
+Checks exercise the real condition module and combat message-filter function
+with controlled receiving objects, plus direct inheritance. Full combat and
+body entry remain unvalidated. Body/adversary/human compilation now reaches
+zero-to-object assignments in `std/adversary/target.c` at lines 72, 101, 119
+and 126.
 
 #### Lima file metadata
 
@@ -2457,3 +2499,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-blows]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/base.c
 [lima-combat-damage-sink]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_damage_sink.c
 [lima-combat-behaviors]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/behaviors.c
+[lima-combat-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
+[lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
+[lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
