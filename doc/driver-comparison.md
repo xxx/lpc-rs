@@ -2040,9 +2040,56 @@ callbacks are controlled, and timers are explicitly dispatched through the
 native callback path. Existing over-cap drinking, live health mappings and
 missing-limb error ordering remain unchanged.
 
-Adversary compilation advances to [limb wielding][lima-wield-limbs]: integer zero
-object arguments to `can_wield` and integer zero returns from string functions.
+Adversary compilation next needs the [limb wielding adaptations below](#lima-limb-wielding).
 Body compilation retains the separate [skill-setter signature mismatch](#lima-monster-setup).
+
+#### Lima limb wielding
+
+Reviewed and exercised **28 September 2026** against pinned
+[limb wielding][lima-wield-limbs] and [weapon state][lima-wieldable], using distinct
+nil, `WIELD_LIMBS`, `HEALTH_LIMBS`, default Lima stats and skills enabled, with
+limb shields disabled. No upstream execution is claimed.
+
+Pass nil as the absent object to `can_wield`, and return nil for absent limb
+names. Clear weapon fields with `mark_wielded_by(nil, nil)`. Native dynamic calls
+accept the old `mark_wielded_by(0)` and supply nil for its omitted array argument,
+but that call stores integer zero as owner. Explicit nil arguments preserve the
+intended absence of an owner and limb array. Existing native APIs suffice.
+
+Repair weapon bookkeeping alongside these adaptations. When replacing a weapon,
+clear its weapon state, then remove every actor slot referencing that displaced
+weapon before installing the new one. Clearing only the requested slot leaves
+the other half of a two-handed weapon selectable even though it reports no
+owner or wielding limbs. Preserve slots belonging to unrelated weapons.
+
+In `unwield_me`, let the wielder's successful release clear ownership through
+`mark_wielded_by`; remove the unconditional owner assignment and flag clearing.
+After requesting release for a hand flip or dual-to-single conversion, stop if
+the weapon still has an owner. A refused hand flip then preserves its original
+slot and metadata, and a refused dual-to-single conversion returns without
+recursing. Successful release still clears owner, limbs, flags and the move hook.
+
+Checks cover both handed replacements, normal and refused transitions, real
+hook dispatch, skill restrictions and the complete adapted wieldable module.
+Real limb health and body definitions also verify that disabling an arm clears
+the replacement weapon. Caught callback errors retain earlier writes and stop
+the transition; uncaught errors restore actor and weapon state. No callback
+recovery policy is added, so a caught weapon-clear error can still leave partial
+state before slot cleanup.
+
+Keep wider eligibility rules and return conventions separate. Explicit limb
+calls still bypass health/membership checks, and several refused `wield` paths
+still yield one from `do_wield`. Duplicate dual-unwield callbacks and empty-slot
+notifications are unchanged. The [wield][lima-wield-command] and
+[dualwield][lima-dualwield-command] commands still need nil string arguments in
+their `do_wield(ob, 0, 1)` calls. Full weapon objects, inventory movement, parser
+dispatch, live body entry, full combat and alternate wield modes remain
+unvalidated; flags and several receiving callbacks are controlled in the tests.
+
+Adversary compilation advances to [limb armour][lima-armour-limbs]: applying
+`sizeof` to a class and typed-zero returns/assignments. Body compilation retains
+the separate skill-setter mismatch, and `std/weapon.c` still needs adaptation of
+its `object::ob_state()` inherited-call spelling.
 
 #### Lima file metadata
 
@@ -2842,3 +2889,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-advancement-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/advancement/simple.c
 [lima-body-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/body_d.c
 [lima-wield-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/limbs.c
+[lima-wieldable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wieldable.c
+[lima-wield-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wield.c
+[lima-dualwield-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/dualwield.c
+[lima-armour-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/limbs.c
