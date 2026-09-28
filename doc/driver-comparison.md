@@ -1823,9 +1823,39 @@ object guard skips clones destroyed during creation.
 
 Checks exercise real path resolution, cloning and container movement with a
 recording `do_wear` callback. The helper now compiles independently; full armour,
-worn-state behavior and body entry remain unvalidated. Body/adversary/human
-compilation reaches the [wield helper][lima-combat-wield] at line 11, whose
-`evaluate_path(wep, 0, 1)` has the same string-argument mismatch.
+worn-state behavior and body entry remain unvalidated. The
+[wield setup adaptation](#lima-wield-setup) handles the corresponding absent
+path prefix in the next helper.
+
+#### Lima wield setup
+
+Reviewed and exercised **28 September 2026** against the pinned
+[wield helper][lima-combat-wield], using distinct nil and the combat options
+listed above. No upstream execution is claimed.
+
+Change `evaluate_path(wep, 0, 1)` to `evaluate_path(wep, nil, 1)`. As with armour
+setup, nil supplies the absent string prefix and the final `1` ignores the
+current player's working directory. Relative paths resolve from the receiving
+wielder's directory, including during setup. `set_wielding` initializes a clone,
+moves it to the wielder and returns `do_wield`'s integer result. A rejection
+result leaves the item in inventory.
+
+`add_equipment` only clones and moves items; it never invokes wielding. Omitted
+or zero counts create one item, negative counts create none, and positive counts
+create that many clones. It passes paths directly to
+[`clone_object`](efun/clone_object.md); tested relative paths use the receiving
+object's directory without reading the current player's working directory.
+
+Both helpers ignore refused movement: `set_wielding` still calls `do_wield`,
+and `add_equipment` continues creating unplaced clones. Caught errors retain
+earlier changes, including completed batch iterations; uncaught errors roll
+back the native attempt. Preserve this policy when adapting the prefix type.
+
+Checks use real path resolution, cloning and container movement with a recording
+`do_wield` callback. Standalone compilation still needs the receiver's callback;
+actual weapon state, body entry and combat remain unvalidated. Body/adversary/
+human compilation reaches the [stats base][lima-stats-base], where `filter_mapping`
+and literal-zero string resets require adaptation.
 
 #### Lima file metadata
 
@@ -2609,5 +2639,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/messages.c
 [lima-combat-armour]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/armour_base.c
 [lima-combat-wield]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/wield_base.c
+[lima-stats-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/base.c
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
