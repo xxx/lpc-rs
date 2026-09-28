@@ -47,6 +47,23 @@ int upvalue_add(int n) {
     } :);
     return work(n);
 }
+int foreach_one(int n) {
+    int *items = ({ 1 });
+    int sum;
+    for (int i = 0; i < n; i++) foreach (int value : items) sum += value;
+    return sum;
+}
+int foreach_eight(int n) {
+    int *items = ({ 1, 2, 3, 4, 5, 6, 7, 8 });
+    int sum;
+    for (int i = 0; i < n; i++) foreach (int value : items) sum += value;
+    return sum;
+}
+int foreach_literal(int n) {
+    int sum;
+    for (int i = 0; i < n; i++) foreach (int value : ({ 1, 2 })) sum += value;
+    return sum;
+}
 "#;
 
 fn integer_execution(c: &mut Criterion) {
@@ -75,6 +92,9 @@ fn integer_execution(c: &mut Criterion) {
         ("global_add", ITERATIONS as i64 - 1),
         ("upvalue_copy", ITERATIONS as i64 - 1),
         ("upvalue_add", ITERATIONS as i64 - 1),
+        ("foreach_one", ITERATIONS as i64),
+        ("foreach_eight", ITERATIONS as i64 * 36),
+        ("foreach_literal", ITERATIONS as i64 * 3),
     ] {
         let function = process
             .initial_program()

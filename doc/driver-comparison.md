@@ -575,7 +575,7 @@ save import still require further driver support. See [class support](lpc/classe
 | `sscanf` | Supports `%(regexp)`; checks argument types and raises a missing-destination error when scanning reaches a conversion needing one. [Reference][fl-sscanf], [implementation][fl-sscanf-source]. | Has no regex conversion. Non-string input/format returns `0`; the total destination count is checked before scanning, even if the input would fail earlier. Review error handling as well as format strings. [Reference](efun/sscanf.md). |
 | Colour expansion | `terminal_colour` in `PACKAGE_CONTRIB` looks up split text segments, including ordinary text, and can insert a default `RESET` into the supplied mapping. [Implementation][fl-colour-source]. | Looks up only explicit colour tokens and leaves input mappings unchanged. Callers relying on implicit text replacement or the added mapping entry need changes. [Reference](efun/terminal_colour.md). |
 | Deep copying | `copy` in `PACKAGE_CONTRIB` copies arrays, mapping values, classes, and buffers; mapping keys remain shared. Repeated container references are copied independently; cycles encountered during value traversal hit the nesting limit. Objects and functions retain identity. [Implementation][fl-copy], [declaration][fl-contrib-spec]. | [`deep_copy`](efun/deep_copy.md) copies arrays, mapping keys and values, and all retained class fields. It preserves cycles and shared references within the copy; objects and functions retain identity, and immutable bytes can remain shared. Rename `copy` calls or supply a wrapper after checking key identity and sharing assumptions. There is no native `copy` alias. Cycle-preserving copying does not make a mudlib traversal cycle-safe: recursive flatteners still need acyclic array nesting or their own cycle detection. |
-| `foreach` separator | Uses `in` between the loop variables and the collection. [Reference][fl-foreach], [grammar][fl-parameter-grammar]. | Accepts `in` and `:` with identical iteration behavior. `in` is contextual and remains available as an identifier elsewhere. This adds the separator spelling while retaining native loop scope and type checks. [Reference](lpc/foreach.md). |
+| `foreach` separator | Uses `in` between the loop variables and the collection. [Reference][fl-foreach], [grammar][fl-parameter-grammar]. | Accepts `in` and `:` with identical iteration behavior. `in` is contextual and remains available as an identifier elsewhere. The collection value is retained at loop entry even if its source variable is reassigned. Native loop scope and type checks remain. [Reference](lpc/foreach.md). |
 | Catch blocks | Supports `catch(expr)` and `catch { statements }`; rejects `break` and `continue` that leave the catch. Returns zero on success, a string for runtime errors, or the value passed to `throw`. [Reference][fl-catch], [jumps][fl-catch-jumps]. | Supports both forms with the existing zero-or-error-message result. `throw` stringifies its argument. `return`, `break`, and `continue` may leave catch blocks and remove the exited handlers; inner loops and switches retain ordinary jump behavior. Prior writes remain in the current transaction. [Reference](efun/catch.md). |
 | Unnamed prototype parameters | Accepts typed parameters without names, including arrays, in prototypes such as `void start_shell(int);`. [Grammar][fl-parameter-grammar], [declarations][fl-variadic-declarations]. | Accepts named, unnamed, and mixed parameter lists in prototypes. Prototypes remain ignored with a warning; calls are checked against definitions, including eligible sibling or child definitions for otherwise unresolved local names. An object being compiled still requires implementations for every call. Definitions and declared closure parameters require names. [Reference](lpc/anatomy_of_a_program.md#function-prototypes). |
 | Trailing call commas | Allows one trailing comma after a nonempty argument list. [Grammar][fl-call-arguments]. | Supports `f(a,)`, including method, inherited, efun and computed function calls, spreads and reference arguments. The comma adds no argument; declaration parameter lists and partial-application slots retain their own syntax. [Reference](lpc/anatomy_of_a_program.md#function-calls). |
@@ -1594,12 +1594,9 @@ contract. Native checks cover real producers, compound field updates,
 cross-object class identity, save/restore and formatting without payload
 mutation. [Class semantics](lpc/classes.md).
 
-Audit the combat callers next. [The main module][lima-effect-combat] assigns
-`damage * 0.5` to an integer and omits the separator argument to `format_list`;
-these now block body/adversary/human compilation. Its action events also pass
-literal zero for the string `target_extra` field. Use `nil` for an absent
-limb name: forwarding numeric zero through the producer fails the class-field
-check in distinct mode. The helper adaptation leaves these callers unchanged.
+The [combat-main adaptation](#lima-combat-main) addresses the next caller
+failures: integer damage halving, an omitted list separator and literal zero
+for absent limb names. The event helper alone leaves these callers unchanged.
 
 The producer's weaponless fallback damage type is a string, while ordinary
 weapons supply an array of names. Searching that fallback with a string needle
@@ -1615,6 +1612,36 @@ A separate `BLOW_SIMPLE`/`HEALTH_LIMBS` producer check finds that its
 limb-name string fails the declared type check. That configuration needs its
 own field adaptation. These checks do not establish full combat, body entry, or support
 for all combat configurations.
+
+#### Lima combat main
+
+Reviewed **27 September 2026** against the pinned [main module][lima-effect-combat].
+Native checks use distinct nil with `BLOW_TYPES`, `HEALTH_LIMBS`, `WIELD_LIMBS`,
+`FORMULA_SKILLS` and `PULSE_HEART_BEAT`; no upstream execution is claimed.
+
+Use `nil` for the absent limb name in dispatch, miss and disarm events. Literal
+zero fails the event class's string-field check. Replace `damage * 0.5` with
+integer division by two, which truncates toward zero without losing precision
+through a float conversion. Supply `"and"` to `format_list` and an explicit zero
+initial value to the `prevent_combat` hook reduction; an omitted seed becomes
+nil and fails its string concatenation.
+
+The silent-message removal loop can retain its original source. Native
+[`foreach`](lpc/foreach.md) retains the collection value at entry, so subtracting
+messages from the source variable does not change the collection being traversed.
+It shares existing array and mapping elements rather than copying them.
+
+Checks cover action events reaching the real queue, integer damage boundaries,
+visible and silent hooks, attack exit paths and direct inheritance. Existing
+policies remain: a hook returning zero alone silently prevents combat; the
+mapping-shaped effect consumer ignores the actual class-array queue; and an
+empty ammunition inventory falls through to ordinary damage. Review these
+mudlib behaviors separately. Ordinary unarmed combat supplies the attacker as
+its weapon; an explicitly nil weapon still fails the direct method call.
+
+Body/adversary/human compilation now reaches `std/adversary/behaviors.c`, which
+assigns literal zero to the object `busy_with`. Full combat and body entry
+remain unvalidated.
 
 #### Lima file metadata
 

@@ -5080,6 +5080,209 @@ mod test_instructions {
     }
 }
 
+mod foreach_collection_binding {
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    use super::*;
+    use crate::test_support::run_prog_with_config;
+
+    async fn succeeds_in_both_modes(code: &str) {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(code, Arc::new(config)).await;
+            assert_eq!(task.result(), Some(1.into()), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn subtracting_from_the_local_binding_keeps_the_original_array() {
+        succeeds_in_both_modes(
+            r##"
+            int create() {
+                string *items = ({ "#silent", "visible" });
+                string visited = "";
+                foreach (string item : items) {
+                    visited += item;
+                    if (item == "#silent") items -= ({ item });
+                }
+                return visited == "#silentvisible" && sizeof(items) == 1;
+            }
+            "##,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_callback_can_rebind_the_global_collection() {
+        succeeds_in_both_modes(
+            r#"
+            int *items = ({ 1, 2, 3 });
+            void replace() { items = ({ 9 }); }
+            int create() {
+                int visited;
+                foreach (int item : items) {
+                    visited = visited * 10 + item;
+                    replace();
+                }
+                return visited == 123 && items[0] == 9;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn rebinding_an_upvalue_keeps_the_original_collection() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                int *items = ({ 1, 2, 3 });
+                function visit = (: {
+                    int visited;
+                    foreach (int item : items) {
+                        visited = visited * 10 + item;
+                        items = ({ 9 });
+                    }
+                    return visited;
+                } :);
+                return visit() == 123 && items[0] == 9;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn mapping_keys_and_values_use_the_original_collection() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                mapping items = ([ "a": 1, "b": 2 ]);
+                int visited;
+                foreach (string key, int value : items) {
+                    if (key == "a" && value == 1) visited += 1;
+                    if (key == "b" && value == 2) visited += 2;
+                    items = ([]);
+                }
+                return visited == 3 && sizeof(items) == 0;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn strings_and_bytes_keep_their_entry_values() {
+        for (ty, original, replacement) in [
+            ("string", "\"ab\"", "\"b\""),
+            (
+                "bytes",
+                "to_bytes(\"ab\", \"utf-8\")",
+                "to_bytes(\"b\", \"utf-8\")",
+            ),
+        ] {
+            succeeds_in_both_modes(&format!(
+                r#"
+                int create() {{
+                    {ty} items = {original};
+                    int visited;
+                    foreach (int item : items) {{
+                        visited = visited * 1000 + item;
+                        items = {replacement};
+                    }}
+                    return visited == 97098 && sizeof(items) == 1;
+                }}
+                "#,
+            ))
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn retained_arrays_and_mappings_still_share_element_mutations() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                int *items = ({ 1, 2 });
+                int *alias = items;
+                int visited;
+                foreach (int item : items) {
+                    visited = visited * 10 + item;
+                    alias[1] = 9;
+                    items = ({});
+                }
+                if (visited != 19) return 0;
+                mapping pairs = ([ "a": 1, "b": 2 ]);
+                mapping same = pairs;
+                int count;
+                int total;
+                foreach (string key, int value : pairs) {
+                    total += value;
+                    if (++count == 1) {
+                        same["a"] = 9;
+                        same["b"] = 9;
+                        total -= value;
+                    }
+                    pairs = ([]);
+                }
+                return count == 2 && total == 9;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn collection_expressions_run_once_per_loop_entry() {
+        succeeds_in_both_modes(
+            r#"
+            int calls;
+            int *items = ({ 1, 2 });
+            int *collection() { calls++; return items; }
+            int create() {
+                int total;
+                for (int i = 0; i < 3; i++) {
+                    foreach (int item : collection()) {
+                        items = ({ 3, 4 });
+                        total += item;
+                    }
+                }
+                return calls == 3 && total == 17;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn nested_loops_capture_independently_and_keep_control_flow() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                int *items = ({ 1, 2, 3 });
+                int total;
+                foreach (int outer : items) {
+                    if (outer == 2) continue;
+                    foreach (int inner : items) {
+                        total += outer * 10 + inner;
+                        items = ({ 9 });
+                        break;
+                    }
+                }
+                items = ({});
+                foreach (int item : items) return 0;
+                return total == 50;
+            }
+            "#,
+        )
+        .await;
+    }
+}
+
 /// The `bytes` value in LPC, built through `to_bytes` since there is no
 /// source literal.
 mod mixed_numeric_comparisons {

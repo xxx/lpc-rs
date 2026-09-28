@@ -2359,7 +2359,8 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         node.collection.visit(self).await?;
-        let collection_location = self.current_result;
+        // Rebinding the source variable must not redirect later element loads.
+        let collection_location = self.save_result(node.collection.span());
 
         let index_location = self.assign_sym_location(FOREACH_INDEX)?;
         // Only the first run of the foreach gets the frame's NULL fill for its index.
@@ -6385,24 +6386,25 @@ mod tests {
         async fn a_mapping_foreach_loads_the_key_then_the_value_after_its_entry_jump() {
             let code = "void create() { mapping m; foreach (k, v : m) { } }";
             let expected = vec![
-                Sizeof(Register(1).as_local(), Register(5).as_local()),
-                Jmp(Address(5)),
+                Copy(Register(1).as_local(), Register(4).as_local()),
+                Sizeof(Register(4).as_local(), Register(6).as_local()),
+                Jmp(Address(6)),
                 LoadMappingKey(
-                    Register(1).as_local(),
                     Register(4).as_local(),
+                    Register(5).as_local(),
                     Register(2).as_local(),
                 ),
                 Load(
-                    Register(1).as_local(),
+                    Register(4).as_local(),
                     Register(2).as_local(),
                     Register(3).as_local(),
                 ),
-                Inc(Register(4).as_local()),
+                Inc(Register(5).as_local()),
                 Jncmp(
                     Comparison::Eq,
-                    Register(4).as_local(),
                     Register(5).as_local(),
-                    Address(2),
+                    Register(6).as_local(),
+                    Address(3),
                 ),
                 Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
@@ -7297,12 +7299,13 @@ mod tests {
             assert_eq!(
                 instructions_of_f(code).await,
                 vec![
-                    Instruction::Sizeof(local(1), local(5)),
-                    Instruction::Jmp(Address(5)),
-                    Instruction::Load(local(1), local(4), local(3)),
+                    Instruction::Copy(local(1), local(4)),
+                    Instruction::Sizeof(local(4), local(6)),
+                    Instruction::Jmp(Address(6)),
+                    Instruction::Load(local(4), local(5), local(3)),
                     Instruction::Add(local(2), local(3), local(2)),
-                    Instruction::Inc(local(4)),
-                    Instruction::Jncmp(Comparison::Eq, local(4), local(5), Address(2)),
+                    Instruction::Inc(local(5)),
+                    Instruction::Jncmp(Comparison::Eq, local(5), local(6), Address(3)),
                     Instruction::Copy(local(2), local(0)),
                     Instruction::Ret,
                 ]
