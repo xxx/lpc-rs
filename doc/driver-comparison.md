@@ -1491,8 +1491,8 @@ review `query_msg`'s declared `string` result alongside its callers and
 prototypes: the registry can hold arrays of alternatives.
 
 The [effects queue adaptation](#lima-effects-queues) lets the actual living
-compile; body compilation now reaches the event-info class helper described
-below. Default message lookup remains blocked by the
+compile; the [event-info adaptation](#lima-combat-event-records) advances body
+compilation into the combat code. Default message lookup remains blocked by the
 [message daemon's][lima-message-daemon] dependency on
 [`m_colours`][lima-message-colours], which assigns a `floor` float result to an
 integer. Default-registry tests use an explicit daemon fixture; a separate real
@@ -1554,9 +1554,57 @@ Two independent consumer issues remain. `base_disease` wraps sliced arguments
 in another array during infection, changing the percentage payload into a nested
 array. Combat expects a mapping of effect objects, whereas `query_effects`
 returns an array of classes. Resolve that contract in the mudlib. Body/adversary
-compilation currently stops at arrow field access in
-[`std/classes/event_info/types.c`][lima-event-info-types]; that helper is a
-separate adaptation boundary.
+compilation advances further with the event-info adaptation below.
+
+#### Lima combat event records
+
+Reviewed **27 September 2026** against the pinned [typed event
+class][lima-event-info-types], [queue producer][lima-event-producer],
+[combat caller][lima-effect-combat] and [combat configuration][lima-combat-config].
+Native execution uses both null modes, `BLOW_TYPES`, `HEALTH_LIMBS` and the same
+adapted master/simul layer as above. These checks combine source review with
+native execution; no upstream driver execution is claimed.
+
+In `event_damage`, replace `evt->data` with `evt.data`. In `event_to_str`, use
+[`sprintf`](efun/sprintf.md) to render object fields and mixed payloads instead
+of concatenating them directly with strings. Formatting only the header leaves
+the original loop failing on mapping payload elements. The adaptation uses
+`%O` for values and `%d` for element indexes. Nested collections use native
+debug rendering, and scalar payloads get an explicit data line. This output is
+diagnostic text: `%O` preserves literal string contents and remains subject to
+the native nesting and output limits.
+
+Preserve the class layout and producer's array/string distinction. Numeric
+damage is wrapped with its damage types; arrays and action strings pass through
+unchanged. Supplied arrays remain shared with the queued event. The helper
+reads the last array element without clamping or validating its type. Its
+declared integer result does not validate a value obtained from `mixed`:
+passing an action string or malformed payload is outside the numeric-damage
+contract. Native checks cover real producers, compound field updates,
+cross-object class identity, save/restore and formatting without payload
+mutation. [Class semantics](lpc/classes.md).
+
+Audit the combat callers next. [The main module][lima-effect-combat] assigns
+`damage * 0.5` to an integer and omits the separator argument to `format_list`;
+these now block body/adversary/human compilation. Its action events also pass
+literal zero for the string `target_extra` field. Use `nil` for an absent
+limb name: forwarding numeric zero through the producer fails the class-field
+check in distinct mode. The helper adaptation leaves these callers unchanged.
+
+The producer's weaponless fallback damage type is a string, while ordinary
+weapons supply an array of names. Searching that fallback with a string needle
+in the [resistance code][lima-combat-blows] fails under native `member_array`;
+normalize the representation or handle both shapes when adapting those
+consumers. Other consumers, including natural armour and the
+[damage sink][lima-combat-damage-sink], use index 1 for damage. That agrees with
+the helper's last-element convention for ordinary two-element payloads;
+arbitrary longer arrays do not have an established shared contract.
+
+A separate `BLOW_SIMPLE`/`HEALTH_LIMBS` producer check finds that its
+[class][lima-event-info-simple] declares `target_extra` as an object; passing a
+limb-name string fails in both modes. That configuration needs its own field
+adaptation. These checks do not establish full combat, body entry, or support
+for all combat configurations.
 
 #### Lima file metadata
 
@@ -2323,3 +2371,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-effect-disease]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/effect/base_disease.c
 [lima-effect-combat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/main.c
 [lima-event-info-types]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/event_info/types.c
+[lima-event-info-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/event_info/simple.c
+[lima-event-producer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/class_types.c
+[lima-combat-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/combat_modules.h
+[lima-combat-blows]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/base.c
+[lima-combat-damage-sink]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_damage_sink.c
