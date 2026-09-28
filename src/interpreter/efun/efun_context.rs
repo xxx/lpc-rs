@@ -528,8 +528,14 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                 );
             }
             t.drop_var(process.position.livings.id);
-            if is_living && let Some(env) = &environment {
-                Process::unmark_living(t, &process, env);
+            if let Some(env) = &environment {
+                t.merge(
+                    env.position.inventory.id,
+                    MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(&process))),
+                );
+                if is_living {
+                    Process::unmark_living(t, &process, env);
+                }
             }
             // A dying shadow leaves its chain.
             if process.shadow.ever_shadowing.load(Ordering::Acquire)

@@ -359,7 +359,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
 | Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
-| Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
+| Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
 | Connection model | [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
@@ -1380,6 +1380,14 @@ Removal has no environment or inventory, and message checks use native
 connection channels. Real container mass/capacity types, inventory predicates
 and message delivery still block body compilation. These checks do not establish
 body entry, full object/body persistence, movement, cleanup or reconnect.
+
+For inventory emptiness checks, `sizeof(all_inventory(container))` counts live
+members, including immediately after a destruction in the same transaction.
+[`deep_inventory`](efun/deep_inventory.md) also excludes destroyed members and
+does not traverse destroyed containers. Neither query revives a destroyed object
+when a new object takes its path. These native guarantees are covered separately
+from the object-foundation migration; they do not adapt Lima's relation or
+capacity bookkeeping.
 
 #### Lima file metadata
 
