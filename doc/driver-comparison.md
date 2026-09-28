@@ -1854,8 +1854,44 @@ back the native attempt. Preserve this policy when adapting the prefix type.
 Checks use real path resolution, cloning and container movement with a recording
 `do_wield` callback. Standalone compilation still needs the receiver's callback;
 actual weapon state, body entry and combat remain unvalidated. Body/adversary/
-human compilation reaches the [stats base][lima-stats-base], where `filter_mapping`
-and literal-zero string resets require adaptation.
+human compilation next needs the [stats base adaptation](#lima-stats-base).
+
+#### Lima stats base
+
+Reviewed and exercised **28 September 2026** against the pinned
+[stats base][lima-stats-base], using distinct nil, `BODY_STATS_LIMA`, skills
+enabled and introductions disabled, with the combat options listed above.
+No upstream execution is claimed.
+
+Replace `filter_mapping` with [`filter`](efun/filter.md), and reset the cached
+description with nil in both `clear_description` and `init_stats`. FluffOS's
+core alias passes the mapping key and value to the predicate, matching this
+caller's use of `$1` as a key. These source findings were reviewed at revision
+`44532e02` with `F_FILTER` enabled; no optional package is required.
+[Declaration][fl-stats-filter-spec], [implementation][fl-stats-filter-mapping].
+
+Those compile fixes are insufficient for initialization. Default the base
+module's absent numeric reads to zero, and populate zero-valued modifiers for
+known stat names before reset refreshes the scores. Lima's initializer writes
+base scores into an empty mapping; clearing only existing modifiers leaves nil
+operands in its arithmetic. For increment, initialize an absent entry to zero
+and retain `++`, preserving rejection of string and mapping values. The numeric
+reader defaults nil only; it does not validate or convert other stored values.
+
+Preserve broad key-prefix matching, including `"stat"` matching `"static"`.
+Filtered mappings share nested values, while `query_stats` deep-copies them.
+Hook sums retain their existing callback behavior: caught errors preserve
+earlier mutations, and uncaught errors roll back the native attempt.
+
+Checks exercise the base through inheritance and inclusion with real hooks and
+the colour daemon. The [default Lima stats module][lima-stats] also initializes
+with controlled numeric matrix and skill callbacks, but still needs follow-up:
+an existing bonus during initialization reads an absent derived score, direct
+modifier reset leaves derived scores cached until recomputation, and child
+getter overrides retain direct mapping reads. Full body, combat, saved-stat
+migration and alternate stat systems remain unvalidated. Body compilation now
+reaches the float-to-int `max_skill` assignment in the
+[monster setup module][lima-monster-setup].
 
 #### Lima file metadata
 
@@ -2640,5 +2676,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-armour]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/armour_base.c
 [lima-combat-wield]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/wield_base.c
 [lima-stats-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/base.c
+[lima-monster-setup]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/monster.c
+[fl-stats-filter-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L290-L292
+[fl-stats-filter-mapping]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/mapping.cc#L1024-L1107
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
