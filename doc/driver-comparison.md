@@ -1490,13 +1490,73 @@ current object, so an orphan's contents can receive the action twice. Also
 review `query_msg`'s declared `string` result alongside its callers and
 prototypes: the registry can hold arrays of alternatives.
 
-Body compilation now reaches [`std/living/effects.c`][lima-message-effects],
-where an arrow field access needs review. Default message lookup remains blocked
-by the [message daemon's][lima-message-daemon] dependency on
+The [effects queue adaptation](#lima-effects-queues) lets the actual living
+compile; body compilation now reaches the event-info class helper described
+below. Default message lookup remains blocked by the
+[message daemon's][lima-message-daemon] dependency on
 [`m_colours`][lima-message-colours], which assigns a `floor` float result to an
 integer. Default-registry tests use an explicit daemon fixture; a separate real
 lookup confirms the blocker. Message-file loading, full body entry and combat
 remain unvalidated.
+
+#### Lima effects queues
+
+Reviewed **27 September 2026** against the pinned [effects module][lima-effects],
+[effect class][lima-effect-class], [disease implementation][lima-effect-disease]
+and [combat consumer][lima-effect-combat]. Native execution uses both null modes
+and the same master/simul layer and container configuration as above; upstream
+driver behavior was not executed.
+
+Use `.name` for the class field in `find_effect_indexes_matching`. A compiling
+module also needs queue repairs: the source has no tail append, adjusts the
+wrong relative delays, tests a void removal result, and constructs head prefixes
+with `[0..-1]`. That prefix is the whole array under native negative-bound
+slicing. Explicitly handle empty prefixes, preserve surviving deadlines, keep
+arrival order at equal deadlines and return a meaningful removal result.
+`find_effect` returns a class or integer zero and should not declare an integer
+result. [Classes](lpc/classes.md), [indexing](lpc/indexing.md).
+
+Keep one owned timer ID and cancel it when replacing the head or clearing the
+queue. Query that ID with [`query_call_out`](efun/query_call_out.md), synchronize
+the remaining head delay before editing the queue, and retain the existing timer
+when its head is unchanged. The adopted adapter keeps integer-second class
+fields, rounding the remaining milliseconds upward; changed deadlines retain
+whole-second granularity. Other timers on the same object are left alone.
+A direct `next_effect` call consumes the pending timer too.
+
+Retain the counter convention: positive N runs N ticks followed by an end hook
+on the next interval, zero ends at the first firing, and negative counts repeat.
+Omitted repeat/interval arguments select the effect's defaults; explicit zeros
+do not. Function intervals must return integers. Negative delays are queued as
+zero. The stored class layout and [`deep_copy`](efun/deep_copy.md) isolation are
+preserved. Native save/restore preserves the queue, while timer ownership and
+callback guards are nosave state. Reinstatement immediately processes the first
+entry of a restored queue; calling it again on an active queue does nothing.
+There is no offline elapsed-time calculation.
+
+Retire a missing effect or a failing tick/end/reinstate hook and continue the
+remaining queue. The adapter reports caught errors through `dump`; native
+[`catch`](efun/catch.md) retains callback writes preceding the error. This is
+not a nested rollback. A failing start hook propagates without inserting the
+new effect. Removing or clearing an effect during its callback prevents its
+reinsertion, and reentrant dispatch/reinstatement does nothing. Clear detaches
+its entries before end hooks; effects those hooks explicitly add survive.
+Ordinary removal continues to omit end hooks. Driver-level task aborts still
+follow the native transaction rules.
+
+Native checks exercise mixed queues, cancellation, callback failures and
+mutation, elapsed head time, concurrent additions, persistence, an isolated cold
+cycle and actual living initialization. The broader retained migration suite
+also runs against the adapter. These checks do not establish full body login,
+combat, offline timing or effects retained across live recompilation.
+
+Two independent consumer issues remain. `base_disease` wraps sliced arguments
+in another array during infection, changing the percentage payload into a nested
+array. Combat expects a mapping of effect objects, whereas `query_effects`
+returns an array of classes. Resolve that contract in the mudlib. Body/adversary
+compilation currently stops at arrow field access in
+[`std/classes/event_info/types.c`][lima-event-info-types]; that helper is a
+separate adaptation boundary.
 
 #### Lima file metadata
 
@@ -2258,3 +2318,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-message-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/messages_d.c
 [lima-message-effects]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/living/effects.c
 [lima-message-colours]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_colours.c
+
+[lima-effect-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/effect.c
+[lima-effect-disease]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/effect/base_disease.c
+[lima-effect-combat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/main.c
+[lima-event-info-types]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/event_info/types.c
