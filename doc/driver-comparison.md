@@ -1304,15 +1304,82 @@ character as a second account; repeated registration of the same owner is a
 no-op. Use `objectp` filtering for body enumeration so distinct nil does not
 survive subtraction of integer zero.
 
-This migration does not resolve full body entry or cleanup. The real human race
-still fails at `stat_roll_mods`, and the standard body has earlier inherited
-compile blockers. The retained audit reproduces failed entry recovery in the
+This migration does not resolve full body entry or cleanup. The object foundation
+adaptation below resolves the human race's `stat_roll_mods` visibility error,
+but container compilation still blocks the body. The retained audit reproduces
+failed entry recovery in the
 auto-wizard/first-admin route. With a body fixture, ordinary user cleanup and
 link-dead expiry can fail destruction authorization; scoped authority for the
 owned body succeeds, but a throwing cleanup still leaves the user attached.
 Those remain explicit integration tasks, including the policy for partial
 effects when an error is caught. The fixtures do not establish body persistence,
 reconnect or a complete playable login.
+
+#### Lima object foundation
+
+Reviewed **27 September 2026** against the pinned [standard object][lima-object],
+[description][lima-description], [names][lima-names], [flags][lima-flags],
+[hooks][lima-hooks], [message recipient][lima-recipient] and
+[Lima stats module][lima-stats] sources. Native checks use both null modes,
+`__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES`, `BODY_STATS_LIMA`, `USE_MASS`,
+`METRIC` and `USE_SKILLS`, with `USE_SIZE` disabled and the adapted
+master/simul/security policy. These are source review and native execution
+checks, without upstream driver execution.
+
+Use protected inheritance for `CLASS_STATMODS` in the configured stats module
+when descendants name its `stat_roll_mods` class. A private inherit hides that
+class from descendants under native [visibility rules](lpc/inheritance.md).
+The alternate DND and Rifts stats configurations need separate validation.
+Keep description backing fields private: a descendant's bare `long()` resolves
+the method without exposing the same-named field. No receiver workaround or
+saved-field rename is needed. See [callable name resolution](lpc/function_type.md).
+
+Use configured `nil` for absent strings and mappings, and floating-point literals
+for float defaults. Keep absent flag-map entries explicitly numeric zero before
+bitwise operations, including nonpersistent flag sets. Format fractional mass
+and value explicitly with [`sprintf`](efun/sprintf.md). Pass `this_object()` to
+[`file_name`](efun/file_name.md) and retain extensionless path comparisons.
+
+Pass `pluralize` and `resync_visibility` as bare callbacks. A native closure whose
+body is just a function name returns that function value; it does not invoke it.
+Pluralization stays in Lima's language module. Replace hook folding through
+`implode` with [`reduce`](efun/reduce.md) and initialize sum accumulators to zero.
+Use [`function_info`](efun/function_info.md)'s owner field with
+[`objectp`](efun/objectp.md) to discard callbacks whose owners were destroyed;
+native [`functionp`](efun/functionp.md) is a predicate, not an owner-status
+bitmask. Retain callback registration order, argument forwarding and each hook
+mode's empty default.
+
+The [verb-support module][lima-object-verbs] must compile in ordinary objects
+without container methods. After checking `is_container()`, call the public
+`is_relation_alias` and `get_relations` methods through the receiver. Do not
+depend on the container's private `valid_relation` helper. Capability fixtures
+exercise these calls; they do not establish real container behavior.
+
+For the reviewed string-only recipient calls, guard
+[`write_socket(msg)`](efun/write_socket.md) with `interactive(this_object())`.
+This writes directly to the current object's connection, bypasses `catch_tell`,
+and keeps noninteractive delivery silent instead of producing debug output.
+It also works under Lima's existing master compilation policy: explicit
+`efun::tell_object` calls from this module are denied, and the simul-efun
+`tell_object` wrapper rejects calls. Bare `tell` would re-enter the recipient.
+[Master policy][lima-master], [simul-efun overrides][lima-overrides].
+Keep that policy intact; standalone host compilation does not exercise
+[`valid_override`](apply/master/valid_override.md), so test an LPC-triggered
+load as well. The reviewed FluffOS `receive` implementation also writes directly
+to the current interactive connection. Its buffer input is outside this
+string-only adaptation. FluffOS's core
+`F_RECEIVE` path was reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0`, separately from the overview revision.
+[Implementation][fl-object-receive], [declaration][fl-object-receive-spec].
+
+Execution checks cover actual object initialization and cloning, independent
+clone state, names, flags, descriptions, hook folding and destroyed owners,
+fractional mass/value, attached-connection delivery and simple self-removal.
+Removal has no environment or inventory, and message checks use native
+connection channels. Real container mass/capacity types, inventory predicates
+and message delivery still block body compilation. These checks do not establish
+body entry, full object/body persistence, movement, cleanup or reconnect.
 
 #### Lima file metadata
 
@@ -2053,3 +2120,12 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-user-bodies]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/bodies.c
 [lima-body-switching]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/sw_body.c
 [lima-body]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body.c
+[lima-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object.c
+[lima-description]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/description.c
+[lima-names]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/names.c
+[lima-flags]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/flags.c
+[lima-recipient]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/msg_recipient.c
+[lima-stats]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/lima.c
+[lima-object-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/vsupport.c
+[fl-object-receive]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L1750-L1773
+[fl-object-receive-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec
