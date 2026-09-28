@@ -27,7 +27,7 @@ performed. [Implementation][fl-callouts], [declaration][fl-core-spec].
 Timer argument forwarding and lookup were additionally reviewed on
 **26 September 2026** at the listed FluffOS revision. These are core efuns;
 [Lima's configuration][lima-timer-config] enables `this_player in call_out`.
-The event/help adaptations below were exercised on lpc-rs in both null modes,
+The event/help adaptations below were exercised on lpc-rs,
 without FluffOS execution or a timing comparison.
 [Scheduling][fl-callout-reference], [lookup][fl-find-callout].
 FluffOS snooping was source-reviewed on **24 September 2026** at the listed
@@ -43,12 +43,12 @@ The FluffOS `clonep` reference was reviewed on **26 September 2026** at the
 same revision, with the core efun enabled; no cross-driver execution was
 performed. [Reference][fl-clonep], [declaration][fl-core-spec].
 The Lima object-caller and state-scheduling adaptations below were reviewed on
-**26 September 2026** at its listed revision and exercised on lpc-rs in both
-null modes. No FluffOS execution was performed.
+**26 September 2026** at its listed revision and exercised on lpc-rs.
+No FluffOS execution was performed.
 Lima's command base and stdio adaptations were also reviewed on that date at
 its listed revision, with `SENSIBLE_MODIFIERS` enabled and function profiling
 disabled. The four object commands were exercised with the adapted master and
-simul-efuns in both null modes, using fixture shell/user objects. This is not a
+simul-efuns, using fixture shell/user objects. This is not a
 complete shell or Lima boot. The coordinated pipeline adaptation was exercised
 on the same date using its actual parser module and fixture command lookup.
 [Command base][lima-command-base], [stdio][lima-command-stdio],
@@ -65,7 +65,7 @@ package; no cross-driver execution was performed. [Getter][fl-master-getter],
 FluffOS object restoration and saved-string encoding were source-reviewed on
 **26 September 2026** at the listed revision. These are core persistence paths;
 compressed saves additionally require `HAVE_ZLIB`. Lima's shared daemon module
-uses uncompressed saves. The port was exercised on lpc-rs in both null modes;
+uses uncompressed saves. The port was exercised on lpc-rs;
 no FluffOS execution was performed. [Restore reference][fl-restore-object],
 [persistence implementation][fl-object-persistence].
 
@@ -560,7 +560,7 @@ save import still require further driver support. See [class support](lpc/classe
 |---|---|---|
 | Random selection helpers | `random(n)` selects an index below a positive bound and returns zero for a zero bound. Empty array indexing errors; string indexing at the final boundary returns integer zero. String positions are graphemes: the reviewed index helper can return only the first codepoint of a short multi-scalar cluster, while longer clusters can error. [Random][fl-random], [length][fl-grapheme-length], [indexing][fl-string-read], [UTF-8 helper][fl-string-read-scalar]. | Lima's `choice` can remain an LPC helper using predicates, [`random`](efun/random.md), [`keys`](efun/keys.md) and [indexing](lpc/indexing.md). Return array elements or mapping values with their existing identities; select mappings by entry, including repeated equal values. String input returns an integer Unicode scalar, with combining marks and joiners occupying separate positions. Preserve zero for an empty string and errors for empty arrays/maps. Guard legitimately empty lists before selecting: testing the result afterward cannot handle an indexing error. Recheck lists after actions that may change them, such as sweep's first hit. |
 | Array shuffling | `shuffle` reorders its argument in place, returns that same array, and leaves arrays shorter than two elements unchanged. Aliases observe the new order; element references are preserved. Requires `PACKAGE_CONTRIB`. [Reference][fl-shuffle], [implementation][fl-shuffle-source]. | There is no native `shuffle`; an LPC Fisher–Yates helper can use [`random`](efun/random.md) and array element assignments while preserving identity and aliases. A weighted selector such as Lima's `element_of_weighted` can omit its shuffle: for nonnegative integer weights with a positive, nonoverflowing total, each key still receives probability `weight / total`. A two-pass helper can total the weights and select with one draw, preserving the distribution while changing random-number consumption. Validate weights and overflow explicitly; choose the configured null result for empty/all-zero input. Native `random` rejects negative bounds, whereas the reviewed FluffOS entry point returns zero. [Source][fl-random]. |
-| Regex association | `reg_assoc` returns parallel arrays of alternating gaps/matches and their labels. Earliest matches win, with pattern order breaking ties. Each search uses the remaining suffix; the default gap label is integer zero. `pcre_assoc` uses PCRE. [Reference][fl-reg-assoc], [core source][fl-reg-assoc-source], [PCRE source][fl-pcre-assoc]. | A mudlib simul can build the association arrays with [`regmatch`](efun/regmatch.md) and `RE_MATCH_SUBS`; there is no native association efun. Preserve empty gaps and advance empty matches by a Unicode scalar without dropping intervening text. Use an explicit `0` default label when callers require it in both null modes. Searching a suffix retains the legacy anchor context; an offset into the original text preserves its anchors instead. Review patterns for the [native regex dialect](efun/regexp.md#dialect), scalar indexing and embedded NUL support. This does not supply full PCRE compatibility. Repeated `regmatch` calls recompile their patterns, so measure frequent calls or inputs with many matches. |
+| Regex association | `reg_assoc` returns parallel arrays of alternating gaps/matches and their labels. Earliest matches win, with pattern order breaking ties. Each search uses the remaining suffix; the default gap label is integer zero. `pcre_assoc` uses PCRE. [Reference][fl-reg-assoc], [core source][fl-reg-assoc-source], [PCRE source][fl-pcre-assoc]. | A mudlib simul can build the association arrays with [`regmatch`](efun/regmatch.md) and `RE_MATCH_SUBS`; there is no native association efun. Preserve empty gaps and advance empty matches by a Unicode scalar without dropping intervening text. Use an explicit `0` default label when callers require numeric zero. Searching a suffix retains the legacy anchor context; an offset into the original text preserves its anchors instead. Review patterns for the [native regex dialect](efun/regexp.md#dialect), scalar indexing and embedded NUL support. This does not supply full PCRE compatibility. Repeated `regmatch` calls recompile their patterns, so measure frequent calls or inputs with many matches. |
 | Array and mapping predicates | `pointerp` tests arrays; `arrayp` is an alias. `mapp` tests mappings. Each returns integer `1` for its type and `0` otherwise. [Declarations][fl-core-spec], [implementations][fl-type-predicates]. | Use [`arrayp`](efun/arrayp.md) and [`mappingp`](efun/mappingp.md). Rename `pointerp` and `mapp` calls or provide simul wrappers. These predicates test container type, independently of whether the container is empty. |
 | Type inspection | `typeof` returns a string such as `"int"` or `"float"`; its `T_*` constants name those strings. [Reference][fl-typeof], [implementation][fl-typeof-source]. | [`typeof`](efun/typeof.md) returns an integer type tag. Replace simple checks with predicates such as [`intp`](efun/intp.md) and [`floatp`](efun/floatp.md), or define mudlib constants for the native tags when retaining a switch. String-valued foreign constants will not match. For a numeric variadic helper such as Lima's `sum`, validate each argument before adding it; numeric strings and nested arrays remain invalid. Call `sum(values...)` to spread an array, or use Lima's `array_sum(values)` wrapper. Preserve integer accumulation and the switch to floating arithmetic when a float is encountered; nil acts as zero only in zero mode. |
 | Character input | `get_char` delivers one UTF-8 character or control byte, then returns to line mode unless rearmed. Its reference specifies first-registration-wins and extra arguments after the input. [Reference][fl-get-char]. | [`get_char`](efun/get_char.md) shares transactional registration with `input_to`; the last registration wins across both APIs. Its second argument is boolean no-echo; use ordinary pointer binding for extra arguments, which precede the character. Classic SGA negotiation is supported; RFC LINEMODE is refused. Unread input is preserved across mode changes. Audit repeated registrations, callback argument order, and flag use. |
@@ -626,6 +626,16 @@ save import still require further driver support. See [class support](lpc/classe
 | Named global reads and writes | `fetch_variable(name, object?)` and `store_variable(name, value, object?)` default to the current object. Lookup takes the first match, searching inherits before the object's own globals. The implementation rejects a private match on a foreign target; it does not enforce the reference's public-only description. Self-access includes private globals, and `nosave` globals remain accessible. The setter copies the value without a declared-type check. [References][fl-fetch-variable], [setter][fl-store-variable], [implementation][fl-named-globals], [lookup][fl-global-lookup], [assignment][fl-global-assignment]. | Read through [`variable_info`](efun/variable_info.md); no native `fetch_variable` is needed for a name lookup. The native setter takes the target **first**, requires a live object, and accepts an optional exact declaring-source path. Duplicate names require that selector; it does not choose the first match. Writes check retained types, configured nil semantics and scalar class identity. Foreign writes require [`valid_store_variable`](apply/master/valid_store_variable.md), including public fields, separately from inspection permission. Update argument order, duplicate-name handling, type assumptions, and master policy together. |
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
 | Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
+
+#### Lima port configuration
+
+The Lima port targets **`LPC_NULL_MODE=distinct`**. Its adaptations and active
+validation use that configuration only. Earlier local runs also exercised
+zero mode; those results are historical evidence, not a Lima compatibility
+requirement. The driver supports both settings for different mudlibs, with
+separate native tests for each. Distinct nil does not emulate FluffOS
+`undefinedp` metadata; mapping membership and omitted arguments still need
+the adaptations described below.
 
 #### Lima event and help timers
 
@@ -798,7 +808,7 @@ boot remain separate work.
 
 Reviewed 27 September 2026 against the pinned [CMD_D][lima-command-daemon] and
 [getopt][lima-shell-getopt] sources. Execution checks use the LPC adaptation
-with `LPC_NULL_MODE=zero` and `distinct`, `__SENSIBLE_MODIFIERS__` defined,
+with `LPC_NULL_MODE=distinct`, `__SENSIBLE_MODIFIERS__` defined,
 and the adapted master/simul-efuns. These are not cross-driver execution tests.
 
 Parenthesize assignments inside logical conditions, use native class member
@@ -844,7 +854,7 @@ separate work.
 
 Reviewed 27 September 2026 against the pinned [M_SAVE][lima-save-module],
 [shell][lima-shell] and [wish][lima-wish] sources. Execution checks use the LPC
-adaptation in both null modes, with `__SENSIBLE_MODIFIERS__` and
+adaptation with distinct nil, `__SENSIBLE_MODIFIERS__` and
 `EVERYTHING_SAVES` defined and the adapted master/simul-efuns. These are native
 execution tests with receiving-object fixtures, not cross-driver or full-login
 tests.
@@ -910,7 +920,7 @@ Reviewed on **27 September 2026** at the pinned Lima revision: the
 [destruction wrapper][lima-overrides], [master][lima-master],
 [shell][lima-shell] and [user shell lifecycle][lima-user-shell]. The wrapper and
 master routines are unconditional in that snapshot. Native execution checks
-use both null modes, the adapted master/simul/security daemon, and actual shell
+use distinct nil, the adapted master/simul/security daemon, and actual shell
 inheritance with `__SENSIBLE_MODIFIERS__` and `EVERYTHING_SAVES` defined. No
 FluffOS execution or complete Lima login/logout is claimed.
 
@@ -972,7 +982,7 @@ Reviewed **27 September 2026** against the pinned [wish][lima-wish],
 [base shell][lima-shell], [prompt][lima-shell-prompt],
 [history][lima-shell-history], [input forwarding][lima-input-forwarding],
 [XTERM256_D][lima-xterm] and [ANSI_D][lima-ansi] sources. Native execution checks
-use both null modes, `__SENSIBLE_MODIFIERS__` and `EVERYTHING_SAVES`, the adapted
+use distinct nil, `__SENSIBLE_MODIFIERS__` and `EVERYTHING_SAVES`, the adapted
 master/simul/security policy, and full wish. The user fixture captures modal
 callbacks; these checks do not establish real modal input, login or FluffOS
 execution.
@@ -1027,7 +1037,7 @@ body/logout integration remains separate work.
 
 Reviewed **27 September 2026** against the pinned [input stack][lima-inputsys]
 and [input forwarding module][lima-input-forwarding]. Native execution checks
-use both null modes, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES` and the adapted
+use distinct nil, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES` and the adapted
 master/simul/security policy. A fixture user inherits the real input stack;
 checks execute the callbacks registered with its native connection and include
 full wish dispatch. This exercises mudlib dispatch and committed registrations,
@@ -1068,7 +1078,7 @@ Body/logout ownership and character-shell key bindings remain separate work.
 
 Reviewed 27 September 2026 against the pinned [Lima login][lima-login],
 [master][lima-master] and [user daemon][lima-user-daemon], with `USE_USER_MENU`
-enabled. Native checks use both null modes, the actual master/simul/security
+enabled. Native checks use distinct nil, the actual master/simul/security
 objects, full primary and backup users, and committed input callbacks. They
 cover admission and password handling; no complete game login or FluffOS
 execution is established.
@@ -1141,7 +1151,7 @@ Reviewed 27 September 2026 against the pinned [input system][lima-inputsys],
 [GMCP module][lima-user-gmcp] and [FluffOS transport][fl-telnet]. Lima has
 `USE_USER_MENU` enabled; the reviewed FluffOS configuration defaults
 `enable gmcp` to `0`. Upstream behavior was reviewed in source. Native tests use
-real loopback Telnet connections in both null modes with Lima's full
+real loopback Telnet connections with distinct nil and Lima's full
 master/simul/security and user objects. Terminal-negotiation handoff tests use
 a menu fixture; a separate [player menu test](#lima-player-menu-and-frames)
 exercises the real menu over Telnet. Complete gameplay login and upstream
@@ -1194,8 +1204,8 @@ Reviewed **27 September 2026** against the pinned [frame module][lima-frame],
 [menu library][lima-menu], [player menu][lima-player-menu],
 [player shell][lima-pshell] and [user messages][lima-user-messages]. The reviewed
 [configuration][lima-menu-config] enables `USE_USER_MENU`, with auto-login after
-10 seconds and a 300-second menu idle timeout. Native checks use both null
-modes, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES` and the adapted
+10 seconds and a 300-second menu idle timeout. Native checks use distinct nil,
+`__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES` and the adapted
 master/simul/security objects. They include real authenticated menu input and
 quit over loopback Telnet; upstream execution remains untested.
 
@@ -1248,7 +1258,7 @@ entry, bodyful logout and actual player-command integration remain separate work
 Reviewed **27 September 2026** against the pinned [USER_D][lima-user-daemon],
 [user body records][lima-user-bodies], [login][lima-login],
 [body switching][lima-body-switching] and [body][lima-body] sources. Native
-checks use both null modes, `USE_USER_MENU`, `__SENSIBLE_MODIFIERS__` and
+checks use distinct nil, `USE_USER_MENU`, `__SENSIBLE_MODIFIERS__` and
 `EVERYTHING_SAVES`, with the adapted master/simul/security policy. The reviewed
 configuration also enables `AUTO_WIZ`. Upstream behavior is source-reviewed;
 these are native execution checks, without upstream driver execution.
@@ -1321,7 +1331,7 @@ reconnect or a complete playable login.
 Reviewed **27 September 2026** against the pinned [standard object][lima-object],
 [description][lima-description], [names][lima-names], [flags][lima-flags],
 [hooks][lima-hooks], [message recipient][lima-recipient] and
-[Lima stats module][lima-stats] sources. Native checks use both null modes,
+[Lima stats module][lima-stats] sources. Native checks use distinct nil,
 `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES`, `BODY_STATS_LIMA`, `USE_MASS`,
 `METRIC` and `USE_SKILLS`, with `USE_SIZE` disabled and the adapted
 master/simul/security policy. These are source review and native execution
@@ -1398,7 +1408,7 @@ the error keeps the destruction; a committed removal stays absent from lookup.
 
 Reviewed **27 September 2026** against the pinned [container][lima-container],
 [movement][lima-container-move] and [user object][lima-container-user] sources.
-Native checks use both null modes, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES`,
+Native checks use distinct nil, `__SENSIBLE_MODIFIERS__`, `EVERYTHING_SAVES`,
 `BODY_STATS_LIMA`, `USE_MASS`, `METRIC` and `USE_SKILLS`, with `USE_SIZE`
 disabled. The size-based configuration needs separate validation. These are
 source review and native execution checks, without upstream driver execution.
@@ -1452,7 +1462,7 @@ remain open.
 
 Reviewed **27 September 2026** against the pinned [message module][lima-messages],
 [living message wrapper][lima-living-messages], [grammar][lima-message-grammar]
-and [string helpers][lima-message-strings]. Native checks use both null modes
+and [string helpers][lima-message-strings]. Native checks use distinct nil
 and the container configuration above, with the adapted master/simul layer.
 These are source review and native execution checks, without upstream driver
 execution.
@@ -1503,7 +1513,7 @@ remain unvalidated.
 
 Reviewed **27 September 2026** against the pinned [effects module][lima-effects],
 [effect class][lima-effect-class], [disease implementation][lima-effect-disease]
-and [combat consumer][lima-effect-combat]. Native execution uses both null modes
+and [combat consumer][lima-effect-combat]. Native execution uses distinct nil
 and the same master/simul layer and container configuration as above; upstream
 driver behavior was not executed.
 
@@ -1561,7 +1571,7 @@ compilation advances further with the event-info adaptation below.
 Reviewed **27 September 2026** against the pinned [typed event
 class][lima-event-info-types], [queue producer][lima-event-producer],
 [combat caller][lima-effect-combat] and [combat configuration][lima-combat-config].
-Native execution uses both null modes, `BLOW_TYPES`, `HEALTH_LIMBS` and the same
+Native execution uses distinct nil, `BLOW_TYPES`, `HEALTH_LIMBS` and the same
 adapted master/simul layer as above. These checks combine source review with
 native execution; no upstream driver execution is claimed.
 
@@ -1602,8 +1612,8 @@ arbitrary longer arrays do not have an established shared contract.
 
 A separate `BLOW_SIMPLE`/`HEALTH_LIMBS` producer check finds that its
 [class][lima-event-info-simple] declares `target_extra` as an object; passing a
-limb-name string fails in both modes. That configuration needs its own field
-adaptation. These checks do not establish full combat, body entry, or support
+limb-name string fails the declared type check. That configuration needs its
+own field adaptation. These checks do not establish full combat, body entry, or support
 for all combat configurations.
 
 #### Lima file metadata
@@ -1657,8 +1667,8 @@ inherited-program handling and completion reporting explicitly.
 
 Lima's [master][lima-master] and [preload list][lima-preload] were reviewed on
 **24 September 2026** at `eefaff66adcae9b01e16059574c925b0d63e70a1`.
-The adapted master and complete simul library were exercised on lpc-rs in both
-null modes. This establishes the tested startup contracts, not a complete Lima
+The adapted master and complete simul library were exercised on lpc-rs. This
+establishes the tested startup contracts, not a complete Lima
 boot or execution on FluffOS.
 
 File policies need the native argument order:
@@ -1703,7 +1713,7 @@ and user login remain separate porting work.
 Lima's [security daemon][lima-security] and [`m_access`][lima-access] were
 reviewed on **24 September 2026** at
 `eefaff66adcae9b01e16059574c925b0d63e70a1`. The adapted daemon, full simuls and
-master were exercised together on lpc-rs in both null modes, using Lima's
+master were exercised together on lpc-rs with distinct nil, using Lima's
 `SENSIBLE_MODIFIERS` configuration. This is native execution and upstream source
 review, not cross-driver execution or a complete Lima boot.
 
@@ -1755,7 +1765,7 @@ errors that `load_object` would turn into null; authorize that specific
 
 Source authorization was reviewed on **24 September 2026** at the listed
 FluffOS revision and Lima revision above; the adapted master was exercised on
-lpc-rs in both null modes on **25 September 2026**. This is upstream source
+lpc-rs with distinct nil on **25 September 2026**. This is upstream source
 review and native execution, not cross-driver execution or a complete Lima boot.
 FluffOS's [file loader][fl-source-load] and [include reader][fl-source-include]
 pass the master as the caller to [file permission checks][fl-file-permission].
@@ -1794,7 +1804,7 @@ lifecycle operations; review those policies independently.
 Lima's [`m_daemon_data` module][lima-daemon-data] was reviewed on
 **26 September 2026** at the pinned Lima revision above, with
 `SENSIBLE_MODIFIERS` enabled. The adapted module, real master, full simuls and
-security daemon were exercised together on lpc-rs in both null modes. This is
+security daemon were exercised together on lpc-rs with distinct nil. This is
 native execution and upstream source review, not cross-driver execution or a
 complete Lima boot.
 
@@ -1842,8 +1852,8 @@ migration is validated. [Bundled data][lima-data], [source string codec][fl-obje
 
 Preserve saved numeric zeros explicitly when migrating. The two bundled guild
 records contain ten zero-valued fields declared `string *`. Keeping those zeros
-makes their native class records valid in zero mode but invalid in distinct-null
-mode. Supporting the latter requires a deliberate schema or value conversion;
+makes their native class records invalid in the Lima port's distinct nil
+configuration. Loading them requires a deliberate schema or value conversion;
 the migration must not silently reinterpret these zeros as `nil`. The other
 nine bundled saves can be converted without this class-field conflict. The
 reviewed migration retains existing content anomalies, including invalid dates
@@ -1869,8 +1879,12 @@ initialization; replacing these names alone does not establish a complete boot.
 
 Lima's remaining `copy` calls were reviewed on **26 September 2026** at the
 pinned revisions, with `PACKAGE_CONTRIB` enabled for FluffOS. Native tests cover
-adapted group/task getters, the migrated method table, and extracted class,
-socket-table and hook callers; no cross-driver execution was performed.
+the adapted group daemon and extracted task/method getters, class, socket-table
+and hook callers; no cross-driver execution was performed. The full
+[method][lima-method], [party][lima-party] and [task][lima-task] daemons still
+contain numeric-zero returns incompatible with their declared reference types
+under distinct nil; those are remaining port blockers.
+
 Use [`deep_copy`](efun/deep_copy.md) for these snapshots and working copies.
 String and numeric table keys retain their comparisons. FTP's socket-object
 keys and references also retain identity, as do hook callbacks; copying a
@@ -1917,10 +1931,9 @@ NULs, and converts integers outside the native integer range to floats, which
 may lose precision. The `-0` token retains floating negative zero.
 
 JSON booleans decode to integer 1/0 and encode back as numbers. JSON null becomes
-the [configured null](lpc/null.md): zero mode loses its distinction from integer
-zero; distinct nil encodes as `null`. Code requiring the old coercion or filtering
-policies should implement them explicitly around the native efuns. The inventory
-found no external JSON-helper consumers in the reviewed Lima tree; downstream
+[distinct nil](lpc/null.md) in the Lima port and encodes back as `null`. Code
+requiring the old coercion or filtering policies should implement them explicitly
+around the native efuns. The inventory found no external JSON-helper consumers in the reviewed Lima tree; downstream
 applications may have their own contracts.
 
 #### FluffOS parser package
@@ -2286,6 +2299,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-newsdata]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c#L136-L158
 [lima-ftp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/ftp_d.c
 [lima-hooks]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/hooks.c
+[lima-method]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/method_d.c
 [lima-task]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/task_d.c
 [lima-effects]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/living/effects.c
 [lima-preload]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
