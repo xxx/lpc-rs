@@ -1759,9 +1759,48 @@ Checks cover the included and inherited target module, reciprocal combat links
 and real inventory traversal. The [heartbeat pulse][lima-combat-pulse] check
 records scheduler requests and calls the heartbeat manually; it does not
 establish native heartbeat scheduling. Pulse-module adaptation remains pending.
-Full combat and body entry remain unvalidated. Body/adversary/human compilation
-now reaches the [adversary message module][lima-combat-messages] at line 149,
-where a debug expression adds an object to a string.
+Full combat and body entry remain unvalidated. The
+[adversary message adaptation](#lima-combat-messages) handles diagnostic
+rendering and combat preference callbacks.
+
+#### Lima combat messages
+
+Reviewed and exercised **28 September 2026** against the pinned
+[adversary message module][lima-combat-messages]. Native checks use distinct nil
+with `BLOW_TYPES`, `HEALTH_LIMBS`, `WIELD_LIMBS`, `FORMULA_SKILLS` and
+`PULSE_HEART_BEAT`; random targeting stays disabled. No upstream execution is
+claimed.
+
+Use [`sprintf`](efun/sprintf.md) in the missing-target diagnostic: `%O` renders
+the actor, weapon and possibly nil limb; `%d` renders the integer percentage.
+Object values cannot be concatenated directly with strings. Pass bare
+`message_filter` callbacks in `dodge_message` and `handle_message`; the original
+`(: message_filter :)` returns a truthy function value and ignores preferences.
+
+Capture `omess` after selecting an array alternative and before resolving its
+leading `!` message key. Otherwise, `handle_message(({"!miss"}), ...)` retains
+the array as filter metadata and bypasses the recipient's hide-misses setting.
+Keep the selected key for filtering even when the damage-source registry returns
+an array of rendering templates; the message composer handles those alternatives.
+
+Preserve the existing delivery policies. Normal combat filters the room before
+propagating to observers; it does not check each observer's preferences.
+Dodging filters the actor, its inventory and other direct room occupants
+individually. Brief mode replaces only the requested participant's text and
+retains its existing format: no trailing newline and at most three characters
+of percentage text. Literal message strings still lose their first character
+when deriving filter metadata.
+
+Configuration is cached from the current player's shell until explicit refresh.
+Missing weapons suppress delivery after message lookup. A caught receiver error
+retains earlier deliveries and the throwing receiver's mutation; an uncaught
+error rolls back the native attempt. The adaptation preserves these behaviors.
+
+Checks exercise real composition, delivery and the damage-source registry with
+controlled receiving actors, including direct inheritance. Full body entry and
+combat remain unvalidated. Body/adversary/human compilation now reaches the
+[armour helper][lima-combat-armour] at line 9: `evaluate_path(s, 0, 1)` passes
+literal zero to its string argument.
 
 #### Lima file metadata
 
@@ -2543,5 +2582,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-corpses]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/corpses.c
 [lima-combat-pulse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/pulse/heart_beat.c
 [lima-combat-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/messages.c
+[lima-combat-armour]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/armour_base.c
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
