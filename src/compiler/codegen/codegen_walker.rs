@@ -1852,11 +1852,8 @@ impl TreeWalker for CodegenWalker {
         // Resolved before the arguments are visited: an implicit efun lvalue
         // is pushed as a cell, never evaluated.
         // A function-typed variable answers a bare name only.
-        let calls_variable = namespace == &CallNamespace::Local
-            && self
-                .context
-                .lookup_var(name)
-                .is_some_and(|v| v.type_.matches_type(LpcType::Function(false)));
+        let calls_variable =
+            namespace == &CallNamespace::Local && self.context.lookup_callable_var(name).is_some();
         let implicit_refs: Vec<bool> = if receiver.is_none() && !calls_variable {
             self.context
                 .lookup_function_complete(name, namespace)
@@ -2052,28 +2049,14 @@ impl TreeWalker for CodegenWalker {
         };
 
         // Take care of the result after the call returns.
-        if let Some(func) = self.context.lookup_function_complete(name, namespace) {
+        if has_receiver || calls_variable {
+            push_copy(self);
+        } else if let Some(func) = self.context.lookup_function_complete(name, namespace) {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
             } else {
                 push_copy(self);
             }
-        } else if let Some(Symbol {
-            type_: LpcType::Function(false) | LpcType::Mixed(false),
-            ..
-        }) = self.context.lookup_var(name)
-        {
-            push_copy(self);
-        } else if has_receiver
-            || matches!(
-                self.context.scopes.lookup(name),
-                Some(Symbol {
-                    type_: LpcType::Function(false),
-                    ..
-                })
-            )
-        {
-            push_copy(self);
         } else {
             return Err(lpc_bug!(
                 node.span,
@@ -2574,11 +2557,7 @@ impl TreeWalker for CodegenWalker {
                 // `&` used as the receiver
                 FunctionPtrReceiver::Dynamic => FunctionReceiver::Dynamic,
             }
-        } else if self
-            .context
-            .lookup_var(node.name)
-            .is_some_and(|v| v.type_.matches_type(LpcType::Function(false)))
-        {
+        } else if self.context.lookup_callable_var(&node.name).is_some() {
             // A function-typed variable shadows a function of the same name, as a bare-name call does.
             FunctionReceiver::Value(self.location_of(&node.name)?)
         } else {

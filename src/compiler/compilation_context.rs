@@ -7,7 +7,7 @@ use crate::compiler::{
 use derive_builder::Builder;
 use lpc_rs_core::{
     EFUN, RegisterSize, call_namespace::CallNamespace, class::ClassScope, lpc_path::LpcPath,
-    pragma_flags::PragmaFlags,
+    lpc_type::LpcType, pragma_flags::PragmaFlags,
 };
 use lpc_rs_errors::{
     source_map::{DiagnosticSources, FileId},
@@ -324,6 +324,14 @@ impl CompilationContext {
         self.scopes.lookup(r).or_else(|| {
             self.inherited_var_index(r)
                 .and_then(|i| self.inherits[i].global_variables.get(r))
+        })
+    }
+
+    /// The accessible function or mixed variable that takes precedence over a bare function name.
+    pub fn lookup_callable_var(&self, name: &str) -> Option<&Symbol> {
+        self.lookup_var(name).filter(|symbol| {
+            symbol.type_.matches_type(LpcType::Function(false))
+                && (symbol.visible_to_children() || self.scopes.lookup(name).is_some())
         })
     }
 

@@ -13,6 +13,16 @@ Call a function variable with `f(args...)`. When a value may instead be a litera
 use [`evaluate(value, args...)`](../efun/evaluate.md): it calls functions and
 returns other values unchanged.
 
+In `f(args...)` and `&f(args...)`, an accessible `function` or `mixed` variable
+takes precedence over a function with the same name. Its calls have a `mixed`
+result and do not use the shadowed function's declared signature. An inherited
+private variable cannot intercept either form: the compiler resolves the
+function instead, or reports a visibility error if no function is available.
+Code in the declaring source retains access to its own private callbacks.
+
+Qualified calls such as `::f()` and `efun::f()`, and receiver calls such as
+`object->f()`, resolve functions independently of same-named variables.
+
 Prefer the bare function name when no arguments are being bound:
 `evaluate(strindex, "hello", "ll")`. Use `&name(args)` to bind arguments,
 such as `function add_ten = &add(10)`.

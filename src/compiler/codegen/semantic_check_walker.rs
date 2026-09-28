@@ -456,12 +456,8 @@ impl TreeWalker for SemanticCheckWalker {
             argument.visit(self).await?;
         }
 
-        // A function-typed variable answers a bare name only.
-        let is_function_pointer = namespace == &CallNamespace::Local
-            && self
-                .context
-                .lookup_var(*name)
-                .is_some_and(|sym| sym.type_.matches_type(LpcType::Function(false)));
+        let is_function_pointer =
+            namespace == &CallNamespace::Local && self.context.lookup_callable_var(name).is_some();
 
         // An unknown namespace is reported above, not searched.
         if !unknown_namespace
@@ -493,6 +489,10 @@ impl TreeWalker for SemanticCheckWalker {
                 "a function pointer cannot take an argument by reference"
             );
             self.context.diagnostics.record(e);
+        }
+
+        if is_function_pointer {
+            return Ok(());
         }
 
         // Further checks require access to the function prototype for error messaging
@@ -823,11 +823,12 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
-        let proto_opt = self
-            .context
-            .lookup_function_complete(node.name, &CallNamespace::default());
-
-        if let Some(callee) = proto_opt {
+        if node.receiver.is_none()
+            && self.context.lookup_callable_var(&node.name).is_none()
+            && let Some(callee) = self
+                .context
+                .lookup_function_complete(node.name, &CallNamespace::Local)
+        {
             let prototype = callee.as_ref();
             if !self
                 .context

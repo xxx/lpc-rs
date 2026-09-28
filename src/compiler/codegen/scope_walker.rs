@@ -279,6 +279,29 @@ impl ScopeWalker {
                 .ancestors(&self.context.scopes.scopes)
                 .contains(&closure_scope_id)
     }
+
+    fn reference_callable(&mut self, name: Ustr, span: Option<Span>) {
+        if let Some(symbol) = self.context.lookup_callable_var(&name) {
+            Self::note_reference(&mut self.referenced, symbol, name);
+            let upvalue = self.should_upvalue_symbol(symbol);
+            self.check_ambiguity(name, span);
+            if upvalue {
+                self.context.lookup_var_mut(name).unwrap().upvalue = true;
+            }
+        } else if !self
+            .context
+            .contains_function_complete(&name, &CallNamespace::Local)
+            && let Some(symbol) = self.context.lookup_var(name)
+            && let Some(error) = Self::visibility_error(
+                name,
+                symbol,
+                self.context.scopes.lookup(&name).is_some(),
+                span,
+            )
+        {
+            self.context.diagnostics.record(error);
+        }
+    }
 }
 
 impl ContextHolder for ScopeWalker {
@@ -329,7 +352,9 @@ impl TreeWalker for ScopeWalker {
         }
 
         // Efun outputs alias variables, while indexed elements and members use hidden cells.
-        if receiver.is_none() {
+        let calls_variable =
+            namespace == &CallNamespace::Local && self.context.lookup_callable_var(name).is_some();
+        if receiver.is_none() && !calls_variable {
             let mut to_mark: Vec<Ustr> = Vec::new();
             let mut output_temps: Vec<usize> = Vec::new();
             if let Some(callee) = self.context.lookup_function_complete(*name, namespace) {
@@ -370,19 +395,8 @@ impl TreeWalker for ScopeWalker {
             }
         }
 
-        // A function-typed variable answers a bare name only.
-        if namespace == &CallNamespace::Local
-            && let Some(symbol) = self.context.lookup_var(&name)
-            && symbol.type_.matches_type(LpcType::Function(false))
-        {
-            Self::note_reference(&mut self.referenced, symbol, *name);
-            let upvalue = self.should_upvalue_symbol(symbol);
-            self.check_ambiguity(*name, node.span);
-            if upvalue {
-                trace!("upvaluing called function var {}", name);
-                let symbol = self.context.lookup_var_mut(name).unwrap();
-                symbol.upvalue = true;
-            }
+        if receiver.is_none() && namespace == &CallNamespace::Local {
+            self.reference_callable(*name, node.span);
         }
 
         Ok(())
@@ -499,19 +513,8 @@ impl TreeWalker for ScopeWalker {
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         walk_function_ptr(self, node).await?;
 
-        // A function-typed variable answers a bare name only.
-        if node.receiver.is_none()
-            && let Some(symbol) = self.context.lookup_var(node.name)
-            && symbol.type_.matches_type(LpcType::Function(false))
-        {
-            Self::note_reference(&mut self.referenced, symbol, node.name);
-            let upvalue = self.should_upvalue_symbol(symbol);
-            self.check_ambiguity(node.name, node.span);
-            if upvalue {
-                trace!("upvaluing captured function var {}", node.name);
-                let symbol = self.context.lookup_var_mut(node.name).unwrap();
-                symbol.upvalue = true;
-            }
+        if node.receiver.is_none() {
+            self.reference_callable(node.name, node.span);
         }
 
         Ok(())

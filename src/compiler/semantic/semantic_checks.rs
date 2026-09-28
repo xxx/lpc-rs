@@ -467,11 +467,8 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 CallChain::Root {
                     name, namespace, ..
                 } => {
-                    // A function-typed variable is the call target; any other
-                    // same-named variable is ignored.
-                    let calls_pointer = context
-                        .lookup_var(name.as_str())
-                        .is_some_and(|var| var.type_.matches_type(LpcType::Function(false)));
+                    let calls_pointer = namespace == &CallNamespace::Local
+                        && context.lookup_callable_var(name).is_some();
                     if calls_pointer {
                         return Ok(LpcType::Mixed(false));
                     }
