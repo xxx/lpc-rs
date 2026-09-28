@@ -1720,9 +1720,48 @@ learning cap. The adaptation preserves these policies.
 
 Checks exercise the real condition module and combat message-filter function
 with controlled receiving objects, plus direct inheritance. Full combat and
-body entry remain unvalidated. Body/adversary/human compilation now reaches
-zero-to-object assignments in `std/adversary/target.c` at lines 72, 101, 119
-and 126.
+body entry remain unvalidated. The [target adaptation](#lima-combat-targets)
+handles the next module's object resets and final-opponent cleanup.
+
+#### Lima combat targets
+
+Reviewed **27 September 2026** against the pinned [target module][lima-combat-targets];
+migration checks ran **28 September 2026**. Native checks use distinct nil with
+`BLOW_TYPES`, `HEALTH_LIMBS`, `WIELD_LIMBS`, `FORMULA_SKILLS` and
+`PULSE_HEART_BEAT`. `TARGETTING_IS_RANDOM` stays disabled in the active port;
+three additional target-selection tests enable it in temporary fixtures.
+No upstream execution is claimed.
+
+Replace the four object `target` resets with `nil`. After stopping a specific
+fight, use `!target && !sizeof(other_targets)` to decide whether to call
+`stop_attacking`. Comparing `query_targets()` with a fresh `({0})` or `({nil})`
+array never detects this state under native [array identity](lpc/comparisons.md).
+Preserve `query_targets()`'s nil primary slot: an idle object returns `({nil})`.
+It returns an independent array, retaining opponent order and shared object
+references. Target selection prunes destroyed, ghost and unreachable opponents
+through the real inventory helpers.
+
+Both `stop_fight()` and `stop_fight(nil)` notify opponents and clear all targets.
+The [corpse module][lima-combat-corpses]'s literal `stop_fight(0)` still needs
+caller adaptation. Reciprocal `stop_hitting_me` uses
+[`previous_object`](efun/previous_object.md) to remove the caller's combat link;
+it leaves remote pulse cleanup to that object's combat loop. A stale secondary
+entry also keeps the initiating pulse active after a specific-target stop until
+selection and caller cleanup run. `get_target` itself does not stop a pulse.
+
+Preserve the existing selection preconditions and callback ordering. A live
+candidate requires the actor to have an environment; an idle orphan returns
+nil. The main combat caller checks the actor's own ghost/condition state.
+A caught peer callback error retains earlier mutations, while an uncaught error
+rolls back the native attempt.
+
+Checks cover the included and inherited target module, reciprocal combat links
+and real inventory traversal. The [heartbeat pulse][lima-combat-pulse] check
+records scheduler requests and calls the heartbeat manually; it does not
+establish native heartbeat scheduling. Pulse-module adaptation remains pending.
+Full combat and body entry remain unvalidated. Body/adversary/human compilation
+now reaches the [adversary message module][lima-combat-messages] at line 149,
+where a debug expression adds an object to a string.
 
 #### Lima file metadata
 
@@ -2500,5 +2539,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-damage-sink]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_damage_sink.c
 [lima-combat-behaviors]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/behaviors.c
 [lima-combat-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
+[lima-combat-targets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/target.c
+[lima-combat-corpses]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/corpses.c
+[lima-combat-pulse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/pulse/heart_beat.c
+[lima-combat-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/messages.c
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
