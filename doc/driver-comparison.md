@@ -1993,8 +1993,56 @@ message delivery, body/health death entry and full combat remain unvalidated.
 The [loot daemon][lima-loot-daemon] still fails on assignment syntax in its
 meat/pelt conditional. The [corpse object][lima-corpse-object]'s three-argument
 `mudlib_setup` also conflicts with [decay][lima-decay]'s zero-argument definition.
-Adversary compilation advances to class-field arrow access in
-[limb health][lima-health-limbs].
+Adversary compilation next needs the [limb health adaptations below](#lima-limb-health).
+
+#### Lima limb health
+
+Reviewed and exercised **28 September 2026** against the pinned
+[limb health module][lima-health-limbs], using distinct nil, `HEALTH_LIMBS`,
+`DEATH_CORPSES`, `ADVANCEMENT_SIMPLE`, default Lima stats, skills and karma
+enabled, and limb shields disabled. No upstream execution is claimed.
+
+Replace class-field arrows with dot access, retaining object method calls and
+visible class assertions. Use native [`filter`](efun/filter.md) for the
+weighted-limb mapping; its callback receives the key and value, and the existing
+predicate uses the key. Return nil when no damageable limb can be selected.
+In `hurt_us`, return integer zero damage for a non-damageable limb rather than
+returning without a value. Existing native APIs suffice.
+
+Three source-logic repairs accompany these adaptations:
+
+- In `update_body_style`, test collection sizes: empty mappings and arrays are
+  truthy. Reject an absent style or one without vital/system limbs before
+  replacing the remembered style, weights or health mapping.
+- Initialize current health from the already adjusted maximum. Calling
+  `hp_adjustment` again applies the scaling twice. With the exact
+  [simple advancement formula][lima-advancement-simple], a twenty-HP limb at
+  level ten and health stat twenty starts at **180/60** before this repair and
+  **60/60** afterward. The formula and maximum-health scaling are unchanged.
+- In `remove_abuse`, subtract the successful skill-check bonus instead of
+  adding it. Removing three from nine abuse leaves three, instead of fifteen;
+  larger reductions still clamp at zero.
+
+Checks use the real [body daemon][lima-body-daemon] and adopted
+[saved body definitions][lima-body-definitions], including the fourteen-part
+humanoid. They cover selectors, movement, damage, disabling limbs, elapsed
+healing, reflex, diagnosis and death. Disabling a vital limb or the last live
+system limb kills. Ghost state is set before `die`, followed by party lookup
+and XP/karma awards. A caught death error retains the dead state without
+awards; an uncaught error restores the attempt. Integration with the adopted
+targeting, effects and corpse modules ends queued effects before loot,
+cancels their timer and schedules removal.
+
+The HP formula is extracted; full advancement, actual corpse creation/movement,
+the real party daemon, player-body death, full combat, pulse scheduling and
+alternate health/shield configurations remain unvalidated. Most receiving
+callbacks are controlled, and timers are explicitly dispatched through the
+native callback path. Existing over-cap drinking, live health mappings and
+missing-limb error ordering remain unchanged.
+
+Adversary compilation advances to [limb wielding][lima-wield-limbs]: integer zero
+object arguments to `can_wield` and integer zero returns from string functions.
+Body compilation retains the separate [skill-setter signature mismatch](#lima-monster-setup).
 
 #### Lima file metadata
 
@@ -2791,3 +2839,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-corpse-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/corpse.c
 [lima-decay]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_decay.c
 [lima-health-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/limbs.c
+[lima-advancement-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/advancement/simple.c
+[lima-body-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/body_d.c
+[lima-wield-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/limbs.c
