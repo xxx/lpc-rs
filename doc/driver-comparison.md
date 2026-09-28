@@ -1639,9 +1639,48 @@ empty ammunition inventory falls through to ordinary damage. Review these
 mudlib behaviors separately. Ordinary unarmed combat supplies the attacker as
 its weapon; an explicitly nil weapon still fails the direct method call.
 
-Body/adversary/human compilation now reaches `std/adversary/behaviors.c`, which
-assigns literal zero to the object `busy_with`. Full combat and body entry
-remain unvalidated.
+The [behaviors adaptation](#lima-combat-behaviors) handles the next module's
+object reset, timer calls and callbacks. Full combat and body entry remain
+unvalidated.
+
+#### Lima combat behaviors
+
+Reviewed **27 September 2026** against the pinned [behaviors module][lima-combat-behaviors].
+Native checks use distinct nil with `BLOW_TYPES`, `HEALTH_LIMBS`, `WIELD_LIMBS`,
+`FORMULA_SKILLS` and `PULSE_HEART_BEAT`; no upstream execution is claimed.
+
+Reset the absent `busy_with` object to `nil`. Retain private, nonsaved integer
+IDs for busy and hunting timers, and use [`query_call_out`](efun/query_call_out.md)
+and [`remove_call_out`](efun/remove_call_out.md) with those IDs. Schedule the
+callbacks with `&end_busy(args)` and `&is_hunted_call(who)`; the busy payload is
+one argument, including when it is an array. Cancel the old busy timer before
+accepting a replacement, so repeated requests do not leave an earlier timer
+untracked. On completion, inspect the current timer ID: an action may already
+have scheduled its successor. A pending hunt coalesces arrivals until it fires.
+
+Use bare named functions for arrival, movement and interruption. Under native
+closure semantics, the original `(: name :)` expressions return a function
+value without invoking it. Store the interrupt callback once and reuse that
+value when registering it with the [hook module][lima-hooks]; evaluating the
+name again creates a different function identity and duplicates the hook.
+Retain the stored arrival callback when moving its hook between rooms, and
+guard hook setup when the adversary has no environment.
+
+Replace `functionp("do_game_command")`, which tests a string's type, with
+[`function_exists`](efun/function_exists.md) and a dynamic call through
+`this_object()`. This permits receiving adversaries without that optional method.
+
+Existing policies remain separate work: interruption invokes the action with
+nil while leaving its timer pending; an action error consumes the one-shot timer
+but leaves busy state set; and a failed healing search permanently sets
+`no_heals`. Failure text is emitted only for an action result of `-1`, despite
+the source comment describing zero. Native timer callbacks have no player;
+spell and material actions using Lima's `this_body()` still need their caller
+context adapted. The checks exercise the real module, hooks and native timers
+with controlled receiving objects, not full spell/material execution or combat.
+
+Body/adversary/human compilation now reaches `std/adversary/condition.c:123`,
+where integer `stance_impact` receives `1.2`. Full body entry remains unvalidated.
 
 #### Lima file metadata
 
@@ -2417,3 +2456,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/combat_modules.h
 [lima-combat-blows]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/base.c
 [lima-combat-damage-sink]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_damage_sink.c
+[lima-combat-behaviors]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/behaviors.c
