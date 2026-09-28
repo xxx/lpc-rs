@@ -52,6 +52,8 @@ pub struct CallOutSchedule {
     /// physical [`CallOut`]); the owner is kept alive by its commit into the
     /// object space, so no strong ref is needed across the flush.
     pub process: std::sync::Weak<Process>,
+    /// The command giver captured at scheduling, without retaining a destructed object.
+    pub player: Option<std::sync::Weak<Process>>,
     /// The function to run.
     pub func_ref: LpcRef,
     /// The delay before the first run.
@@ -566,6 +568,7 @@ mod tests {
         Effect::ScheduleCallOut(CallOutSchedule {
             id: 0,
             process: Arc::downgrade(&owner),
+            player: None,
             func_ref: 0.into(),
             delay: chrono::Duration::seconds(100),
             repeat: None,

@@ -9,6 +9,10 @@ use crate::interpreter::{
     vm::global_state::GlobalState,
 };
 
+#[cfg(test)]
+#[path = "call_out_player_tests.rs"]
+mod player_tests;
+
 impl GlobalState {
     /// Handler for [`VmOp::PrioritizeCallOut`](crate::interpreter::vm::vm_op::VmOp::PrioritizeCallOut):
     /// run the call out with `id`. A firing that cannot start removes the
@@ -23,9 +27,9 @@ impl GlobalState {
                     LpcRef::Function(ref func) => Ok(func.clone()),
                     _ => Err(lpc_error!("invalid function sent to `call_out`")),
                 };
-                Some((func, call_out.process().upgrade()))
+                Some((func, call_out.process().upgrade(), call_out.player.clone()))
             });
-            let Some((func, owner)) = entry else {
+            let Some((func, owner, player)) = entry else {
                 return;
             };
 
@@ -63,7 +67,11 @@ impl GlobalState {
 
             let max_execution_time = global_state.config.max_execution_time;
             let receiver = prepared.context.process.clone();
-            if let Err(e) = prepared.for_call_out().execute(max_execution_time).await {
+            if let Err(e) = prepared
+                .for_call_out(player)
+                .execute(max_execution_time)
+                .await
+            {
                 let template = TaskTemplate::from(global_state.clone());
                 report_runtime_error(&e, Some(receiver), template).await;
             }

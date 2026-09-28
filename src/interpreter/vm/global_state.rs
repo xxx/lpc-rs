@@ -38,9 +38,15 @@ pub struct PreparedCall {
 
 impl PreparedCall {
     /// Mark a scheduled callback before constructing its retryable entry.
-    pub(crate) fn for_call_out(mut self) -> Self {
-        if let crate::interpreter::task::SeedEntry::Callback { origin, .. } = &mut self.entry {
+    pub(crate) fn for_call_out(mut self, player: Option<std::sync::Weak<Process>>) -> Self {
+        if let crate::interpreter::task::SeedEntry::Callback {
+            origin,
+            call_out_player,
+            ..
+        } = &mut self.entry
+        {
             *origin = CallOrigin::CallOut;
+            *call_out_player = player;
         }
         self
     }
@@ -241,6 +247,7 @@ impl GlobalState {
             entry: crate::interpreter::task::SeedEntry::Callback {
                 function: resolved.function.clone(),
                 origin: CallOrigin::Driver,
+                call_out_player: None,
                 owner,
                 simul: match &ptr.address {
                     FunctionAddress::SimulEfun(name) => Some(name.to_string()),

@@ -509,10 +509,16 @@ impl TaskContext {
         repeat: Option<Duration>,
     ) -> u64 {
         let id = self.global_state.with_call_outs(|co| co.mint_id());
+        let player = if self.config().call_out_preserve_player {
+            self.this_player.load().as_ref().map(Arc::downgrade)
+        } else {
+            None
+        };
         self.txn().with(|t| {
             t.record_call_out(CallOutSchedule {
                 id,
                 process: Arc::downgrade(owner),
+                player,
                 func_ref,
                 delay,
                 repeat,

@@ -31,6 +31,10 @@ pub struct Config {
     #[builder(default)]
     pub null_mode: lpc_rs_core::null_mode::NullMode,
 
+    /// Preserve the scheduling command giver in call-outs, fixed for this VM's lifetime.
+    #[builder(default)]
+    pub call_out_preserve_player: bool,
+
     #[builder(setter(into, strip_option), default = "None")]
     pub auto_include_file: Option<Ustr>,
 
@@ -199,6 +203,11 @@ impl ConfigBuilder {
         let lib_dir_str = lib_dir.map(|d| d.to_string()).unwrap_or_default();
 
         Ok(Self {
+            call_out_preserve_player: Some(boolean_setting(
+                &env,
+                "CALL_OUT_PRESERVE_PLAYER",
+                self.call_out_preserve_player.unwrap_or(false),
+            )?),
             null_mode: crate::tls::setting(&env, "NULL_MODE")
                 .map(|value| value.parse().map_err(|error| lpc_error!("{}", error)))
                 .transpose()?
@@ -456,6 +465,45 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn call_out_player_preservation_configuration() {
+        assert!(
+            !ConfigBuilder::default()
+                .build()
+                .unwrap()
+                .call_out_preserve_player
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mud.env");
+        for (text, builder_value, expected) in [
+            ("", true, true),
+            ("CALL_OUT_PRESERVE_PLAYER=true\n", false, true),
+            ("LPC_CALL_OUT_PRESERVE_PLAYER=false\n", true, false),
+            (
+                "CALL_OUT_PRESERVE_PLAYER=false\nLPC_CALL_OUT_PRESERVE_PLAYER=true\n",
+                false,
+                true,
+            ),
+        ] {
+            fs::write(&path, text).unwrap();
+            let config = ConfigBuilder::default()
+                .call_out_preserve_player(builder_value)
+                .load_env(Some(&path))
+                .await
+                .unwrap()
+                .build()
+                .unwrap();
+            assert_eq!(config.call_out_preserve_player, expected, "{text}");
+        }
+        fs::write(&path, "LPC_CALL_OUT_PRESERVE_PLAYER=perhaps\n").unwrap();
+        let error = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("CALL_OUT_PRESERVE_PLAYER"));
     }
 
     #[tokio::test]

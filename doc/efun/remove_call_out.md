@@ -21,8 +21,8 @@ stashing the ID in a variable somewhere.
 ### Examples
 
 Run this from a player command, where `this_player()` identifies the recipient.
-Capture the player before scheduling: `this_player()` is 0 inside a call out,
-so use `tell_object()` with the captured recipient to deliver the message.
+Capture the recipient explicitly so delivery works independently of
+[`call_out`](call_out.md)'s player-preservation setting.
 
 ```c
 object player = this_player();

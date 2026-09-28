@@ -24,6 +24,13 @@ Global timer inspection in FluffOS was source-reviewed on **22 and 24 September 
 at the listed revision, with its core call-out efuns enabled. The inspected
 implementation returns three fields per timer; no cross-driver execution was
 performed. [Implementation][fl-callouts], [declaration][fl-core-spec].
+Call-out player preservation was source-reviewed on **28 September 2026** at
+these same revisions: FluffOS with its core call-out efuns and `this_player in
+call_out` enabled (the runtime default), LDMud's call-out reference, and DGD's
+`this_user` reference. FluffOS's shadow traversal is conditional on `NO_SHADOWS`;
+its fallback requires an `O_LISTENER` owner. No upstream execution is claimed.
+[FluffOS implementation][fl-callouts], [runtime default][fl-runtime-settings],
+[LDMud reference][ld-callout-context], [DGD reference][dgd-callout-user].
 Timer argument forwarding and lookup were additionally reviewed on
 **26 September 2026** at the listed FluffOS revision. These are core efuns;
 [Lima's configuration][lima-timer-config] enables `this_player in call_out`.
@@ -358,6 +365,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
 | Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
+| Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
@@ -534,6 +542,7 @@ mudlib assumptions about case normalization at its command-entry boundary.
 
 | Topic | LDMud behaviour | lpc-rs behaviour and porting impact |
 |---|---|---|
+| Call-out player context | Preserves the scheduling user. [Reference][ld-callout-context]. | Enable `LPC_CALL_OUT_PRESERVE_PLAYER=true`; see the native [`call_out`](efun/call_out.md) contract. |
 | String trimming | `trim(text, where, chars)` accepts 1 for left, 2 for right and 0 or 3 for both; the header defines `TRIM_BOTH` as 3. The documented default set is space and tab. [Reference][ld-trim], [header][ld-trim-header]. | Native [`trim`](efun/trim.md) uses 0 for both (the default), 1 for left and 2 for right; 3 is an error. Update header constants and literal modes. The default set also includes LF, CR, vertical tab and form feed; supply `" \t"` explicitly to retain the documented upstream set. Other upstream edge cases were not checked. |
 | Array predicate | Calls it `pointerp`. [Reference][ld-pointerp]. | Rename calls to [`arrayp`](efun/arrayp.md), or provide `int pointerp(mixed value) { return arrayp(value); }` as a simul-efun. |
 | Reference arguments | `&x` passes a reference without a special callee declaration; indexed lvalues and ranges can be referenced. [Reference][ld-refs]. | Both parameter and argument use `ref`. Only variables can be explicit reference arguments; cross-object and function-pointer calls cannot carry them. This can require interface changes. [Reference](lpc/references.md). |
@@ -588,6 +597,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Predefined source macros | `__FILE__` names the current in-game source; `__DIR__` includes a trailing `/`. Both expand at use time, including in macro bodies. `__VERSION__` is the build's version string. These names cannot be redefined or undefined. [Expansion and protection][fl-predefined], [version registration][fl-pragma-lexer]. | Provides `__FILE__`, `__DIR__`, and `__VERSION__`; the version identifies `lpc-rs` and its package version. Driver-specific configuration checks still need adaptation. [Reference](lpc/macros.md#predefined-macros). |
 | Warning and type-retention pragmas | `warnings` / `no_warnings` switch warning reporting as compilation proceeds; includes share the setting. `save_types` / `no_save_types` control retention of argument types. Both positive flags are enabled by the reviewed defaults. Unknown pragmas warn. [Pragmas][fl-pragmas], [lexer][fl-pragma-lexer], [compiler][fl-pragma-compiler], [defaults][fl-options]. | `warnings` / `no_warnings` follow each warning's primary source location, including repeated includes and macro invocations. This can differ from FluffOS's reporting-time setting for delayed warnings. `save_types` is accepted silently because function types are always retained. `no_save_types` and other unknown pragmas remain errors even with warnings disabled. [Reference](lpc/pragmas.md). |
 | Constructor arguments | `clone_object(path, ...)` forwards extra arguments to the new object's `create`. [Reference][fl-clone]. | `clone_object` forwards extra arguments after global initialisation. Constructors also run without arguments when loading prototypes; use defaults or handle `0`. Supplied declared arguments are type-checked. [Reference](efun/clone_object.md). |
+| Call-out player context | With `this_player in call_out` enabled (the default), captures the scheduling command giver; if it is unavailable, uses an `O_LISTENER` callback owner, following shadowing when supported. `this_interactive` is cleared. [Implementation][fl-callouts], [default][fl-runtime-settings]. | Enable `LPC_CALL_OUT_PRESERVE_PLAYER=true`. A missing or destructed saved player remains nil; there is no owner fallback. Repeats and transaction retries restore the originally captured player, and `this_interactive()` remains nil. The setting applies to call-outs; other deferred APIs retain their own contracts. [Native reference](efun/call_out.md). |
 | Timer handles | Reserves `0` for invalid handles; handles combine a counter with the current game tick. [Implementation][fl-callouts]. | Timer IDs start at `1` per VM. Store the returned handle; its numeric value need not match FluffOS or be consecutive. [Reference](efun/call_out.md). |
 | Timer inspection | `call_out_info()` returns rows of owner, string callback label, and seconds remaining in the reviewed implementation; function pointers are rendered as labels. [Implementation][fl-callouts]. | Use [`query_call_outs(-1)`](efun/query_call_outs.md) for all owners, or pass an object for an owner-specific query. Native rows contain scheduling owner, function pointer, milliseconds remaining, milliseconds between repeats, and ID. The query includes the current transaction's schedules and excludes its cancellations. An LPC helper can project the first three fields, converting callbacks with [`function_name`](efun/function_name.md) and durations with `remaining_ms < 0 ? 0 : remaining_ms / 1000`; the fourth native field is a repeat interval, not callback data. Bare-name grouping combines differently bound callbacks with the same name. A `my_call_outs`-style simul can query `previous_object()` directly, but must return an empty array for a missing caller: a nil selector queries the simul itself. Preserve `-1` for a missing timer in name-lookup helpers. If scheduling wrappers hide callbacks inside closures, retain the original name separately or query a reliably maintained timer ID. |
 | Whole-object enumeration | `objects()` accepts optional function or local-method-name filtering; the result is capped by `__MAX_ARRAY_SIZE__`. With `F_SET_HIDE`, visibility depends on caller status or `valid_hide`. Callback filtering can reorder entries. [Reference][fl-objects], [implementation][fl-objects-implementation], [visibility][fl-object-enumeration]. | [`objects()`](efun/objects.md) takes no arguments and returns all transaction-visible loaded objects without truncation or an ordering guarantee. Use `filter(objects(), predicate)` for selection, with native truthiness and callback behavior; use `foreach` when only side effects are wanted. Initialize missing counters before incrementing them in distinct-null mode. For clone counts, exclude prototypes explicitly: subtracting one undercounts when the prototype is absent. There is no corresponding hidden-object category. An LPC method-name wrapper must bind the original caller explicitly. |
@@ -629,7 +639,8 @@ save import still require further driver support. See [class support](lpc/classe
 
 #### Lima port configuration
 
-The Lima port targets **`LPC_NULL_MODE=distinct`**. Its adaptations and active
+The Lima port targets **`LPC_NULL_MODE=distinct`** with
+**`LPC_CALL_OUT_PRESERVE_PLAYER=true`**. Its adaptations and active
 validation use that configuration only. Earlier local runs also exercised
 zero mode; those results are historical evidence, not a Lima compatibility
 requirement. The driver supports both settings for different mudlibs, with
@@ -664,13 +675,15 @@ an uncaught error in a one-shot removes that firing and rolls back an attempted
 reschedule. Repeating timers therefore change failure behavior as well as how
 manual invocations interact with the schedule. [Native contract](efun/call_out.md).
 
-Native callbacks start without `this_player()`. Help already retains its
-initiator and can notify that object directly. Use `nil` when clearing the
-object or returning an absent topic array, and `!topics` to detect an
-uninitialized index in either null mode. Other timer callers that depend on
-saved player context need their own adaptation; an ordinary simul wrapper also
-changes timer ownership. [Callback context](efun/call_out.md),
-[null modes](lpc/null.md).
+Enable `LPC_CALL_OUT_PRESERVE_PLAYER=true` to retain the scheduling player,
+matching Lima's enabled upstream setting. Help also retains its initiator and
+can notify that object directly. Use `nil` when clearing the object or returning
+an absent topic array, and `!topics` to detect an uninitialized index. The native
+setting preserves timer ownership; an ordinary simul wrapper changes it.
+A timer with no saved player has no owner fallback. Combat heartbeat adapters
+must still establish the combat actor explicitly: the scheduling player can be
+a different object. [Callback context](efun/call_out.md),
+[Lima configuration][lima-timer-config].
 
 Review completion bookkeeping when moving incremental scans to native
 transactions. Help's completion used to run only from a directory callback,
@@ -1233,7 +1246,8 @@ A vanished owner retires the menu. Schedule the idle timer after menu startup;
 schedule auto-login only for a selected character. Activity cancels auto-login
 and replaces the idle timer, using IDs from
 [`query_call_outs`](efun/query_call_outs.md). This keeps menu policy in the
-mudlib; native call-outs still start without a current player.
+mudlib. The wrapper selects and validates the menu owner independently of the
+player captured by the call-out preservation setting.
 
 Reject character entry with no selection before accessing the registry. Use
 the user's actual [`query_fname` accessor][lima-user-bodies] for the selected
@@ -2517,6 +2531,7 @@ not execution-tested.
 
 | Topic | DGD behaviour | lpc-rs behaviour and porting impact |
 |---|---|---|
+| Delayed user context | `this_user()` returns nil for delayed tasks. [Reference][dgd-callout-user]. | Leave `CALL_OUT_PRESERVE_PLAYER=false` for empty call-out player context; `this_interactive()` remains empty with either setting. DGD's user API and native `this_player` are distinct interfaces. |
 | Nil mode | `typechecking=2` enables distinct nil; other modes use integer zero as nil. [Configuration][dgd-nil-config], [values][dgd-nil-values]. | Set `NULL_MODE=distinct` for a separate nil value. This setting is independent of compiler type-checking pragmas. The default is `zero`. Saved numeric zero always stays numeric; explicit saved nil collapses with a warning when restored in zero mode. [Reference](lpc/null.md). |
 | Nil mapping values | Assigning nil deletes a mapping entry. [Implementation][dgd-nil-mapping]. | Nil is a storable value and key. Use `m_delete` for deletion and [`has_key`](efun/has_key.md) for membership, independently of the stored value. |
 | Atomic function boundaries | The `atomic` modifier gives a function an error-rollback boundary. [Language reference][dgd-lpc]. | Transactions belong to driver tasks; there is no `atomic` function modifier. Calls across objects share their owning transaction. Function-level rollback assumptions need review. [Runtime](../README.md#how-execution-works). |
@@ -2942,3 +2957,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-armour-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/limbs.c
 [lima-wear-info]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/wear_info.c
 [lima-wearable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wearable.c
+
+[fl-runtime-settings]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/rc.cc
+[ld-callout-context]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/call_out
+[dgd-callout-user]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/kfun/this_user

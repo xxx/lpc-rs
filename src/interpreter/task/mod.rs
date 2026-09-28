@@ -104,6 +104,8 @@ pub enum SeedEntry {
         local: Option<LocalFunction>,
         name: Option<String>,
         origin: CallOrigin,
+        /// Restored on every call-out attempt; other callback origins ignore it.
+        call_out_player: Option<std::sync::Weak<Process>>,
     },
 }
 
@@ -512,8 +514,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 simul,
                 local,
                 name,
-                ..
+                origin,
+                call_out_player,
             } => {
+                if *origin == CallOrigin::CallOut {
+                    let player = call_out_player
+                        .as_ref()
+                        .and_then(std::sync::Weak::upgrade)
+                        .filter(|player| player.is_live(&self.context.txn));
+                    self.context.this_player.store(player);
+                    self.context.entry_player.store(None);
+                }
                 if !owner
                     .upgrade()
                     .is_some_and(|owner| owner.is_live(&self.context.txn))
@@ -1068,7 +1079,7 @@ mod stm_retry_tests {
     use std::time::Duration;
 
     use indoc::indoc;
-    use lpc_rs_utils::debug_log::DebugLog;
+    use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog};
 
     use super::*;
     use crate::{
@@ -1287,6 +1298,7 @@ mod stm_retry_tests {
                     local: None,
                     name: Some("probe".into()),
                     origin,
+                    call_out_player: None,
                 },
                 process,
                 args: Vec::new(),
@@ -1313,6 +1325,69 @@ mod stm_retry_tests {
         int hits;
         int foo() { int n; sscanf("hits 10", "hits %d", n); hits += n; return hits; }
     "##};
+
+    #[tokio::test]
+    async fn call_out_retry_restores_player_and_discards_the_rejected_schedule() {
+        let config = crate::test_config_builder!()
+            .call_out_preserve_player(true)
+            .build()
+            .unwrap();
+        let mut task = run_prog_with_config(
+            r#"
+            void tick() {}
+            int probe() {
+                int correct_player = this_player() == this_object();
+                call_out(tick, 100);
+                set_this_player(nil);
+                return correct_player;
+            }
+        "#,
+            Arc::new(config),
+        )
+        .await;
+        let process = task.context.process.clone();
+        let seed = TaskSeed {
+            entry: SeedEntry::Callback {
+                function: process
+                    .initial_program()
+                    .lookup_function("probe")
+                    .unwrap()
+                    .clone(),
+                owner: Arc::downgrade(&process),
+                simul: None,
+                local: None,
+                name: Some("probe".into()),
+                origin: CallOrigin::CallOut,
+                call_out_player: Some(Arc::downgrade(&process)),
+            },
+            process: process.clone(),
+            args: Vec::new(),
+            initializes: false,
+        };
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+        let (result, stats) = task.eval_with_committer(&tx, &seed).await;
+        tx.send(CommitProtocol::Close).unwrap();
+        drop(tx);
+        handle.join().unwrap();
+
+        result.unwrap();
+        assert_eq!(stats.attempts, 2);
+        assert_eq!(stats.conflicts, 1);
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        task.context.global_state.with_call_outs(|calls| {
+            assert_eq!(calls.len(), 1);
+            let call = calls.queue().iter().next().unwrap().1;
+            assert!(
+                call.player
+                    .as_ref()
+                    .unwrap()
+                    .ptr_eq(&Arc::downgrade(&process))
+            );
+        });
+    }
 
     #[tokio::test]
     async fn a_retried_task_recreates_its_clone_with_constructor_arguments() {

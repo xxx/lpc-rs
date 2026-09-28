@@ -26,6 +26,10 @@ pub struct CallOut {
     /// The process where `call_out` was called from.
     process: Weak<Process>,
 
+    /// The scheduling command giver, restored independently for each firing.
+    #[builder(default)]
+    pub player: Option<Weak<Process>>,
+
     /// The reference to the function that will be run.
     pub func_ref: LpcRef,
 
@@ -185,6 +189,7 @@ impl CallOuts {
         let CallOutSchedule {
             id,
             process,
+            player,
             func_ref,
             delay,
             repeat,
@@ -218,6 +223,7 @@ impl CallOuts {
         self.queue.push(CallOut {
             id,
             process,
+            player,
             func_ref,
             repeat_duration: repeat,
             next_run: Utc::now() + delay,
@@ -239,6 +245,7 @@ mod tests {
                 calls.materialize(CallOutSchedule {
                     id: 0,
                     process: Weak::new(),
+                    player: None,
                     func_ref: 0.into(),
                     delay: Duration::seconds(100),
                     repeat,
