@@ -1798,9 +1798,34 @@ error rolls back the native attempt. The adaptation preserves these behaviors.
 
 Checks exercise real composition, delivery and the damage-source registry with
 controlled receiving actors, including direct inheritance. Full body entry and
-combat remain unvalidated. Body/adversary/human compilation now reaches the
-[armour helper][lima-combat-armour] at line 9: `evaluate_path(s, 0, 1)` passes
-literal zero to its string argument.
+combat remain unvalidated. The [armour setup adaptation](#lima-armour-setup)
+handles the next helper's absent path prefix.
+
+#### Lima armour setup
+
+Reviewed and exercised **28 September 2026** against the pinned
+[armour helper][lima-combat-armour]. Checks use distinct nil with `BLOW_TYPES`,
+`HEALTH_LIMBS`, `WIELD_LIMBS`, `FORMULA_SKILLS` and `PULSE_HEART_BEAT`; random
+targeting stays disabled. No upstream execution is claimed.
+
+Change `evaluate_path(s, 0, 1)` to `evaluate_path(s, nil, 1)`: the second argument
+is a string prefix, so nil expresses its absence. Keep the final `1` to ignore
+the current player's working directory. Relative paths resolve from the
+receiving wearer's directory, including when the helper runs during its setup.
+Each invocation creates a separate clone, initializes it, moves it to the wearer
+and then calls `do_wear`. The prototype is not equipped.
+
+Preserve the existing failure policy when making this type adaptation. A refused
+move still leads to `do_wear` with a nil environment; the helper ignores the move
+result. A caught movement or wear error retains the created clone and earlier
+mutations, while an uncaught error rolls back the native attempt. The existing
+object guard skips clones destroyed during creation.
+
+Checks exercise real path resolution, cloning and container movement with a
+recording `do_wear` callback. The helper now compiles independently; full armour,
+worn-state behavior and body entry remain unvalidated. Body/adversary/human
+compilation reaches the [wield helper][lima-combat-wield] at line 11, whose
+`evaluate_path(wep, 0, 1)` has the same string-argument mismatch.
 
 #### Lima file metadata
 
@@ -2583,5 +2608,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-pulse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/pulse/heart_beat.c
 [lima-combat-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/messages.c
 [lima-combat-armour]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/armour_base.c
+[lima-combat-wield]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/wield_base.c
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
