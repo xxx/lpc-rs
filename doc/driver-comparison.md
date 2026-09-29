@@ -2651,12 +2651,63 @@ the shipped saved table masks this path. Keep guards on public edits and reloads
 trim configuration fields, skip blank/comment lines, normalize prepositions and
 deduplicate aliases explicitly. Build a replacement mapping before publication
 and save after successful construction. Valid saved data takes precedence over
-configuration. The registry avoids [Lima's `clean_array`][lima-clean-array],
-whose adjacent-duplicate algorithm assumes `r & r` sorts the array; native
-intersection preserves input order. Other callers still need review.
+configuration. See the [shared helper adaptation below](#lima-array-deduplication)
+for other `clean_array` callers.
 
 Full parser-dispatched gameplay, the stock body, doors/siblings/lockables,
 portal/climbing/vehicle behavior and a complete cold boot remain unvalidated.
+
+#### Lima array deduplication
+
+Reviewed and exercised **29 September 2026** against the pinned
+[`clean_array` helper][lima-clean-array] and its callers, using distinct nil
+and preserved call-out player context. These are Lima source findings and
+lpc-rs execution results; no upstream driver execution is claimed.
+
+The helper assumes `r & r` sorts its input, then removes adjacent duplicates.
+Native intersection preserves input order, so separated duplicates survive.
+This can repeat statistics bonus hooks, callback evaluations, message types
+and recipients. Replace that assumption with explicit first-occurrence
+deduplication using [`member_array`](efun/member_array.md):
+
+```c
+mixed *clean_array(mixed *values)
+{
+    mixed *result = ({});
+    if (!arrayp(values))
+        error("Bad argument 1 to clean_array");
+    foreach (mixed value in values)
+        if (member_array(value, result) == -1)
+            result += ({value});
+    return result;
+}
+```
+
+This returns a fresh shallow array, leaving the input and its aliases unchanged
+while retaining element identities. Equality follows LPC `==`: equal integers
+and floats collapse, nil stays distinct from zero, and destructed objects match
+nil. Separate empty arrays remain distinct. The first numeric type wins; the
+original adjacent-run deletion retained the last equal value. Reject non-array
+inputs explicitly: `foreach` alone would accept nil as empty, while the old
+helper accidentally returns a dynamically supplied integer zero unchanged.
+Request sorting separately when presentation requires it.
+[Native comparisons](lpc/comparisons.md).
+
+Keep the returned array in the [FTP flag parser][lima-ftp]:
+`flags = clean_array(flags);`. Its original discarded call cannot mutate the
+input. In [`process_mail_list`][lima-mail-daemon], expand groups, lowercase the
+names, deduplicate, then filter valid users. Lowercasing after deduplication
+can reintroduce duplicates, including mixed-case members introduced by
+[group expansion][lima-group-daemon].
+
+Checks exercise the real preposition/message daemons and statistics hooks,
+plus extracted follow/wander methods. Caller tests execute the edited FTP and
+mail function bodies; mail uses the real group/user daemons with fixture group
+and account files. The FTP fixture widens its return type to permit its existing
+zero return. Complete FTP and mail daemons still have unrelated compilation
+blockers, so these checks do not establish working network services or mail
+delivery. The membership loop remains quadratic in the worst case; bounded
+correctness tests do not establish large-array performance.
 
 #### Lima file metadata
 
@@ -3492,7 +3543,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-furniture]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/furniture.c
 [lima-crafting-station]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/crafting_station.c
 [lima-complex-exit-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/complex_exit_obj.c
-[lima-clean-array]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L58-L83
+[lima-clean-array]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L47-L73
+[lima-mail-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/mail_d.c
+[lima-group-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/group_d.c
 
 [lima-money-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/money_d.c
 [lima-body-pockets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/pockets.c
