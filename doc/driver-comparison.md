@@ -2254,13 +2254,46 @@ from the net reduction. A weakness can make that reduction negative, but
 durability. Weaponless events call neither durability hook. Action strings,
 including empty and one-character strings, already return unchanged.
 
-Two provider blockers remain separate. A fresh damage daemon leaves its type
-list empty because `damage == ({})` compares [array identity](lpc/comparisons.md);
-explicitly loading its configuration allows valid resistance/weakness setters
-to work. The full durability module also passes a float to `random` and assigns
-a float to an int. Checks use recording hooks and five unchanged durability methods extracted
+The [damage-daemon adaptation](#lima-damage-daemon) below initializes the type
+registry before resistance/weakness setters use it. The full durability module
+still passes a float to `random` and assigns a float to an int.
+Checks use recording hooks and five unchanged durability methods extracted
 from that module. They cover wear ordering, absolute loss, clamping and rollback,
 but do not establish complete armour/weapon composition or repair behavior.
+
+#### Lima damage daemon
+
+Reviewed and exercised **28 September 2026** against the pinned
+[damage daemon][lima-damage-daemon] and [daemon-data module][lima-daemon-data],
+with distinct nil and preserved call-out player context. Checks use the real
+master, persistence module, stock configuration and native-format save files;
+no upstream execution is claimed.
+
+In `create()`, replace `if (damage == ({}))` with `if (!sizeof(damage))`, keeping
+it after `::create()` so restored state is available first. FluffOS shares one
+empty-array instance and compares array pointers, so Lima's original check
+works there. Separately created arrays have distinct identities on lpc-rs,
+including empty arrays; use a size check to test emptiness.
+FluffOS's core allocator and equality operator were source-reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0`, without optional-package requirements
+or FluffOS execution. [Allocation][fl-empty-array], [equality][fl-array-equality],
+[native comparisons](lpc/comparisons.md).
+
+Fresh startup then loads and saves all 13 configured types, their abbreviations
+and ten magical attack tables. Real weapon damage-type and armour
+resistance/weakness setters accept configured types without an explicit load.
+A populated saved list remains authoritative, even if configuration changes or
+disappears. Empty saved lists reload configuration at the next startup,
+including after `clear_damage_types()`. A partial save without the list also
+uses configuration. `nosave` attack weights retain their declared values.
+
+Preserve the loader's existing replacement policy: loading replaces the type
+list but retains abbreviation and special-attack entries omitted by the new
+configuration. Missing configuration publishes an empty daemon without a save;
+empty configuration saves an empty registry. Malformed saved state aborts
+loading without overwriting the file. An uncaught caller error rolls back
+initial publication and deferred saves. Restart and rollback checks exercise
+these paths; complete weapons, armour and combat remain unvalidated.
 
 #### Lima file metadata
 
@@ -3038,6 +3071,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-blows]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/base.c
 [lima-combat-damage-sink]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_damage_sink.c
 [lima-damage-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/damage_d.c
+[fl-empty-array]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/array.cc#L89-L99
+[fl-array-equality]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/ops/ops.cc#L121-L126
 [lima-durability]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_durability.c
 [lima-combat-behaviors]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/behaviors.c
 [lima-combat-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
