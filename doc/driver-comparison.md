@@ -364,7 +364,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
-| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
+| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
@@ -1112,9 +1112,10 @@ and timeout handlers inert. Enumerate current-object
 four where Lima requests no-argument cancellation. The password prompt must
 replace the name timer; rejection and timeout must remove the user's timers.
 
-Call-outs have no current player. A timeout notice sent through Lima's `write`
-wrapper therefore misses the connection. Use [`write_socket`](efun/write_socket.md)
-from the user object for that notice and its former `receive` output calls.
+Lima enables `LPC_CALL_OUT_PRESERVE_PLAYER=true`, allowing its `write` wrapper
+to reach the captured user from a timeout. The port retains
+[`write_socket`](efun/write_socket.md) on the user object for that notice and
+its former `receive` output calls, addressing the owned connection directly.
 Apply the same account/callback adaptations to `user_bak`, so the master's
 fallback actually works when the primary user fails compilation.
 
@@ -1612,11 +1613,11 @@ The [combat-main adaptation](#lima-combat-main) addresses the next caller
 failures: integer damage halving, an omitted list separator and literal zero
 for absent limb names. The event helper alone leaves these callers unchanged.
 
-The producer's weaponless fallback damage type is a string, while ordinary
-weapons supply an array of names. Searching that fallback with a string needle
-in the [resistance code][lima-combat-blows] fails under native `member_array`;
-normalize the representation or handle both shapes when adapting those
-consumers. Other consumers, including natural armour and the
+The original producer's weaponless fallback damage type is a string, while
+ordinary weapons supply an array of names. The [blows adaptation](#lima-combat-blows)
+normalizes that fallback to `({"bludgeon"})`, so resistance consumers receive the
+same type-array shape for weaponless events. Other consumers, including natural
+armour and the
 [damage sink][lima-combat-damage-sink], use index 1 for damage. That agrees with
 the helper's last-element convention for ordinary two-element payloads;
 arbitrary longer arrays do not have an established shared contract.
@@ -1688,9 +1689,11 @@ Existing policies remain separate work: interruption invokes the action with
 nil while leaving its timer pending; an action error consumes the one-shot timer
 but leaves busy state set; and a failed healing search permanently sets
 `no_heals`. Failure text is emitted only for an action result of `-1`, despite
-the source comment describing zero. Native timer callbacks have no player;
-spell and material actions using Lima's `this_body()` still need their caller
-context adapted. The checks exercise the real module, hooks and native timers
+the source comment describing zero. With Lima's
+`LPC_CALL_OUT_PRESERVE_PLAYER=true` setting, timer callbacks preserve the
+scheduling player; no saved player still means nil. Full spell and material
+actions using Lima's `this_body()` remain unvalidated. The checks exercise the
+real module, hooks and native timers
 with controlled receiving objects, not full spell/material execution or combat.
 
 The [condition adaptation](#lima-combat-condition) handles the next module's
@@ -1770,9 +1773,9 @@ A caught peer callback error retains earlier mutations, while an uncaught error
 rolls back the native attempt.
 
 Checks cover the included and inherited target module, reciprocal combat links
-and real inventory traversal. The [heartbeat pulse][lima-combat-pulse] check
-records scheduler requests and calls the heartbeat manually; it does not
-establish native heartbeat scheduling. Pulse-module adaptation remains pending.
+and real inventory traversal. The [heartbeat adaptation](#lima-combat-pulse)
+now uses native repeating timers. Target cleanup checks inspect native timer
+state, and pulse checks dispatch the actual callback through the runtime.
 Full combat and body entry remain unvalidated. The
 [adversary message adaptation](#lima-combat-messages) handles diagnostic
 rendering and combat preference callbacks.
@@ -2148,9 +2151,86 @@ is unchanged. Full [wearable objects][lima-wearable], worn flags, stat hooks,
 inventory movement, parser dispatch, live body entry, scheduled combat and
 alternate armour modes remain unvalidated. The wearable module still has
 integer returns in void methods; `std/armour.c` also needs adaptation of its
-`object::mudlib_setup()` inherited-call spelling. Adversary compilation advances
-to missing `set_heart_beat` calls in the selected
-[pulse module][lima-combat-pulse].
+`object::mudlib_setup()` inherited-call spelling. The pulse and blows
+adaptations below address the next selected combat modules.
+
+#### Lima combat pulse
+
+Reviewed **28 September 2026** against the pinned [heartbeat pulse module][lima-combat-pulse]
+and [distribution heartbeat interval][lima-heartbeat-config]. Native checks use
+`LPC_NULL_MODE=distinct`, `LPC_CALL_OUT_PRESERVE_PLAYER=true`, `PULSE_HEART_BEAT`,
+`BLOW_TYPES`, `HEALTH_LIMBS`, `ARMOUR_LIMBS`, `WIELD_LIMBS` and `FORMULA_SKILLS`,
+with skills enabled and limb shields disabled. No upstream execution is claimed.
+
+Replace the selected module's `set_heart_beat` calls with one private `nosave`
+integer timer ID. Schedule `call_out(heart_beat, 2, 2)`, matching the nominal
+two-second interval in the reviewed configuration. Use
+[`query_call_out`](efun/query_call_out.md) to avoid duplicate timers and
+[`remove_call_out`](efun/remove_call_out.md) to cancel the owned timer immediately
+when combat stops, then clear the handle. This is a module-local adapter;
+it does not add a general `set_heart_beat` API.
+
+In the callback, use [`set_this_player`](efun/set_this_player.md) to establish the
+combat actor, restore the previous player on success and error, and rethrow any
+caught error. Use ordinary calls: [Lima's master][lima-master] rejects explicit
+`efun::` bypasses
+from this module, and no simul-efun shadows `set_this_player`. Player
+preservation alone is insufficient here: the scheduling player may be an opponent. The wrapper makes Lima's `this_user()`, `this_body()`
+and message routing resolve the actor during a heartbeat. Immediate swings
+retain the original incoming context. `this_interactive()` remains nil for the
+scheduled callback.
+
+Retain the module's existing target selection, immediate-swing rules,
+`continue_fight` response, zero penalty and empty attack-speed setter. Native
+repeating callbacks that begin execution remain scheduled after a callback
+error. An external cancellation still needs stop/start to rearm while the
+existing attacking flag is set. The first callback runs two seconds after
+start commits; per-object timers do not reproduce a shared heartbeat phase or
+actor ordering.
+
+Checks load the pulse through the real master compilation gate, dispatch actual
+native callbacks and cover repeat retention, start/stop, transaction rollback,
+error reporting, destruction, actor context and real Lima message routing to a
+controlled actor. They also compose the real target module and an extracted
+attack method. Wall-clock scheduling, full body/NPC
+entry and complete combat remain unvalidated.
+
+#### Lima combat blows
+
+Reviewed **28 September 2026** against the pinned [blows pipeline][lima-combat-blows],
+[typed producer][lima-event-producer] and [damage sink][lima-combat-damage-sink],
+using the configuration above. Native execution exercises the adapted module
+with controlled receiving methods; no upstream execution is claimed.
+
+Use dot access for class fields, retaining arrows for calls through object
+fields: `evt.target->query_ghost()`. Pass an explicit final percent `0` to
+`handle_message` for special string results, and match its declaration to the
+five-argument implementation with a mixed first argument. Normalize the
+weaponless producer's type field to `({"bludgeon"})`, matching weapon sources.
+The original scalar string fails a resistance search with a string needle.
+
+Treat nil from a resistance, effect, health or armour modifier as discarding
+that event. Stop its remaining modifiers and result delivery, then continue
+later queue entries. The original outer queue already recognizes nil, but its
+inner modifier chains pass discarded events to later callbacks or dereference
+them. No general provider-error recovery policy is introduced.
+
+Preserve resistance, vulnerability, source, effect, natural-armour and worn-armour
+order. Resistance halves once and vulnerability doubles once with integer
+rounding; duplicate matches do not stack. Special string results skip effects
+and natural armour, still visit the source and worn armour, and retain miss,
+fatal and disarm handling. Successful drains clear the queue, including events
+appended during delivery. Uncaught failures roll back the transaction; caught
+failures retain partial effects and the queue under native catch semantics.
+
+Checks include actual damage-source and damage-sink modules. The sink reduces
+weaponless damage, but its separate `evt->weapon` access still fails when
+forwarding durability loss to a weapon. That runtime blocker remains to be
+adapted; compilation alone does not exercise it. Adversary compilation now
+reaches `std/adversary/formula/skills.c`, whose object/string concatenation and
+float-to-integer assignment need review. Body/human retain the skill-setter
+argument mismatch. Full armed armour integration, real combat message delivery,
+full body entry and alternate combat configurations remain unvalidated.
 
 #### Lima file metadata
 
