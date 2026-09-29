@@ -2384,11 +2384,11 @@ unwield callback. The recording wearer does not establish real body cleanup
 or inventory accounting. Persistent flags and durability fields are saved;
 adjectives and wielding limbs still need separate registration/setup work.
 
-Real armour and weapon cloning reach compile errors in `crafting_d`, after the
-[message/colour adaptation](#lima-message-files-and-colours). The isolated tests replace only
-salvage-category and message-set lookups in disposable copies. They do not
-establish crafting compatibility, full combat or complete item
-restoration. Sword and fullplate still need float arguments at their own value
+Real armour and weapon cloning now succeeds with the
+[crafting registry adaptation](#lima-crafting-registry) and prepared recipes.
+The isolated item tests still replace salvage-category and message-set lookups
+in disposable copies; separate integration checks use the real daemons. These
+checks do not establish full combat or complete item restoration. Sword and fullplate still need float arguments at their own value
 and mass setters; throwable and ranged-weapon consumers retain separate errors.
 
 #### Lima message files and colours
@@ -2432,7 +2432,65 @@ caught refresh failures atomic would change the mudlib's existing policy.
 at `idx - 1` becomes `[0..-1]` and returns the entire wrapped string when `idx`
 is zero. Interactive colour selection and the troll-based message test helper
 remain unvalidated. Widgets and player colour commands have separate compile
-errors; complete item initialization still stops at crafting.
+errors. Real item initialization is covered with the
+[crafting registry adaptation](#lima-crafting-registry).
+
+#### Lima crafting registry
+
+Reviewed and exercised **28 September 2026** against the pinned
+[crafting daemon][lima-crafting-registry] and [material configuration][lima-crafting-materials],
+using distinct nil and preserved call-out player context. Checks use the real
+master, simul efuns and daemon persistence. No upstream execution is claimed.
+
+Use `nil` for absent object, string and array results, `0.0` for float zeros,
+and explicit integer zero for rejected upgrade registration. Supply `"and"` to
+list-rendering helpers. Test recipe presence with `!!crafting_recipes[name]`:
+a missing entry is nil, which differs from integer zero. A failed
+[`load_object`](efun/load_object.md) can return nil without throwing; check both
+the caught error and the returned object before invoking recipe methods.
+
+Initialize material and quality definitions before loading recipes, then
+validate upgrade schemes against the loaded registry. Preserve nonempty saved
+materials as authoritative; an empty saved mapping reloads configuration.
+Quality definitions and recipe indexes are `nosave` and rebuild on startup.
+Strip the `quality-` prefix from configuration keys, publish the parsed quality
+mapping, and use integer powers of two for its weights. The per-category
+quality query derives cumulative thresholds from those weights. Stock metal
+and wood retain their eight-level distributions; shorter quality lists work
+in the registry, but special-weapon randomization still assumes eight levels.
+The unused aggregate quality query retains its legacy shared threshold array.
+
+Explicit configuration reload replaces categories, qualities and upgrade
+schemes. Parse before publishing, so a caught parse error leaves those tables
+and their save unchanged. Missing configuration logs an error and retains the
+current tables; fresh startup retains the built-in quality defaults. Invalid
+upgrade entries are reported and omitted, while valid entries are saved.
+Rebuild both material lookup caches and the longest-name value after category
+changes. Removing a category also removes its upgrade schemes.
+
+Recipe reload builds replacement recipe, filename and station indexes, skipping
+files with missing metadata, failed loads, throwing getters or invalid result
+types. Repeated reloads do not duplicate station entries; removed files lose
+their recipes and filenames. Prune upgrade schemes that reference unavailable
+recipes. Restoring such a recipe requires reloading configuration or explicitly
+registering its upgrade scheme again. A missing recipe directory aborts before
+replacing the indexes. These guarantees concern registry publication; caught
+errors can still preserve side effects from recipe initialization or getters.
+See [transactional error handling](efun/catch.md).
+
+With eleven recipe objects preloaded in separate calls, initialization registers
+39 materials, thirteen stock recipes and all seven stock upgrade schemes;
+subsequent armour and weapon cloning succeeds. Loading remains synchronous,
+with the 4,000 ms execution budget unchanged. The audit's cold stock scan
+exceeded that budget in a debug build, mostly during compilation; a complete
+cold boot remains unvalidated.
+
+Eight stock recipes still have value-argument, throwable or food/drink compile
+errors. Repair/payment remains separate work: money-only repair can report
+success without funds, and sparse material pouches fail estimation on nil
+arithmetic. The money daemon and interactive crafting consumers retain their
+own compile blockers. Registry support does not establish working repairs or
+a complete crafting workflow.
 
 #### Lima file metadata
 
@@ -3255,3 +3313,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-weapon-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/weapon.c
 [fl-type-qualifiers]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y#L3305-L3319
 [fl-implode-strings]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/array.cc#L341-L370
+
+[lima-crafting-registry]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/crafting_d.c
+[lima-crafting-materials]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/crafting-materials
