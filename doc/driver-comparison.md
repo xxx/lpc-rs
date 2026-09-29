@@ -2255,11 +2255,11 @@ durability. Weaponless events call neither durability hook. Action strings,
 including empty and one-character strings, already return unchanged.
 
 The [damage-daemon adaptation](#lima-damage-daemon) below initializes the type
-registry before resistance/weakness setters use it. The full durability module
-still passes a float to `random` and assigns a float to an int.
-Checks use recording hooks and five unchanged durability methods extracted
-from that module. They cover wear ordering, absolute loss, clamping and rollback,
-but do not establish complete armour/weapon composition or repair behavior.
+registry before resistance/weakness setters use it. Sink checks use recording
+hooks and five unchanged durability methods extracted from that module; the
+[durability adaptation](#lima-durability) also exercises the complete module.
+These checks cover wear ordering, absolute loss, clamping and rollback, but do
+not establish complete armour/weapon composition or crafting workflows.
 
 #### Lima damage daemon
 
@@ -2294,6 +2294,49 @@ empty configuration saves an empty registry. Malformed saved state aborts
 loading without overwriting the file. An uncaught caller error rolls back
 initial publication and deferred saves. Restart and rollback checks exercise
 these paths; complete weapons, armour and combat remain unvalidated.
+
+#### Lima durability
+
+Reviewed and exercised **28 September 2026** against the pinned
+[durability module][lima-durability], [damage source][lima-combat-damage-source],
+[damage sink][lima-combat-damage-sink] and [save module][lima-save-module].
+Checks use distinct nil, preserved call-out player context, the real master
+and small receivers inheriting these complete modules. No upstream execution
+is claimed.
+
+Use explicit [`to_int`](efun/to_int.md) conversions at the two floating results:
+
+```c
+durability = 1 + random(to_int(current_max_dura * 0.1));
+current_max_dura = to_int(current_max_dura * (1 - (random(5) / 100.0)));
+```
+
+This retains the original arithmetic and truncates toward zero. FluffOS's core
+compiler inserts these conversions for typed integer efun arguments and integer
+assignments. Its compiler and grammar were source-reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0`, with typed function bodies and core
+`random`/`to_int` enabled; no optional package is required.
+[Efun conversion][fl-durability-conversions], [assignment][fl-durability-assignment].
+
+In `internal_setup`, replace `this_object()->add_save(...)` with the local call
+`add_save(...)`. Dynamic dispatch skips this protected helper and silently leaves
+durability out of the save. The local call registers `durability` and
+`current_max_dura`. The receiver must supply a visible `add_save` definition,
+normally by inheriting `M_SAVE`; compiling the durability module alone therefore
+reports an unresolved helper. [Sibling function resolution](lpc/inheritance.md#functions-supplied-by-the-receiving-object).
+
+Preserve the original saved-field policy: `max_dura` is not registered. A fresh
+receiver lazily adopts the restored current maximum as its original maximum;
+a receiver configured before restoration retains that configured original.
+Checks exercise save round trips, repeated registration and transactional rollback.
+
+Repair uses rolls 0–4, despite the source comment saying 0–5, and refills to the
+truncated new maximum. Small maxima can reach zero, after which percentage
+queries divide by zero. `set_max_durability(0)` is ignored; changing a nonzero
+maximum leaves existing durability untouched. These are separate item policies,
+not reasons to relax native types. Real source/sink and salvage checks cover
+wear and damaged-state initialization; complete weapons, armour and the
+crafting/payment workflow retain separate porting blockers.
 
 #### Lima file metadata
 
@@ -3074,6 +3117,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-empty-array]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/array.cc#L89-L99
 [fl-array-equality]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/ops/ops.cc#L121-L126
 [lima-durability]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_durability.c
+[lima-combat-damage-source]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_damage_source.c
+[fl-durability-conversions]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/compiler.cc
+[fl-durability-assignment]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y
 [lima-combat-behaviors]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/behaviors.c
 [lima-combat-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
 [lima-combat-targets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/target.c
