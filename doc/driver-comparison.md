@@ -2831,10 +2831,63 @@ Checks exercise the real moving-room, controller, buttons, press action and door
 callbacks, including a two-stop queue and landing lamp updates. They replace
 `INDOOR_ROOM` with fixture room-state and placement storage over the real
 container; stock object placements are recorded, not spawned as a world.
-The real room hierarchy still encounters room-description compile blockers.
-Full room initialization, room chat, body/parser entry and cold boot remain
+The separate room-foundation checks below use the actual room hierarchy.
+Full stock-world initialization, body/parser entry and cold boot remain
 unvalidated. Timers use the native queue with expedited dispatch, without
 claiming wall-clock accuracy or cancellation of an already-running callback.
+
+#### Lima room foundation
+
+Reviewed and exercised **29 September 2026** against the pinned
+[base room][lima-base-room], [room descriptions][lima-roomdesc] and
+[room state][lima-room-state], with the default positive light level and
+`OBVIOUS_EXITS_BOTTOM` enabled. These use distinct nil and preserved call-out
+players. Upstream drivers were not executed.
+
+Use the mudlib link's `is_user()` marker when separating player descriptions
+from other inventory, and pass nil as the `format_list` separator to retain
+its default `and`. Return nil for an unknown state description. Expand only
+the matched `$state` segments from Lima's `reg_assoc` simul; iterating
+every segment can replace ordinary text between markers with another state's
+description. Preserve unknown markers and the existing marker expression.
+
+Save the previous forced-look flag, catch the description and recipient call,
+restore the flag, then rethrow an error. Resetting it to zero only after a
+successful `tell(who, long())` leaks forced mode when the caller catches an
+error, and loses the outer mode during a nested look. Use the same positive-light
+threshold for change notices as for looking: zero and negative light are dark.
+Give `do_look_at_str` its string argument and return a handled result from both
+it and `do_smell`; otherwise their verbs append a second fallback message.
+
+Register arrival and departure as invoking function pointers and keep their
+identity across repeated chat setup. Own separate IDs for the chat tick and
+deferred listener check. Coalesce checks, cancel both old handles on setup,
+and clear a tick's handle before invoking its message callback. Start chat
+when a listener arrives, keep one tick while listeners remain, and cancel it
+after the last departure. A callback that reconfigures chat or moves a listener
+leaves its deferred check in charge of rearming. Callback errors retain the
+existing error policy; there is no automatic retry.
+
+Use bare function names with [`call_out`](efun/call_out.md) and inspect the
+owned ID with [`query_call_out`](efun/query_call_out.md). Remove the original
+unused `chat_msg` argument: the native third argument specifies repetition,
+rather than a callback argument. Default an omitted interval to 15 seconds,
+and reject nonpositive intervals or messages other than a string, nonempty
+string array or function before changing configuration or timers. Preserve
+the original chance policy: initially 20, updated only by a positive supplied
+chance, and tested with `random(100) <= chance`.
+
+Checks exercise the actual base/indoor room, state, descriptions, movement,
+hooks, chat timers and look/listen/smell verbs with fixture actors and bounded
+real object spawning. Wizard location formatting goes through the real security
+daemon. The base/indoor/outdoor and moving-room/elevator hierarchies compile;
+this does not establish outdoor weather, full stock-world initialization,
+body/parser entry or cold boot. [Shared inventory grouping][lima-object-grouping]
+still casts the string from [object `ob_state`][lima-names] to an integer;
+the [school chat examples][lima-school-room-chat] also need their trailing
+`#include` semicolons removed. Those remain separate
+adaptations. Timer checks dispatch through the native queue by ID and do not
+measure wall-clock accuracy or cancel an already-running callback.
 
 #### Lima file metadata
 
@@ -3693,3 +3746,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-elevator-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/elevator_button.c
 [lima-elevator-call-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/elevator_call_button.c
 [lima-stock-elevator]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/elevator.c
+[lima-base-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/base_room.c
+[lima-roomdesc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/room/roomdesc.c
+[lima-room-state]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/room/state.c
+[lima-object-grouping]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/objcalls.c
+[lima-school-room-chat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/room_chat01.c
