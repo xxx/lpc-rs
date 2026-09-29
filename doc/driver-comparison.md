@@ -2790,10 +2790,51 @@ room flags on initialization and copied state as well as ordinary transitions.
 Checks use actual door/gate code with fixture actors and room-state storage,
 including both stock cave paths. Timer callbacks are dispatched through the
 native queue; these checks do not measure wall-clock accuracy or cancellation
-of an already-running callback. Full elevator travel, controller queue
-progression and landing lamps remain separate work. The moving-room/controller
-classes still encounter the existing room-description compile blockers, and
-the unused legacy internal-door class retains its old room/verb interface.
+of an already-running callback. Moving-room/controller checks are described
+below. The unused legacy internal-door class retains its old room/verb interface.
+
+#### Lima moving rooms and elevators
+
+Reviewed and exercised **29 September 2026** against the pinned
+[moving room][lima-moving-room], [elevator controller][lima-elevator],
+[panel button][lima-elevator-button], [landing button][lima-elevator-call-button]
+and [stock setup][lima-stock-elevator]. These use distinct nil and preserved
+call-out players, as above. Upstream drivers were not executed.
+
+Schedule arrival with the bare `arrive` function and register the controller's
+closed-door hook as a bare function, retaining its pointer identity across
+repeated setup. The original closures return function pointers without calling
+them. Bind the progress announcement with `&tell_from_inside(this_object(),
+"The elevator continues ...\n")`; its original comma-expression closure only
+returns the string. Keep separate arrival and progress timer IDs, cancel and
+clear both before notifying a landing, and resolve arrival from `travelling_to`;
+`where` is nil while moving. A progress callback may finish the trip or start another one:
+rearm only while the same trip remains active, using its arrival ID to distinguish
+it from a new trip. Repeated arrival and current-stop requests are no-ops.
+
+Validate destinations and load their rooms before changing trip or queue state.
+This prevents a caught bad queue insertion from leaving an invalid head, and
+prevents an unavailable landing from silently completing a trip. Revalidate the
+pending destination at arrival. Arbitrary callback errors retain the existing
+partial-effect limits; this adds no recovery policy for routes changed during
+travel. Preserve FIFO queue order, call return codes and the landing-before-door
+arrival sequence. Closed notifications received during motion must not start
+another trip.
+
+Use nil for absent string arguments and `direct_press_obj(object ob)` for both
+button permission methods. Check an unkeyed button's key length when rendering
+its label. In stock setup, set the door direction to east and derive its initial
+destination from `query_location()`, matching the initial Church stop rather than
+the original invalid Attic path.
+
+Checks exercise the real moving-room, controller, buttons, press action and door
+callbacks, including a two-stop queue and landing lamp updates. They replace
+`INDOOR_ROOM` with fixture room-state and placement storage over the real
+container; stock object placements are recorded, not spawned as a world.
+The real room hierarchy still encounters room-description compile blockers.
+Full room initialization, room chat, body/parser entry and cold boot remain
+unvalidated. Timers use the native queue with expedited dispatch, without
+claiming wall-clock accuracy or cancellation of an already-running callback.
 
 #### Lima file metadata
 
@@ -3647,3 +3688,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-oak-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/large_oak_door.c
 [lima-elevator-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/elevator_door.c
 [lima-gate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/gate.c
+[lima-moving-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/moving_room.c
+[lima-elevator]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/elevator.c
+[lima-elevator-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/elevator_button.c
+[lima-elevator-call-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/elevator_call_button.c
+[lima-stock-elevator]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/elevator.c
