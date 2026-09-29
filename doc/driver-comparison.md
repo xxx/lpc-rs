@@ -615,6 +615,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Literal string search | `strsrch(text, needle, flag)` finds the first match with flag `0`, or the last with any nonzero flag. Positions use grapheme clusters; some fast paths differ in boundary checks. Integer zero can match the C-string terminator. [Implementation][fl-strsrch-source], [Unicode helper][fl-string-search], [tests][fl-strsrch-tests]. | The native name is `strindex`; rename calls or provide a mudlib wrapper. Positions and integer needles use Unicode scalar values. Combining marks can match separately; integer zero matches only an actual NUL. Empty string needles match the first or last boundary. [Reference](efun/strindex.md). |
 | String trimming | `trim`, `ltrim` and `rtrim` take an optional string set as argument two in `PACKAGE_TRIM`. Omitted or empty sets select space, tab, LF, CR, vertical tab and form feed. Custom sets match Unicode scalars; the wrapper uses NUL-terminated input. [Wrapper][fl-trim], [helper][fl-trim-helper]. | Use [`trim(text, where, chars)`](efun/trim.md): 0/default for both, 1 for left and 2 for right. Move custom sets to argument three. An explicit empty set removes nothing, so omit it to retain upstream defaults. Native strings preserve NUL, and an integer character is also accepted. Use `map(lines, trim, 2)` for right-trim array callbacks. Preserve any mudlib-local helpers with narrower whitespace rules. |
 | Literal replacement | `replace_string` supports all matches, a maximum count, or an inclusive occurrence range. Expansion past its configured limit returns an undefined value; some paths treat NUL as the end of the string. [Implementation][fl-replace-string-source]. | Supports the same three call forms with non-overlapping literal matches. Changed results above 8,192 UTF-8 bytes raise errors; embedded NULs are ordinary data. Review overflow handling and output sizes. [Reference](efun/replace_string.md). |
+| String joining | The string form of `implode` joins only string entries, omitting nonstrings and their delimiters. [Implementation][fl-implode-strings]. | Native [`implode`](efun/implode.md) stringifies every element, including nil. Filter unwanted values explicitly, or initialize unused display cells with `""`, as in the [Lima colour-table adaptation](#lima-message-files-and-colours). |
 | String repetition | `repeat_string(text, count)` in `PACKAGE_CONTRIB` repeats the whole string, reducing a positive count to fit the configured byte limit. Nonpositive counts return an empty string. [Implementation][fl-repeat-string], [reference][fl-repeat-reference]. | Replace calls with `text * count`; parenthesize compound operands. Nonpositive counts also produce an empty string. Native results above 8,192 UTF-8 bytes raise an error instead of returning fewer repetitions. Oversized constant expressions can fail compilation; dynamic overflow is a catchable runtime error. Review callers relying on capped output. [Strings](lpc/types.md). |
 | Mixed numeric comparisons | Ordering and equality compare int and float operands using C++ numeric promotion, which can round large integers. [Implementation][fl-numeric-comparisons]. | [All six comparisons](lpc/comparisons.md) accept ints and floats without warnings and compare their exact numeric values. For example, `9007199254740993 > 9007199254740992.0` is true. Natural sorting, min/max and array membership use the same numeric rule. Mapping keys, array set operations and grouping remain type-sensitive. |
 | Rounding | `round(float)` in `PACKAGE_MATH` returns a float using the C math rounding operation, with halfway values rounded away from zero. [Declaration][fl-math-spec], [implementation][fl-round]. | [`round(int \| float)`](efun/round.md) also returns a float and rounds halfway values away from zero, alongside [`floor`](efun/floor.md) and [`ceil`](efun/ceil.md). Integer arguments are promoted to float and can lose precision at large magnitudes. Use `to_int(round(value))` where a declared integer result is required; native typing does not implicitly convert the result to int. |
@@ -1517,12 +1518,11 @@ prototypes: the registry can hold arrays of alternatives.
 
 The [effects queue adaptation](#lima-effects-queues) lets the actual living
 compile; the [event-info adaptation](#lima-combat-event-records) advances body
-compilation into the combat code. Default message lookup remains blocked by the
-[message daemon's][lima-message-daemon] dependency on
-[`m_colours`][lima-message-colours], which assigns a `floor` float result to an
-integer. Default-registry tests use an explicit daemon fixture; a separate real
-lookup confirms the blocker. Message-file loading, full body entry and combat
-remain unvalidated.
+compilation into the combat code. The [message/colour adaptation](#lima-message-files-and-colours)
+enables real default-message lookup and message-file loading. The isolated
+rendering tests retain an explicit daemon fixture; separate checks exercise
+the real registry with living and damage-source consumers. Full body entry
+and combat remain unvalidated.
 
 #### Lima effects queues
 
@@ -2384,12 +2384,55 @@ unwield callback. The recording wearer does not establish real body cleanup
 or inventory accounting. Persistent flags and durability fields are saved;
 adjectives and wielding limbs still need separate registration/setup work.
 
-Real armour cloning reaches compile errors in `crafting_d`; real weapon cloning
-reaches `m_colours` through `messages_d`. The isolated tests replace only
+Real armour and weapon cloning reach compile errors in `crafting_d`, after the
+[message/colour adaptation](#lima-message-files-and-colours). The isolated tests replace only
 salvage-category and message-set lookups in disposable copies. They do not
-establish either daemon's compatibility, full combat or complete item
+establish crafting compatibility, full combat or complete item
 restoration. Sword and fullplate still need float arguments at their own value
 and mass setters; throwable and ranged-weapon consumers retain separate errors.
+
+#### Lima message files and colours
+
+Reviewed and exercised **28 September 2026** against the pinned
+[colour module][lima-message-colours] and [message daemon][lima-message-daemon],
+using distinct nil and preserved call-out player context. Checks use the real
+master, simul efuns, colour daemon, daemon persistence and stock message files.
+No upstream execution is claimed.
+
+In `use_colour`, explicitly convert the palette index with
+`to_int(floor(...))`, retaining floor, clamping and the zero-width fallback.
+Initialize each row in `colour_table` with `allocate(num_horiz, "")` so unused
+cells contribute no text. Native [`implode`](efun/implode.md) stringifies every
+element, including nil; an uninitialized cell otherwise prints `nil` in a
+ragged table. FluffOS's string form skips nonstrings and their delimiters.
+That core implementation was source-reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0` on the date above, with no optional
+package requirement. [Implementation][fl-implode-strings].
+
+Pass an explicit `"and"` separator to both `format_list` calls in the message
+daemon's missing/unknown combat-key diagnostics. Keep message-file parsing,
+punctuation and repeated-key alternatives in LPC. Fresh loading reads all
+eleven stock files, and real living and damage-source consumers retrieve their
+default messages. Unicode gradients and visible lengths use native scalar
+positions; table checks cover ragged rows, automatic columns and colour markers.
+
+Retain the existing persistence policy. A restored mapping, including an empty
+one, takes precedence over message files. Batch loads update memory only;
+explicit saving or a non-batch load persists the result. Base-message reloads
+merge keys, while combat/living sets replace their mappings. A missing source
+directory or malformed save fails initialization; an existing empty directory
+produces an empty saved registry. See [daemon persistence](#lima-daemon-persistence).
+
+Refresh clears the registry before loading files. If its caller catches a later
+error, an empty or partially rebuilt live registry can remain while the old
+save stays unchanged. An uncaught error rolls back the transaction. Making
+caught refresh failures atomic would change the mudlib's existing policy.
+
+`colour_truncate` also retains its leading-newline edge case: the slice ending
+at `idx - 1` becomes `[0..-1]` and returns the entire wrapped string when `idx`
+is zero. Interactive colour selection and the troll-based message test helper
+remain unvalidated. Widgets and player colour commands have separate compile
+errors; complete item initialization still stops at crafting.
 
 #### Lima file metadata
 
@@ -3211,3 +3254,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-armour-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/armour.c
 [lima-weapon-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/weapon.c
 [fl-type-qualifiers]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y#L3305-L3319
+[fl-implode-strings]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/array.cc#L341-L370
