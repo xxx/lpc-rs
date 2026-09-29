@@ -2759,9 +2759,41 @@ The migrated pick action accepts the tool and retains the existing skill policy.
 Checks use real doors, keys, chest, container creation and verb methods with
 fixture actors that record requested movement. They also exercise the
 [stock oak door][lima-oak-door]'s callbacks against fixture room-state storage.
-This does not establish full body/parser integration, elevator timer behavior,
-stock gate wiring or a complete cold boot. Arbitrary callbacks retain their
-existing partial-effect limits.
+Elevator door timing and stock gate wiring are covered below. Full body/parser
+integration and a complete cold boot remain unvalidated. Arbitrary callbacks
+retain their existing partial-effect limits.
+
+#### Lima elevator doors and gates
+
+Reviewed and exercised **29 September 2026** against the pinned
+[elevator door][lima-elevator-door] and [stock gate][lima-gate], with the same
+configuration as the door migration above. Upstream drivers were not executed;
+these repairs use existing function callbacks, timer handles and cancellation.
+
+Register the elevator's arrival/departure hooks as bare functions, retaining
+their pointer identities so repeated `on_clone` calls replace the same hooks.
+Replace the string call-outs with `call_out(call_out_close_door, 15)`, correcting
+the departure callback's misspelled name. Keep one owned timer: arrival replaces
+the previous timer, departure reuses a pending close, and early closure cancels
+it. Clear the handle before notifying the controller. A repeated departure
+request must wait while the door is open; a closed door can reply immediately.
+Keep both peer states and room flags consistent before a closed notification.
+Preserve the automatic transition messages, whose base callbacks inspect the
+old state; redundant closes should not emit another message or notification.
+
+The stock gate must use its supplied direction instead of the literal `"dir"`.
+Delegate its base transition callbacks and maintain `gate_open` in each gate's
+own environment. The original player-room/hard-coded North Tunnel updates
+leave North Cave's description stale when operated from the tunnel. Refresh
+room flags on initialization and copied state as well as ordinary transitions.
+
+Checks use actual door/gate code with fixture actors and room-state storage,
+including both stock cave paths. Timer callbacks are dispatched through the
+native queue; these checks do not measure wall-clock accuracy or cancellation
+of an already-running callback. Full elevator travel, controller queue
+progression and landing lamps remain separate work. The moving-room/controller
+classes still encounter the existing room-description compile blockers, and
+the unused legacy internal-door class retains its old room/verb interface.
 
 #### Lima file metadata
 
@@ -3613,3 +3645,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-open-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/open.c
 [lima-pick-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/pick.c
 [lima-oak-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/large_oak_door.c
+[lima-elevator-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/elevator_door.c
+[lima-gate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/gate.c
