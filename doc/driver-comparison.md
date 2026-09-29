@@ -2223,14 +2223,44 @@ fatal and disarm handling. Successful drains clear the queue, including events
 appended during delivery. Uncaught failures roll back the transaction; caught
 failures retain partial effects and the queue under native catch semantics.
 
-Checks include actual damage-source and damage-sink modules. The sink reduces
-weaponless damage, but its separate `evt->weapon` access still fails when
-forwarding durability loss to a weapon. That runtime blocker remains to be
-adapted; compilation alone does not exercise it. Adversary compilation now
-reaches `std/adversary/formula/skills.c`, whose object/string concatenation and
-float-to-integer assignment need review. Body/human retain the skill-setter
-argument mismatch. Full armed armour integration, real combat message delivery,
+Checks include actual damage-source and damage-sink modules, with the sink
+adaptation below covering armed damage and durability forwarding. Adversary
+compilation now reaches `std/adversary/formula/skills.c`, whose object/string
+concatenation and float-to-integer assignment need review. Body/human retain
+the skill-setter argument mismatch. Full armed armour integration, real combat message delivery,
 full body entry and alternate combat configurations remain unvalidated.
+
+#### Lima damage sink
+
+Reviewed and exercised **28 September 2026** against the pinned
+[damage sink][lima-combat-damage-sink], [damage daemon][lima-damage-daemon] and
+[durability module][lima-durability], using the combat configuration above,
+distinct nil and preserved call-out player context. No upstream execution is
+claimed.
+
+Change `evt->weapon->decrease_durability(reduced)` to
+`evt.weapon->decrease_durability(reduced)`. The original class-field arrow fails
+after the armour's durability hook, before the weapon's hook. Dot access forwards
+the same reduction to the weapon and preserves event identity. The armed path
+through the real producer, source, sink and result handler then delivers damage
+and clears the queue.
+
+Preserve the sink's existing policies. With an array of damage types, armour
+class contributes only for matching resistances or weaknesses; armour class
+alone provides no reduction. Duplicate types stack, and a type can have both a
+resistance and a weakness. Clamp damage after all types, then calculate wear
+from the net reduction. A weakness can make that reduction negative, but
+`decrease_durability` takes its absolute value, so both items still lose
+durability. Weaponless events call neither durability hook. Action strings,
+including empty and one-character strings, already return unchanged.
+
+Two provider blockers remain separate. A fresh damage daemon leaves its type
+list empty because `damage == ({})` compares [array identity](lpc/comparisons.md);
+explicitly loading its configuration allows valid resistance/weakness setters
+to work. The full durability module also passes a float to `random` and assigns
+a float to an int. Checks use recording hooks and five unchanged durability methods extracted
+from that module. They cover wear ordering, absolute loss, clamping and rollback,
+but do not establish complete armour/weapon composition or repair behavior.
 
 #### Lima file metadata
 
@@ -3007,6 +3037,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-combat-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/combat_modules.h
 [lima-combat-blows]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/base.c
 [lima-combat-damage-sink]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_damage_sink.c
+[lima-damage-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/damage_d.c
+[lima-durability]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_durability.c
 [lima-combat-behaviors]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/behaviors.c
 [lima-combat-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
 [lima-combat-targets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/target.c
