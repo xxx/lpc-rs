@@ -593,7 +593,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Class copying and conversion | `assemble_class` creates positional class storage from an array, without a named definition; `disassemble_class` returns a shallow field array. Their round trip copies the outer record while sharing nested references. Requires `PACKAGE_CONTRIB`. [Implementation][fl-class-assembly]. | Replace copy-only round trips with [`copy_class`](efun/copy_class.md), which preserves nominal identity and retained field views. Converting between different class types requires explicit named construction, even when their layouts match. For example, build `new(class limb, health: data.health, max_health: data.max_health, parent: data.parent, flags: data.flags)` and let omitted integer fields default to zero. Replace layout-count repair checks with a guarded nominal cast and presence check; compatible [field views](lpc/classes.md) do not require resetting a record merely because fields changed. Generic assembly/disassembly and foreign class-save import remain unsupported. |
 | Class visibility | Accepts visibility modifiers on class definitions but discards them; inheritance copies classes regardless of the modifier. [Grammar][fl-class-grammar], [declarations][fl-class-declarations], [inheritance][fl-class-inheritance]. | Enforces `private class`: descendants cannot name the class or access its members, including through `mixed`. Public and protected classes remain inheritable, subject to inherit visibility. Defining code retains access. If descendants rely on an upstream private declaration being exposed, make it public/protected or include its definition explicitly. [Reference](lpc/classes.md#declaration-visibility). |
 | Inheritance visibility | Supports access modifiers on inherits; private functions and globals become hidden when inherited again. The reviewed build enables `SENSIBLE_MODIFIERS`, so explicit public declarations do not defeat a private inherit. [Grammar rules][fl-inherit-grammar], [compiler][fl-pragma-compiler], [defaults][fl-options]. | Supports public, protected and private inheritance, including local access and restricted simul-efun exports. Other inherit modifiers remain unsupported. [Reference](lpc/inheritance.md). |
-| Inherited function qualifiers | Named qualifiers match direct-parent path suffixes with the source extension removed. Both named qualifiers and unqualified `::foo()` search direct parents in declaration order for the first defining the function. Qualified calls through a private direct inherit are rejected. [Compiler, `arrange_call_inherited`][fl-pragma-compiler]. | Source basenames and unqualified `::foo()` search direct parents in reverse declaration order, giving later inherits precedence. Explicit aliases select one parent and take precedence over automatic names; path-suffix qualifiers are unsupported. Private imports remain callable within the importing source. [Reference](lpc/inheritance.md#calls-and-aliases). |
+| Inherited function qualifiers | Named qualifiers match direct-parent path suffixes with the source extension removed. Both named qualifiers and unqualified `::foo()` search direct parents in declaration order for the first defining the function. Qualified calls through a private direct inherit are rejected. Basic-type keywords can qualify calls, including `object::`. [Compiler, `arrange_call_inherited`][fl-pragma-compiler], [keyword grammar][fl-type-qualifiers]. | Source basenames and unqualified `::foo()` search direct parents in reverse declaration order, giving later inherits precedence. Explicit aliases select one parent and take precedence over automatic names; use an alias for a type-keyword basename such as `object`. Path-suffix qualifiers are unsupported. Private imports remain callable within the importing source. [Reference](lpc/inheritance.md#calls-and-aliases). |
 | Predefined source macros | `__FILE__` names the current in-game source; `__DIR__` includes a trailing `/`. Both expand at use time, including in macro bodies. `__VERSION__` is the build's version string. These names cannot be redefined or undefined. [Expansion and protection][fl-predefined], [version registration][fl-pragma-lexer]. | Provides `__FILE__`, `__DIR__`, and `__VERSION__`; the version identifies `lpc-rs` and its package version. Driver-specific configuration checks still need adaptation. [Reference](lpc/macros.md#predefined-macros). |
 | Warning and type-retention pragmas | `warnings` / `no_warnings` switch warning reporting as compilation proceeds; includes share the setting. `save_types` / `no_save_types` control retention of argument types. Both positive flags are enabled by the reviewed defaults. Unknown pragmas warn. [Pragmas][fl-pragmas], [lexer][fl-pragma-lexer], [compiler][fl-pragma-compiler], [defaults][fl-options]. | `warnings` / `no_warnings` follow each warning's primary source location, including repeated includes and macro invocations. This can differ from FluffOS's reporting-time setting for delayed warnings. `save_types` is accepted silently because function types are always retained. `no_save_types` and other unknown pragmas remain errors even with warnings disabled. [Reference](lpc/pragmas.md). |
 | Constructor arguments | `clone_object(path, ...)` forwards extra arguments to the new object's `create`. [Reference][fl-clone]. | `clone_object` forwards extra arguments after global initialisation. Constructors also run without arguments when loading prototypes; use defaults or handle `0`. Supplied declared arguments are type-checked. [Reference](efun/clone_object.md). |
@@ -1839,8 +1839,9 @@ mutations, while an uncaught error rolls back the native attempt. The existing
 object guard skips clones destroyed during creation.
 
 Checks exercise real path resolution, cloning and container movement with a
-recording `do_wear` callback. The helper now compiles independently; full armour,
-worn-state behavior and body entry remain unvalidated. The
+recording `do_wear` callback. The helper now compiles independently; complete
+armour-wrapper checks are described [below](#lima-armour-and-weapons), and real
+body entry remains unvalidated. The
 [wield setup adaptation](#lima-wield-setup) handles the corresponding absent
 path prefix in the next helper.
 
@@ -2099,13 +2100,16 @@ calls still bypass health/membership checks, and several refused `wield` paths
 still yield one from `do_wield`. Duplicate dual-unwield callbacks and empty-slot
 notifications are unchanged. The [wield][lima-wield-command] and
 [dualwield][lima-dualwield-command] commands still need nil string arguments in
-their `do_wield(ob, 0, 1)` calls. Full weapon objects, inventory movement, parser
-dispatch, live body entry, full combat and alternate wield modes remain
-unvalidated; flags and several receiving callbacks are controlled in the tests.
+their `do_wield(ob, 0, 1)` calls. Inventory movement, parser dispatch, live body
+entry, full combat and alternate wield modes remain unvalidated; flags and
+several receiving callbacks are controlled in the tests. Complete weapon
+wrapper checks and their dependency limits are described
+[below](#lima-armour-and-weapons).
 
 Adversary compilation next needs the [limb armour adaptations below](#lima-limb-armour).
-Body compilation retains the separate skill-setter mismatch, and `std/weapon.c`
-still needs adaptation of its `object::ob_state()` inherited-call spelling.
+Body compilation retains the separate skill-setter mismatch. The
+[weapon adaptation](#lima-armour-and-weapons) replaces `object::ob_state()`
+with an explicit inherit alias.
 
 #### Lima limb armour
 
@@ -2147,12 +2151,12 @@ before reconciliation. Uncaught errors roll back writes, including removal
 followed by a later error. No general callback recovery policy is added.
 
 Generic underlayers still try only the right limb, and low-level wear eligibility
-is unchanged. Full [wearable objects][lima-wearable], worn flags, stat hooks,
-inventory movement, parser dispatch, live body entry, scheduled combat and
-alternate armour modes remain unvalidated. The wearable module still has
-integer returns in void methods; `std/armour.c` also needs adaptation of its
-`object::mudlib_setup()` inherited-call spelling. The pulse and blows
-adaptations below address the next selected combat modules.
+is unchanged. The [armour/weapon adaptation](#lima-armour-and-weapons) fixes the
+wearable module's integer returns in void methods and the armour wrapper's
+`object::` spelling. Its isolated checks exercise worn flags and removal through
+the complete wrapper. Real stat hooks, inventory movement, parser dispatch,
+live body entry, scheduled combat and alternate armour modes remain unvalidated.
+The pulse and blows adaptations below address the next selected combat modules.
 
 #### Lima combat pulse
 
@@ -2258,8 +2262,10 @@ The [damage-daemon adaptation](#lima-damage-daemon) below initializes the type
 registry before resistance/weakness setters use it. Sink checks use recording
 hooks and five unchanged durability methods extracted from that module; the
 [durability adaptation](#lima-durability) also exercises the complete module.
-These checks cover wear ordering, absolute loss, clamping and rollback, but do
-not establish complete armour/weapon composition or crafting workflows.
+These checks cover wear ordering, absolute loss, clamping and rollback. The
+[armour/weapon adaptation](#lima-armour-and-weapons) exercises the complete item
+wrappers with isolated dependencies; real crafting and message loading remain
+separate work.
 
 #### Lima damage daemon
 
@@ -2293,7 +2299,8 @@ configuration. Missing configuration publishes an empty daemon without a save;
 empty configuration saves an empty registry. Malformed saved state aborts
 loading without overwriting the file. An uncaught caller error rolls back
 initial publication and deferred saves. Restart and rollback checks exercise
-these paths; complete weapons, armour and combat remain unvalidated.
+these paths; full combat remains unvalidated. Complete item-wrapper checks and
+their dependency limits are described [below](#lima-armour-and-weapons).
 
 #### Lima durability
 
@@ -2335,8 +2342,54 @@ truncated new maximum. Small maxima can reach zero, after which percentage
 queries divide by zero. `set_max_durability(0)` is ignored; changing a nonzero
 maximum leaves existing durability untouched. These are separate item policies,
 not reasons to relax native types. Real source/sink and salvage checks cover
-wear and damaged-state initialization; complete weapons, armour and the
-crafting/payment workflow retain separate porting blockers.
+wear and damaged-state initialization. Complete armour/weapon wrappers need
+the [adaptations below](#lima-armour-and-weapons); real dependency loading and
+the crafting/payment workflow remain separate porting work.
+
+#### Lima armour and weapons
+
+Reviewed and exercised **28 September 2026** against the pinned
+[armour object][lima-armour-object], [weapon object][lima-weapon-object] and
+[wearable module][lima-wearable], using distinct nil and preserved call-out
+player context. Checks use the complete item wrappers, their actual inherits,
+the real master and simul efuns. No upstream execution is claimed.
+
+Give `OBJ` an explicit alias in each item wrapper:
+
+```c
+inherit OBJ base_object;
+```
+
+Replace the four `object::` calls with `base_object::`, preserving their
+selected parent and order. `object` is a native type keyword, so it cannot be
+used directly as a call qualifier. FluffOS accepts basic-type keywords in this
+position; its [grammar][fl-type-qualifiers] was source-reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0`, with no optional-package or
+build-option requirement. Native [inherit aliases](lpc/inheritance.md#calls-and-aliases)
+provide the needed selection. Other Lima objects using `object::` need their
+own alias adaptations.
+
+Keep each wrapper's integer price API while explicitly converting the inherited
+float value: initialize `value` with `to_int(::query_value())`, then store it
+with `set_value(to_float(value))`. This preserves truncation toward zero,
+nonzero-price caching and the existing policy of reapplying the value factor
+on each query. Pass `1.0` to armour's float `set_mass` parameter. In the wearable
+module, use bare `return;` for the early exits in void `remove` and `do_remove`.
+[Integer conversion](efun/to_int.md), [float conversion](efun/to_float.md).
+
+Isolated checks cover setup, price calculation, durability saving, worn/wielded
+state and calls to both parents during removal. Armour notifies its wearer
+before base-object release; weapon retains base-object release before its
+unwield callback. The recording wearer does not establish real body cleanup
+or inventory accounting. Persistent flags and durability fields are saved;
+adjectives and wielding limbs still need separate registration/setup work.
+
+Real armour cloning reaches compile errors in `crafting_d`; real weapon cloning
+reaches `m_colours` through `messages_d`. The isolated tests replace only
+salvage-category and message-set lookups in disposable copies. They do not
+establish either daemon's compatibility, full combat or complete item
+restoration. Sword and fullplate still need float arguments at their own value
+and mass setters; throwable and ranged-weapon consumers retain separate errors.
 
 #### Lima file metadata
 
@@ -3154,3 +3207,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-runtime-settings]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/rc.cc
 [ld-callout-context]: https://github.com/ldmud/ldmud/blob/e1cbe804944c1f5865ad1beeeff220b43c48c7e3/doc/efun/call_out
 [dgd-callout-user]: https://github.com/dworkin/lpc-doc/blob/4bf768ac6f3a20561e0ebdc8ad85ddc7c00d8ca4/kfun/this_user
+
+[lima-armour-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/armour.c
+[lima-weapon-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/weapon.c
+[fl-type-qualifiers]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y#L3305-L3319
