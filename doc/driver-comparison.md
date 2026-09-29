@@ -2654,8 +2654,9 @@ and save after successful construction. Valid saved data takes precedence over
 configuration. See the [shared helper adaptation below](#lima-array-deduplication)
 for other `clean_array` callers.
 
-Full parser-dispatched gameplay, the stock body, doors/siblings/lockables,
-portal/climbing/vehicle behavior and a complete cold boot remain unvalidated.
+Door and lockable migration is covered [below](#lima-doors-and-locks). Full
+parser-dispatched gameplay, the stock body, portal/climbing/vehicle behavior
+and a complete cold boot remain unvalidated.
 
 #### Lima array deduplication
 
@@ -2708,6 +2709,59 @@ zero return. Complete FTP and mail daemons still have unrelated compilation
 blockers, so these checks do not establish working network services or mail
 delivery. The membership loop remains quadratic in the worst case; bounded
 correctness tests do not establish large-array performance.
+
+#### Lima doors and locks
+
+Reviewed and exercised **29 September 2026** against the pinned
+[door][lima-door], [sibling module][lima-sibling],
+[lockable module][lima-lockable], [openable module][lima-openable] and
+[hidden][lima-hidden-door]/[secret][lima-secret-door] derivatives. Tests use
+lpc-rs with distinct nil, preserved call-out player context, `USE_SKILLS`
+enabled and `CLOSED_DOORS_ARE_OBVIOUS_EXITS` undefined. Upstream drivers
+were not executed; these adaptations use existing native APIs.
+
+Use nil for absent sibling objects and `!!locked` for the integer hook-state
+argument. Match the inherited two-argument `door_check` signature in secret
+doors. Register `door_check` and `extra_long_stuff` as bare function callbacks;
+`(: name :)` returns the function rather than invoking it.
+
+Preserve `set_locked`'s `key_type = locked` default in the door wrapper.
+Forwarding an omitted key type as explicit nil loses it, including after a
+successful unlock/relock cycle. Magic unlocking and picking should clear the
+locked state while retaining the original key type. Stop picking an already
+unlocked object before hooks or skill checks. Guard execution as well as parser
+checks: refuse locking an open or already locked object, unlocking an unlocked
+one, absent key objects and absent key types. Missing keys should produce a
+normal refusal instead of a call on nil.
+
+Resolve movement destinations only after permission succeeds. Pass the captured
+room to sibling lookup and movement; a permission check must not invoke the
+destination callback again. Door execution accepts a live object or loads a
+string path, refusing unavailable rooms before movement. Sibling lookup likewise
+resolves once per lookup and accepts object results directly. Lima's pathname
+canonicalization strips clone suffixes, so use an object-valued destination to
+retain a room clone's identity.
+
+Recheck a cached sibling's room and identifier, skip self and absent identifiers,
+and reevaluate callable destinations before reusing the cache. Register the
+move hook that copies an existing sibling's state. Keep the container's explicit
+`on_clone` synchronization safe after that hook has already run. Refresh hidden
+exit metadata on initialization, direct state changes and state copies. Notify
+the sibling only when its open/closed state changes; preserve its callback's
+view of the old state before copying, and the actor-side callback's view after
+mutation. Pure lock changes should not emit open/close callbacks.
+
+Change the [open verb][lima-open-verb]'s absent object arguments to nil.
+For [tool-based picking][lima-pick-verb], invoke the pick action on lockable
+targets while retaining generic tool-opening behavior for other targets.
+The migrated pick action accepts the tool and retains the existing skill policy.
+
+Checks use real doors, keys, chest, container creation and verb methods with
+fixture actors that record requested movement. They also exercise the
+[stock oak door][lima-oak-door]'s callbacks against fixture room-state storage.
+This does not establish full body/parser integration, elevator timer behavior,
+stock gate wiring or a complete cold boot. Arbitrary callbacks retain their
+existing partial-effect limits.
 
 #### Lima file metadata
 
@@ -3549,3 +3603,13 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-money-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/money_d.c
 [lima-body-pockets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/pockets.c
+
+[lima-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/door.c
+[lima-sibling]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_sibling.c
+[lima-lockable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_lockable.c
+[lima-openable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_openable.c
+[lima-hidden-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/hidden_door.c
+[lima-secret-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/secret_door.c
+[lima-open-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/open.c
+[lima-pick-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/pick.c
+[lima-oak-door]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/large_oak_door.c
