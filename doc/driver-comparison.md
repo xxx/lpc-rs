@@ -2487,9 +2487,10 @@ cold boot remains unvalidated.
 
 Eight stock recipes still have value-argument, throwable or food/drink compile
 errors. The [repair/payment adaptation](#lima-repair-and-payment) covers daemon
-payments with a concrete pockets host. Interactive crafting consumers and the
-full body retain compile blockers; registry support does not establish a
-complete crafting workflow.
+payments with a concrete pockets host, and the
+[consumer adaptation](#lima-crafting-and-repair-consumers) covers crafting and
+repair handlers. Furniture stations and the full body retain compile blockers;
+registry support does not establish a complete crafting workflow.
 
 #### Lima repair and payment
 
@@ -2541,8 +2542,59 @@ removal refusal, debit error or repair-hook error stops execution; a caller
 that catches it retains earlier effects. Uncaught failure rolls back the whole
 attempt. Lima's modal dispatcher catches handler errors, so it does not provide
 that rollback guarantee. See [transactional error handling](efun/catch.md).
-The interactive repair verb, crafting, vendor and accountant modules still need
-their own migrations; these checks do not establish an end-to-end shop workflow.
+The [consumer adaptation](#lima-crafting-and-repair-consumers) covers interactive
+crafting and repair handlers. Vendor and accountant modules still need their
+own migrations; these checks do not establish an end-to-end shop workflow.
+
+#### Lima crafting and repair consumers
+
+Reviewed and exercised **28 September 2026** against the pinned
+[crafting module][lima-crafting-module], [repair verb][lima-repair-verb],
+[craft verb][lima-craft-verb] and [salvage verb][lima-salvage-verb]. Native tests
+use distinct nil, preserved call-out player context, the real master, simul
+efuns, modal input dispatcher and payment implementations, with concrete actor,
+station and item fixtures. Upstream drivers were not executed. The shared
+[verb base][lima-verb-base] needs `file_name(this_object())`; void craft/salvage
+handlers must call their delegates and then return without a value.
+
+Bind confirmation arguments explicitly: `&craft_item_confirmed(body, what)` and
+`&repair_with_what(body, items)` accept the reply supplied by the modal dispatcher.
+The original `(: handler, arg, arg :)` expressions evaluate their final operand
+under native closure semantics; they do not invoke the handler. Capture one body
+for quoting and payment, and reject confirmation after the active body changes.
+Crafting also requires the body to remain beside the station and the recipe to
+remain available there. Repair rechecks item access: single targets may be in
+the room or the body's inventory, including nested inventory; batch targets
+must remain directly carried. The daemon still recalculates resources at payment.
+
+Check the current recipe, every positive material count and the full fee before
+creating an item. Use the shared money affordability check for both recipe and
+component fees. Prepare the item and validate its XP before charging, require
+`MOVE_OK` and actual placement in the intended body, then recheck resources
+after delivery hooks. An ordinary delivery refusal consumes no fee or materials
+and grants no XP. Dispose of rejected items through their normal `remove()`
+method; direct station-requested destruction can fail Lima's security policy.
+Grant XP only after delivery and payment. This does not make arbitrary hooks
+atomic: a caught debit failure can retain earlier material removals, and a
+throwing cleanup hook can leave the prepared object alive. The existing modal
+catch policy remains unchanged.
+
+Parse the complete component request against registry names, with an optional
+positive decimal count or `a`, `an`, or `one`. Accept mudlib-generated plurals,
+including multiword names such as `fiber optics bundles`; reject trailing words,
+zero, negative, fractional, malformed and overflowing counts. Pluralization stays
+in `M_GRAMMAR`. Preserve ten-to-one upgrades, one-to-ten salvage, flat fees of
+one and five base-currency units respectively, and the existing skill difficulty
+and random lower-tier bonus. Retire the unused `simple_salvage2` duplicate,
+whose category parser and smith path do not match the live callers.
+
+Let `repair_cost_string` accept an item array as well as a single item, using
+the daemon's shared money-only plan and currency formatter. Deduplicate batch
+targets and display the same fractional cost that payment uses: a 0.1-gold
+repair is quoted as `1 silver`, rather than integer zero. Remove the absent
+`repair_obj` call and unused bench lookup. Furniture/complex-exit dependencies,
+full parser/body integration, vendor/accountant flows and a complete cold boot
+remain separate work.
 
 #### Lima file metadata
 
@@ -3368,6 +3420,11 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-crafting-registry]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/crafting_d.c
 [lima-crafting-materials]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/crafting-materials
+[lima-crafting-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_crafting.c
+[lima-repair-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/repair.c
+[lima-craft-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/craft.c
+[lima-salvage-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/salvage.c
+[lima-verb-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/verb_ob.c
 
 [lima-money-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/money_d.c
 [lima-body-pockets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/pockets.c
