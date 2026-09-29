@@ -2486,11 +2486,63 @@ exceeded that budget in a debug build, mostly during compilation; a complete
 cold boot remains unvalidated.
 
 Eight stock recipes still have value-argument, throwable or food/drink compile
-errors. Repair/payment remains separate work: money-only repair can report
-success without funds, and sparse material pouches fail estimation on nil
-arithmetic. The money daemon and interactive crafting consumers retain their
-own compile blockers. Registry support does not establish working repairs or
-a complete crafting workflow.
+errors. The [repair/payment adaptation](#lima-repair-and-payment) covers daemon
+payments with a concrete pockets host. Interactive crafting consumers and the
+full body retain compile blockers; registry support does not establish a
+complete crafting workflow.
+
+#### Lima repair and payment
+
+Reviewed and exercised **28 September 2026** against the pinned
+[crafting daemon][lima-crafting-registry], [money daemon][lima-money-daemon]
+and [body pockets][lima-body-pockets], using distinct nil and preserved call-out
+player context. Tests use the real master, simul efuns, saved currency registry
+and adapted money/pockets implementations. Upstream drivers were not executed.
+
+Align payment with pockets' existing storage: one floating-point balance per
+base currency. Convert denomination deposits and withdrawals exactly once;
+missing balances mean `0.0`. Keep `query_amt_money`'s rounded integer result,
+with an explicit conversion after `round`. Let `subtract_money` accept fractional
+amounts, and reject negative additions, negative withdrawals and overdrafts
+before mutation. Currency and denomination membership tests must use truthiness:
+missing mapping entries are nil, so `!= 0` incorrectly accepts unknown names.
+
+Replace the money daemon's coin-count/change algorithm with a single debit in
+base-currency units. Preserve the two-mapping receipt shape: denominations
+representing the payment, then an empty change mapping. Insufficient funds
+raise an error; repair preflight returns failure without invoking the debit.
+Use the same affordability comparison for quoting and withdrawal, allowing
+binary rounding differences within `1e-15 * (abs(balance) + abs(amount))`.
+Clear such residuals on final withdrawal. This is floating-point accounting;
+the existing denomination formatter still limits displayed precision, including
+its small rounding allowance. Saved denomination-count wallets need explicit
+conversion before use; this adaptation does not infer or migrate them.
+
+Build repair estimates, displays and payments from the same resource plan.
+Deduplicate objects, skip undamaged items, treat absent salvage information as
+cash-only, and reject invalid salvage categories or percentages before mutation.
+A sparse pouch means zero available pieces. Bound tier lookup by both the
+category length and the existing five repair values; names beyond those five
+have no repair value. Include exact-value materials, reserve every selected
+piece across the whole batch, and debit the extra lowest-tier piece used to
+cover a remainder. Percentage-rounding remainders remain payable in cash.
+Sum remaining durability units before the single cash conversion.
+
+Check the full cash amount and every positive material count before consuming
+resources. Exact funds suffice; shortages leave the items, money and materials
+unchanged. Pouch removal takes precedence over matching inventory objects,
+consistent with the quote. Zero removal is a no-op, and negative counts fail.
+Payment never requests zero-count removals. Render costs and savings with
+`currency_to_string`; remove the unused `buy_durability` helper and its calls
+to the absent `money_to_array` method.
+
+Resource preflight does not make arbitrary callbacks atomic. An unexpected
+removal refusal, debit error or repair-hook error stops execution; a caller
+that catches it retains earlier effects. Uncaught failure rolls back the whole
+attempt. Lima's modal dispatcher catches handler errors, so it does not provide
+that rollback guarantee. See [transactional error handling](efun/catch.md).
+The interactive repair verb, crafting, vendor and accountant modules still need
+their own migrations; these checks do not establish an end-to-end shop workflow.
 
 #### Lima file metadata
 
@@ -3316,3 +3368,6 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-crafting-registry]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/crafting_d.c
 [lima-crafting-materials]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/crafting-materials
+
+[lima-money-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/money_d.c
+[lima-body-pockets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/pockets.c
