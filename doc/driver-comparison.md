@@ -2489,8 +2489,9 @@ Eight stock recipes still have value-argument, throwable or food/drink compile
 errors. The [repair/payment adaptation](#lima-repair-and-payment) covers daemon
 payments with a concrete pockets host, and the
 [consumer adaptation](#lima-crafting-and-repair-consumers) covers crafting and
-repair handlers. Furniture stations and the full body retain compile blockers;
-registry support does not establish a complete crafting workflow.
+repair handlers. The [furniture/exit adaptation](#lima-furniture-and-complex-exits)
+loads the four stock stations; the full body retains compile blockers. Registry
+support does not establish a complete crafting workflow.
 
 #### Lima repair and payment
 
@@ -2592,9 +2593,70 @@ Let `repair_cost_string` accept an item array as well as a single item, using
 the daemon's shared money-only plan and currency formatter. Deduplicate batch
 targets and display the same fractional cost that payment uses: a 0.1-gold
 repair is quoted as `1 silver`, rather than integer zero. Remove the absent
-`repair_obj` call and unused bench lookup. Furniture/complex-exit dependencies,
-full parser/body integration, vendor/accountant flows and a complete cold boot
-remain separate work.
+`repair_obj` call and unused bench lookup. The
+[furniture/exit adaptation](#lima-furniture-and-complex-exits) covers stock
+stations and movement. Full parser/body integration, vendor/accountant flows
+and a complete cold boot remain separate work.
+
+#### Lima furniture and complex exits
+
+Reviewed and exercised **29 September 2026** against the pinned
+[complex-exit module][lima-complex-exit], [simple-exit module][lima-simple-exit],
+[furniture][lima-furniture], [crafting station][lima-crafting-station] and
+[method registry][lima-method]. Native tests use distinct nil and preserved
+call-out player context, with `USE_COMPLEX_EXITS` and `USE_INTRODUCTIONS`
+undefined and `WIZARDS_SEE_HIDDEN_EXITS` enabled. Tests use concrete actors with
+real object/container and smart movement, plus the real master, simul efuns and
+registry implementations. All four stock station types instantiate; a weapon
+station also completes a fixture recipe through the migrated modal consumer.
+Upstream drivers were not executed.
+
+Use nil for absent strings/arrays and an empty array when clearing hidden
+directions. Declare filtered exit collections as object arrays, access movement
+record fields with dots, and give the object inherit an explicit non-keyword
+alias in [the complex-exit object][lima-complex-exit-object]. Register unbound
+callbacks as `enter_check` and `the_short`; expressions such as
+`(: enter_check :)` return a function value under native closure semantics.
+Evaluate a callable obvious description when producing a direction string.
+
+Keep a movement method's destination relation separately from its canonical
+registry name. `sit on` is registered as `mount`, but must retain `on` in the
+movement record. Give furniture an explicit `on` default; crafting stations
+retain their `under` default. Use the full matched key for checks, so
+`crawl under` is not rechecked as nonexistent `crawl`. Exact canonical names
+take precedence over aliases; reject ambiguous execution and normalize aliases
+for removal. Preserve the legacy convention that zero passed to `add_method`
+selects its default allow check, while `set_method_checks(..., 0)` denies.
+
+In [the object verb wrapper][lima-object-verbs], apply both container relation
+and complex-exit checks when an object implements both. Return the delegated
+movement result. Execution must independently reject unknown or ambiguous
+methods, check access before evaluating the destination, and evaluate that
+destination once. Convert a returned object to its path using that captured
+result. The previous code evaluated object destinations twice, even before
+reporting a denied check.
+
+Route object exit helpers to the existing singular enter/exit message queries,
+plural `set_method_checks`, and object description API. Delegate message and
+description updates before requiring a simple-exit mapping entry. Keep enter
+and exit defaults separate. Read a simple exit's destination field before
+evaluation; `(class move_data)exits[direction].destination` casts the destination
+itself and fails on a normal string. Preserve the existing caught-error limits:
+an exception after a container releases its actor can retain that release;
+these adaptations do not add generic movement rollback.
+
+Initialize a missing method registry with a private configuration builder.
+Calling its user-guarded public mutation API from startup fails without a user;
+the shipped saved table masks this path. Keep guards on public edits and reloads,
+trim configuration fields, skip blank/comment lines, normalize prepositions and
+deduplicate aliases explicitly. Build a replacement mapping before publication
+and save after successful construction. Valid saved data takes precedence over
+configuration. The registry avoids [Lima's `clean_array`][lima-clean-array],
+whose adjacent-duplicate algorithm assumes `r & r` sorts the array; native
+intersection preserves input order. Other callers still need review.
+
+Full parser-dispatched gameplay, the stock body, doors/siblings/lockables,
+portal/climbing/vehicle behavior and a complete cold boot remain unvalidated.
 
 #### Lima file metadata
 
@@ -3425,6 +3487,12 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-craft-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/craft.c
 [lima-salvage-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/salvage.c
 [lima-verb-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/verb_ob.c
+[lima-complex-exit]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_complex_exit.c
+[lima-simple-exit]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_exit.c
+[lima-furniture]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/furniture.c
+[lima-crafting-station]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/crafting_station.c
+[lima-complex-exit-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/complex_exit_obj.c
+[lima-clean-array]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L58-L83
 
 [lima-money-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/money_d.c
 [lima-body-pockets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/pockets.c
