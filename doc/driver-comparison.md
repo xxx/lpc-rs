@@ -3222,9 +3222,48 @@ immediate casts, true strike's five-second callback, fire beam's repeated
 channeling and acid's ongoing damage. The registry is not replaced by a fixture
 daemon; one probe catalog entry checks verb argument contracts through its public
 mapping inspector. Complete parser/body entry, player health delivery and cold
-startup remain unchecked. Dancing lights still has a helper argument-count
-blocker; conjure ale's fluid lifecycle, registry administration and shared channel
-ownership need separate review.
+startup remain unchecked. Dancing lights remains blocked in the adopted casting
+overlay; the [separate diagnostic below](#lima-dancing-lights) repairs its spell
+and item lifecycle. Conjure ale's fluid lifecycle, registry administration and
+shared channel ownership need separate review.
+
+#### Lima dancing lights
+
+Source-reviewed and exercised in a **diagnostic overlay on 30 September 2026**
+at the pinned Lima revision, with distinct nil, preserved call-out players,
+`USE_MASS` and `EVERYTHING_SAVES`. The patch is not yet adopted; no upstream
+driver was executed. Sources: [spell][lima-dancing-lights],
+[item][lima-dancing-lights-item], [companion module][lima-companion],
+[stateful setup][lima-stateful], [state daemon][lima-state-daemon] and
+[object hooks][lima-object-hooks]. Existing native APIs suffice.
+
+Call the spell-rank helper with only the casting body. Check live clones for
+that owner before creating another swarm: state-daemon ownership only sees
+registered objects, leaving a gap before the zero-delay registration callback.
+If initial movement is refused, remove the new clone before installing following
+hooks or announcing a successful summon.
+
+The companion module needs an owned timer ID, [`query_call_out`](efun/query_call_out.md)
+and bound callbacks for following and snacks. Dispatch its host combat calls
+through `this_object()`. Install one stored move callback, replace it on repeated
+setup and remove it and any pending follow timer through the removal hook.
+Ignore missing or replaced masters when the timer fires; only announce arrival
+after successful movement. Use bare `something_appeared` for the arrival hook.
+
+Name the item's object inherit so its setup can explicitly compose object,
+companion and stateful initialization, and supply its cantrip level of zero for
+the follow delay. Nonpositive duration removes the item on its first update
+instead of leaving an unscheduled light. Positive duration retains the original
+`(rank + 2) * (1 + success)` formula and exact update count. State intervals
+remain one minute, with the daemon's existing initial spread when first loaded.
+Each swarm contributes five units of light.
+
+Checks exercise the real registry, cast verb, busy callback, movement, hooks,
+messages, state daemon and native timers with fixture users/bodies. They cover
+duplicate prevention before registration, independent owners, following and
+room light transfer, rejected moves, vanished casters, expiry, recasting,
+hook/timer cleanup, snacks and transaction rollback. Complete parser/body entry,
+save/restore, general pet combat/chipping and cold startup remain unchecked.
 
 #### Lima file metadata
 
@@ -4116,3 +4155,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-acid-spell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/acid_arrow.c
 [lima-fire-beam]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/fire_beam.c
 [lima-fireball]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/fireball.c
+[lima-dancing-lights]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/dancing_lights.c
+[lima-dancing-lights-item]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/item/dancing_lights.c
+[lima-companion]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_companion.c
+[lima-stateful]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_stateful.c
+[lima-state-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/state_d.c
+[lima-object-hooks]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/hooks.c
