@@ -3082,9 +3082,46 @@ auto-removal policy. Hamburger retains its switch fallthrough and remains after
 its final stage because auto-removal is off. Generic food still needs
 `set_num_eats` before its extra-long percentage calculation; its default original
 bite count is zero. Other food/decay consumers need setup composition review.
-Poisonous eating remains blocked by the poison transient's override signature;
-it fails before the action or bite decrement. Cold startup, full parser/player
-entry and complete restoration remain unchecked.
+Poisonous eating also needs the transient adapter below. Cold startup, full
+parser/player entry and complete restoration remain unchecked.
+
+#### Lima poison and transient effects
+
+Reviewed **29 September 2026** against pinned [poison][lima-poison],
+[transient][lima-transient], [object creation][lima-object] and
+[state scheduling][lima-stateful-module], with distinct nil, preserved call-out players,
+`USE_MASS` and `EVERYTHING_SAVES`. Upstream drivers were not executed.
+
+Match transient's `void do_effect(object affected)` signature in poison. Its
+original zero-argument integer callback fails the inherited contract. Keep
+`mudlib_setup()` zero-argument for inherited state registration and poison's
+save fields, and move clone-argument configuration to
+`setup(int strength, int duration, string action)`. The object creation path
+forwards the clone arguments to `setup`; initialization finishes before the
+deferred state-registration callback runs. This retains the existing type/name,
+strength, action and integer duration calculation `duration / 2`.
+
+Poisonous bites then create or merge the effect, perform their action and heal
+once before decrementing or removing food. Matching effects add strength and
+duration, preserve the resident action and remove the incoming clone. The
+incoming effect's extendability flag controls merging. Ordinary movement returns
+integer success; a merge returns nil. The edible caller's unused chained-move
+assignment does not require a repair for these checks.
+
+Keep duration units and expiry order explicit when porting: the state module's
+default interval is one minute, despite transient's heartbeat wording. An update
+applies the effect before checking expiry and decrementing, so a stored count of
+two permits three effects and zero permits one. These existing policies remain.
+Poison damage is `1 + random(strength)` to `torso`. Detached/nonliving effects
+remove themselves without damage; ghosts receive the action before removal.
+
+Checks cover real food, movement, messages, saves, state scheduling and native
+timer dispatch with fixture users, bodies and damage sinks. Full player damage,
+effect restoration, spell casting and cold startup remain unchecked.
+[Speed][lima-transient-speed], [shield][lima-transient-shield] and
+[spell transients][lima-transient-spell] retain separate callback/setup signature
+blockers; [true strike][lima-transient-true-strike] also needs its string
+call-out adapted.
 
 #### Lima file metadata
 
@@ -3961,3 +3998,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-twinkie]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/misc/twinkie.c
 [lima-cobbler]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/mongoose_cobbler.c
 [lima-hamburger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/hamburger.c
+[lima-poison]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient/poison.c
+[lima-transient]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient.c
+[lima-transient-speed]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient/speed.c
+[lima-transient-shield]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/transient/shield.c
+[lima-transient-spell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient_spell.c
+[lima-transient-true-strike]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/transient/true_strike.c
