@@ -3303,8 +3303,8 @@ Checks exercise the real registry and verb handler, movement, messages, hooks
 and native timer dispatch with fixture users/bodies and a fixture vessel. They
 cover baseline failures, pouring/merging, refused placement and retrieval,
 evaporation, drinking, vanished casters, cleanup and transaction rollback.
-[Stock bottles, fluid sources and kegs](#lima-bottles-and-fluid-sources) have a
-separate diagnostic audit below; its patch is not yet adopted. The
+[Stock bottles, fluid sources and kegs](#lima-bottles-and-fluid-sources) use the
+separately audited and adopted mudlib patch below. The
 [separate drink base][lima-drink-base] still needs its own review. Full parser/body
 entry, item restoration and cold startup remain unchecked.
 
@@ -3316,8 +3316,8 @@ revision, with distinct nil, preserved call-out players, `USE_MASS` and
 [bottle][lima-bottle], [keg][lima-keg],
 [fluid container][lima-fluid-container], [fluid source][lima-fluid-source],
 [drink source][lima-drink-source], [fill verb][lima-fill-verb] and
-[drink verb][lima-drink-verb]. A seven-file diagnostic mudlib patch uses existing
-native APIs; it is not yet adopted.
+[drink verb][lima-drink-verb]. The adopted seven-file mudlib patch uses existing
+native APIs.
 
 Select fluid through `all_inventory`, return nil for absent objects and use float
 mass arithmetic. Call container/source host methods through `this_object()`.
