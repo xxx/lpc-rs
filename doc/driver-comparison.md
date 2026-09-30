@@ -3398,8 +3398,7 @@ revision, with distinct nil, preserved call-out players, `USE_MASS` and
 [drink base][lima-drink-base], [older drink-container module][lima-drink-container],
 [beer][lima-beer], [chemo satchel][lima-chemo], [dirty water][lima-dirty-water],
 [blackberry cider][lima-blackberry-cider] and [boiled water][lima-boiled-water].
-The seven-file diagnostic mudlib patch has **not been adopted**. Existing native
-APIs suffice.
+The adopted seven-file mudlib patch uses existing native APIs.
 
 Alias the object inherit for its setup call, remove the redundant drink validator
 whose argument list differs from its inherited definition, and use float mass/
