@@ -364,7 +364,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
-| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
+| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer. Lima [spell casting adapters](#lima-spell-casting) also use native function callbacks. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
@@ -3163,12 +3163,68 @@ apply-before-expiry ordering still give the fixed count of two three updates.
 
 Checks exercise native event classes, direct effect hooks, movement, messages,
 state scheduling, timer dispatch, cancellation and rollback with fixture users,
-bodies and speed/damage sinks. Acid checks use an explicit fixture spell registry;
-stock casting and the full combat damage pipeline remain unchecked. Stock spell
-callers retain their spell-base return/argument blockers, and the spell daemon
-retains its regexp/return blockers. Generic identity/extendability, shield fields
-and spell caster/limb fields still need save/restore review. Cold startup and
-complete restoration remain unchecked.
+bodies and speed/damage sinks. The original acid checks use an explicit fixture
+spell registry. The [casting adapters](#lima-spell-casting) below additionally
+exercise stock registry, verb and timer paths; the full combat damage pipeline
+remains unchecked. Generic identity/extendability, shield fields and spell
+caster/limb fields still need save/restore review. Cold startup and complete
+restoration remain unchecked.
+
+#### Lima spell casting
+
+Source-reviewed **29 September 2026** at the pinned Lima revision; the adopted
+paths were exercised on lpc-rs on **30 September 2026** with distinct nil,
+preserved call-out players, `USE_MASS` and `EVERYTHING_SAVES`. No upstream driver
+was executed. Sources: [spell base][lima-spell-base],
+[registry][lima-spell-daemon], [skill daemon][lima-skill-daemon],
+[cast verb][lima-cast-verb] and [combat spell][lima-combat-spell].
+
+The spell base needs integer failure returns and the separator argument to
+`format_list`. Align its component methods with `valid_reagent(object)` and
+`check_valid_reagent(object, mixed)`, as used by the registry and stock overrides.
+Preserve string refusals from circumstance checks and run those checks for room
+spells too. Guard nil before living/item tests. Parenthesize delayed target flags,
+reject missing or departed targets, and retain room/flexible casts and explicitly
+permitted self casts.
+
+Use native [`regexp`](efun/regexp.md) with an array of names and test the result's
+size. The registry's void casting wrapper calls its target without returning a
+value, clears nil directory entries and registers through `query_name()`. The
+cast verb should pass presence flags consistently, pass nil for absent targets,
+and supply the missing `STR at OBJ with OBJ` action handler.
+
+The skill daemon needs nil results in two array-returning methods, a `mixed`
+local for its existing class-or-integer skill query and class-member syntax
+`skill.skill_points` in its percentage calculation. This preserves the query
+shapes; it does not establish every skill metadata or administration method.
+
+Put combat difficulty inside `test_skill`, respect `no_dodge` and retain the
+supplied limb, using a random limb only when none is supplied. Convert stock
+callbacks to native function values: [acid arrow][lima-acid-spell] uses
+`&calculate_damage(success, ob)`, [fire beam][lima-fire-beam] uses
+`&calculate_damage(success)` and [fireball][lima-fireball] uses bare
+`calculate_damage`. Native anonymous expressions `(: function :)` return a
+function value, and `(: function, arguments :)` return the last expression;
+these spell sites need a callback that produces numeric damage.
+
+Acid's initial damage retains its original target-based skill lookup. Ongoing
+damage should guard missing attacker/target and use the supplied cached caster's
+rank, allowing it to work without current player context. Keep its fixed duration,
+three updates, independent effects and damage formula. Native `||` already
+returns the selected operand, so the existing skill, description and busy-delay
+fallbacks need no adaptation. Existing interruption policy also remains:
+`stop_busy()` cancels the timer; the interrupt hook leaves it pending.
+
+Checks exercise the real registry, skill daemon, verb handlers, busy helper,
+movement, messages, effect constructors, state daemon and native timer dispatch
+with fixture users/bodies and combat event queues. They cover shield/unlock
+immediate casts, true strike's five-second callback, fire beam's repeated
+channeling and acid's ongoing damage. The registry is not replaced by a fixture
+daemon; one probe catalog entry checks verb argument contracts through its public
+mapping inspector. Complete parser/body entry, player health delivery and cold
+startup remain unchecked. Dancing lights still has a helper argument-count
+blocker; conjure ale's fluid lifecycle, registry administration and shared channel
+ownership need separate review.
 
 #### Lima file metadata
 
@@ -4052,3 +4108,11 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-transient-spell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient_spell.c
 [lima-transient-true-strike]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/transient/true_strike.c
 [lima-transient-acid-arrow]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/transient/acid_arrow.c
+[lima-spell-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/spell.c
+[lima-spell-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/spell_d.c
+[lima-skill-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/skill_d.c
+[lima-cast-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/cast.c
+[lima-combat-spell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/combat_spell.c
+[lima-acid-spell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/acid_arrow.c
+[lima-fire-beam]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/fire_beam.c
+[lima-fireball]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/fireball.c
