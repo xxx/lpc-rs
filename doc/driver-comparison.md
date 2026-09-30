@@ -3303,11 +3303,55 @@ Checks exercise the real registry and verb handler, movement, messages, hooks
 and native timer dispatch with fixture users/bodies and a fixture vessel. They
 cover baseline failures, pouring/merging, refused placement and retrieval,
 evaporation, drinking, vanished casters, cleanup and transaction rollback.
-[Stock bottles][lima-bottle], [fluid containers][lima-fluid-container],
-[fluid sources][lima-fluid-source], [drink sources][lima-drink-source],
-[kegs][lima-keg], the [separate drink base][lima-drink-base] and
-[fill verb][lima-fill-verb] still have compile blockers or need separate lifecycle
-review. Full parser/body entry, item restoration and cold startup remain unchecked.
+[Stock bottles, fluid sources and kegs](#lima-bottles-and-fluid-sources) have a
+separate diagnostic audit below; its patch is not yet adopted. The
+[separate drink base][lima-drink-base] still needs its own review. Full parser/body
+entry, item restoration and cold startup remain unchecked.
+
+#### Lima bottles and fluid sources
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS` and
+`EVERYTHING_SAVES`. No upstream driver was executed. Sources:
+[bottle][lima-bottle], [keg][lima-keg],
+[fluid container][lima-fluid-container], [fluid source][lima-fluid-source],
+[drink source][lima-drink-source], [fill verb][lima-fill-verb] and
+[drink verb][lima-drink-verb]. A seven-file diagnostic mudlib patch uses existing
+native APIs; it is not yet adopted.
+
+Select fluid through `all_inventory`, return nil for absent objects and use float
+mass arithmetic. Call container/source host methods through `this_object()`.
+Use aggregate container capacity, including unrelated contents, rather than the
+first item's nonexistent `query_size` under `USE_MASS`. Give the full-message
+helper a different name from its `full_action` field and guard zero capacity
+when describing fullness.
+
+Finite fills preserve the incoming amount through `part_fill_with`; renewable
+source fills supply the remaining capacity. Partial transfers remain
+all-or-nothing. Check the fluid's fill veto before merging, require successful
+movement before reporting success or consuming the incoming object, and restore
+a resized source seed on movement refusal. The stock fill verb's finite path
+otherwise expands a one-unit puddle into a five-unit bottle.
+
+Delegate bottle drinking to its contained fluid and remove the bottle's separate
+drinkable counter. A full five-unit ale bottle supplies ten drinks at the retained
+two-drinks-per-unit rate; exhausting the ale leaves the bottle intact. Keep the
+keg's intentional direct-drinking prohibition.
+
+Dispose of source ID-discovery and drinking samples, including veto and caught
+callback-error paths. After filling, dispose only of unplaced temporary fluid;
+preserve successfully placed contents or leaked puddles. Cache the fluid name
+before a merge can retire its clone. Start evaporation for successful leaks,
+guard absent players, and preserve placed contents when a caller catches a
+later announcement error. Uncaught errors still roll back the transaction.
+
+Test membership with `member_array(...) < 0`: index zero is a match, and minus
+one means absent. Pass the selected source object into the `STR from OBJ` drink
+handlers rather than searching again for a nearby source. Checks exercise stock
+bottles/kegs and real fill/drink/pour handlers with fixture users, bodies and
+enabled/refusing sources. Full parser/body entry, item restoration, cold startup,
+water setup, remaining vessel numeric contracts and partly consumed merging
+remain separate work.
 
 #### Lima file metadata
 
@@ -4216,3 +4260,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-bottle]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/bottle.c
 [lima-keg]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/keg.c
 [lima-fill-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/fill.c
+[lima-drink-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/drink.c
