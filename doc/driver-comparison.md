@@ -3360,8 +3360,7 @@ revision, with distinct nil, preserved call-out players, `USE_MASS` and
 `EVERYTHING_SAVES`. No upstream driver was executed. Sources:
 [standard water][lima-water-base], [domain water][lima-water-item],
 [flask][lima-flask], [tankard][lima-tankard] and [river][lima-river]. The
-five-file diagnostic mudlib patch uses existing native APIs and is not adopted
-at this audit checkpoint.
+adopted five-file mudlib patch uses existing native APIs.
 
 Initialize both water forms to one mass unit under `USE_MASS`. Their stock setup
 leaves mass at zero, despite a quantity of one. Keep the domain water's optional
