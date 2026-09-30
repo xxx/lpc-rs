@@ -2938,6 +2938,52 @@ default and explicit candidates, unique containers, nested setup values and
 recursive contents. They do not establish complete vendor trade, player-command
 dispatch, full body integration or cold boot.
 
+#### Lima thrown objects
+
+Reviewed **29 September 2026** against the pinned
+[throwable module][lima-throwable] and [stock stick][lima-stick], using distinct
+nil and preserved call-out players. Upstream drivers were not executed.
+
+Replace the module's string-plus-arguments timer calls with partial applications:
+`call_out(&land_throwable(target, 1), random(2) + 1)` for hits and
+`call_out(&land_throwable(target, 0), random(3) + 1)` for misses. Preserve the
+existing delay ranges and one-shot scheduling. With
+`LPC_CALL_OUT_PRESERVE_PLAYER=true`, Lima's `this_body()` resolves the scheduling
+user's body when the native callback fires. Moving the thrower to another room
+does not replace that context; a missing body remains a callback failure.
+
+Use the bare `prevent_throw` function pointer for both prevention-hook
+registrations. In lpc-rs, `(: prevent_throw :)` returns a function value instead
+of calling it, so Lima's yes/no/error reducer otherwise allows the hook even
+when the response is zero or a refusal string. The direct `do_throw` check
+already rejects those responses. Preserve the stored response and reuse the
+existing hook when setters change it; no native closure change is needed.
+
+Pass `nil` for the unspecified limb field in `do_thrown_damage`: integer zero
+cannot populate the selected event class's nullable string `target_extra`.
+The vital-damage helper already passes a selected string limb. Render the debug
+target explicitly with `sprintf("Target is: %O", target)`. Pass `this_object()`
+after the target in the miss message, whose `$o` otherwise becomes Lima's
+generic `"something"` fallback.
+
+The stock stick needs float literals for weight and value (`1.0` and `2.0`).
+Its fresh `({colour})` setup arrays then work with the grouping helper's value
+comparison: equal-colour sticks group and different colours remain separate.
+Native array identity is unchanged. These are two mudlib source changes using
+existing APIs.
+
+Runtime checks exercise actual object/container movement, room and message
+helpers, typed event construction and native timer dispatch with fixture users,
+throwers and targets. They include the stock stick with its inherited setup,
+grouping and delayed damage producer. Stock recipe dependencies and the crafting
+registry are loaded in separate bounded transactions before those stick checks;
+a cold clone exceeded the existing crafting budget. This does not establish
+cold startup, full player-body combat, damage delivery or parser command entry.
+The throw verb and other stock throwable consumers retain separate return-type,
+float-literal, array-declaration and food-inherit porting work. Existing policy
+also remains: disappearing targets use the no-detonation branch, ordinary
+targetless throws schedule no landing hook, and nonweapons bounce without damage.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -3801,3 +3847,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-object-grouping]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/objcalls.c
 [lima-cmp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L92-L127
 [lima-school-room-chat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/room_chat01.c
+[lima-throwable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_throwable.c
+[lima-stick]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/stick.c
