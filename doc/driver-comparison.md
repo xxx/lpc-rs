@@ -3350,8 +3350,46 @@ one means absent. Pass the selected source object into the `STR from OBJ` drink
 handlers rather than searching again for a nearby source. Checks exercise stock
 bottles/kegs and real fill/drink/pour handlers with fixture users, bodies and
 enabled/refusing sources. Full parser/body entry, item restoration, cold startup,
-water setup, remaining vessel numeric contracts and partly consumed merging
-remain separate work.
+and partly consumed merging remain separate work. Water and the remaining
+vessel setup contracts are [audited below](#lima-water-and-remaining-vessels).
+
+#### Lima water and remaining vessels
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS` and
+`EVERYTHING_SAVES`. No upstream driver was executed. Sources:
+[standard water][lima-water-base], [domain water][lima-water-item],
+[flask][lima-flask], [tankard][lima-tankard] and [river][lima-river]. The
+five-file diagnostic mudlib patch uses existing native APIs and is not adopted
+at this audit checkpoint.
+
+Initialize both water forms to one mass unit under `USE_MASS`. Their stock setup
+leaves mass at zero, despite a quantity of one. Keep the domain water's optional
+`USE_SIZE` initialization. Flask and tankard mass arguments need float literals;
+convert the river's integer `TOO_LARGE` constant with `to_float`. Capacities stay
+at one unit for a flask and eight for a tankard; the river remains attached.
+
+In standard water, assign IDs before setting the proper name `"some water"`.
+Lima's [name synchronization][lima-names] only initializes the primary ID while
+the proper name is absent. The stock order leaves a nil primary ID, causing
+drinking and pouring name construction to fail on lpc-rs. Reordering preserves
+the display name and supplies the `water` primary ID without changing the shared
+names module.
+
+Return `move(target) == MOVE_OK` from `move_water`, and reject nil/self targets.
+The stock function reports success even when movement is refused. Keep its
+occupied-water guard: it refuses a second water object even when spare capacity
+remains. Container filling retains the separately adopted merge/top-up policy.
+
+Checks exercise real river, flask, tankard and water objects through fill/drink/
+pour handlers, with fixture users/bodies and refusal hosts. A full flask supplies
+two drinks and a full tankard sixteen; exhaustion removes water and leaves the
+vessel intact. River setup and drinking dispose of temporary samples. Standard
+water retains its non-evaporating policy, while domain water retains evaporation
+through owned native timers. Refused transfers, finite-volume preservation,
+merges and rollback are covered. Full parser/body entry, restoration, cold startup,
+partly consumed merging and the [separate drink base][lima-drink-base] remain
+unchecked by this audit.
 
 #### Lima file metadata
 
@@ -4261,3 +4299,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-keg]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/keg.c
 [lima-fill-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/fill.c
 [lima-drink-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/drink.c
+[lima-water-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/water.c
+[lima-water-item]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/water.c
+[lima-flask]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/flask.c
+[lima-tankard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/tankard.c
+[lima-river]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/river.c
