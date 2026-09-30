@@ -2979,10 +2979,52 @@ grouping and delayed damage producer. Stock recipe dependencies and the crafting
 registry are loaded in separate bounded transactions before those stick checks;
 a cold clone exceeded the existing crafting budget. This does not establish
 cold startup, full player-body combat, damage delivery or parser command entry.
-The throw verb and other stock throwable consumers retain separate return-type,
-float-literal, array-declaration and food-inherit porting work. Existing policy
-also remains: disappearing targets use the no-detonation branch, ordinary
-targetless throws schedule no landing hook, and nonweapons bounce without damage.
+Existing policy also remains: disappearing targets use the no-detonation branch,
+ordinary targetless throws schedule no landing hook, and nonweapons bounce
+without damage.
+
+#### Lima throw verb and stock consumers
+
+Reviewed **29 September 2026** against the pinned [throw verb][lima-throw-verb],
+[club][lima-club], [rock][lima-rock] and [baseball grenade][lima-grenade], with
+distinct nil, preserved call-out players and Lima's `USE_MASS` configuration.
+Upstream drivers were not executed.
+
+Keep the private `throw_one` helper void and use `return;` after printing its
+refusal text. Both callers discard its result. Add `do_throw_obs(mixed *info)`
+with `handle_obs(info, do_throw_obj)`, using the bare callback pointer. This
+keeps the advertised plural rule on the same acquisition/throw path as the
+single-object rule and prints parser error strings. The inherited generic
+handler ignores an item's refusal result and adds its own success message,
+which otherwise duplicates ordinary throw output or announces a disabled item
+as thrown. Preserve the three registered rules and existing fallback strings.
+
+The club needs `set_weight(1.0)`. The rock needs
+`set_mass(to_float(SMALL))`, keeping its integer size constant and existing
+configuration guards. Preserve their inherited setup, weapon classes, damage
+types and skills. The club's existing weapon price getter truncates its `0.1`
+base value to zero and chooses a level-derived price; changing its weight does
+not alter that pricing policy.
+
+The grenade needs float weight/value literals (`1.0`, `40.0`) and
+`object *targets` for its filter result. Replace its damage callbacks with
+`&calc_damage(1)` and `&calc_damage(sizeof(targets))`. Here
+`(: calc_damage, 1 :)` returns one, and the analogous room literal returns the
+target count, rather than calling the damage method. Explicit partial
+applications preserve `10 + random(10) / targets` and its separate evaluation
+per recipient. An empty list never evaluates the callback. Hits retain the
+impact event followed by force damage to a vital limb; misses select attackable
+non-body objects and use nil for the unspecified limb. Both explosion branches
+remove the grenade. Queued weapon references become nil after its removal;
+complete damage delivery remains unchecked.
+
+Checks exercise real verb registration and handlers, stock items, movement,
+messages, typed event production and native timer dispatch with fixture users
+and bodies. Real crafting, message and damage dependencies are preloaded in
+separate bounded transactions. Cold startup and full player/parser/combat
+integration remain unchecked. Ordinary targetless grenade throws still do not
+detonate, and room explosions still announce once per selected target.
+Twinkie remains blocked by its food inherit and needs a separate audit.
 
 #### Lima file metadata
 
@@ -3849,3 +3891,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-school-room-chat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/room_chat01.c
 [lima-throwable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_throwable.c
 [lima-stick]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/stick.c
+[lima-throw-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/throw.c
+[lima-club]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/club.c
+[lima-rock]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/rock.c
+[lima-grenade]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/baseball_grenade.c
