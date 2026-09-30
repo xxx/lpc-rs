@@ -2882,12 +2882,61 @@ hooks, chat timers and look/listen/smell verbs with fixture actors and bounded
 real object spawning. Wizard location formatting goes through the real security
 daemon. The base/indoor/outdoor and moving-room/elevator hierarchies compile;
 this does not establish outdoor weather, full stock-world initialization,
-body/parser entry or cold boot. [Shared inventory grouping][lima-object-grouping]
-still casts the string from [object `ob_state`][lima-names] to an integer;
-the [school chat examples][lima-school-room-chat] also need their trailing
-`#include` semicolons removed. Those remain separate
-adaptations. Timer checks dispatch through the native queue by ID and do not
-measure wall-clock accuracy or cancel an already-running callback.
+body/parser entry or cold boot. Shared inventory grouping is covered below;
+the [school chat examples][lima-school-room-chat] still need their trailing
+`#include` semicolons removed. Timer checks dispatch through the native queue by
+ID and do not measure wall-clock accuracy or cancel an already-running callback.
+
+#### Lima object grouping
+
+Reviewed **29 September 2026** against the pinned
+[grouping helpers][lima-object-grouping],
+[object descriptions][lima-description] and
+[room descriptions][lima-roomdesc], using distinct nil and preserved call-out
+players. Upstream drivers were not executed.
+
+Keep `ob_state()` as a mixed value: ordinary objects return description strings,
+and containers use integer `-1` to mark unique instances. Cache each state once
+and test both for the sentinel with `intp(state) && state == -1`; the original
+int cast throws for strings on lpc-rs. Retain ordinary equality for states and
+attributes, and keep unique objects separate even when compared with themselves.
+Placed unique objects keep a `count` result of zero; the renderers treat zero or
+one as singular.
+Checking both sides also keeps integer `-1` unique against float `-1.0`, despite
+ordinary numeric equality; two float states of `-1.0` remain ordinary peers.
+
+Compare `setup_args()` with Lima's existing [recursive `cmp`][lima-cmp], rather
+than native array identity. A fresh array with the same arguments should group
+with its peers. This explicit mudlib comparison preserves native array and
+mapping identity, including empty arrays. `cmp` compares acyclic nested arrays
+and mapping values recursively, checks mapping key presence, and retains native
+equality for other values. Nil and integer zero remain distinct. Cyclic setup
+values are outside this helper's contract.
+
+Scope display grouping to the supplied eligible objects. Optional candidate
+arrays on `count` and `duplicatep` preserve ordinary caller/environment defaults;
+an explicit empty array must stay empty. Select the first representative in
+candidate order, ignoring nil and integer-zero entries without modifying the
+caller's array. For `inv_list`, apply visibility, short-description, attachment
+and untouched filtering before selecting groups. Attached contents still recurse
+at the existing indentation depth. The room's nonliving display groups exclude
+the viewer, hidden objects, the `except` object and attached objects, and stay
+separate from its living descriptions. Pass those candidates through
+`show_in_room` so its plural count matches duplicate selection.
+
+Whole-environment grouping can count excluded objects or let an omitted first
+representative suppress an included later one. Separate container relations
+already supply separate arrays to `inv_list`; candidate-based grouping keeps
+one relation from reporting the other's contents. Remove nil entries as well
+as integer zero before calling inventory methods in distinct-nil mode.
+
+These are mudlib changes in the grouping helpers, object descriptions and room
+descriptions. Existing native APIs suffice. Runtime checks exercise the actual
+room, object, container, movement, master and full simul composition with fixture
+items and actors. They cover filtered representatives, relation boundaries,
+default and explicit candidates, unique containers, nested setup values and
+recursive contents. They do not establish complete vendor trade, player-command
+dispatch, full body integration or cold boot.
 
 #### Lima file metadata
 
@@ -3750,4 +3799,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-roomdesc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/room/roomdesc.c
 [lima-room-state]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/room/state.c
 [lima-object-grouping]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/objcalls.c
+[lima-cmp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L92-L127
 [lima-school-room-chat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/room_chat01.c
