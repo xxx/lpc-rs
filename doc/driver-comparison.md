@@ -3305,8 +3305,8 @@ cover baseline failures, pouring/merging, refused placement and retrieval,
 evaporation, drinking, vanished casters, cleanup and transaction rollback.
 [Stock bottles, fluid sources and kegs](#lima-bottles-and-fluid-sources) use the
 separately audited and adopted mudlib patch below. The
-[separate drink base][lima-drink-base] still needs its own review. Full parser/body
-entry, item restoration and cold startup remain unchecked.
+[separate drink base](#lima-embedded-drinks) has its own diagnostic audit. Full
+parser/body entry, item restoration and cold startup remain unchecked.
 
 #### Lima bottles and fluid sources
 
@@ -3386,9 +3386,58 @@ two drinks and a full tankard sixteen; exhaustion removes water and leaves the
 vessel intact. River setup and drinking dispose of temporary samples. Standard
 water retains its non-evaporating policy, while domain water retains evaporation
 through owned native timers. Refused transfers, finite-volume preservation,
-merges and rollback are covered. Full parser/body entry, restoration, cold startup,
-partly consumed merging and the [separate drink base][lima-drink-base] remain
-unchecked by this audit.
+merges and rollback are covered. Full parser/body entry, restoration, cold startup
+and partly consumed merging remain unchecked by this audit. The
+[separate drink base](#lima-embedded-drinks) is audited below.
+
+#### Lima embedded drinks
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS` and
+`EVERYTHING_SAVES`. No upstream driver was executed. Sources:
+[drink base][lima-drink-base], [older drink-container module][lima-drink-container],
+[beer][lima-beer], [chemo satchel][lima-chemo], [dirty water][lima-dirty-water],
+[blackberry cider][lima-blackberry-cider] and [boiled water][lima-boiled-water].
+The seven-file diagnostic mudlib patch has **not been adopted**. Existing native
+APIs suffice.
+
+Alias the object inherit for its setup call, remove the redundant drink validator
+whose argument list differs from its inherited definition, and use float mass/
+price arguments and explicit numeric conversions. The half-price modifier needs
+a float declaration. Chemo's drink override must retain the parent's optional
+drinkee argument. The older container module needs an empty-safe inventory helper
+and host calls through `this_object()` instead of unresolved prototypes.
+
+Bind the alcohol callback as bare `alchohol_drink_action`. An expression closure
+containing only that name returns a function value on lpc-rs without invoking it.
+Refresh the remaining-drink count before choosing the ordinary or last-drink
+action; otherwise a freshly configured single drink uses the stale initial
+counter. Compute fullness as remaining drinks divided by the reconstructed total,
+with a defined zero-total result. The stock formula describes a partly consumed
+bottle incorrectly and can return nil with a drink remaining or divide by zero
+when its configured count is zero.
+
+At drink-container execution, refuse closed containers, guard missing contents
+and honor an explicitly selected drink only when it belongs to that container.
+Embedded drinks select themselves. The stock handler ignores the selected
+object and can consume contents despite its closed-container validator.
+
+Retain the existing healing/alcohol coupling, alcohol clamp, minimum-one-unit
+drink count, unchanged mass between sips and removal of the whole embedded item
+on exhaustion. The last sip skips taste effects but still heals. Computed
+remaining-drink value takes precedence over stored price; alcoholic drinks retain
+the half-price modifier. These policies differ from the separate fluid/vessel
+lifecycle and need a separate decision before changing them.
+
+Checks cover the base and all seven stock callers, real drink handlers, selection/
+refusal, exhaustion, bounded alcohol/abuse calls, poison creation and rollback.
+User/body fixtures record effects; complete player health delivery is unchecked.
+The real crafting daemon registers both drink recipes and computes their XP after
+successful recipes are preloaded in separate four-second transactions, with the
+stock inventory intact. Both recipe markers already exist. An earlier draft cold
+registry scan exceeded that unchanged limit during compilation; full cold startup remains
+unestablished. Full parser/body entry, restoration and custom drink reconfiguration
+also remain separate work.
 
 #### Lima file metadata
 
@@ -4294,6 +4343,12 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-fluid-source]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_fluid_source.c
 [lima-drink-source]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_drink_source.c
 [lima-drink-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/drink.c
+[lima-drink-container]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_drink_container.c
+[lima-beer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/beer.c
+[lima-chemo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/chemo_satchel.c
+[lima-dirty-water]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/dirty_water.c
+[lima-blackberry-cider]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/blackberry_cider.c
+[lima-boiled-water]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/boiled_water.c
 [lima-bottle]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/bottle.c
 [lima-keg]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/keg.c
 [lima-fill-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/fill.c
