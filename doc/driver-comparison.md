@@ -3118,10 +3118,57 @@ remove themselves without damage; ghosts receive the action before removal.
 Checks cover real food, movement, messages, saves, state scheduling and native
 timer dispatch with fixture users, bodies and damage sinks. Full player damage,
 effect restoration, spell casting and cold startup remain unchecked.
-[Speed][lima-transient-speed], [shield][lima-transient-shield] and
-[spell transients][lima-transient-spell] retain separate callback/setup signature
-blockers; [true strike][lima-transient-true-strike] also needs its string
-call-out adapted.
+Speed and spell transients need the separate adapters below.
+
+#### Lima speed and spell transients
+
+Reviewed **29 September 2026** against pinned [speed][lima-transient-speed],
+[shield][lima-transient-shield], [spell transient base][lima-transient-spell],
+[acid arrow][lima-transient-acid-arrow] and
+[true strike][lima-transient-true-strike], with distinct nil, preserved call-out
+players, `USE_MASS` and `EVERYTHING_SAVES`. Upstream drivers were not executed.
+
+Match `void do_effect(object affected)` in the concrete effects. Speed and
+shield keep inherited registration in zero-argument `mudlib_setup()` and receive
+clone configuration in typed `setup` hooks; speed also keeps its action/strength
+save registration. The spell transient base uses inherited registration plus a
+shared `setup(mixed *args...)` initializer for strength, action, caster and limb.
+Remove its recursive call to `this_object()->setup()`.
+
+True strike's caller supplies one duration argument. Its typed setup explicitly
+initializes the spell base with zero strength and nil action/limb before setting
+that duration. Acid arrow accepts its four clone arguments and initializes the
+same base, retaining its own fixed duration of two. Its damage callback should
+call the stock spell's three-argument `ongoing_damage(caster, target, limb)`;
+that function already forwards the no-dodge flag. These retain the cached casting
+body and the existing rule that extension sets the resident caster to the current
+body.
+
+Retire detached/nonliving speed and acid effects before dispatching their
+setter/damage calls. Shield renewal should message only when an incoming effect
+and living environment exist. True strike must require a live caster before
+comparing it with the current body: two nil values otherwise qualify and attempt
+to message a nil body. Bind its cleanup as
+`call_out(&do_effect(environment()), 1)` to match the effect hook and retain the
+one-second delay. It doubles one positive damage event or sets nonpositive damage
+to one, then marks itself spent.
+
+Retain the existing mudlib policies explicitly. Speed merging adds duration and
+keeps resident strength/action; removal resets speed to zero. The selected
+[heartbeat combat module][lima-combat-pulse] has an empty `set_attack_speed`, so
+adapting the transient does not itself change attack frequency. Shield subtracts
+a fixed five from bludgeon damage, clamps at zero and ignores configured strength.
+Acid arrows remain independent with `cannot_extend()`. Minute intervals and
+apply-before-expiry ordering still give the fixed count of two three updates.
+
+Checks exercise native event classes, direct effect hooks, movement, messages,
+state scheduling, timer dispatch, cancellation and rollback with fixture users,
+bodies and speed/damage sinks. Acid checks use an explicit fixture spell registry;
+stock casting and the full combat damage pipeline remain unchecked. Stock spell
+callers retain their spell-base return/argument blockers, and the spell daemon
+retains its regexp/return blockers. Generic identity/extendability, shield fields
+and spell caster/limb fields still need save/restore review. Cold startup and
+complete restoration remain unchecked.
 
 #### Lima file metadata
 
@@ -4004,3 +4051,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-transient-shield]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/transient/shield.c
 [lima-transient-spell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient_spell.c
 [lima-transient-true-strike]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/transient/true_strike.c
+[lima-transient-acid-arrow]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/transient/acid_arrow.c
