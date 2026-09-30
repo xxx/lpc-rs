@@ -3024,7 +3024,67 @@ and bodies. Real crafting, message and damage dependencies are preloaded in
 separate bounded transactions. Cold startup and full player/parser/combat
 integration remain unchecked. Ordinary targetless grenade throws still do not
 detonate, and room explosions still announce once per selected target.
-Twinkie remains blocked by its food inherit and needs a separate audit.
+The food and twinkie adapters are described below.
+
+#### Lima food and decay
+
+Reviewed **29 September 2026** against pinned [food][lima-food],
+[edible][lima-edible], [healing][lima-healing], [decay][lima-decay],
+[twinkie][lima-twinkie], [mongoose cobbler][lima-cobbler] and
+[hamburger][lima-hamburger], with distinct nil, preserved call-out players,
+`USE_MASS` and `EVERYTHING_SAVES`. Upstream drivers were not executed.
+
+Give food's object inherit an explicit name, such as `inherit OBJ base_object;`,
+and call `base_object::mudlib_setup()`: `object` is a reserved type token.
+Use float `1.0` for its healing modifier and
+[`to_float(query_num_eats())`](efun/to_float.md) in value arithmetic; a cast
+does not perform numeric conversion. Match the inherited zero-argument
+`direct_eat_obj()` and omit the unused argument in its inherited call. Preserve
+integer pricing, the 35% decay discount and zero value after eating or decay.
+The stock mongoose cobbler also needs float weight `1.0`.
+The corrected food inherit makes both cobbler and pigeon on a spit compilable;
+recheck the crafting registry's cooking recipes when adopting these changes.
+
+Rename edible's action helper, whose original name collides with its global
+`eat_action` variable, and give its action parameter type `mixed`. On this
+driver the original helper call resolves to that variable: string actions raise
+a non-function call error, and function actions run twice without healing.
+Choose the regular or last-bite action once, run the renamed helper once, then
+decrement the bite count or remove the final piece. The helper delivers the
+action and calls healing before removal; the original final-bite branch skips
+healing. String actions still use `simple_action`, function actions receive no
+arguments, and the last action replaces the regular one only for the last bite.
+Prefer bare callback names, for example `set_eat_action(eat_message)`.
+
+Guard healing's absent environment before checking `is_living()`. Its recipient
+policy remains the living carrier, or the current body otherwise. Passing an
+explicit eater changes the action recipient but does not override that healing
+policy. These checks use a fixture health sink; full player-body healing remains
+unchecked.
+
+Call decay's inherited `add_save` directly. Calling that protected helper through
+`this_object()->` cannot reach it here. Hamburger also needs an explicit
+`mudlib_setup()` that invokes both food and decay setup; its inherited decay
+setup otherwise skips food's bite-count registration. Together these changes
+register `num_eats` and `num_decays`. Existing adjective/original-bite save
+omissions and complete item restoration remain separate work.
+
+Rename twinkie's custom `throw` method to `do_throw`, the entry used by the real
+verb; `throw` is reserved here. Fall back to inherited `do_throw(target)` for
+untargeted throws or a disabled/refused item. Targeted throws retain the creamy
+filling action and remove the twinkie. This preserves ordinary untargeted throws
+and inherited refusal strings.
+
+Checks exercise real foods, eat/throw handlers, movement, messages, save
+registration, the state daemon and native timer dispatch with fixture users and
+bodies. Decay keeps its existing stages, minute intervals, return values and
+auto-removal policy. Hamburger retains its switch fallthrough and remains after
+its final stage because auto-removal is off. Generic food still needs
+`set_num_eats` before its extra-long percentage calculation; its default original
+bite count is zero. Other food/decay consumers need setup composition review.
+Poisonous eating remains blocked by the poison transient's override signature;
+it fails before the action or bite decrement. Cold startup, full parser/player
+entry and complete restoration remain unchecked.
 
 #### Lima file metadata
 
@@ -3895,3 +3955,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-club]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/club.c
 [lima-rock]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/rock.c
 [lima-grenade]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/baseball_grenade.c
+[lima-food]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/food.c
+[lima-edible]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_edible.c
+[lima-healing]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_healing.c
+[lima-twinkie]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/misc/twinkie.c
+[lima-cobbler]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/mongoose_cobbler.c
+[lima-hamburger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/hamburger.c
