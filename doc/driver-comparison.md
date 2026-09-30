@@ -3265,6 +3265,50 @@ room light transfer, rejected moves, vanished casters, expiry, recasting,
 hook/timer cleanup, snacks and transaction rollback. Complete parser/body entry,
 save/restore, general pet combat/chipping and cold startup remain unchecked.
 
+#### Lima conjure ale and fluids
+
+Source-reviewed and exercised in a **diagnostic overlay on 30 September 2026**
+at the pinned Lima revision, with distinct nil, preserved call-out players,
+`USE_MASS` and `EVERYTHING_SAVES`. The four-file patch is not yet adopted;
+no upstream driver was executed. Sources: [spell][lima-ale-spell],
+[ale item][lima-ale-item], [fluid base][lima-fluid] and
+[drinkable module][lima-drinkable]. Existing native APIs suffice.
+
+Use an absolute clone path for the ale: the stock relative path resolves beneath
+the spell directory on lpc-rs. Cache the casting body and its environment, check
+the movement result, remove a refused clone and announce success after placement.
+Explicitly start evaporation after placement; the stock spell only moves the
+item. Casting remains immediate, with its existing reflex and skill checks.
+
+Fluid levels and capacity arithmetic need float values under `USE_MASS`, with
+explicit integer conversion for quantity. Absent fluid lookups return nil.
+Make the drinkable count formula use float operands before converting the result
+to int; retain its existing minimum-one-unit calculation and two drinks per unit.
+Consumption does not gradually reduce mass in this patch.
+
+Use the bare evaporation callback: `(: evaporate_puddle_func :)` returns a
+function value on lpc-rs without invoking it. Store the native timer ID and cancel
+it through movement/removal hooks; removing ID zero does not cancel the object's
+pending timers. Starting evaporation replaces its prior timer. The first delay
+remains six seconds, later delays twenty seconds, and each update removes one
+mass unit. Function-valued evaporation actions retain synchronous evaluation.
+
+Exclude the pouring object from resident-fluid lookup and reject self-merges.
+Move incoming fluid successfully before merging it into the resident puddle,
+retiring the incoming clone and keeping one timer on the resident. Only announce
+successful spills, return the actual movement result from `move_fluid`, and treat
+get/drop error strings as refusal before changing fluid state.
+
+Checks exercise the real registry and verb handler, movement, messages, hooks
+and native timer dispatch with fixture users/bodies and a fixture vessel. They
+cover baseline failures, pouring/merging, refused placement and retrieval,
+evaporation, drinking, vanished casters, cleanup and transaction rollback.
+[Stock bottles][lima-bottle], [fluid containers][lima-fluid-container],
+[fluid sources][lima-fluid-source], [drink sources][lima-drink-source],
+[kegs][lima-keg], the [separate drink base][lima-drink-base] and
+[fill verb][lima-fill-verb] still have compile blockers or need separate lifecycle
+review. Full parser/body entry, item restoration and cold startup remain unchecked.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4161,3 +4205,14 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-stateful]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_stateful.c
 [lima-state-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/state_d.c
 [lima-object-hooks]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/hooks.c
+[lima-ale-spell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/spell/ale.c
+[lima-ale-item]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/ale.c
+[lima-fluid]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/fluid.c
+[lima-drinkable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_drinkable.c
+[lima-fluid-container]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_fluid_container.c
+[lima-fluid-source]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_fluid_source.c
+[lima-drink-source]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_drink_source.c
+[lima-drink-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/drink.c
+[lima-bottle]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/bottle.c
+[lima-keg]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/keg.c
+[lima-fill-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/fill.c
