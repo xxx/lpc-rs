@@ -3565,6 +3565,57 @@ recipient. Full body/human compilation advances to karma typing errors in
 [simple advancement][lima-advancement-simple]. Full player combat, parser/body
 entry, saved player migration and cold startup remain unchecked.
 
+#### Lima simple advancement
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS`,
+`EVERYTHING_SAVES`, `USE_SKILLS`, `FORMULA_SKILLS`, `BODY_STATS_LIMA`,
+`WIELD_LIMBS`, `ADVANCEMENT_SIMPLE`, `AUTO_LEVEL`, `CAN_LOSE_LEVELS`,
+`USE_KARMA` and `XP_FACTOR=250`. Sixteen fresh public source comparisons match
+original Lima; no upstream driver was executed. Sources include
+[simple advancement][lima-advancement-simple], [body quests][lima-body-quests],
+[party awards][lima-party-advancement], [body skills][lima-body-skills] and
+[limb health][lima-health-limbs]. The proposed one-file mudlib patch is
+**not adopted** and uses existing native APIs.
+
+Initialize `karma_mod` with `0.0` and assign
+`karma = to_int(karma + karma_mod)`. Convert the complete sum, preserving the
+integer destination. With karma 100 and modifier −1 the result is 96;
+converting only the increment would produce 97. The setter remains unclamped,
+the getter clamps to −1000–1000, and modification clamps its argument to −5–5
+before calculating the increment and clamping the result.
+
+Keep stock level, XP and callback policies. Explicit zero XP uses stored XP;
+explicit zero level selects the current level minus one. `set_level` refreshes
+body style. XP gains/losses issue existing commands on level changes and save
+the linked receiver. `set_experience` instead saves the linked ambient body
+and requires that context; stock callers were not found. Do not introduce a
+nil fallback as part of the karma adaptation.
+
+XP retains integer `XP_FACTOR / 15`, the level-ratio transformation, floating
+calculation, floor conversion and minimum of one. A negative monster level
+can still produce positive XP: player level 1 and monster level −2 yield 32.
+Solo `xp_value` applies the recipient's guild buff; party awards call
+`calc_xp_for` directly and apply a level share without that buff. The stored
+XP modifier does not participate in this calculation. The unused
+`skill_xp_plus` helper accepts NPC integer records but fails with body skill
+class records; this audit leaves it unchanged.
+
+Checks exercise included and inherited advancement, real body skills, real
+limb health and the real quest module. A fixture quest daemon supplies the
+authorized caller. Unchanged party XP/karma methods are extracted into a host
+with fixture roster, debug and save methods; the complete party daemon still
+has string-return-zero errors. Commands, messages, saves and selected stats
+are supplied or captured by hosts. These checks do not establish full player
+combat, party persistence or quest-daemon integration.
+
+Keep static host requirements visible. Player bodies supply `save_me` and
+`do_game_command`; standalone adversaries and selected monsters still fail
+without them. With the proposed karma patch, full body/human compilation
+advances to the string-form `setup_monster` [`call_out`](efun/call_out.md) in
+[the adversary][lima-adversary]. That timer site needs a separate audit.
+Full parser/body entry, player-save migration and cold startup remain unchecked.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4373,6 +4424,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-decay]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_decay.c
 [lima-health-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/limbs.c
 [lima-advancement-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/advancement/simple.c
+[lima-body-quests]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/quests.c
+[lima-party-advancement]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/party_d.c
 [lima-body-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/body_d.c
 [lima-wield-limbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/limbs.c
 [lima-wieldable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wieldable.c
