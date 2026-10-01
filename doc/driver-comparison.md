@@ -3564,6 +3564,8 @@ text; an inherited host also exercises the real debug macro without a connected
 recipient. Full body/human compilation advances to karma typing errors in
 [simple advancement][lima-advancement-simple]. Full player combat, parser/body
 entry, saved player migration and cold startup remain unchecked.
+The [advancement adaptation](#lima-simple-advancement) below advances body
+compilation further.
 
 #### Lima simple advancement
 
@@ -3575,8 +3577,8 @@ revision, with distinct nil, preserved call-out players, `USE_MASS`,
 original Lima; no upstream driver was executed. Sources include
 [simple advancement][lima-advancement-simple], [body quests][lima-body-quests],
 [party awards][lima-party-advancement], [body skills][lima-body-skills] and
-[limb health][lima-health-limbs]. The proposed one-file mudlib patch is
-**not adopted** and uses existing native APIs.
+[limb health][lima-health-limbs]. The adopted one-file mudlib patch uses
+existing native APIs.
 
 Initialize `karma_mod` with `0.0` and assign
 `karma = to_int(karma + karma_mod)`. Convert the complete sum, preserving the
@@ -3611,7 +3613,7 @@ combat, party persistence or quest-daemon integration.
 
 Keep static host requirements visible. Player bodies supply `save_me` and
 `do_game_command`; standalone adversaries and selected monsters still fail
-without them. With the proposed karma patch, full body/human compilation
+without them. With the karma patch, full body/human compilation
 advances to the string-form `setup_monster` [`call_out`](efun/call_out.md) in
 [the adversary][lima-adversary]. That timer site needs a separate audit.
 Full parser/body entry, player-save migration and cold startup remain unchecked.
