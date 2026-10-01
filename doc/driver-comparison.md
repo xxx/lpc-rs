@@ -3666,6 +3666,52 @@ patch, full body/human compilation advances to object-typed zero in
 monsters retain missing save/command host definitions. Full parser/body entry,
 player-save migration and cold startup remain unchecked.
 
+#### Lima following
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players and the combat/advancement
+options listed in the [setup audit](#lima-deferred-adversary-setup). Thirteen fresh
+public source comparisons match original Lima; no upstream driver was executed.
+Sources include [the follow module][lima-setup-follow],
+[the verb][lima-follow-verb], [the following monster][lima-follow-monster],
+[the wolf caller][lima-follow-wolf], [object hooks][lima-hooks],
+[object movement][lima-container-move] and [smart movement][lima-follow-smartmove].
+The proposed mudlib patch is **not adopted** and uses existing native APIs.
+
+Clear the object target with `nil` and use [`evaluate`](efun/evaluate.md)
+instead of Lima's string `eval` helper. Declare `query_follow_search` as
+`mixed *`: its existing callers consume string and object selectors. Replace
+the four `(: method :)` callback literals with bare method names. Under native
+[closure semantics](lpc/function_type.md), those literals return the function
+value without calling it; otherwise follow/arrival/move hooks and the match
+predicate silently do no work.
+
+Flatten selector callback results before deduplication and discard nil/zero
+results before [`present`](efun/present.md). The module documents callbacks
+returning arrays, but its original expansion nests them and lookup throws.
+An absent callback result now produces no candidate. The [real follow
+verb][lima-follow-verb] lists mixed selectors and toggles object selection with
+its original messages. Selection retains a present target and otherwise chooses
+randomly among candidates present in the follower's room.
+
+Keep the existing gameplay policies visible: clearing the search list does not
+clear the target; an empty search during a move leaves old-room hooks registered;
+and `is_following` reads a flag that this module never sets. The patch does not
+redesign those policies. With a search, movement detaches the previous room's
+hooks and attaches the new room's hooks without duplicates. The departure hook
+submits `go <direction>` with the follower as the current body/user and restores
+the saved user before rethrowing a response error.
+
+Checks inherit the real follow and hook modules and call the real verb and simul
+helpers. Room events, response/action methods and the user message receiver are
+instrumented; the complete [smart movement][lima-follow-smartmove] and
+[action queue][lima-follow-actions] are not exercised. Standalone modules still
+need visible `respond`, `call_hooks` and `add_hook` implementations. Full
+body/human compilation advances to `find_call_out` and string-form `call_out`
+in the action module; following monsters retain save/command host requirements.
+Connected-client delivery, full parser/body entry, saves/upgrades and cold
+startup remain unchecked.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4470,6 +4516,11 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-adversary]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary.c
 [lima-setup-overrides]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/overrides.c
 [lima-setup-follow]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_follow.c
+[lima-follow-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/follow.c
+[lima-follow-monster]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/following_monster.c
+[lima-follow-wolf]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/wolf.c
+[lima-follow-smartmove]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_smartmove.c
+[lima-follow-actions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_actions.c
 [lima-death-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/death_messages.c
 [lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
 [lima-corpse-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/corpse.c
