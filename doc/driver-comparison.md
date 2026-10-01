@@ -3718,12 +3718,12 @@ startup remain unchecked.
 
 Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
 revision, with distinct nil, preserved call-out players and the options listed
-in the [setup audit](#lima-deferred-adversary-setup). Fifteen fresh public source
-comparisons match original Lima; no upstream driver was executed. Sources include
+in the [setup audit](#lima-deferred-adversary-setup). Fifteen pinned public source
+comparisons from the audit match original Lima; no upstream driver was executed.
+Sources include
 [the action module][lima-follow-actions], [object hooks][lima-hooks],
 [following][lima-setup-follow] and [the quiet command][lima-actions-quiet].
-The proposed two-file mudlib patch is **not adopted** and uses existing native
-APIs.
+The local port adopts the two-file mudlib patch using existing native APIs.
 
 Replace name-based `find_call_out`, `call_out` and cancellation with owned handles
 and [`query_call_out`](efun/query_call_out.md), [`call_out`](efun/call_out.md) and
