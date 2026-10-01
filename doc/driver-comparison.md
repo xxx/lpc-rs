@@ -1974,8 +1974,8 @@ Compilation then exposes the [corpse callers below](#lima-corpse-handling) and a
 separate body signature mismatch. The [body setter][lima-body-skills] overrides
 the two-argument monster `set_skill` with a three-argument setter whose final
 argument is training points. The runtime body guard does not remove that static
-argument-count check. The [body skill audit below](#lima-body-and-adversary-skills)
-recommends an explicit zero default for the final argument.
+argument-count check. The [body skill adaptation below](#lima-body-and-adversary-skills)
+gives the final argument an explicit zero default.
 
 #### Lima corpse handling
 
@@ -3486,8 +3486,8 @@ revision, with distinct nil, preserved call-out players, `USE_MASS`,
 match original Lima; no upstream driver was executed. Sources include
 [body skills][lima-body-skills], [adversary skills][lima-adversary-skills],
 [the skill class][lima-skill-class], [monster setup][lima-monster-setup],
-[the trainer][lima-trainer] and [the skill daemon][lima-skill-daemon]. The audited
-two-file mudlib patch is recommended for adoption and uses existing native APIs.
+[the trainer][lima-trainer] and [the skill daemon][lima-skill-daemon]. The adopted
+two-file mudlib patch uses existing native APIs.
 
 Give the body setter an explicit `int training_points = 0` default. Inherited
 monster setup and the trainer's `set_trainer_skill` supply two arguments;
