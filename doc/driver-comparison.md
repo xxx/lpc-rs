@@ -3767,12 +3767,13 @@ requirement remain unchanged.
 
 #### Lima player naming
 
-Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
-revision, with distinct nil, preserved call-out players, `USE_TITLES` enabled
-and `USE_INTRODUCTIONS` disabled. Ten public source comparisons match original
-Lima; FluffOS's idle reference and implementation are separately source-reviewed
-at the pinned driver revision. No upstream driver was executed. The proposed
-two-file mudlib patch is **not adopted** and uses existing native APIs.
+Source-reviewed **30 September 2026** and exercised on lpc-rs through
+**1 October 2026** at the pinned Lima revision, with distinct nil, preserved
+call-out players, `USE_TITLES` enabled and `USE_INTRODUCTIONS` disabled. Ten
+pinned public source comparisons from the audit match original Lima; FluffOS's
+idle reference and implementation remain pinned audit evidence. No upstream
+driver was executed. The local port adopts the two-file mudlib patch using
+existing native APIs.
 
 In [the naming module][lima-actions-naming], return nil from `query_userid()`
 when there is no user link, preserving its declared string contract. A live
