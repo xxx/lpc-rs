@@ -3615,8 +3615,56 @@ Keep static host requirements visible. Player bodies supply `save_me` and
 `do_game_command`; standalone adversaries and selected monsters still fail
 without them. With the karma patch, full body/human compilation
 advances to the string-form `setup_monster` [`call_out`](efun/call_out.md) in
-[the adversary][lima-adversary]. That timer site needs a separate audit.
+[the adversary][lima-adversary]. The
+[deferred-setup audit](#lima-deferred-adversary-setup) below examines that timer.
 Full parser/body entry, player-save migration and cold startup remain unchecked.
+
+#### Lima deferred adversary setup
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS`,
+`EVERYTHING_SAVES`, `USE_SKILLS`, `FORMULA_SKILLS`, `BODY_STATS_LIMA`,
+`WIELD_LIMBS`, `ADVANCEMENT_SIMPLE`, `AUTO_LEVEL`, `CAN_LOSE_LEVELS`,
+`USE_KARMA` and `XP_FACTOR=250`. Twelve fresh public source comparisons match
+original Lima; no upstream driver was executed. Sources include
+[object creation][lima-object], [adversary setup][lima-adversary],
+[monster defaults][lima-monster-setup] and [the simul overrides][lima-setup-overrides].
+The proposed one-line mudlib patch is **not adopted** and uses existing native APIs.
+
+Replace `call_out("setup_monster", 0)` with `call_out(setup_monster, 0)`.
+Keep the delay and the separate transaction. Clone creation calls
+`mudlib_setup`, `internal_setup` and the area's `setup` before the callback
+runs. Calling the method directly runs defaults before the area sets its level:
+the checked level-15 NPC receives level-1 skill points of 10 instead of 250.
+
+The bare callback reaches a derived override when scheduled by the inherited
+method. At firing, the stock method tests `is_body` before default work, and
+the monster module reads the current level. Player bodies still skip defaults.
+Blueprint initialization does not enter the clone setup path, and each
+`mudlib_setup` invocation still schedules one callback; the patch adds no
+deduplication policy. Named callbacks follow native
+[`call_out`](efun/call_out.md) binding and compatible recompilation rules.
+
+The callback preserves the player captured before area setup under Lima's
+configured mode; changing that player later in creation does not replace it.
+An absent player stays nil, `this_interactive` stays nil, `previous_object`
+is the callback owner and `origin` is `"call_out"`. Context fixtures use Lima's
+existing `this_user` wrapper. Its obsolete `this_player` stub and compiler
+restrictions on explicit efun bypass remain unchanged.
+
+An uncaught creation failure schedules nothing. A callback failure rolls back
+its default changes after creation has committed. Destruction before firing
+prevents the work, and the one-shot callback is consumed even when it throws.
+
+Checks extract the real object creation and adversary scheduling/guard methods,
+inherit the real monster module and use a fixture skill registry with stock
+rank thresholds. Living, configuration, area, stats, weapon and health methods
+are instrumented hosts. The native clone and call-out execution paths run;
+the complete adversary/player lifecycle is not established. With the proposed
+patch, full body/human compilation advances to object-typed zero in
+[the follow module][lima-setup-follow]. Standalone adversaries and selected
+monsters retain missing save/command host definitions. Full parser/body entry,
+player-save migration and cold startup remain unchecked.
 
 #### Lima file metadata
 
@@ -4420,6 +4468,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-trainer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_trainer.c
 [lima-skill-formula]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/formula/skills.c
 [lima-adversary]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary.c
+[lima-setup-overrides]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/overrides.c
+[lima-setup-follow]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_follow.c
 [lima-death-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/death_messages.c
 [lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
 [lima-corpse-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/corpse.c
