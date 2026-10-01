@@ -3670,13 +3670,15 @@ player-save migration and cold startup remain unchecked.
 
 Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
 revision, with distinct nil, preserved call-out players and the combat/advancement
-options listed in the [setup audit](#lima-deferred-adversary-setup). Thirteen fresh
-public source comparisons match original Lima; no upstream driver was executed.
+options listed in the [setup audit](#lima-deferred-adversary-setup). Thirteen pinned
+public source comparisons from the audit match original Lima; no upstream driver
+was executed.
 Sources include [the follow module][lima-setup-follow],
 [the verb][lima-follow-verb], [the following monster][lima-follow-monster],
 [the wolf caller][lima-follow-wolf], [object hooks][lima-hooks],
 [object movement][lima-container-move] and [smart movement][lima-follow-smartmove].
-The proposed mudlib patch is **not adopted** and uses existing native APIs.
+The local port adopts the one-file, eight-site mudlib patch using existing native
+APIs.
 
 Clear the object target with `nil` and use [`evaluate`](efun/evaluate.md)
 instead of Lima's string `eval` helper. Declare `query_follow_search` as
