@@ -4017,18 +4017,19 @@ The compile matrix passes 409/620, preserving all 406 preceding successes and
 matching all eighteen audited targets. Complete daemon compilation advances
 from failure to success. Standalone mixins still require host methods;
 player channel commands retain their command-parent
-blocker. IMUD compilation and SNOOP_D cleanup failures are unchanged. Real IMUD
-transport, SOUL_D parsing, pager/full-shell command dispatch, password/menu/network
-login, foreign saves, stock equipment and cold startup remain unchecked.
-The [body-switch audit below](#lima-permanent-body-filenames-and-cleanup)
-exercises a proposed repair; adopt it before claiming complete player login support.
+blocker. IMUD compilation and SNOOP_D cleanup failures remained in that migration.
+Real IMUD transport, SOUL_D parsing, pager/full-shell command dispatch,
+password/menu/network login, foreign saves, stock equipment and cold startup remain unchecked.
+The [body-switch migration below](#lima-permanent-body-filenames-and-cleanup)
+adopts the reviewed repair; complete player login remains unchecked.
 
 #### Lima permanent body filenames and cleanup
 
 Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
-with distinct nil, preserved call-out players and the preceding channel overlay.
+with distinct nil and preserved call-out players. The four-file patch is adopted
+over the preceding channel overlay in the local Lima migration.
 Nine public Lima byte comparisons are recorded; no upstream driver was executed.
-The four-file diagnostic patch is not adopted and needs no native API change.
+It needs no native API change; the adopted library matches the audited copy.
 
 For permanent [switches][lima-body-switching], call the existing protected
 `set_body_fname(query_selected_body(), body_fname)` rather than only saving
@@ -4037,7 +4038,7 @@ account body record and persists it. Runtime query_fname, the actual account
 save and restore retain the changed filename. Temporary and omitted-name
 switches preserve registration.
 
-The adapted [master][lima-master] can narrowly permit a requester whose base name
+The adapted [master][lima-master] narrowly permits a requester whose base name
 is USER_OB to remove a body whose `query_link()` identifies that requester.
 Keep critical master/simul/security checks first and preserve existing privilege
 checks for other objects. Keep the simul's master check before cleanup and native
@@ -4053,8 +4054,13 @@ checks. In the [dummy][lima-entry-snoop-dummy], guard clone-only create work wit
 `if (!clonep()) return;`: initializing the blueprint without a name otherwise
 fails before the clone can be created.
 
-The audit passes 41 native cases: eighteen new cases, including five controls,
-and all 23 retained channel cases with unchanged assertions and raw observations.
+The migration verifies 699 native cases: eighteen body-switch cases, including five
+controls, and all 681 previously selected cases with unchanged assertions.
+The 723 observations match frozen evidence within existing checked bounds;
+body-switch and retained channel/account observations match exactly.
+Historical account-entry failure controls retain the preceding frozen overlay.
+Scoped retries resolve compilation-budget failures without changing the
+4,000 ms limit.
 The complete real account/body/shell switches and removes its old body.
 An injected later entry failure rolls back filename registration, body cleanup,
 inventory, account/body save files and outgoing messages. The stock cleanup
@@ -4073,11 +4079,12 @@ Production dummy construction and local cleanup run, and the native connection
 queue receives start/stop controls on the same connection. A dead dummy
 mapping value remains after removal. Public snoop command authorization, cycle
 handling, subscriber delivery and TCP processing are not established by this
-fixture. The compile matrix advances from 11/16 to 12/16: SNOOP_D succeeds;
-standalone switch/account mixins and non_object retain host dependencies.
+fixture. The compile matrix passes 411/621, preserving all 409 preceding
+successes and matching all sixteen audited targets. SNOOP_D advances to success
+and the added dummy target compiles; standalone switch/account mixins and
+non_object retain host dependencies.
 Cold startup, complete login/takeover, stock equipment and foreign saves remain
-unchecked. Adopt this patch and audit moderation notification destinations
-separately.
+unchecked. Audit moderation notification destinations separately.
 
 #### Lima file metadata
 
