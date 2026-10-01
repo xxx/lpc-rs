@@ -370,7 +370,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
-| Connection model | [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
+| Connection model | [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). Connection metadata supplies idle time for [Lima player naming](#lima-player-naming). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
 | Build and configuration | [Cargo build and installation](../README.md#build-and-install), [environment settings and explicit dotenv files](../default.env). | [Make-based build][cd-readme], with settings in [config.h][cd-config]. | [Configure/Make build][ld-install], with [command-line options and argument files][ld-invocation]. | [CMake build][fl-readme] and a [runtime configuration file][fl-config]. | [Make-based build][dgd-build] and a separate [driver configuration file][dgd-config]. |
 
 Async I/O and resumable LPC functions do not by themselves establish parallel
@@ -3765,6 +3765,54 @@ advances to zero returned from `query_userid` and unknown `query_idle` in
 inline function syntax and the quiet command parent's `dispatch_main`
 requirement remain unchanged.
 
+#### Lima player naming
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_TITLES` enabled
+and `USE_INTRODUCTIONS` disabled. Ten public source comparisons match original
+Lima; FluffOS's idle reference and implementation are separately source-reviewed
+at the pinned driver revision. No upstream driver was executed. The proposed
+two-file mudlib patch is **not adopted** and uses existing native APIs.
+
+In [the naming module][lima-actions-naming], return nil from `query_userid()`
+when there is no user link, preserving its declared string contract. A live
+link returns the account ID even when disconnected; the character's display
+name is a separate value. Destructed links take the absent-link path.
+
+Provide `query_idle(object ob)` as a simul helper over
+[`query_connection(ob)["idle"]`](efun/query_connection.md). Reject nil and
+objects without connections rather than reporting them as active players.
+The reviewed FluffOS helper also errors for non-interactive objects and reads
+seconds since the last input command. [Reference][fl-query-idle],
+[implementation][fl-query-idle-source]. Native connection metadata already
+provides the clock, so this does not require another driver efun. Check
+`link && interactive(link)` before querying it: native
+[`interactive`](efun/interactive.md) can default a nil argument to the current
+object, including a connected body with no user link.
+
+Keep the naming policies: idle text begins at 60 seconds, uses the largest time
+unit and can accompany the inactive marker; disconnected descriptions retain
+the lifeless prefix. Default titles are cached, and ghost descriptions use the
+underlying character name even after visibility changes. The describe setter
+accepts callers by base name and still invokes saving after an unauthorized
+call without changing the description. The nickname setter instead checks the
+full filename, rejecting cloned callers; replacing a nickname changes its IDs
+without saving, and initialization restores the nickname ID. These caller and
+gameplay policies are unchanged. [Titles][lima-naming-title],
+[describe command][lima-naming-describe], [nickname command][lima-naming-nickname].
+
+Checks inherit the real naming/title modules and use native connection attachment,
+detachment, caller inspection, formatting and `parse_refresh`. Deterministic
+idle-boundary checks substitute the simul helper's clock result; separate checks
+read the real connection clock. Identity, ID mutations and saving are
+instrumented host methods, and command callers are proxies at the real paths.
+Complete commands, connected-client output, saves/upgrades, parser targeting and
+cold startup remain unchecked. The configured-out introductions branches are
+not exercised. Full body/human compilation advances to `filter_mapping` in
+`std/body/guilds.c`; standalone naming/title modules still need visible host
+methods, and complete describe/nickname/people commands still lack the command
+parent's `dispatch_main`.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4703,3 +4751,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-lockpick-mediocre]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/mediocre_electric_lock_pick.c
 [lima-lockpick-advanced]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/advanced_electric_lock_pick.c
 [lima-lockpick-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_lockpick.c
+
+[lima-naming-title]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/title.c
+[lima-naming-describe]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/describe.c
+[lima-naming-nickname]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/nickname.c
+[fl-query-idle]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/interactive/query_idle.md
+[fl-query-idle-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/comm.cc#L1176-L1181
