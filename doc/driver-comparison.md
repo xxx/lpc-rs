@@ -3448,8 +3448,7 @@ match original Lima; no upstream driver was executed. Sources include the
 [advanced][lima-lockpick-advanced] recipes, [tool module][lima-lockpick-module],
 [lockable module][lima-lockable], [pick verb][lima-pick-verb],
 [crafting module][lima-crafting-module] and [registry][lima-crafting-registry].
-The four-file diagnostic mudlib patch is ready for adoption; existing native APIs
-suffice.
+The adopted four-file mudlib patch uses existing native APIs.
 
 Use float price literals in the three recipes: `50.0`, `200.0` and `500.0`.
 Their integer arguments do not satisfy the material value setter's float type.
