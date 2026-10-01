@@ -3962,9 +3962,62 @@ privileged cleanup reaches [SNOOP_D's][lima-entry-snoop] integer-zero return
 from a mapping method. Both leave the old body alive in these checks.
 The adopted patch preserves these policies and blockers. Complete mailbox
 compilation succeeds; the expanded compile matrix retains all preceding successes
-and its other diagnostics match the audit. Audit channel composition and repair
-body-switch persistence/cleanup separately before
-claiming complete player login support.
+and its other diagnostics match the audit. The
+[channel audit below](#lima-channel-daemon-composition) exercises a proposed repair
+of that daemon; repair body-switch persistence/cleanup separately before claiming
+complete player login support.
+
+#### Lima channel daemon composition
+
+Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
+with distinct nil, preserved call-out players, `USE_MASS`, `EVERYTHING_SAVES`,
+`BODY_STATS_LIMA` and limb wielding. Ten public Lima byte comparisons and one
+pinned FluffOS grammar read are recorded; no upstream driver was executed.
+The proposed 22-line patch changes the daemon and its command/moderation mixins;
+it is not adopted, and no native API change is required.
+
+In [the channel command][lima-entry-channel], replace the assignment in `/clear`
+with `adminp(user) || (ci.moderator && this_body() == ci.moderator)`.
+[Moderation][lima-channel-moderation] stores the current **body**, while
+`this_user()` is the account object. Equality with the account denies a legitimate
+moderator. The non-nil guard also prevents an account without a body from matching
+an unmoderated channel. Format the denial with `user->query_userid()` so it does
+not dereference a missing body.
+
+Use `nil` when clearing moderator/speaker/requestor fields, clearing saved
+listener/hook arrays, passing an absent sender, returning missing listener/name
+results and pruning null listeners. Flags and counts remain numeric zero.
+Access [class fields](lpc/classes.md) with `.` before broadcasts and object calls:
+`ci.listeners->channel_rcv_string(...)`, `ci.moderator->query_name()` and
+`((class channel_info)info[name]).name`. Native `receiver->name` without an
+argument list creates a [function value](lpc/function_type.md), and these legacy
+field forms fail during compilation or receiver resolution. The reviewed
+FluffOS grammar has both dot and arrow member productions. [Grammar][fl-channel-members].
+
+The audit passes 44 native cases: 23 new channel cases, including five controls,
+and all 21 retained user-entry cases with unchanged assertions and raw observations.
+The complete cloned/attached user enters through the real
+[daemon][lima-channel-daemon] and [account channel module][lima-channel-user].
+Registration deduplicates, enforces wizard/admin flags and purges empty transient
+channels. Actual output includes tells, emotes, notices and fixture soul data;
+history retains twenty records. Errors roll back history and outgoing messages.
+Native daemon saves restore permanent flags and live blueprint listener records.
+Security-role mappings are seeded through test helpers; production permission
+queries execute. The retained user-entry cases keep their original channel fixture.
+
+Moderation queues body requestors, calls a speaker and clears typed fields on
+signoff. An existing notification issue remains: raise/lower notices target the
+body's `channel_rcv_string`, but that receiver is defined on the account object.
+The raise check observes the missing notice; both source sites remain unchanged
+apart from class-field spelling. Repair their destination separately.
+
+Complete daemon compilation advances from failure to success. Standalone mixins
+still require host methods; player channel commands retain their command-parent
+blocker. IMUD compilation and SNOOP_D cleanup failures are unchanged. Real IMUD
+transport, SOUL_D parsing, pager/full-shell command dispatch, password/menu/network
+login, foreign saves, stock equipment and cold startup remain unchecked.
+Adopt the proposed channel patch, then address body-switch filename/cleanup behavior
+before claiming complete player login support.
 
 #### Lima file metadata
 
@@ -4935,3 +4988,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-entry-implode]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/strings/implode.md
 
 [fl-entry-fold]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/array.cc#L423-L461
+
+[lima-channel-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/channel_d.c
+[lima-channel-moderation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/channel/moderation.c
+[lima-channel-user]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/channel.c
+[fl-channel-members]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/grammar.y
