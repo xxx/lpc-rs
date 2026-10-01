@@ -3523,6 +3523,48 @@ compilation advances to strict type errors in the
 [combat formula][lima-skill-formula]. Complete player combat, parser/body entry,
 saved player-skill migration and cold startup remain unchecked.
 
+#### Lima skill combat formula
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS`,
+`EVERYTHING_SAVES`, `USE_SKILLS`, `FORMULA_SKILLS`, `BODY_STATS_LIMA` and
+`WIELD_LIMBS`. Fourteen fresh public source comparisons match original Lima;
+no upstream driver was executed. Sources include the
+[skill formula][lima-skill-formula], [combat main][lima-effect-combat],
+[damage source][lima-combat-damage-source], [limb wielding][lima-wield-limbs]
+and [body skills][lima-body-skills]. The proposed one-file mudlib patch uses
+existing native APIs and remains unadopted.
+
+Format debug objects with [`sprintf`](efun/sprintf.md) and `%O`. Wrap the first
+hit and defense result assignments in [`to_int`](efun/to_int.md), retaining
+their integer locals and later integer arithmetic. Moving the conversion to
+the return changes rounding: attack value 3, defense value 1 and dexterity
+−85 give defense −1 with the existing intermediate truncation, rather than 0
+if the expression stays floating point until the end.
+
+Preserve the formula's gameplay policies. Hit clamps to 0–100; defense, damage
+and disarm remain unclamped. Restrictions replace the hit/defense attack skill,
+divide attack by ten and multiply defense by ten, but do not reduce damage
+despite the stock comment. Stat selection tests the original attack name for
+the substring `combat/guns`; a `combat/ranged/pistol` name uses the physical
+stat. The patch does not change that naming convention or combat balance.
+
+Stock wielding supplies the body itself as the unarmed weapon. Do not replace
+that object with nil or add nil guards as part of this adaptation. Disarm
+prevention counts an unarmed target's body bonus twice, adds half its mental
+stat, and calls `query_anti_disarm()` without an argument. The stock damage-source
+getter ignores its object parameter; the omitted argument becomes nil under
+native dynamic calls. The disarm skill test still runs with its learning cap,
+although its result is ignored. Those behaviors remain unchanged.
+
+Checks exercise the real formula, damage-source metadata, body learning/caps
+and combat-main hit, miss and disarm event production. Hosts supply stats,
+weapon and skill-test callbacks, with scripted random draws and captured debug
+text; an inherited host also exercises the real debug macro without a connected
+recipient. Full body/human compilation advances to karma typing errors in
+[simple advancement][lima-advancement-simple]. Full player combat, parser/body
+entry, saved player migration and cold startup remain unchecked.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
