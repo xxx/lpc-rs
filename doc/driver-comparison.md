@@ -3963,8 +3963,8 @@ from a mapping method. Both leave the old body alive in these checks.
 The adopted patch preserves these policies and blockers. Complete mailbox
 compilation succeeds; the expanded compile matrix retains all preceding successes
 and its other diagnostics match the audit. The
-[channel audit below](#lima-channel-daemon-composition) exercises a proposed repair
-of that daemon; repair body-switch persistence/cleanup separately before claiming
+[channel migration below](#lima-channel-daemon-composition) adopts the reviewed
+daemon repair; repair body-switch persistence/cleanup separately before claiming
 complete player login support.
 
 #### Lima channel daemon composition
@@ -3973,8 +3973,8 @@ Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
 with distinct nil, preserved call-out players, `USE_MASS`, `EVERYTHING_SAVES`,
 `BODY_STATS_LIMA` and limb wielding. Ten public Lima byte comparisons and one
 pinned FluffOS grammar read are recorded; no upstream driver was executed.
-The proposed 22-line patch changes the daemon and its command/moderation mixins;
-it is not adopted, and no native API change is required.
+The adopted 22-line patch changes the daemon and its command/moderation mixins;
+no native API change is required.
 
 In [the channel command][lima-entry-channel], replace the assignment in `/clear`
 with `adminp(user) || (ci.moderator && this_body() == ci.moderator)`.
@@ -3994,8 +3994,10 @@ argument list creates a [function value](lpc/function_type.md), and these legacy
 field forms fail during compilation or receiver resolution. The reviewed
 FluffOS grammar has both dot and arrow member productions. [Grammar][fl-channel-members].
 
-The audit passes 44 native cases: 23 new channel cases, including five controls,
-and all 21 retained user-entry cases with unchanged assertions and raw observations.
+The migration passes 681 native cases: 23 new channel cases, including five
+controls, and all 658 previously selected cases with unchanged assertions.
+The 705 observations match frozen evidence within existing checked bounds;
+channel and user-entry observations match exactly.
 The complete cloned/attached user enters through the real
 [daemon][lima-channel-daemon] and [account channel module][lima-channel-user].
 Registration deduplicates, enforces wizard/admin flags and purges empty transient
@@ -4011,13 +4013,15 @@ body's `channel_rcv_string`, but that receiver is defined on the account object.
 The raise check observes the missing notice; both source sites remain unchanged
 apart from class-field spelling. Repair their destination separately.
 
-Complete daemon compilation advances from failure to success. Standalone mixins
-still require host methods; player channel commands retain their command-parent
+The compile matrix passes 409/620, preserving all 406 preceding successes and
+matching all eighteen audited targets. Complete daemon compilation advances
+from failure to success. Standalone mixins still require host methods;
+player channel commands retain their command-parent
 blocker. IMUD compilation and SNOOP_D cleanup failures are unchanged. Real IMUD
 transport, SOUL_D parsing, pager/full-shell command dispatch, password/menu/network
 login, foreign saves, stock equipment and cold startup remain unchecked.
-Adopt the proposed channel patch, then address body-switch filename/cleanup behavior
-before claiming complete player login support.
+Address body-switch filename/cleanup behavior next before claiming complete
+player login support.
 
 #### Lima file metadata
 
