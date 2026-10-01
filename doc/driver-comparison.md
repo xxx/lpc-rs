@@ -3854,6 +3854,50 @@ composed host compile; full body/human advance to the float argument for
 `init_cmd_hook()`. Complete guild daemon/caller diagnostics remain separate;
 command dispatch and cold startup are not established.
 
+#### Lima player body setup
+
+Source-reviewed and exercised on lpc-rs **1 October 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS`,
+`EVERYTHING_SAVES` and `WIELD_STYLE=WIELD_LIMBS`; `USE_SIZE` and introductions
+are disabled. Thirteen public Lima comparisons match original source. FluffOS's
+core `F_SAVE_VARIABLE` / `F_RESTORE_VARIABLE` entry points and declarations are
+source-reviewed at the pinned revision; no upstream driver was executed.
+The three-line mudlib patch is tested in a diagnostic copy and remains unadopted.
+
+In [`std/body.c`'s `init_cmd_hook()`][lima-body], pass `100.0` to `set_mass`:
+[the mass setter][lima-body-mass] takes a float. Replace `restore_variable` and
+`save_variable` with existing native [`restore_value`](efun/restore_value.md)
+and [`save_value`](efun/save_value.md). FluffOS's originals serialize one value
+using its own save format. This adaptation uses the native
+[save format](save-format.md); renaming calls does not convert historical
+serialized `saved_items` embedded inside an outer save file.
+[Upstream declarations][fl-body-save-spec], [entry points][fl-body-save-source].
+
+Keep the existing restore policy: a matching-base failure is rethrown; a
+foreign-base mapping invokes the conversion hook, rewrites the base name and
+retries. The stock hook is empty. The adopted `M_SAVE` adapter also accepts
+positional saves, but this race-change fallback still requires a mapping.
+A matching positional root retains its legacy move to the previous object;
+a mapping root does not. Successful restoration clears `saved_items` to numeric
+zero. Uncaught failures roll back setup and restored inventory transactionally.
+See [the M_SAVE adaptation](#lima-shell-persistence).
+
+Equipment restoration has an existing selector issue: `#ifdef WIELD_SINGLE`
+selects the single-style branch because [the combat header][lima-body-combat]
+defines that selector even when `WIELD_STYLE` selects limbs. The patch preserves
+this branch; restoring nonempty stock equipment needs separate review.
+
+Fifty-eight native cases cover 28 new setup cases and 30 retained guild cases,
+whose assertions and raw observations are unchanged. Five exact body methods
+exercise inventory restoration and entry ordering in controlled hosts; real
+`M_SAVE`, mass, cloning, serialization and movement run, with injected later
+failures verifying rollback. Complete body/human objects compile. Fresh human
+construction, `su_enter_game()` into a real indoor room and `enter_game(0)`
+through the stock Void fallback succeed with a proxy user and controlled channel
+daemon. [User callers][lima-body-switching], [start selection][lima-body-start].
+Full login/incarnation and shell execution, registered look targeting, historical
+save import and cold startup remain unchecked.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4803,3 +4847,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-guild-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_guild_master.c#L189-L224
 [fl-guild-filter-entry]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc#L598-L607
 [fl-guild-filter-mapping]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/mapping.cc#L1078-L1142
+
+[lima-body-mass]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/mass.c
+[lima-body-combat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/combat_modules.h
+[lima-body-start]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/start.c
+[fl-body-save-spec]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/core.spec
+[fl-body-save-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/save.cc
