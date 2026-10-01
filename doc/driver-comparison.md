@@ -3908,13 +3908,15 @@ Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
 with distinct nil, preserved call-out players, `USE_MASS`, `EVERYTHING_SAVES`,
 `BODY_STATS_LIMA` and limb wielding. Eighteen public Lima byte comparisons and
 six pinned FluffOS reads are recorded. No upstream driver was executed.
-The following seven-line mudlib patch is proposed; it is not adopted.
+The local port adopts the following seven-line mudlib patch using existing
+native APIs.
 
 The composed [user][lima-entry-user] can save its account and start the real
-player shell, but [body persistence][lima-body] still uses upstream bound-pointer
-syntax such as `(: save_object, USER_PATH(bodyid) :)`. Here that closure returns
-the path without saving. Likewise, its restore callback returns the trailing
-integer without restoring. Use `(: save_object(USER_PATH(bodyid)) :)` and
+player shell. Its original [body persistence][lima-body] uses upstream
+bound-pointer syntax such as `(: save_object, USER_PATH(bodyid) :)`. Here that
+closure returns the path without saving. Likewise, its restore callback returns
+the trailing integer without restoring. Use
+`(: save_object(USER_PATH(bodyid)) :)` and
 `(: restore_object(USER_PATH(userid)) :)` inside `unguarded`. The native restore
 call takes one argument and leaves nosave variables unchanged. These closures
 perform the calls locally under the existing security wrapper. Upstream treats
@@ -3930,9 +3932,12 @@ form of `implode` is a left fold, including numeric zero for an empty array.
 The mailbox stores zero/one flags, so the explicit zero initializer preserves
 its sum. [Fold reference][fl-entry-implode], [implementation][fl-entry-fold].
 
-The native audit has 49 selected cases: 21 new cases and all 28 body setup
-cases with unchanged assertions and observations. The complete user is a real
-transactionally created clone with an attached connection. Actual private
+The adoption checks 658 native cases: all 637 previously selected cases and
+the audit's 21 user-entry cases, including three controls. Assertions are
+unchanged; user-entry, body setup and guild observations match frozen evidence
+exactly. Other observations remain within their existing checked timing,
+identity and random bounds. The complete user is a real transactionally created
+clone with an attached connection. Actual private
 incarnation and input methods are reached through appended test wrappers.
 The real body, player shell, security master, mailbox daemon and mailbox run.
 Account/body saves, stat restoration, nonempty fixture inventory, blank modal
@@ -3955,8 +3960,10 @@ inventory is not transferred. Finally, it catches old-body cleanup errors:
 ordinary-user destruction is denied by the adopted master policy, and a
 privileged cleanup reaches [SNOOP_D's][lima-entry-snoop] integer-zero return
 from a mapping method. Both leave the old body alive in these checks.
-The proposed patch preserves these policies and blockers. Audit channel
-composition and repair body-switch persistence/cleanup separately before
+The adopted patch preserves these policies and blockers. Complete mailbox
+compilation succeeds; the expanded compile matrix retains all preceding successes
+and its other diagnostics match the audit. Audit channel composition and repair
+body-switch persistence/cleanup separately before
 claiming complete player login support.
 
 #### Lima file metadata
