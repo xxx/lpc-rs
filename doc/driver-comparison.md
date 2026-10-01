@@ -622,7 +622,7 @@ save import still require further driver support. See [class support](lpc/classe
 | String membership search | `member_array(integer, text, start)` searches bytes from a byte offset. A negative start or one beyond the byte length raises an error. Search stops at NUL, and integer zero can match the terminator. [Implementation][fl-member-string]. | [`member_array`](efun/member_array.md) searches integer Unicode scalars using scalar offsets. A negative start raises an error; a start at or past the end returns `-1`. Zero matches only actual NUL data, and search continues past embedded NULs. Review byte offsets, especially around file I/O. The optional fourth flags argument is unsupported. |
 | Array mapping and filtering | `map_array` and `filter_array` alias `map` and `filter` with array declarations. Callbacks can be function values or method names, with an optional receiver for named methods; extra arguments follow the element. [Declarations][fl-core-spec], [dispatch][fl-array-callbacks]. | Use [`map`](efun/map.md) and [`filter`](efun/filter.md) with function values. Translate `(: name :)` to `name`, bound literals to `&name(args)`, and named-method calls to function values for the intended receiver. Native `filter` accepts arrays and mappings; string filtering needs an explicit loop or character-array conversion. No native aliases are provided. |
 | Mapping deletion | `map_delete(mapping, key)` removes an entry in place and returns void. [Declaration][fl-core-spec], [implementation][fl-map-delete]. | Use [`m_delete`](efun/m_delete.md) when the result is discarded. It removes the entry in place but returns the same mapping, so a wrapper that promises void should discard its result. Missing keys are harmless. |
-| Mapping callbacks | `map_mapping` aliases `map`; callbacks receive the key, value, then extra arguments. Entries are traversed through the hash table. [Declaration][fl-core-spec], [implementation][fl-mapping-transform]. | Use [`map`](efun/map.md) with function values to produce new values under the same keys, or [`foreach`](lpc/foreach.md) for side effects. Native traversal follows insertion order. Review callbacks whose outcome depends on order, especially inversion of mappings with repeated values. |
+| Mapping callbacks | `map_mapping` aliases `map`; map/filter callbacks receive the key, value, then extra arguments. Entries are traversed through the hash table. [Declaration][fl-core-spec], [map implementation][fl-mapping-transform], [filter implementation][fl-guild-filter-mapping]. | Use [`map`](efun/map.md) to produce new values under the same keys, [`filter`](efun/filter.md) to select entries, or [`foreach`](lpc/foreach.md) for side effects. Native callbacks use function values and traversal follows insertion order. Review callbacks whose outcome depends on order, especially inversion of mappings with repeated values. |
 | Array callback edge cases | Empty arrays skip callback setup. `filter` accepts non-integer results, including `0.0`. Both loops read live array slots; `filter` copies an accepted slot after its callback returns. [Map][fl-map-array], [filter][fl-filter-array], [zero test][fl-filter-zero]. | Native callbacks must be function values even for empty inputs. `filter` uses native truthiness, rejecting `0.0`, nil and dead objects. Both efuns snapshot the input slots before callbacks; nested mutable values remain shared. Audit callbacks that edit the traversed array. Array `map` retains every callback result, including configured nil from void functions; use `foreach` when only side effects are wanted. |
 | String mapping | Calls the callback with each byte up to the first NUL. A nonzero integer result replaces that byte through a `char` conversion; zero or a non-integer result preserves it. Supports function pointers and named callbacks. [Implementation][fl-map-string], [reference][fl-map-reference]. | [`map`](efun/map.md) passes integer Unicode scalars and requires valid integer scalar results. Zero inserts NUL; invalid results raise errors before the next callback. Use explicit identity returns for missing table entries and `foreach` for void callbacks used for side effects. Update byte-indexed translation tables and named callback syntax; native callbacks use function values. |
 | Text length | String length and ordinary indexing use extended grapheme clusters. [Strings][fl-strings]. The string overloads of `member_array` and `map` operate on bytes; see above. | String lengths and positions use Unicode scalar values. A combining sequence or multi-code-point emoji can therefore occupy several positions. [Types](lpc/types.md), [length implementation](../lpc-rs-utils/src/lpc_string.rs). |
@@ -3814,6 +3814,46 @@ not exercised. Full body/human compilation advances to `filter_mapping` in
 methods, and complete describe/nickname/people commands still lack the command
 parent's `dispatch_main`.
 
+#### Lima player guilds
+
+Source-reviewed and exercised on lpc-rs **1 October 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players and `USE_TITLES` enabled.
+Thirteen public source comparisons match original Lima. FluffOS's core mapping
+filter is source-reviewed at the pinned revision with `F_FILTER` enabled; no
+upstream driver was executed. The proposed one-line mudlib patch is **not
+adopted** and uses existing native APIs.
+
+In [the player guild module][lima-player-guilds], replace `filter_mapping` with
+[`filter`](efun/filter.md) and use `.member_level` on the class cast expression.
+Keep `$2`: mapping callbacks receive the key, value, then extra arguments in
+both the reviewed FluffOS implementation and native filter. Renaming alone
+compiles but fails at runtime when the arrow attempts an object-method call.
+See [class member access](lpc/classes.md#construction-and-members).
+[Upstream filter entry point][fl-guild-filter-entry],
+[mapping callback implementation][fl-guild-filter-mapping].
+
+Preserve the existing guild policies separately from this syntax adaptation.
+Only `member_level` controls membership; suspension and bans do not remove it.
+Revoke deletes only unflagged records, re-add retains flags, and unsuspend can
+leave an all-zero record. Revoke/clear leave shell command paths. Privileged
+foreign-body additions still target the current player body's shell, while
+`clear_guilds` remains public without the mutators' security guard.
+The [guild master's release method][lima-player-guild-master] revokes before
+banning in modes 2/3: if revoke deletes the record, the subsequent ban returns
+-1 and is lost. This existing gameplay issue is characterized, not repaired.
+
+Sixty-one native test cases cover 30 new guild cases and 31 retained naming
+cases, whose assertions and observations are unchanged. Class state, membership,
+real security/unguarded calls, shell/message rollback and a fresh native private
+class-mapping save round trip are exercised. Registry checks and connected-body
+selection use exact daemon methods with controlled registry state; release uses
+the exact method with controlled policy and no-op guild-message hosts. Full
+callers and foreign save import are not exercised. Standalone guilds and the
+composed host compile; full body/human advance to the float argument for
+`set_mass(100)` and missing `restore_variable` / `save_variable` in
+`init_cmd_hook()`. Complete guild daemon/caller diagnostics remain separate;
+command dispatch and cold startup are not established.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4758,3 +4798,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-naming-nickname]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/nickname.c
 [fl-query-idle]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/interactive/query_idle.md
 [fl-query-idle-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/comm.cc#L1176-L1181
+
+[lima-player-guilds]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/guilds.c
+[lima-player-guild-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_guild_master.c#L189-L224
+[fl-guild-filter-entry]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc#L598-L607
+[fl-guild-filter-mapping]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/mapping.cc#L1078-L1142
