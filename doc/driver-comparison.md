@@ -3518,9 +3518,9 @@ training propagation, rank notifications, copy isolation, bonuses and rollback.
 Composed hosts supply level/base-test methods and capture private messages;
 selected failure-learning checks force the base-test outcome. The unchanged
 trainer setter is extracted to exercise its dynamic two-argument call, while
-the complete trainer remains blocked through actions/conversation. Full body
-compilation advances to strict type errors in the
-[combat formula][lima-skill-formula]. Complete player combat, parser/body entry,
+the complete trainer remains blocked through actions/conversation. The
+[combat formula adaptation](#lima-skill-combat-formula) below advances full body
+compilation further. Complete player combat, parser/body entry,
 saved player-skill migration and cold startup remain unchecked.
 
 #### Lima skill combat formula
@@ -3532,8 +3532,8 @@ revision, with distinct nil, preserved call-out players, `USE_MASS`,
 no upstream driver was executed. Sources include the
 [skill formula][lima-skill-formula], [combat main][lima-effect-combat],
 [damage source][lima-combat-damage-source], [limb wielding][lima-wield-limbs]
-and [body skills][lima-body-skills]. The proposed one-file mudlib patch uses
-existing native APIs and remains unadopted.
+and [body skills][lima-body-skills]. The adopted one-file mudlib patch uses
+existing native APIs.
 
 Format debug objects with [`sprintf`](efun/sprintf.md) and `%O`. Wrap the first
 hit and defense result assignments in [`to_int`](efun/to_int.md), retaining
