@@ -589,7 +589,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Unnamed prototype parameters | Accepts typed parameters without names, including arrays, in prototypes such as `void start_shell(int);`. [Grammar][fl-parameter-grammar], [declarations][fl-variadic-declarations]. | Accepts named, unnamed, and mixed parameter lists in prototypes. Prototypes remain ignored with a warning; calls are checked against definitions, including eligible sibling or child definitions for otherwise unresolved local names. An object being compiled still requires implementations for every call. Definitions and declared closure parameters require names. [Reference](lpc/anatomy_of_a_program.md#function-prototypes). |
 | Trailing call commas | Allows one trailing comma after a nonempty argument list. [Grammar][fl-call-arguments]. | Supports `f(a,)`, including method, inherited, efun and computed function calls, spreads and reference arguments. The comma adds no argument; declaration parameter lists and partial-application slots retain their own syntax. [Reference](lpc/anatomy_of_a_program.md#function-calls). |
 | Array literal spreading | Accepts `({ first, xs..., last })`; expression-list generation evaluates the expressions before expanding their arrays. [Grammar][fl-parameter-grammar], [code generation][fl-array-spread-codegen]. | Supports the same syntax and evaluation timing, with array or `mixed` operands and native element-type inference. Expansion makes a fresh shallow array. [Reference](lpc/array_spreading.md). |
-| Explicit closure captures | `$(expression)` evaluates at closure creation and retains the result for later calls. Named and bound pointer literals use `(: name :)` and `(: name, arg :)`. [Function reference][fl-functions]. | Supports `$(expression)` alongside existing shared variable captures. Captured references remain shared; the captured value itself cannot be assigned. Named/bound FluffOS literals still need adaptation to `name` and `&name(arg)`. [Reference](lpc/function_type.md#explicit-value-captures). |
+| Explicit closure captures | `$(expression)` evaluates at closure creation and retains the result for later calls. Named and bound pointer literals use `(: name :)` and `(: name, arg :)`. [Function reference][fl-functions]. | Supports `$(expression)` alongside existing shared variable captures. Captured references remain shared; the captured value itself cannot be assigned. Named/bound FluffOS literals still need adaptation to `name` and `&name(arg)`. A native `(: name, arg :)` is a comma expression that returns `arg` without calling `name`; use an explicit call inside the closure when a local security wrapper requires a closure callback. [Reference](lpc/function_type.md#explicit-value-captures), [Lima persistence callbacks](#lima-user-incarnation-and-body-switching). |
 | Class copying and conversion | `assemble_class` creates positional class storage from an array, without a named definition; `disassemble_class` returns a shallow field array. Their round trip copies the outer record while sharing nested references. Requires `PACKAGE_CONTRIB`. [Implementation][fl-class-assembly]. | Replace copy-only round trips with [`copy_class`](efun/copy_class.md), which preserves nominal identity and retained field views. Converting between different class types requires explicit named construction, even when their layouts match. For example, build `new(class limb, health: data.health, max_health: data.max_health, parent: data.parent, flags: data.flags)` and let omitted integer fields default to zero. Replace layout-count repair checks with a guarded nominal cast and presence check; compatible [field views](lpc/classes.md) do not require resetting a record merely because fields changed. Generic assembly/disassembly and foreign class-save import remain unsupported. |
 | Class visibility | Accepts visibility modifiers on class definitions but discards them; inheritance copies classes regardless of the modifier. [Grammar][fl-class-grammar], [declarations][fl-class-declarations], [inheritance][fl-class-inheritance]. | Enforces `private class`: descendants cannot name the class or access its members, including through `mixed`. Public and protected classes remain inheritable, subject to inherit visibility. Defining code retains access. If descendants rely on an upstream private declaration being exposed, make it public/protected or include its definition explicitly. [Reference](lpc/classes.md#declaration-visibility). |
 | Inheritance visibility | Supports access modifiers on inherits; private functions and globals become hidden when inherited again. The reviewed build enables `SENSIBLE_MODIFIERS`, so explicit public declarations do not defeat a private inherit. [Grammar rules][fl-inherit-grammar], [compiler][fl-pragma-compiler], [defaults][fl-options]. | Supports public, protected and private inheritance, including local access and restricted simul-efun exports. Other inherit modifiers remain unsupported. [Reference](lpc/inheritance.md). |
@@ -3897,8 +3897,67 @@ failures verifying rollback. Complete body/human objects compile. Fresh human
 construction, `su_enter_game()` into a real indoor room and `enter_game(0)`
 through the stock Void fallback succeed with a proxy user and controlled channel
 daemon. [User callers][lima-body-switching], [start selection][lima-body-start].
-Full login/incarnation and shell execution, registered look targeting, historical
+That adoption did not exercise full incarnation or shell execution; the
+[user-entry audit below](#lima-user-incarnation-and-body-switching) covers those
+compositions with channel delivery isolated. Registered look targeting, historical
 save import and cold startup remain unchecked.
+
+#### Lima user incarnation and body switching
+
+Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
+with distinct nil, preserved call-out players, `USE_MASS`, `EVERYTHING_SAVES`,
+`BODY_STATS_LIMA` and limb wielding. Eighteen public Lima byte comparisons and
+six pinned FluffOS reads are recorded. No upstream driver was executed.
+The following seven-line mudlib patch is proposed; it is not adopted.
+
+The composed [user][lima-entry-user] can save its account and start the real
+player shell, but [body persistence][lima-body] still uses upstream bound-pointer
+syntax such as `(: save_object, USER_PATH(bodyid) :)`. Here that closure returns
+the path without saving. Likewise, its restore callback returns the trailing
+integer without restoring. Use `(: save_object(USER_PATH(bodyid)) :)` and
+`(: restore_object(USER_PATH(userid)) :)` inside `unguarded`. The native restore
+call takes one argument and leaves nosave variables unchanged. These closures
+perform the calls locally under the existing security wrapper. Upstream treats
+the comma form as a bound function pointer. [Function reference][fl-functions],
+[named-pointer grammar][fl-entry-function-grammar],
+[native function values](lpc/function_type.md).
+
+In the [mailbox][lima-entry-mailbox], make the same explicit-call changes for
+restore, save and removal. Return `nil` for a missing `class mail_msg`, and
+replace the unread-count `implode(values(mailbox), callback)` with
+[`reduce(values(mailbox), callback, 0)`](efun/reduce.md). Upstream's function
+form of `implode` is a left fold, including numeric zero for an empty array.
+The mailbox stores zero/one flags, so the explicit zero initializer preserves
+its sum. [Fold reference][fl-entry-implode], [implementation][fl-entry-fold].
+
+The native audit has 49 selected cases: 21 new cases and all 28 body setup
+cases with unchanged assertions and observations. The complete user is a real
+transactionally created clone with an attached connection. Actual private
+incarnation and input methods are reached through appended test wrappers.
+The real body, player shell, security master, mailbox daemon and mailbox run.
+Account/body saves, stat restoration, nonempty fixture inventory, blank modal
+input, shell save/restart, unread selection and mailbox save/restore succeed.
+Injected failures after entry movement verify rollback of body/shell state,
+inventory, output and checked save files.
+
+Channel delivery is isolated: the full [channel command module][lima-entry-channel]
+rejects `adminp(user) || user = ci.moderator` at compilation. A baseline control
+retains this failure and checks rollback. The body starts in the real stock
+Void room from a freshly generated native save; no cold-start or password/login
+menu flow is established. Inventory uses a small object fixture with real
+movement and persistence, not stock wielded/worn equipment or foreign saves.
+
+Keep three further issues visible. The [permanent switch][lima-body-switching]
+updates only a local filename and saves the unchanged account body record;
+`query_fname` and the saved registration still name the human body. It also
+creates/restores the new body before cleaning up the old one, so unsaved live
+inventory is not transferred. Finally, it catches old-body cleanup errors:
+ordinary-user destruction is denied by the adopted master policy, and a
+privileged cleanup reaches [SNOOP_D's][lima-entry-snoop] integer-zero return
+from a mapping method. Both leave the old body alive in these checks.
+The proposed patch preserves these policies and blockers. Audit channel
+composition and repair body-switch persistence/cleanup separately before
+claiming complete player login support.
 
 #### Lima file metadata
 
@@ -4855,3 +4914,17 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-body-start]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/start.c
 [fl-body-save-spec]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/core.spec
 [fl-body-save-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/save.cc
+
+[lima-entry-user]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user.c
+
+[lima-entry-mailbox]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailbox.c
+
+[lima-entry-channel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/channel/cmd.c
+
+[lima-entry-snoop]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/snoop_d.c
+
+[fl-entry-function-grammar]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/grammar.y#L581-L600
+
+[fl-entry-implode]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/docs/efun/strings/implode.md
+
+[fl-entry-fold]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/array.cc#L423-L461
