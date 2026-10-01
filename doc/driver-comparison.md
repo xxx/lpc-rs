@@ -3629,9 +3629,9 @@ revision, with distinct nil, preserved call-out players, `USE_MASS`,
 original Lima; no upstream driver was executed. Sources include
 [object creation][lima-object], [adversary setup][lima-adversary],
 [monster defaults][lima-monster-setup] and [the simul overrides][lima-setup-overrides].
-The proposed one-line mudlib patch is **not adopted** and uses existing native APIs.
+The local port adopts the one-line mudlib patch using existing native APIs.
 
-Replace `call_out("setup_monster", 0)` with `call_out(setup_monster, 0)`.
+The patch replaces `call_out("setup_monster", 0)` with `call_out(setup_monster, 0)`.
 Keep the delay and the separate transaction. Clone creation calls
 `mudlib_setup`, `internal_setup` and the area's `setup` before the callback
 runs. Calling the method directly runs defaults before the area sets its level:
@@ -3660,7 +3660,7 @@ Checks extract the real object creation and adversary scheduling/guard methods,
 inherit the real monster module and use a fixture skill registry with stock
 rank thresholds. Living, configuration, area, stats, weapon and health methods
 are instrumented hosts. The native clone and call-out execution paths run;
-the complete adversary/player lifecycle is not established. With the proposed
+the complete adversary/player lifecycle is not established. With the adopted
 patch, full body/human compilation advances to object-typed zero in
 [the follow module][lima-setup-follow]. Standalone adversaries and selected
 monsters retain missing save/command host definitions. Full parser/body entry,
