@@ -364,7 +364,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
-| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer. Lima [spell casting](#lima-spell-casting), [companion following](#lima-dancing-lights) and [fluid evaporation](#lima-conjure-ale-and-fluids) adapters also use native function callbacks. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
+| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer or [NPC action queues](#lima-action-queues) with one-shot timers. Lima [spell casting](#lima-spell-casting), [companion following](#lima-dancing-lights) and [fluid evaporation](#lima-conjure-ale-and-fluids) adapters also use native function callbacks. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
@@ -3714,6 +3714,57 @@ in the action module; following monsters retain save/command host requirements.
 Connected-client delivery, full parser/body entry, saves/upgrades and cold
 startup remain unchecked.
 
+#### Lima action queues
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players and the options listed
+in the [setup audit](#lima-deferred-adversary-setup). Fifteen fresh public source
+comparisons match original Lima; no upstream driver was executed. Sources include
+[the action module][lima-follow-actions], [object hooks][lima-hooks],
+[following][lima-setup-follow] and [the quiet command][lima-actions-quiet].
+The proposed two-file mudlib patch is **not adopted** and uses existing native
+APIs.
+
+Replace name-based `find_call_out`, `call_out` and cancellation with owned handles
+and [`query_call_out`](efun/query_call_out.md), [`call_out`](efun/call_out.md) and
+[`remove_call_out`](efun/remove_call_out.md). Idle actions remain chained
+one-shot timers. Responses retain one timer per queued string, `random(3)` delays
+and FIFO delivery, including when their timers fire out of order. Prune expired
+response handles and install a cleanup hook that cancels module-owned work and
+clears its response queue while preserving unrelated timers.
+
+Use actual function values for named callbacks. Cache arrival, departure and
+movement callbacks: evaluating the bare movement method on each start creates
+fresh function values that bypass the hook module's identity-based
+deduplication. The stable movement callback prevents duplicate registrations.
+The departure/arrival callbacks cancel work when the last listener leaves and
+schedule it when the first listener arrives. Combat suppresses the idle command
+while periodic checks continue.
+
+Preserve existing gameplay policies: `stop_actions` cancels the current timer
+but installed hooks can restart it; empty action arrays keep listener checks;
+`set_actions` bypasses the minimum enforced by `set_delay_time`. A response
+exception rolls back its queue removal but consumes its one-shot timer, leaving
+the failed head for a later response. Moving to nil still throws and rolls back.
+Failure recovery and permanent action disabling are separate changes.
+
+Change the quiet command's `set_actions(100, 0)` to `set_actions(100, nil)` for
+its declared array contract. The original dynamic call accepts and stores
+integer zero; this change does not fix a runtime rejection. The extracted
+command body retains player refusal and already-quiet messages.
+
+Checks inherit real action/follow/hook modules, fire native timers and exercise
+the real `do_game_command` through instrumented command lookup/handling. The
+command temporarily sets the NPC as the current body/user and restores the
+saved player before rethrowing lookup or command errors. Quiet checks extract
+its main method and instrument formatted output. Full command-daemon behavior,
+parser fallback, connected-client delivery, complete smart movement,
+saves/upgrades and cold startup remain unchecked. Full body/human compilation
+advances to zero returned from `query_userid` and unknown `query_idle` in
+[the naming module][lima-actions-naming]. Missing save/command hosts, Harry's
+inline function syntax and the quiet command parent's `dispatch_main`
+requirement remain unchanged.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4523,6 +4574,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-follow-wolf]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/wolf.c
 [lima-follow-smartmove]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_smartmove.c
 [lima-follow-actions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_actions.c
+[lima-actions-quiet]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/quiet.c
+[lima-actions-naming]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/naming.c
 [lima-death-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/death_messages.c
 [lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
 [lima-corpse-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/corpse.c
