@@ -3438,6 +3438,46 @@ registry scan exceeded that unchanged limit during compilation; full cold startu
 unestablished. Full parser/body entry, restoration and custom drink reconfiguration
 also remain separate work.
 
+#### Lima lock-pick recipes
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS`,
+`EVERYTHING_SAVES` and `USE_SKILLS`. Fourteen fresh public source comparisons
+match original Lima; no upstream driver was executed. Sources include the
+[simple][lima-lockpick-simple], [mediocre][lima-lockpick-mediocre] and
+[advanced][lima-lockpick-advanced] recipes, [tool module][lima-lockpick-module],
+[lockable module][lima-lockable], [pick verb][lima-pick-verb],
+[crafting module][lima-crafting-module] and [registry][lima-crafting-registry].
+The four-file diagnostic mudlib patch is ready for adoption; existing native APIs
+suffice.
+
+Use float price literals in the three recipes: `50.0`, `200.0` and `500.0`.
+Their integer arguments do not satisfy the material value setter's float type.
+After compilation is repaired, the adopted crafting station's strict XP guard
+still rejects these tools because they have no `crafting_xp` method. Treat that
+public hook as optional: start XP at zero and invoke it only when
+[`function_exists`](efun/function_exists.md) finds it. Continue rejecting nil,
+float, negative, excessive and throwing results from defined hooks, with prepared
+item cleanup before spending resources. Existing nonzero XP hooks retain their
+behavior. Under the station's existing `xp * 10` formula, an absent hook also
+means a zero-difficulty crafting skill check.
+
+The recipes store strength `50`/`200`/`500` and break chance `30`/`20`/`10`, but
+stock lock picking reads neither field. The pick verb forwards the tool to
+`m_lockable::do_pick`; that method checks the body's skill against the target's
+lock defense and ignores the tool. Failed attempts do not consume or break it,
+and picking without a tool uses the same skill check. The module's metadata
+setters do not clamp their values. Retain these stock behaviors for this port;
+activating tool bonuses or breakage requires a separate mudlib gameplay decision.
+
+Checks exercise all three setups, real chest/pick paths, refusal hooks, unused
+instrumented getters, non-lockable target forwarding, real crafting confirmation,
+resource spending, optional and invalid XP, cleanup and rollback. The real
+registry scans the unchanged 21-file stock recipe inventory after preloads in
+separate four-second transactions; electronics and cooking entries are checked.
+Body fixtures record skills and actions and accept movement. Full player skill/
+capacity behavior, parser/body entry and cold startup remain unchecked.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4357,3 +4397,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-flask]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/flask.c
 [lima-tankard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/tankard.c
 [lima-river]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/river.c
+[lima-lockpick-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/electric_lock_pick.c
+[lima-lockpick-mediocre]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/mediocre_electric_lock_pick.c
+[lima-lockpick-advanced]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/advanced_electric_lock_pick.c
+[lima-lockpick-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_lockpick.c
