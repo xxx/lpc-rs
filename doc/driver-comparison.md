@@ -3862,7 +3862,7 @@ revision, with distinct nil, preserved call-out players, `USE_MASS`,
 are disabled. Thirteen public Lima comparisons match original source. FluffOS's
 core `F_SAVE_VARIABLE` / `F_RESTORE_VARIABLE` entry points and declarations are
 source-reviewed at the pinned revision; no upstream driver was executed.
-The three-line mudlib patch is tested in a diagnostic copy and remains unadopted.
+The local port adopts the three-line mudlib patch using existing native APIs.
 
 In [`std/body.c`'s `init_cmd_hook()`][lima-body], pass `100.0` to `set_mass`:
 [the mass setter][lima-body-mass] takes a float. Replace `restore_variable` and
@@ -3887,8 +3887,10 @@ selects the single-style branch because [the combat header][lima-body-combat]
 defines that selector even when `WIELD_STYLE` selects limbs. The patch preserves
 this branch; restoring nonempty stock equipment needs separate review.
 
-Fifty-eight native cases cover 28 new setup cases and 30 retained guild cases,
-whose assertions and raw observations are unchanged. Five exact body methods
+The adoption checks 637 native cases: 609 retained cases and all 28 body setup
+audit cases, with unchanged assertions. Body setup and guild observations match
+the frozen evidence exactly; other retained observations remain within their
+existing checked timing, identity and random bounds. Five exact body methods
 exercise inventory restoration and entry ordering in controlled hosts; real
 `M_SAVE`, mass, cloning, serialization and movement run, with injected later
 failures verifying rollback. Complete body/human objects compile. Fresh human
