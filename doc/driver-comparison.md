@@ -1974,7 +1974,8 @@ Compilation then exposes the [corpse callers below](#lima-corpse-handling) and a
 separate body signature mismatch. The [body setter][lima-body-skills] overrides
 the two-argument monster `set_skill` with a three-argument setter whose final
 argument is training points. The runtime body guard does not remove that static
-argument-count check.
+argument-count check. The [body skill audit below](#lima-body-and-adversary-skills)
+recommends an explicit zero default for the final argument.
 
 #### Lima corpse handling
 
@@ -3477,6 +3478,51 @@ separate four-second transactions; electronics and cooking entries are checked.
 Body fixtures record skills and actions and accept movement. Full player skill/
 capacity behavior, parser/body entry and cold startup remain unchecked.
 
+#### Lima body and adversary skills
+
+Source-reviewed and exercised on lpc-rs **30 September 2026** at the pinned Lima
+revision, with distinct nil, preserved call-out players, `USE_MASS`,
+`EVERYTHING_SAVES` and `USE_SKILLS`. Sixteen fresh public source comparisons
+match original Lima; no upstream driver was executed. Sources include
+[body skills][lima-body-skills], [adversary skills][lima-adversary-skills],
+[the skill class][lima-skill-class], [monster setup][lima-monster-setup],
+[the trainer][lima-trainer] and [the skill daemon][lima-skill-daemon]. The audited
+two-file mudlib patch is recommended for adoption and uses existing native APIs.
+
+Give the body setter an explicit `int training_points = 0` default. Inherited
+monster setup and the trainer's `set_trainer_skill` supply two arguments;
+learning supplies all three. Omitting training points resets them to zero,
+including when updating an existing record. Return nil for an absent class
+record, use dot access for class fields, and replace evaluation's callback-form
+`implode` with a `foreach` sum followed by the unchanged integer percentage
+formula. Native [`implode`](efun/implode.md) joins values and does not fold them.
+
+Default absent numeric mapping entries to zero at the body bonus/rank reads and
+adversary aggregation division. Missing bonuses otherwise cause arithmetic
+errors, and integer getters can return nil through their mixed mapping reads.
+An absent cached rank also makes `rank > nil` false under native
+[comparison rules](lpc/comparisons.md), silently suppressing the first rank-up;
+the comparison needs the same zero default.
+
+Retain stock skill policies. Body setters are unclamped; `query_skill` returns
+an independent bonus-adjusted copy with points clamped to 0–10,000. Body
+aggregation and evaluation use stored points without bonuses. Adversary
+aggregation repeatedly weights the same leaf by path depth rather than reading
+parent records. `zero_skills` clears only the skill mapping, and `clean_skills`
+removes invalid names without clearing bonus/rank caches. Under the existing
+win formula, zero opposing skill gives zero learning gain. These adaptations do
+not change those gameplay or cache policies.
+
+Checks exercise real skill modules, the restored skill daemon, learning and
+training propagation, rank notifications, copy isolation, bonuses and rollback.
+Composed hosts supply level/base-test methods and capture private messages;
+selected failure-learning checks force the base-test outcome. The unchanged
+trainer setter is extracted to exercise its dynamic two-argument call, while
+the complete trainer remains blocked through actions/conversation. Full body
+compilation advances to strict type errors in the
+[combat formula][lima-skill-formula]. Complete player combat, parser/body entry,
+saved player-skill migration and cold startup remain unchecked.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -4274,6 +4320,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/drunk.h
 [lima-body-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/body.o
 [lima-body-skills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/skills.c
+[lima-adversary-skills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/skills.c
+[lima-skill-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/skill.c
+[lima-trainer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_trainer.c
+[lima-skill-formula]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/formula/skills.c
 [lima-adversary]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary.c
 [lima-death-messages]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/death_messages.c
 [lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
