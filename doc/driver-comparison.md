@@ -4020,8 +4020,64 @@ player channel commands retain their command-parent
 blocker. IMUD compilation and SNOOP_D cleanup failures are unchanged. Real IMUD
 transport, SOUL_D parsing, pager/full-shell command dispatch, password/menu/network
 login, foreign saves, stock equipment and cold startup remain unchecked.
-Address body-switch filename/cleanup behavior next before claiming complete
-player login support.
+The [body-switch audit below](#lima-permanent-body-filenames-and-cleanup)
+exercises a proposed repair; adopt it before claiming complete player login support.
+
+#### Lima permanent body filenames and cleanup
+
+Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
+with distinct nil, preserved call-out players and the preceding channel overlay.
+Nine public Lima byte comparisons are recorded; no upstream driver was executed.
+The four-file diagnostic patch is not adopted and needs no native API change.
+
+For permanent [switches][lima-body-switching], call the existing protected
+`set_body_fname(query_selected_body(), body_fname)` rather than only saving
+after changing a local variable. The [setter][lima-user-bodies] updates the
+account body record and persists it. Runtime query_fname, the actual account
+save and restore retain the changed filename. Temporary and omitted-name
+switches preserve registration.
+
+The adapted [master][lima-master] can narrowly permit a requester whose base name
+is USER_OB to remove a body whose `query_link()` identifies that requester.
+Keep critical master/simul/security checks first and preserve existing privilege
+checks for other objects. Keep the simul's master check before cleanup and native
+[destruction](efun/destruct.md) authorization on its explicit efun call.
+An unrelated account and a nonaccount helper using the owner's player context
+remain denied in these checks.
+This mudlib ownership rule uses the requester's identity.
+
+In [SNOOP_D][lima-entry-snoop], use nil for a denied mapping result and pruning
+absent object references, and object * for filter's selected elements. Allow
+local unsnoop_all calls as unsnoop already does, retaining external command
+checks. In the [dummy][lima-entry-snoop-dummy], guard clone-only create work with
+`if (!clonep()) return;`: initializing the blueprint without a name otherwise
+fails before the clone can be created.
+
+The audit passes 41 native cases: eighteen new cases, including five controls,
+and all 23 retained channel cases with unchanged assertions and raw observations.
+The complete real account/body/shell switches and removes its old body.
+An injected later entry failure rolls back filename registration, body cleanup,
+inventory, account/body save files and outgoing messages. The stock cleanup
+catch remains: a cleanup error can still allow switching while retaining the
+old body.
+
+The new body restores its disk snapshot before old-body cleanup saves live
+inventory. Saved items appear in the new body; unsaved items do not transfer,
+although cleanup writes them to the body save. Retained old-item references are
+live and uncontained in these checks; subsequent autosaves and garbage collection
+are unchecked. Keep this switching policy explicit, and review it separately
+before introducing live inventory transfer or changing the save/clone order.
+
+Appended helpers seed a snoop relation between actual attached accounts/bodies.
+Production dummy construction and local cleanup run, and the native connection
+queue receives start/stop controls on the same connection. A dead dummy
+mapping value remains after removal. Public snoop command authorization, cycle
+handling, subscriber delivery and TCP processing are not established by this
+fixture. The compile matrix advances from 11/16 to 12/16: SNOOP_D succeeds;
+standalone switch/account mixins and non_object retain host dependencies.
+Cold startup, complete login/takeover, stock equipment and foreign saves remain
+unchecked. Adopt this patch and audit moderation notification destinations
+separately.
 
 #### Lima file metadata
 
@@ -4997,3 +5053,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-channel-moderation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/channel/moderation.c
 [lima-channel-user]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/channel.c
 [fl-channel-members]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/grammar.y
+[lima-entry-snoop-dummy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/snoop_dummy.c
