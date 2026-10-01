@@ -3820,8 +3820,8 @@ Source-reviewed and exercised on lpc-rs **1 October 2026** at the pinned Lima
 revision, with distinct nil, preserved call-out players and `USE_TITLES` enabled.
 Thirteen public source comparisons match original Lima. FluffOS's core mapping
 filter is source-reviewed at the pinned revision with `F_FILTER` enabled; no
-upstream driver was executed. The proposed one-line mudlib patch is **not
-adopted** and uses existing native APIs.
+upstream driver was executed. The local port adopts the one-line mudlib patch
+using existing native APIs.
 
 In [the player guild module][lima-player-guilds], replace `filter_mapping` with
 [`filter`](efun/filter.md) and use `.member_level` on the class cast expression.
