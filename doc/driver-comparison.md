@@ -4402,7 +4402,7 @@ fragments, thirteen appends and 158 predecessor sets pass. Seven reviewed origin
 match their pinned Git blobs; six public comparisons and nine older SOUL comparisons
 remain frozen evidence. No upstream driver, native suite, historical matrix or
 preload survey was rerun. Tests use distinct nil, preserved players and four-second
-actions. The logger patch remains diagnostic; the active overlay is unchanged.
+actions. The audit kept the logger patch diagnostic on `emote-command/adapted-lib`.
 
 The [log header][lima-log-header] declares clan, clan_error, feedback and question,
 but LOG_D does not allow them. Stock clan/reporter callers need a separate audit;
@@ -4410,6 +4410,33 @@ this patch keeps their rejection. Adopt the explicit write callback next, then
 audit remaining SOUL commands. Full logger-caller integration, public wizard
 discovery, remote IMUD, vocabulary, network, login and cold startup remain
 unestablished.
+
+#### Lima logger migration
+
+The migration adopts the exact one-line logger callback over
+`emote-command/adapted-lib`; active `logger/adapted-lib` matches the frozen
+diagnostic byte for byte. Explicit invocation preserves the allowlist, privilege,
+paths, aliases, timestamp rules and void API. Native driver and original Lima
+remain unchanged.
+
+All sixteen cases/observations pass in one run with identical assertions, output,
+controls and four-second budgets. Baseline controls retain their frozen library.
+Prompted and inline multipart addemote save and log once; aborts do not log.
+SOUL saves, log appends, modal input and output roll back together. All 24 legal
+symbols, alias order, same-task reads, account permissions, reload, payload bytes,
+rejected symbols and write errors retain their audited behavior.
+
+Compilation is 12/12, matching every audited diagnostic outcome, error and
+location. Six gates, exact patch reproduction, twenty-nine copied source records,
+thirteen appends and 159 predecessor sets pass. Six public comparisons, nine
+older SOUL comparisons and seven pinned Git-blob matches remain frozen evidence.
+No new fetch, upstream driver, native suite, historical matrix or preload survey
+was needed.
+
+Audit remaining SOUL command consumers next through the adopted shell entry.
+Four declared clan/reporter symbols remain absent from LOG_D's allowlist;
+their integration is separate. Full caller logging, public wizard discovery,
+remote IMUD, vocabulary, network, login and cold startup remain unestablished.
 
 #### Lima file metadata
 
