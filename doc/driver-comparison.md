@@ -4894,6 +4894,34 @@ unchanged. Adopt the semote adapter/helper next, then audit random generators.
 Complete menu interaction, other SOUL consumers, tell recipient typing, logging,
 remote IMUD, network, login and cold startup remain unestablished.
 
+#### Lima semote migration
+
+The 2 October 2026 migration adopts the exact audited semote adapter/helper over
+the emote lifecycle overlay. Only `cmds/player/semote.c` changes and
+`obj/mudlib/semote_target.c` is added; the entire adopted library matches the frozen
+diagnostic byte for byte. Ordinary command input now discovers and loads semote,
+and its distinct second target restores correct two-target/onlooker previews.
+The five existing forms, formatting, message parts, read-only behavior, caller
+checks, restore and rollback retain audited behavior. SOUL is unchanged.
+
+All twenty-three case bodies, assertions and normalized observations match the
+audit. Eighteen cases exercise the adopted library; three retain the frozen
+previous library and adapter-only control, including both original defects.
+Two historical verbs controls retain their frozen sources/libraries. Four fixture
+files are copied unchanged; support changes only the adopted directory. Focused
+compilation has six successes from seven probes, matching every audited outcome
+and diagnostic. The full-menu `complete_choice(0, ...)` string-argument blocker
+remains visible. Six quality gates and 174 predecessor artifact/report sets pass.
+
+Configuration changes only its library directory. Distinct nil, preserved
+call-out players and four-second actions remain the target. Frozen source
+evidence is reused without new fetches, upstream execution, a native suite,
+historical matrix or preload survey. Original Lima, native sources and previous
+overlays are unchanged. Audit random generators next. Semote retains its five-form
+preview limit. Complete menu interaction, complete vocabulary delivery, other SOUL
+consumers, tell recipient typing, logging, remote IMUD, network, login and cold
+startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
