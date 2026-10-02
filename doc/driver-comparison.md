@@ -4844,6 +4844,56 @@ and previous overlays are unchanged. Audit semote preview next. Live account
 provisioning/revocation, complete vocabulary delivery, other SOUL consumers,
 logging, remote IMUD, network, login and cold startup remain unestablished.
 
+#### Lima semote preview
+
+The 2 October 2026 audit follows the emote lifecycle migration on Lima
+`eefaff66adcae9b01e16059574c925b0d63e70a1`. [Semote][lima-semote-preview]
+lacks the protected CMD dispatch adapter and cannot load. Adding only that
+adapter leaves a second defect: its two-target preview loads `/cmds/player/semote2`,
+which is absent from the pinned tree. The failed load returns nil, matching the
+nil onlooker perspective. An onlooker consequently sees “Somebody and you”
+instead of two hypothetical targets.
+
+The two-file diagnostic adds the existing dispatch adapter and a distinct,
+grammar-only `/obj/mudlib/semote_target` object named “Somebody else”. It inherits
+Lima's pronoun/reflexive grammar and is not registered as a command. Actor, both
+targets and onlooker receive the correct preview text. No native API or SOUL
+change is needed; the patch remains diagnostic.
+
+Semote retains its five exact forms, in order: empty, LIV, STR, LIV STR and
+LIV LIV. Other forms are skipped, with empty output if none qualifies. Frozen
+stock metadata counts 3,762 covered rule entries and 100 others across 31 shapes;
+this is not complete vocabulary execution. Text slots keep the underscore
+placeholder and existing [punctuation behavior][lima-message-grammar]. Terminal
+and menu output use paging; pipeline/file output retains the raw payload.
+
+Twenty-one new cases and two unchanged verbs controls pass. Coverage includes
+ordinary player/wizard discovery, aliases, message parts, all four perspectives,
+pronouns/possessives/reflexives, usage, redirects/appends, pipelines, handler
+visibility, CMD/shell-owner guards, restore and rollback. Previewing changes no
+SOUL save, templates or registrations and sends no emote to another user. The
+existing public menu entry matches ordinary terminal output without its prompt;
+complete [plmenu][lima-semote-menu] interaction is unestablished. Full plmenu
+compilation fails at `complete_choice(0, ...)`, whose first parameter is a string,
+in both active and diagnostic libraries. That distinct-nil port blocker remains
+separate from the preview adaptation.
+
+Focused compilation has ten successes from thirteen probes: original semote's
+four adapter errors and two identical plmenu failures remain visible. Diagnostic
+semote and its helper pass; shared dependency outcomes are unchanged. Six quality
+gates, exact patch reproduction and 173 predecessor artifact/report sets pass.
+Unsuccessful fixture runs are preserved; corrected expectations distinguish
+paging, placeholder punctuation and the player-only direct-entry accessor.
+
+Pinned local Git blobs match the reviewed originals. The public SOUL rendering
+was reviewed; new semote/menu fetches failed. This is source review and adapted-
+library execution, without upstream driver execution, a native suite, historical
+matrix or preload survey. Distinct nil, preserved call-out players and four-second
+actions remain the target. Original Lima, active overlay and native sources are
+unchanged. Adopt the semote adapter/helper next, then audit random generators.
+Complete menu interaction, other SOUL consumers, tell recipient typing, logging,
+remote IMUD, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5844,3 +5894,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-shorthand-target]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/targetemote.c
 
 [fl-parser-dump]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L3819
+
+[lima-semote-preview]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/semote.c
+[lima-semote-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/plmenu.c
