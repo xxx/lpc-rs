@@ -4008,11 +4008,11 @@ Security-role mappings are seeded through test helpers; production permission
 queries execute. The retained user-entry cases keep their original channel fixture.
 
 Moderation queues body requestors, calls a speaker and clears typed fields on
-signoff. An existing notification issue remains: raise/lower notices target the
-body's `channel_rcv_string`, but that receiver is defined on the account object.
-The raise check observes the missing notice; both source sites remain unchanged
-apart from class-field spelling. The [notification audit below](#lima-channel-moderation-notifications)
-exercises a proposed destination repair.
+signoff. In that channel migration, raise/lower notices still targeted the
+body's `channel_rcv_string`, while the receiver is defined on the account object.
+The baseline raise check preserves the missing-notice assertion.
+The [notification migration below](#lima-channel-moderation-notifications)
+adopts the reviewed destination repair.
 
 The compile matrix passes 409/620, preserving all 406 preceding successes and
 matching all eighteen audited targets. Complete daemon compilation advances
@@ -4085,15 +4085,16 @@ successes and matching all sixteen audited targets. SNOOP_D advances to success
 and the added dummy target compiles; standalone switch/account mixins and
 non_object retain host dependencies.
 Cold startup, complete login/takeover, stock equipment and foreign saves remain
-unchecked. The [notification audit below](#lima-channel-moderation-notifications)
+unchecked. The [notification migration below](#lima-channel-moderation-notifications)
 keeps destination repair separate.
 
 #### Lima channel moderation notifications
 
 Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
-with distinct nil, preserved call-out players and the body-switch overlay.
-Eight public Lima byte comparisons are recorded; no upstream driver was executed.
-The one-file diagnostic patch is not adopted and needs no native API change.
+with distinct nil and preserved call-out players. The one-file patch is adopted
+over the preceding body-switch overlay in the local Lima migration and matches
+the audited library byte for byte. Eight public Lima byte comparisons are
+recorded; no upstream driver was executed. No native API change is needed.
 
 Keep [moderation][lima-channel-moderation] roles and requestors as bodies. For
 raise/lower notices, resolve the moderator body's `query_link()` and invoke the
@@ -4104,22 +4105,29 @@ change or requester feedback. Preserve real receiver errors rather than catching
 them. Use the existing account message pipeline without broadcasting or adding
 channel history.
 
-The audit passes 59 native cases: eighteen new cases, including four controls,
-and all 41 retained channel/body-switch cases with unchanged assertions and
-exact raw observations. Actual attached accounts verify private raise/lower
-delivery, duplicate/no-op paths, body queue ordering, absent links and rollback
-of both output destinations. A third listener remains silent. Tests seed roles
-and missing links through helpers and use a throwing actual account receiver;
-TCP and public role administration are not established. Preserve the historical
-missing-notice assertion as a frozen baseline control when adopting.
+The migration verifies 717 native cases: eighteen notification cases, including
+four controls, and all 699 previously selected cases with unchanged assertions.
+The 741 observations match frozen evidence within existing checked bounds;
+notification and retained channel/account/body-switch observations match exactly.
+The historical missing-notice assertion retains the frozen body-switch library
+as a deliberate baseline control. Two copied body-switch control fixtures
+prepare human/Void blueprints after repeated setup compilation timeouts; their
+actions retain the 4,000 ms limit and every assertion remains unchanged.
 
-Human and Void blueprints are warmed in the new fixture after three initial
-setup compilation timeouts; the action budget remains 4,000 ms. Compilation is
-8/12 in both libraries, with unchanged outcomes and full CHANNEL_D and
-secure/user success. Standalone host dependencies remain. Cold startup, full
-login, network/shell dispatch and moderator role behavior across body switching
-remain unchecked. Source review finds account/body identity comparisons in the
-[command's speaker gates][lima-entry-channel]; audit those permissions separately.
+Actual attached accounts verify private raise/lower delivery, duplicate/no-op
+paths, body queue ordering, absent links and rollback of both output destinations.
+A third listener remains silent. Tests seed roles and missing links through
+helpers and use a throwing actual account receiver; TCP and public role
+administration are not established. Human and Void blueprints are warmed in the
+new fixture; cold startup and full login remain unchecked.
+
+Compilation remains 411/621, preserving every preceding outcome. All twelve
+audited targets match exactly; only three standalone moderation error locations
+move by four lines. Full CHANNEL_D and secure/user compile; standalone host
+dependencies remain. Network/shell dispatch and moderator role behavior across
+body switching remain unchecked. Source review finds account/body identity
+comparisons in the [command's speaker gates][lima-entry-channel]; audit those
+permissions separately.
 
 #### Lima file metadata
 
