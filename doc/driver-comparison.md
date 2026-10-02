@@ -4503,6 +4503,39 @@ object-local. Verbs stays unchanged. Other SOUL consumers, clan/reporter logging
 public wizard discovery, complete vocabulary, remote IMUD, network, login and
 cold startup remain unestablished.
 
+#### Lima parser inspection
+
+The 2 October 2026 audit of [verbs][lima-listing-verbs] uses the same pinned Lima
+revision and FluffOS `2c27287500daf48a87a1f89d69a97d8b9603028d`, with
+`PACKAGE_PARSER`. The reviewed [FluffOS dump][fl-parser-dump] separates verb
+headings from owner/rule lines and annotates synonyms. Lima expects that display
+format. Native [`parse_dump`](efun/parse_dump.md) is global but flat;
+[`query_parser_rules`](efun/query_parser_rules.md) is object-local.
+
+Twelve cases and observations pass, including two unchanged listing controls.
+Distinct registrations on the same owner, `go` with `to OBJ` and `go to` with
+`OBJ`, produce identical text in both native inspectors. Rule newlines also break
+a one-line reader. Tests verify global/local scope, multiword keys, preserved
+rule whitespace, duplicate owner/order, expanded aliases, pending changes,
+rollback, owner-scoped removal and read-only account context. The typed verbs
+control still lists nothing. There is no production diagnostic patch; the active
+listing overlay, native driver and original Lima are unchanged.
+
+Recommend a structured inspector with separate verb, rule, owner and handler-base
+fields, optional owner filtering, registration order and fresh result containers.
+The provisional `query_parser_registry` API is not implemented. Keep both text
+inspectors, then adapt verbs to structured records, its exact filter and SOUL-rule
+exclusion, the CMD adapter and nil.
+
+Focused compilation is 5/7: four production and two control diagnostics match the
+frozen evidence, and the isolated owner fixture compiles. Six gates and 162
+predecessor sets pass. Two pinned public sources were fetched; Lima bytes match
+its original and local Git blob. FluffOS evidence is source review, without
+upstream execution. Tests use distinct nil, preserved players and four-second
+actions. No native suite, historical matrix or preload survey was rerun. Public
+wizard discovery and the remaining SOUL consumers, logging, vocabulary, network,
+login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5498,3 +5531,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-listing-apropos]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/emoteapropos.c
 [lima-listing-show]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showemote.c
 [lima-listing-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/verbs.c
+
+[fl-parser-dump]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L3819
