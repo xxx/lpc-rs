@@ -4584,13 +4584,34 @@ observations.
 
 Focused compilation is 9/11: all four diagnostic targets compile, while baseline
 verbs and its adapter-only control retain their errors and locations. Six gates,
-exact patch reproduction and 164 frozen predecessor sets pass. Original Lima,
-the active listing overlay and native sources remain unchanged; the diagnostic
-patch has not been adopted. The command matches its pinned Git blob and frozen
-public source. No new public fetch, upstream execution, native suite, historical
-matrix or preload survey was needed. Adopt this one-file patch next; other SOUL
-consumers, logging, vocabulary, network, login and cold startup remain
-unestablished.
+exact patch reproduction and 164 frozen predecessor sets pass. During the audit,
+original Lima, the active listing overlay and native sources remained unchanged;
+the patch was prepared separately. The original command matches its pinned Git
+blob and frozen public source. No new public fetch, upstream execution, native
+suite, historical matrix or preload survey was needed. The migration below
+adopts this one-file patch; other SOUL consumers, logging, vocabulary, network,
+login and cold startup remain unestablished.
+
+#### Lima verbs migration
+
+The 2 October 2026 migration adopts the exact one-file verbs patch over the
+listing overlay. The adopted library matches the audited diagnostic byte for
+byte, retaining structured rule grouping, exact filters, SOUL exclusion, CMD
+output and the adapter/nil changes. Native driver and original Lima remain
+unchanged.
+
+All eighteen cases and observations match the final audit, including both frozen
+controls. Only the active library directory changes in the harness; controls
+retain their original library. Four focused targets compile with unchanged
+outcomes and diagnostics. Six gates, exact patch reproduction, three unchanged
+fixture sources and 165 frozen predecessor sets pass. Pinned source evidence
+remains frozen; no new fetch, upstream execution, native suite, historical
+matrix or preload survey was needed.
+
+Audit public wizard command discovery for verbs and showemote next. Their guarded
+CMD entries are tested; directory discovery and authorization through ordinary
+shell input remain unchecked. Other SOUL consumers, logging, vocabulary, network,
+login and cold startup remain unestablished.
 
 #### Lima file metadata
 
