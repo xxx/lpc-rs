@@ -4756,6 +4756,32 @@ are unchanged. Adopt the SOUL rebuild next, then audit ordinary rmemote/mvemote
 entry. Complete vocabulary delivery, other SOUL consumers, logging, remote IMUD,
 network, login and cold startup remain unestablished.
 
+#### Lima SOUL ordering migration
+
+The 2 October 2026 migration adopts the exact audited SOUL patch over the shorthand
+overlay. The new active library matches the frozen diagnostic byte for byte;
+only `daemons/soul_d.c` changes. Registration rebuilds at create, add, remove and
+move retain the audited living/object precedence, stable equal-weight order,
+deduplication and removal/move fixes. Templates, command handlers and caller
+guards retain their behavior. Original Lima and native sources remain unchanged.
+
+All twenty-three case bodies, assertions and observations match the audit.
+Four fixture sources are copied unchanged, and support changes only the adopted
+library directory. Baseline and verbs controls retain frozen libraries and sources.
+All 3,862 stock rules register uniquely under the existing four-second action
+budget. Focused compilation is 8/8 with identical audited outcomes and diagnostics;
+six gates and 170 frozen predecessor sets pass. Configuration changes only its
+library directory. Frozen source evidence is reused without new public fetches,
+upstream execution, a native suite, historical matrix or preload survey. Lima
+keeps distinct nil and preserved call-out players.
+
+Audit ordinary rmemote/mvemote entry, directory discovery and authorization next.
+Their daemon tests use fixture accessors on genuine command objects. SOUL-local
+precedence retains the documented mapping ties and global registration effects;
+it does not reproduce general FluffOS weighting or callback effects. Complete
+vocabulary delivery, other SOUL consumers, logging, remote IMUD, network, login
+and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
