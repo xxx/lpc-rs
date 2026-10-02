@@ -4555,10 +4555,42 @@ distinct mode. Six quality gates and 163 predecessor artifact/report sets pass.
 Lima's original and active listing overlay are unchanged; no new public fetch or
 upstream execution was needed.
 
-Adapt verbs to the structured records next, preserving its exact verb filter,
-SOUL-rule exclusion and output, with the existing CMD adapter and nil. Complete
-wizard-shell discovery, other SOUL consumers, logging, vocabulary, network, login
-and cold startup remain unestablished.
+The command adaptation audited below uses these records, preserving the exact
+verb filter, SOUL-rule exclusion and output, with the existing CMD adapter and
+nil. Complete wizard-shell discovery, other SOUL consumers, logging, vocabulary,
+network, login and cold startup remain unestablished.
+
+#### Lima verbs command
+
+The 2 October 2026 audit prepares a one-file adaptation of
+[verbs][lima-listing-verbs] over the listing overlay. Its private typed handler
+uses [`query_parser_registry`](efun/query_parser_registry.md), grouping rules by
+their full registered verb key in first-registration order. Rule order and
+duplicates remain intact across owners. The exact, case-sensitive filter retains
+multiword keys; nil and an empty string select all. Synonyms appear under their
+registered keys. SOUL exclusion still tests the displayed verb and rule, even
+when another object registered the same rule. The command retains its leading
+newline, comma separators, final newline and buffered CMD output, with the
+existing protected adapter and typed nil.
+
+Sixteen new cases and two unchanged controls pass. They cover grouping, bare and
+multiword rules, whitespace/newlines, aliases, exact filters, SOUL exclusions,
+private/protected visibility, the shell caller guard, terminal/pipeline output,
+account context, read-only state, owner lifecycle and registration/output
+rollback. The tests enter through the actual shell's guarded CMD route; public
+wizard command discovery remains unchecked. Original adapter-only string-zero
+and typed-scanner empty-output controls retain their exact assertions and
+observations.
+
+Focused compilation is 9/11: all four diagnostic targets compile, while baseline
+verbs and its adapter-only control retain their errors and locations. Six gates,
+exact patch reproduction and 164 frozen predecessor sets pass. Original Lima,
+the active listing overlay and native sources remain unchanged; the diagnostic
+patch has not been adopted. The command matches its pinned Git blob and frozen
+public source. No new public fetch, upstream execution, native suite, historical
+matrix or preload survey was needed. Adopt this one-file patch next; other SOUL
+consumers, logging, vocabulary, network, login and cold startup remain
+unestablished.
 
 #### Lima file metadata
 
