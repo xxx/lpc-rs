@@ -4349,12 +4349,32 @@ Six gates, exact patch reproduction, twenty-four copied source records, eleven
 appends and 156 predecessor sets pass. Six fresh public files match original
 Lima bytes at the pinned revision; nine SOUL comparisons remain frozen evidence.
 No upstream driver, native suite, historical matrix or preload survey was rerun.
-The four-file patch remains diagnostic; active `channel-recipient/adapted-lib`
-is unchanged. Adopt it next, then audit [LOG_D][lima-emote-log]: successful
-addemote saves SOUL but leaves log bytes unchanged, and the logger retains a
-partial-pointer unguarded write callback. The unchanged logger compiles in two
-additional checks. Other SOUL consumers, public wizard entry, remote IMUD,
-complete vocabulary, network, login and cold startup remain unestablished.
+The audit kept its four-file patch diagnostic on `channel-recipient/adapted-lib`
+and recommended command migration before auditing [LOG_D][lima-emote-log].
+Successful addemote saves SOUL but leaves log bytes unchanged; source review
+finds a partial-pointer unguarded write callback. The unchanged logger compiles
+in two additional checks.
+
+#### Lima emote command migration
+
+The migration adopts the exact four-file command patch over
+`channel-recipient/adapted-lib`; active `emote-command/adapted-lib` matches the
+frozen diagnostic byte for byte. Four dispatch adapters, one typed-nil
+initialization and three explicit modal callbacks preserve private typed handlers.
+Native driver and original Lima remain unchanged.
+
+All thirty-six cases/observations pass in one run with identical assertions,
+output, controls and action budgets. Original and partial adaptations retain
+their frozen control libraries. Selected compilation is 17/20, matching every
+audited diagnostic outcome, error and location across nineteen command-context
+targets and LOG_D; the four selected commands compile. Six gates, exact patch
+reproduction, twenty-nine copied source records, eleven appends and 157 predecessor
+sets pass. Six reviewed public files and nine older SOUL comparisons remain frozen
+evidence; no new fetch, native suite, historical matrix or preload survey was needed.
+
+Audit LOG_D addemote logging next through the adopted command. The log remains
+unchanged after successful addition. Other SOUL consumers, public wizard discovery,
+remote IMUD, complete vocabulary, network, login and cold startup remain unestablished.
 
 #### Lima file metadata
 
