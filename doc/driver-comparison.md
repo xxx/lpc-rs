@@ -4782,6 +4782,42 @@ it does not reproduce general FluffOS weighting or callback effects. Complete
 vocabulary delivery, other SOUL consumers, logging, remote IMUD, network, login
 and cold startup remain unestablished.
 
+#### Lima emote removal and move command entry
+
+The 2 October 2026 audit exercises ordinary wish input on the adopted SOUL overlay.
+Both editors are discoverable to wizards; player paths and foreign shell contexts
+cannot reach them. Rmemote requires an existing wizard home directory, including
+for admins. Mvemote requires administrator status but no home directory. The
+reviewed configuration uses WIZ_DIR=/wiz with EXPANDED_WIZ_DIR undefined.
+[Configuration](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/config.h),
+[removal handler][lima-emote-remove], [move handler][lima-emote-move].
+
+Whole and specific-rule removal, rename and destination replacement retain correct
+registrations across reload. Redirects, append and pipelines route status output;
+outer errors roll back mutations, saves, history and output. Active
+`mvemote foo foo` reports success and persists deletion. A one-condition diagnostic
+SOUL guard refuses identical names before any change, retaining ordinary lifecycle
+and authorization. It is not adopted. Multiword destinations register and parse,
+but the editors retain their pinned first-space source boundary; quoting does not
+make a multiword source editable. [SOUL implementation][lima-speaker-soul].
+
+Twenty-three cases and observations pass: twenty-one new and two unchanged verbs
+controls, with eighteen active cases and three diagnostic cases. A player refusal
+wording assertion was corrected for the seven possible random nonsense messages;
+source-derived expectations, added discovery checks and normalized observations
+preserve the permission and data checks. Focused compilation is 12/12; six gates,
+exact patch reproduction and 171 frozen predecessor sets pass. Original Lima,
+active library and native sources remain unchanged. Distinct nil, preserved
+call-out players and four-second actions remain the target.
+
+Pinned local Git blobs match the reviewed original files. The public SOUL
+rendering was reviewed; new command/path fetches failed, and frozen wizard
+source evidence was reused. This is adapted-library execution and source review,
+without upstream driver execution, a native suite, historical matrix or preload
+survey. Adopt the self-move guard next, then audit semote preview. Live account
+provisioning/revocation, complete vocabulary delivery, other SOUL consumers,
+logging, remote IMUD, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
