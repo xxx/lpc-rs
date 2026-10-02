@@ -4300,10 +4300,28 @@ requirements. The other fourteen compile results match exactly. Six gates,
 exact patch reproduction and 154 predecessor sets pass. Public source evidence
 is reused from the pinned SOUL audit; no new fetch or upstream driver execution
 was needed. Historical matrices, native suites and preload surveys were not rerun.
-The patch is not adopted; the active overlay remains `soul-daemon/adapted-lib`.
-Adopt receiver selection next, then audit CMD `dispatch_main` composition for
-public emote commands. Remote IMUD, complete vocabulary, public wizard entry,
-network, full login and cold startup remain unestablished.
+The audit left the patch unadopted on `soul-daemon/adapted-lib` and recommended
+receiver migration before auditing CMD `dispatch_main` composition.
+
+#### Lima channel soul recipient migration
+
+The recipient migration adopts the exact audited one-file patch over
+`soul-daemon/adapted-lib`; active `channel-recipient/adapted-lib` matches the
+frozen diagnostic byte for byte. Only `secure/user/channel.c` changes, removing/
+replacing five lines and adding/replacing four. Native driver and original Lima
+remain unchanged.
+
+All twenty cases/observations pass in one run with identical assertions, output,
+controls and action budgets. Original and deliberately faulty receivers retain
+their frozen control libraries. Selected compilation is 9/15, matching every
+audited diagnostic outcome, error and location; full secure/user compiles.
+Six gates, exact patch reproduction, twenty-five copied source records, eight
+appends and 155 predecessor sets pass. Public evidence remains frozen; no new
+fetch, native suite, historical matrix or preload survey was needed.
+
+Audit CMD `dispatch_main` host composition next for public emote command entry.
+Remote IMUD, complete vocabulary, public wizard input, body switching during
+delivery, network, full login and cold startup remain unestablished.
 
 #### Lima file metadata
 
