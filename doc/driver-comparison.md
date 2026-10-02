@@ -4126,8 +4126,51 @@ audited targets match exactly; only three standalone moderation error locations
 move by four lines. Full CHANNEL_D and secure/user compile; standalone host
 dependencies remain. Network/shell dispatch and moderator role behavior across
 body switching remain unchecked. Source review finds account/body identity
-comparisons in the [command's speaker gates][lima-entry-channel]; audit those
-permissions separately.
+comparisons in the [command's speaker gates][lima-entry-channel]; the
+[permission audit below](#lima-moderated-speaker-permissions) reviews them separately.
+
+#### Lima moderated speaker permissions
+
+Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
+with distinct nil, preserved call-out players and the notification overlay.
+The two-line diagnostic patch is not adopted and needs no native API change.
+Ten public Lima byte comparisons are recorded: eight frozen comparisons and
+two fresh ones. No upstream driver was executed.
+
+The [command's two speech gates][lima-entry-channel] compare the account from
+`this_user()` with body-valued moderator/speaker fields. This rejects both
+assigned roles once both fields are populated. Compare `this_body()` with
+`ci.moderator` and `ci.speaker` instead; the [body helper][lima-speaker-context]
+returns the account's `query_body()`. Keep account identity for listener lists,
+output and admin checks, and keep body identity for moderation roles/requestors.
+The same correction applies to plain speech and semicolon/colon emotes.
+
+Preserve the original condition requiring both moderator and speaker.
+Unmoderated or speaker-less channels retain the open floor; admins without a
+body role get no speech bypass. Queued bodies must be called before speaking.
+Actual `/call` transfers permission, speaker signoff reopens the floor, and the
+account must still be listening before either gate.
+
+The audit verifies 85 native cases: 26 new cases, including five controls, and
+all 59 retained channel/body-switch/notification cases with unchanged sources,
+assertions and exact raw observations. An initial Rust fixture type ambiguity
+was corrected before execution. Twelve new history expectations confused raw
+color-marked history with rendered account output; the final checks assert both
+exact forms separately. All 26 new cases pass focused revalidation; retained
+assertions and the 4,000 ms budget remain unchanged. Tests verify recipient
+broadcast, role/queue transitions, denial before soul lookup and rollback of
+history and all three recipient queues.
+
+Literal emotes use an explicit unknown-emote lookup fixture. A separate
+stock-[SOUL_D][lima-speaker-soul] control reaches its existing compile failure
+after passing the repaired gate, preserving history/output rollback. This does
+not establish recognized soul parsing or full emote dispatch. The stock compile
+survey passes 9/14 in both libraries, with identical outcomes, errors and source
+locations. Full CHANNEL_D and account composition compile; standalone host
+dependencies and SOUL_D blockers remain. Cold startup, public moderator-group
+administration, TCP, shell/network dispatch, IMUD and role behavior across body
+switching remain unchecked. Adopt the two-line permission repair, then audit
+SOUL_D separately.
 
 #### Lima file metadata
 
@@ -5104,3 +5147,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-channel-user]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/channel.c
 [fl-channel-members]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/compiler/internal/grammar.y
 [lima-entry-snoop-dummy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/snoop_dummy.c
+
+[lima-speaker-context]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/userfuncs.c
+[lima-speaker-soul]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/soul_d.c
