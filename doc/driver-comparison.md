@@ -4244,9 +4244,25 @@ Selected compilation is 8/14 → 9/14; all other diagnostics match across baseli
 typed-only and diagnostic libraries. Six quality gates, exact patch reproduction
 and 152 predecessor sets are verified. Nine pinned public byte comparisons
 support source review; no upstream driver was executed. Historical matrices,
-native suites and preload surveys were not rerun. The active overlay remains
-`speaker-permission/adapted-lib`; adopt the nineteen-line SOUL adaptation before
-addressing receiver identity.
+native suites and preload surveys were not rerun. At the audit, the active
+overlay remained `speaker-permission/adapted-lib` and the patch was unadopted.
+
+The 1 October 2026 migration at `596dca3e` adopts that exact nineteen-line patch
+over `speaker-permission/adapted-lib`. The active overlay is now
+`soul-daemon/adapted-lib`, matching the audited diagnostic library byte for byte.
+Native/original sources, integer predicates, access checks and parser/message
+policies remain unchanged.
+
+All 50 audit cases and observations pass unchanged, including the 24 SOUL cases
+and 26 permission cases. Original compile/persistence and channel/IMUD controls
+retain their frozen sources and expectations. Selected compilation remains 9/14,
+with identical outcomes, errors and locations. Six gates, exact patch reproduction,
+45 copied records, seven append records and 153 predecessor sets are verified.
+Nine public byte comparisons remain frozen audit evidence; no new fetch, upstream
+driver execution, native suite, historical matrix or preload survey was needed.
+Channel recipient identity, remote IMUD, public wizard command entry, complete
+vocabulary, TCP, full login and cold startup remain unestablished. Audit the
+channel receiver next with the adopted SOUL daemon.
 
 #### Lima file metadata
 
