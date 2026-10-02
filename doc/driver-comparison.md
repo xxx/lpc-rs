@@ -4323,6 +4323,39 @@ Audit CMD `dispatch_main` host composition next for public emote command entry.
 Remote IMUD, complete vocabulary, public wizard input, body switching during
 delivery, network, full login and cold startup remain unestablished.
 
+#### Lima emote command dispatch
+
+Source review at Lima `eefaff66adcae9b01e16059574c925b0d63e70a1` on
+1 October 2026 confirms that the four carried-forward command blockers need
+the existing CMD adapter: [feelings][lima-emote-feelings],
+[rmemote][lima-emote-remove], [mvemote][lima-emote-move] and
+[addemote][lima-emote-add]. A protected varargs four-slot mixed `dispatch_main`
+calls each unchanged private `main(arg)`. Native visibility, composition and
+argument checking remain sufficient; no prototype or driver change is needed.
+Addemote additionally needs `nil` for its string rule initialization and explicit
+calls at three modal callbacks. Typed-only controls compile but never run the
+rule/message handlers because the old expressions return partial pointers.
+
+Sixteen new command cases and twenty unchanged recipient cases verify thirty-six
+observations. Actual player-shell discovery runs feelings; other commands use an
+appended helper on the actual shell and production CMD's caller guard. Visibility,
+permission denials, seeded wizard/admin successes, buffered output, prompted and
+inline multipart addition, aborts, save/reload and transactional rollback pass.
+Wizard role/directory are setup; WISH discovery and TCP input remain untested.
+Compilation improves 12/19 to 16/19 over forty checks including two controls;
+the four commands compile, and the fifteen other outcomes remain unchanged.
+
+Six gates, exact patch reproduction, twenty-four copied source records, eleven
+appends and 156 predecessor sets pass. Six fresh public files match original
+Lima bytes at the pinned revision; nine SOUL comparisons remain frozen evidence.
+No upstream driver, native suite, historical matrix or preload survey was rerun.
+The four-file patch remains diagnostic; active `channel-recipient/adapted-lib`
+is unchanged. Adopt it next, then audit [LOG_D][lima-emote-log]: successful
+addemote saves SOUL but leaves log bytes unchanged, and the logger retains a
+partial-pointer unguarded write callback. The unchanged logger compiles in two
+additional checks. Other SOUL consumers, public wizard entry, remote IMUD,
+complete vocabulary, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5301,3 +5334,13 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-speaker-context]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/userfuncs.c
 [lima-speaker-soul]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/soul_d.c
+
+[lima-emote-feelings]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/feelings.c
+
+[lima-emote-remove]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/rmemote.c
+
+[lima-emote-move]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/mvemote.c
+
+[lima-emote-add]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/addemote.c
+
+[lima-emote-log]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/log_d.c
