@@ -94,6 +94,7 @@ pub(crate) mod query_command;
 pub(crate) mod query_connection;
 pub(crate) mod query_ip_number;
 pub(crate) mod query_notify_fail;
+pub(crate) mod query_parser_registry;
 pub(crate) mod query_parser_rules;
 pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
@@ -603,6 +604,11 @@ efuns! {
     },
     query_notify_fail => {
         returns: LpcType::Mixed(false),
+    },
+    query_parser_registry => {
+        returns: LpcType::Mapping(true),
+        arity: (1, 1),
+        args: [LpcType::Object(false)],
     },
     query_parser_rules => {
         returns: LpcType::String(true),
@@ -1548,6 +1554,7 @@ mod tests {
                 "query_call_outs",
                 "query_command",
                 "query_notify_fail",
+                "query_parser_registry",
                 "query_parser_rules",
                 "query_resident_memory",
                 "query_verb",

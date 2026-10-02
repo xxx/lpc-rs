@@ -9,6 +9,10 @@ rule (`rule` `""`) leaves a trailing space: `"look "`. Verb keys use canonical
 spacing, including multiword keys; rule text retains its original whitespace.
 This is registration order, not the longest-phrase order used for dispatch.
 
+For separate verb and rule fields, owner identity and synonym handler verbs, use
+[`query_parser_registry`](query_parser_registry.md). Joined strings do not preserve
+the boundary between a multiword verb and its rule.
+
 ### See also
 
 `parse_add_rule`, `parse_add_synonym`, `parse_remove`, `parse_dump`,
