@@ -4264,6 +4264,47 @@ Channel recipient identity, remote IMUD, public wizard command entry, complete
 vocabulary, TCP, full login and cold startup remain unestablished. Audit the
 channel receiver next with the adopted SOUL daemon.
 
+#### Lima channel soul recipients
+
+Source review at Lima `eefaff66adcae9b01e16059574c925b0d63e70a1` on
+1 October 2026 identifies two problems in
+[channel_rcv_soul][lima-channel-user]. It compares receiving accounts with the
+body-valued participant list produced by [SOUL_D][lima-speaker-soul], and its
+fixed branches only handle an actor and one target. A second target and ordinary
+observer therefore select the first target's slot even after correcting identity.
+
+Select `member_array(query_body(), data[0])` for the receiving account, use that
+message slot when found, and otherwise use `data[1][<1]`, the final observer
+message. Keep first-match actor priority when actor and target are the same body.
+Use the receiver's own getter: [this_body][lima-speaker-context] follows
+`this_user()` and still returns the sender's body during broadcast. An explicit
+control shows that using it gives every listener the actor's text. This one-file
+Lima adaptation uses existing native operations and requires no driver change.
+
+The diagnostic verifies personalized actor/target/observer output for ordinary,
+colon, multipart and two-target souls, raw delivery, reversed sender/target roles,
+self-targets and bodyless listeners. Unregistered listeners receive nothing.
+Actual moderator and called-speaker commands retain their body gates; a nonrole
+body gets only denial feedback. History retains observer text, unknown emotes
+retain literal fallback, and later errors roll back all four recipient queues
+and history. The tests use the actual adopted SOUL parser and message composer;
+audit verbs and templates are seeded through production add-emote calls.
+
+Twenty cases/observations are verified: eighteen new cases, including three
+controls, and two frozen channel cases with identical assertions and observations.
+One new denial expectation initially omitted the account renderer's second LF;
+the corrected exact assertion passes focused revalidation. Selected compilation
+is 9/15 in both libraries across thirty checks. Full secure/user composition
+compiles; its standalone channel mixin adds `query_body` to existing host
+requirements. The other fourteen compile results match exactly. Six gates,
+exact patch reproduction and 154 predecessor sets pass. Public source evidence
+is reused from the pinned SOUL audit; no new fetch or upstream driver execution
+was needed. Historical matrices, native suites and preload surveys were not rerun.
+The patch is not adopted; the active overlay remains `soul-daemon/adapted-lib`.
+Adopt receiver selection next, then audit CMD `dispatch_main` composition for
+public emote commands. Remote IMUD, complete vocabulary, public wizard entry,
+network, full login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
