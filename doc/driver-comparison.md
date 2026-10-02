@@ -4376,6 +4376,41 @@ Audit LOG_D addemote logging next through the adopted command. The log remains
 unchanged after successful addition. Other SOUL consumers, public wizard discovery,
 remote IMUD, complete vocabulary, network, login and cold startup remain unestablished.
 
+#### Lima logger callbacks
+
+Source review at Lima `eefaff66adcae9b01e16059574c925b0d63e70a1` on
+2 October 2026 finds that [LOG_D][lima-emote-log] constructs a bound `write_file`
+pointer inside `unguarded` without invoking it. Use an explicit closure call:
+`unguarded(1, (: write_file(legal_logs[$(which)], $(what)) :));`.
+The current access wrapper does not adapt ordinary native efun pointers.
+This one-line library change preserves the allowlist, privilege, paths and void
+API; no native API or broader security-wrapper change is needed.
+
+Fourteen new logger cases and two unchanged command controls verify sixteen
+observations. All 24 legal symbols pass: 21 append exact payload bytes and three
+add one timestamp prefix. Login/quit share a file; snoop uses the secure directory.
+Prompted and inline multipart addemote save and log once, while aborts do not log.
+SOUL save, log append, modal-stack consumption and queued output roll back together
+on a later uncaught error. Alias order, same-task reads, account permissions,
+daemon reload, rejected names, empty/NUL payloads and write errors pass.
+Missing parents and directory targets now expose native write errors that the
+old no-op concealed. Retained controls use the unchanged adopted command overlay.
+
+Compilation remains 12/12 in baseline and diagnostic libraries over 24 checks.
+Six gates, exact patch reproduction, 24 copied fixture files, two unchanged test
+fragments, thirteen appends and 158 predecessor sets pass. Seven reviewed originals
+match their pinned Git blobs; six public comparisons and nine older SOUL comparisons
+remain frozen evidence. No upstream driver, native suite, historical matrix or
+preload survey was rerun. Tests use distinct nil, preserved players and four-second
+actions. The logger patch remains diagnostic; the active overlay is unchanged.
+
+The [log header][lima-log-header] declares clan, clan_error, feedback and question,
+but LOG_D does not allow them. Stock clan/reporter callers need a separate audit;
+this patch keeps their rejection. Adopt the explicit write callback next, then
+audit remaining SOUL commands. Full logger-caller integration, public wizard
+discovery, remote IMUD, vocabulary, network, login and cold startup remain
+unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5364,3 +5399,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-emote-add]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/addemote.c
 
 [lima-emote-log]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/log_d.c
+
+[lima-log-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/log.h
