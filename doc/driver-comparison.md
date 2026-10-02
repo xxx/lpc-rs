@@ -4818,6 +4818,32 @@ survey. Adopt the self-move guard next, then audit semote preview. Live account
 provisioning/revocation, complete vocabulary delivery, other SOUL consumers,
 logging, remote IMUD, network, login and cold startup remain unestablished.
 
+#### Lima emote lifecycle migration
+
+The 2 October 2026 migration adopts the exact self-move guard from the command
+audit over the SOUL ordering overlay. Only `daemons/soul_d.c` changes, and the
+entire active library matches the frozen diagnostic byte for byte. Identical-name
+moves now fail before changing emote data, parser registrations or saves.
+Ordinary removal, rename, destination replacement, administrator/caller checks
+and rollback retain audited behavior. Command handlers retain their existing
+first-space source boundary.
+
+All twenty-three case bodies, assertions and normalized observations match the
+audit. Three cases exercise the adopted guard and ordinary lifecycle/admin/rollback
+behavior; eighteen previous-library cases retain the frozen SOUL ordering overlay,
+including the deletion control. Two historical verbs controls retain their frozen
+libraries and sources. Three fixture files are copied unchanged; support changes
+only the adopted directory. Focused compilation is 6/6 with matching outcomes
+and diagnostics. Six gates and 172 frozen predecessor artifact/report sets pass.
+Configuration changes only its library directory. Distinct nil, preserved call-out
+players and four-second actions remain the target.
+
+Frozen source evidence is reused without a new public fetch, upstream execution,
+native suite, historical matrix or preload survey. Original Lima, native sources
+and previous overlays are unchanged. Audit semote preview next. Live account
+provisioning/revocation, complete vocabulary delivery, other SOUL consumers,
+logging, remote IMUD, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
