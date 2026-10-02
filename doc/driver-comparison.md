@@ -4438,6 +4438,47 @@ Four declared clan/reporter symbols remain absent from LOG_D's allowlist;
 their integration is separate. Full caller logging, public wizard discovery,
 remote IMUD, vocabulary, network, login and cold startup remain unestablished.
 
+#### Lima SOUL listing commands
+
+Source review at Lima `eefaff66adcae9b01e16059574c925b0d63e70a1` on
+2 October 2026 finds ten remaining SOUL command consumers without the adopted
+CMD adapter. The [adverbs][lima-listing-adverbs],
+[emoteapropos][lima-listing-apropos] and [showemote][lima-listing-show] listing
+commands need only the protected varargs four-slot mixed adapter calling each
+unchanged private `main(arg)`. Native typing, visibility and dispatch suffice.
+Adverbs keeps framed pipe output and a zero-count frame for no matches;
+emoteapropos's direct usage write bypasses pipes; showemote's native `%O` output
+has unquoted rule strings. Existing menu entry and SOUL query behavior remain.
+
+Eighteen new cases and two unchanged logger controls verify twenty observations.
+Actual player-shell discovery runs adverbs/emoteapropos; showemote uses the real
+shell's guarded CMD entry. Filtering, empty results, menus, pipelines, template
+display, hidden handlers/adapters, rejected direct dispatch, second-account output,
+read-only state and output rollback pass. The retained save/log and rollback
+controls keep their original bodies, assertions, observations and frozen library.
+
+Compilation improves 4/14 to 7/14 over thirty checks including two controls.
+All three selected commands compile; eleven other target diagnostics stay
+unchanged. Six gates, exact patch reproduction, twenty-six copied fixture sources,
+two retained fragments, fourteen appends and 160 predecessor sets pass. Fourteen
+original commands match pinned Git blobs; six public comparisons remain frozen.
+No upstream driver, native suite, historical matrix or preload survey was rerun.
+Tests use distinct nil, preserved players and four-second actions. The three-file
+patch remains diagnostic on the unchanged logger overlay.
+
+[Verbs][lima-listing-verbs] additionally assigns zero to a string. Typed nil makes
+its adapter control compile, but it still returns only a newline for existing
+rules: its header/indented-rule scanner does not match native
+[`parse_dump`](efun/parse_dump.md) rows. The existing
+[`query_parser_rules`](efun/query_parser_rules.md) inspector is object-local.
+Verbs remains unchanged pending separate global-inspection review. Source-only
+follow-ups cover shorthand editor arguments, semote preview, random generators
+and tell soul typing/recipient identity; their runtime behavior is unchecked.
+
+Adopt the three listing adapters next, then audit parser inspection for verbs.
+Complete SOUL consumers/vocabulary, clan/reporter logging, public wizard discovery,
+remote IMUD, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5428,3 +5469,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-emote-log]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/log_d.c
 
 [lima-log-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/log.h
+
+[lima-listing-adverbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/adverbs.c
+[lima-listing-apropos]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/emoteapropos.c
+[lima-listing-show]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showemote.c
+[lima-listing-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/verbs.c
