@@ -4133,7 +4133,8 @@ comparisons in the [command's speaker gates][lima-entry-channel]; the
 
 Source-reviewed and exercised **1 October 2026** at the pinned Lima revision,
 with distinct nil, preserved call-out players and the notification overlay.
-The two-line diagnostic patch is not adopted and needs no native API change.
+At the audit, the two-line diagnostic patch was not adopted and needed no native
+API change; the [migration below](#lima-moderated-speaker-migration) adopts it.
 Ten public Lima byte comparisons are recorded: eight frozen comparisons and
 two fresh ones. No upstream driver was executed.
 
@@ -4169,8 +4170,35 @@ survey passes 9/14 in both libraries, with identical outcomes, errors and source
 locations. Full CHANNEL_D and account composition compile; standalone host
 dependencies and SOUL_D blockers remain. Cold startup, public moderator-group
 administration, TCP, shell/network dispatch, IMUD and role behavior across body
-switching remain unchecked. Adopt the two-line permission repair, then audit
-SOUL_D separately.
+switching remain unchecked. The [migration below](#lima-moderated-speaker-migration)
+adopts the two-line permission repair; SOUL_D remains a separate audit.
+
+#### Lima moderated speaker migration
+
+Adopted **1 October 2026** at the pinned Lima revision, with distinct nil,
+preserved call-out players and the exact two-line patch over the notification
+overlay. Both speech gates compare bodies with moderator/speaker fields;
+listener lists, output and admin checks retain account identity. The audited
+open-floor, queued-body, role-transfer, signoff and listener policies remain.
+No native API change is needed.
+
+The migration verifies 743 selected cases and 767 observations: all 717 preceding
+cases plus 26 permission cases, including five controls, with unchanged assertions
+and action budgets. Original permission rejection controls keep the frozen
+notification library; stock SOUL_D retains its actual blocker. Permission and
+retained account/body/channel/notification observations match exactly; 18 raw
+differences elsewhere retain existing checked bounds.
+Nine cases initially timed out compiling the full human body at 4,000 ms.
+All nine pass an unchanged focused retry; the failed run and retry are archived.
+No fixture setup, assertion or action budget changed.
+
+Compilation remains 411/621, with identical outcomes, errors and source locations;
+all fourteen audited targets match. Full CHANNEL_D and account composition
+compile, while standalone host dependencies and stock SOUL_D blockers remain.
+Literal emotes use an explicit unknown-emote lookup fixture; a separate stock-SOUL
+control retains its real compile failure and rollback. Recognized souls, IMUD,
+TCP, full login/cold startup, public role administration and role behavior across
+body switching remain unchecked. Audit stock SOUL_D separately.
 
 #### Lima file metadata
 
