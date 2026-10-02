@@ -4613,6 +4613,40 @@ CMD entries are tested; directory discovery and authorization through ordinary
 shell input remain unchecked. Other SOUL consumers, logging, vocabulary, network,
 login and cold startup remain unestablished.
 
+#### Lima wizard command discovery
+
+The 2 October 2026 audit uses the same pinned Lima revision and adopted verbs
+overlay. The actual [user shell selection][lima-user-shell] starts
+[wish][lima-wish]; ordinary modal input discovers verbs and showemote through
+CMD_D and the guarded CMD entry. The configured administrator directory is
+`/trans/admincmds`. Player input cannot discover either wizard command, including
+explicit wizard command paths. Restart after promotion selects wish. Changing
+wizard paths excludes a cached command, and resetpath restores discovery.
+
+Fifteen cases and observations pass: thirteen new cases and two unchanged verbs
+controls with matching observations and libraries. Tests cover default/exact and
+multiword filters, SOUL exclusions, templates/usage/missing names, both-command
+redirects and pipelines, append output, owner guard, history/read-only payload
+state and outer-error rollback. The [modal dispatcher][lima-inputsys] catches
+the foreign-context shell error and recaptures the owner's prompt without
+running the command; an isolated shell entry verifies the uncaught guard
+separately. Fixture-only methods expose protected history, while normal discovery
+uses the existing input dispatcher. Shared support remains unchanged.
+
+Six focused production targets compile. Six gates and 166 frozen predecessor
+sets pass. Original Lima, active overlay and native sources remain unchanged;
+this audit recommends no production patch. Three pinned public source renderings
+were reviewed and local originals match pinned Git blobs. Commands-header fetches
+failed, so its configured macro was reviewed locally. This is source review and
+local adapted-library execution; no upstream execution, native suite, historical
+matrix or preload survey was needed. Tests keep distinct nil, preserved players
+and four-second actions.
+
+Audit shorthand emote editors stupidemote and targetemote next through ordinary
+wizard input. Role provisioning/revocation, restored saved-path policy, backtick
+expansion, other SOUL consumers/vocabulary, logging, remote IMUD, network, login
+and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
