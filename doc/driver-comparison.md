@@ -4463,8 +4463,8 @@ unchanged. Six gates, exact patch reproduction, twenty-six copied fixture source
 two retained fragments, fourteen appends and 160 predecessor sets pass. Fourteen
 original commands match pinned Git blobs; six public comparisons remain frozen.
 No upstream driver, native suite, historical matrix or preload survey was rerun.
-Tests use distinct nil, preserved players and four-second actions. The three-file
-patch remains diagnostic on the unchanged logger overlay.
+Tests use distinct nil, preserved players and four-second actions. The audit kept
+the three-file patch diagnostic on the unchanged logger overlay.
 
 [Verbs][lima-listing-verbs] additionally assigns zero to a string. Typed nil makes
 its adapter control compile, but it still returns only a newline for existing
@@ -4475,9 +4475,33 @@ Verbs remains unchanged pending separate global-inspection review. Source-only
 follow-ups cover shorthand editor arguments, semote preview, random generators
 and tell soul typing/recipient identity; their runtime behavior is unchecked.
 
-Adopt the three listing adapters next, then audit parser inspection for verbs.
+The migration below adopts the three listing adapters; parser inspection for
+verbs remains the next audit.
 Complete SOUL consumers/vocabulary, clan/reporter logging, public wizard discovery,
 remote IMUD, network, login and cold startup remain unestablished.
+
+#### Lima SOUL listing migration
+
+The 2 October 2026 migration adopts the exact three listing adapters over the
+logger overlay. Adverbs, emoteapropos and showemote retain their private typed
+handlers, menus, query behavior and output. Native driver and original Lima
+remain unchanged; the adopted library matches the frozen diagnostic byte for byte.
+
+All twenty cases and observations match the final audit: eighteen listing cases
+and two logger controls. Only library/fixture directory paths change in the
+harness; baseline and isolated verbs controls keep the frozen logger library.
+Compilation is 7/14, matching every audited outcome, error and location. The
+three selected commands compile, and seven existing failures remain visible.
+Six gates, exact patch reproduction, thirty-two copied source records, fourteen
+appends and 161 predecessor sets pass. Fourteen pinned Git-blob matches and six
+public comparisons remain frozen; no new fetch, upstream execution, native suite,
+historical matrix or preload survey was needed.
+
+Audit global parser inspection for verbs next. Its typed adapter control compiles
+but its scanner lists nothing from native parse_dump; query_parser_rules remains
+object-local. Verbs stays unchanged. Other SOUL consumers, clan/reporter logging,
+public wizard discovery, complete vocabulary, remote IMUD, network, login and
+cold startup remain unestablished.
 
 #### Lima file metadata
 
