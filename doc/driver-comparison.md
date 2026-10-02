@@ -4714,6 +4714,48 @@ logging omission remain intact. Ordinary targeted dispatch, other SOUL consumers
 vocabulary, logging, remote IMUD, network, login and cold startup remain
 unestablished.
 
+#### Lima SOUL rule ordering
+
+The 2 October 2026 audit follows the shorthand migration on the same pinned Lima
+revision. Active SOUL registration and restore select STR before a living target;
+reordering targetemote alone fixes a fresh name but leaves older verbs affected.
+Keep native first-success selection and adapt [SOUL][lima-speaker-soul] to rebuild
+its stored rules in priority order at create, add, remove and move.
+
+The one-file diagnostic uses the reviewed [FluffOS token weights][fl-parser-rule-weights]
+for SOUL's rule forms: starting at one, add four for LIV, three for OBJ/LVS, two
+for OBS and one for text/literal words; object `:v` subtracts one. Stable sorting
+keeps saved mapping insertion order for equal priorities. It removes duplicates
+after repeated edits, restores surviving registrations after partial removal,
+and clears/rebuilds source and destination registrations after a move. Existing
+templates and caller guards retain their behavior.
+
+Twenty-three cases and observations pass: twenty-one new cases and two unchanged
+verbs controls. Actual targetemote input and actor/target delivery, object/text/
+empty fallbacks, replacement, complex/multiword rules, ties, old/legacy/invalid
+saves, invalid edits, ownership, removal/move, guards and rollback pass. All
+3,862 stock saved rules across 31 shapes register uniquely under the unchanged
+four-second action budget. Removal/move daemon tests use fixture accessors on
+legitimate command objects; ordinary directory discovery and authorization remain
+unchecked. Two invalid-rule probe inputs were corrected from a valid literal
+to unsupported OBJ:q without changing the diagnostic or weakening assertions.
+
+Focused compilation is 16/16. Six gates, exact patch reproduction and 169 frozen
+predecessor sets pass. Native sources, original Lima and the active shorthand
+overlay remain unchanged; the SOUL patch is diagnostic. Frozen pinned source
+hashes remain intact and two public FluffOS renderings were reviewed. This is
+source review and adapted-library execution without upstream execution, a native
+suite, historical matrix or preload survey. Lima retains distinct nil and
+preserved call-out players.
+
+This is SOUL-local precedence, not general FluffOS weighted selection. Equal
+weights retain native mapping order rather than newest-registration traversal;
+rebuilding can move SOUL's entries relative to other owners in the global registry.
+Other owners' rules remain intact, and native global selection/callback effects
+are unchanged. Adopt the SOUL rebuild next, then audit ordinary rmemote/mvemote
+entry. Complete vocabulary delivery, other SOUL consumers, logging, remote IMUD,
+network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5280,6 +5322,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-colour-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/contrib/contrib.cc#L577-L1102
 [fl-parser-source]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc
 [fl-parser-selection]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2825
+[fl-parser-rule-weights]: https://raw.githubusercontent.com/fluffos/fluffos/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc
 [fl-parser-relations]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2478
 [fl-parser-handler-args]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2084
 [fl-parser-pair-limit]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L2675
