@@ -4689,6 +4689,31 @@ Adopt the two-file patch next, then audit SOUL rule ordering. Other SOUL
 consumers/vocabulary, logging, remote IMUD, network, login and cold startup remain
 unestablished.
 
+#### Lima shorthand emote migration
+
+The 2 October 2026 migration adopts the exact audited two-file patch over the
+verbs overlay. Stupidemote and targetemote now use the guarded CMD adapter and
+declared three-argument SOUL API with message arrays. Private nomask handlers,
+generated templates and registration order retain their audited behavior. The
+active shorthand-emote library matches the frozen diagnostic byte for byte;
+original Lima and native sources remain unchanged.
+
+All twenty case bodies, assertions and observations match the audit. Adopted
+cases load production command files without diagnostic overwrites; missing-adapter,
+argument and verbs controls retain frozen libraries or sources. Focused compilation
+is 6/6 with identical audited outcomes and diagnostics. Six gates and 168 frozen
+predecessor sets pass. Configuration changes only the library directory. Frozen
+source evidence is reused without new public fetches, upstream execution, a native
+suite, historical matrix or preload survey. Lima keeps distinct nil, preserved
+call-out players and four-second actions.
+
+Audit SOUL ordering at registration, restore and replacement next. STR still
+shadows OBJ/LIV for ambiguous living names under native first-success selection;
+explicit LIV composition works. Duplicate registrations and the original shorthand
+logging omission remain intact. Ordinary targeted dispatch, other SOUL consumers,
+vocabulary, logging, remote IMUD, network, login and cold startup remain
+unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
