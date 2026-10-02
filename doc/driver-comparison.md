@@ -4647,6 +4647,48 @@ wizard input. Role provisioning/revocation, restored saved-path policy, backtick
 expansion, other SOUL consumers/vocabulary, logging, remote IMUD, network, login
 and cold startup remain unestablished.
 
+#### Lima shorthand emote editors
+
+The 2 October 2026 audit uses the same pinned Lima revision and active verbs
+overlay. [Stupidemote][lima-shorthand-stupid] and
+[targetemote][lima-shorthand-target] both lack the CMD adapter. Add the existing
+protected varargs adapter and pass a one-element message array through the
+declared three-argument [SOUL API][lima-speaker-soul]. Keep their private nomask
+string handlers. Adapter-only, three-argument scalar and four-argument array
+controls already run under current dynamic calls; the API cleanup preserves
+their generated templates and registrations.
+
+Twenty cases and observations pass: eighteen new cases and two unchanged verbs
+controls with matching bodies, libraries and observations. Actual wish input
+discovers both diagnostic editors. Tests cover saved templates/reload,
+replacement and retained unrelated rules, duplicate registrations, multiword
+keys, usage/output routing, redirects/appends/pipelines, private visibility and
+caller guards, account/body/channel/log context and outer-error rollback of
+templates, parser rules, saved data, history, shell, files and deferred output.
+Stupidemote's direct usage write bypasses redirection; targetemote buffers usage.
+Shorthand edits retain their existing omission of LOG_ADDEMOTE logging.
+
+Targetemote registers STR before OBJ/LIV. Under native
+[first-success selection](efun/parse_sentence.md#result), an ambiguous living
+name therefore matches STR; explicit LIV composition works. SOUL ordering at
+registration, restore and replacement needs a separate audit before claiming
+ordinary targeted dispatch. Reordering these command calls alone would retain
+earlier registrations and saved-rule ordering.
+
+Focused compilation is 16/18: active 4/6, diagnostic 6/6, controls 6/6. The two
+active failures retain frozen missing-adapter diagnostics. Six gates, exact
+two-file patch reproduction and 167 frozen predecessor sets pass. Shared support,
+original Lima, active overlay and native sources remain unchanged; the patch is
+diagnostic. The pinned SOUL source rendering was reviewed. Command fetches failed
+and matching original/pinned local Git blobs were reviewed. This is source review
+and local adapted-library execution, without upstream execution, a native suite,
+historical matrix or preload survey. Tests keep distinct nil, preserved players
+and four-second actions.
+
+Adopt the two-file patch next, then audit SOUL rule ordering. Other SOUL
+consumers/vocabulary, logging, remote IMUD, network, login and cold startup remain
+unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5642,5 +5684,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-listing-apropos]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/emoteapropos.c
 [lima-listing-show]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showemote.c
 [lima-listing-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/verbs.c
+[lima-shorthand-stupid]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/stupidemote.c
+[lima-shorthand-target]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/targetemote.c
 
 [fl-parser-dump]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/parser/parser.cc#L3819
