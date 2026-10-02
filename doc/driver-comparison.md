@@ -4200,6 +4200,54 @@ control retains its real compile failure and rollback. Recognized souls, IMUD,
 TCP, full login/cold startup, public role administration and role behavior across
 body switching remain unchecked. Audit stock SOUL_D separately.
 
+#### Lima soul daemon
+
+Source review at Lima `eefaff66adcae9b01e16059574c925b0d63e70a1` on
+1 October 2026 identifies two independent adaptations in
+[SOUL_D][lima-speaker-soul]. Use typed `nil` for its missing array/string results,
+the observer `compose_message` object argument, and the bare array return in
+`parse_imud_soul`. Keep integer predicates numeric. This resolves twelve compile
+diagnostics without relaxing native types.
+
+Make the restore callback and six save callbacks explicit calls, for example
+`unguarded(1, (: save_object(SAVE_FILE) :))`. Their original comma-style bodies
+return their last expression (`1` or the save path) without calling the efun.
+The current [access wrapper][lima-access] evaluates those closures but performs
+no restore or save. The typed-only control compiles but restores no emotes,
+adverbs or rules and leaves the save file unchanged on mutation. Use `restore_object(SAVE_FILE)` without the legacy preserve flag;
+native restoration already preserves fields absent from the file.
+See [restore_object](efun/restore_object.md) and
+[save_object](efun/save_object.md). No native API change is needed.
+
+The diagnostic one-file patch restores 2,645 shipped emotes, 397 adverbs and
+3,862 registered rules. Actual parser selection and [message composition][lima-messages]
+cover empty, living-target, text and adverb rules, aliases and multipart messages;
+the shipped `wave` works without fixture seeding. Production local execution
+informs attached actor/target bodies. Save/reload, malformed-restore retry,
+missing-parent errors and later-error rollback are checked. Commit-time save I/O
+failure retains committed memory and logs the failure, as documented by the
+native efun; it cannot be reported back through this callback.
+
+Recognized channel emotes expose a separate receiver problem:
+[channel_rcv_soul][lima-channel-user] compares account identity with body-valued
+soul recipients. Actor and target both receive observer wording. The diagnostic
+SOUL patch leaves this as a control; repair the receiver separately. Local
+IMUD-format generation with real temporary dummies works, but remote-target
+lookup retains the `imud/auth.c:91` function-token compile blocker. Four selected
+public emote commands retain their CMD `dispatch_main` host dependency.
+Wizard add/remove/move command entry, remote transport, the complete shipped
+vocabulary, TCP, full login and cold startup remain unestablished.
+
+The audit verifies 50 cases/observations: 24 SOUL cases, including four controls,
+and 26 frozen permission cases with identical assertions and observations.
+Selected compilation is 8/14 → 9/14; all other diagnostics match across baseline,
+typed-only and diagnostic libraries. Six quality gates, exact patch reproduction
+and 152 predecessor sets are verified. Nine pinned public byte comparisons
+support source review; no upstream driver was executed. Historical matrices,
+native suites and preload surveys were not rerun. The active overlay remains
+`speaker-permission/adapted-lib`; adopt the nineteen-line SOUL adaptation before
+addressing receiver identity.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
