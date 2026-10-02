@@ -4922,6 +4922,59 @@ preview limit. Complete menu interaction, complete vocabulary delivery, other SO
 consumers, tell recipient typing, logging, remote IMUD, network, login and cold
 startup remain unestablished.
 
+#### Lima random emote commands
+
+The 2 October 2026 audit follows the semote migration on Lima
+`eefaff66adcae9b01e16059574c925b0d63e70a1`. Both [random][lima-random-emote]
+and [random2][lima-random-generator] lack the protected CMD dispatch adapter.
+Random selects an existing emote with an exact empty or LIV rule, then executes
+it through the body's normal game-command parser. Names are trimmed and
+lowercased; an unknown name retains the existing untargeted fallback.
+
+Adding only the adapter lets random work with eligible data, but an empty pool
+errors in choice and a nonempty pool with no matching rule exhausts the four-second
+evaluation budget. The one-file diagnostic filters eligible names once, refuses
+an empty result with `No suitable emotes.`, and makes one choice. This retains
+equal weights among eligible names under the existing uniform-choice contract;
+that is source reasoning, not a statistical distribution test. The list is scanned
+once per invocation; full-stock performance and delivery remain unestablished.
+
+Twenty-one new cases and two unchanged verbs controls pass. Coverage includes
+ordinary/targeted/self-target delivery, name normalization and fallback, eligible
+membership, a 65-entry sparse pool, empty/nonmatching pools, restore, visibility,
+CMD/shell-owner guards and rollback. Real emote delivery goes directly to actor,
+target and onlookers; it is not CMD pipeline output. Refusal status follows CMD
+redirects/appends and pipelines. Failed outer transactions preserve deliveries,
+shell/history, SOUL templates/save/registrations and channel state. Empty string
+templates remain truthy and retain their existing blank delivery. Global name
+lookup can find a remote body, but the game parser uses local scope; remote-target
+execution was not tested.
+
+Random2 is an experimental text generator, not another selector. After adding
+only its adapter, compilation reports a mapping declared as a string and three
+zero-to-string assignments. A separate type-only control changes the mapping/value
+annotations and nullable string initializers, then exposes unknown `get_config`.
+These controls are compile probes, not a working port. Training, weighted
+generation, readiness, batching, sentinels, termination, target/adverb availability
+and mapping-limit policy need a dedicated audit; no native API is added here.
+
+Focused compilation has ten successes from fifteen probes, including staged
+controls; all nonzero outcomes remain recorded. Shared dependency outcomes are
+unchanged. Six quality gates, exact patch reproduction and 175 predecessor
+artifact/report sets pass. Unsuccessful fixture runs are preserved. Shared support
+changes only library selectors; temporary SOUL data is seeded through an appended
+fixture helper, with no command accessors added.
+
+Pinned local Git blobs match the reviewed originals. New random-command public
+fetches failed, and frozen SOUL evidence is reused. This is source review and
+adapted-library execution, without upstream execution, a native suite, historical
+matrix or preload survey. Distinct nil, preserved call-out players and four-second
+actions remain the target. Original Lima, native sources and active overlay are
+unchanged; the selector patch remains diagnostic. Adopt it next, then audit
+random2's training and mapping-limit policy. Complete menu interaction, complete
+vocabulary delivery, other SOUL consumers, tell recipient typing, logging, remote
+IMUD, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -5925,3 +5978,6 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-semote-preview]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/semote.c
 [lima-semote-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/plmenu.c
+
+[lima-random-emote]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/random.c
+[lima-random-generator]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/random2.c
