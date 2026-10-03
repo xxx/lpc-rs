@@ -5151,6 +5151,57 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima pager and text editor port
+
+The 3 October 2026 port changes only [the pager][lima-pager] and
+[text editor][lima-text-editor] over the news reader port. It adopts bare
+input/prompt/completion callbacks, explicit nil for typed empty state and
+[`regmatch`](efun/regmatch.md) for scalar regex searches. Both tools now run
+through Lima's existing modal input system.
+[Function values](lpc/function_type.md).
+
+Explicit file-edit abort preserves the original file and passes nil to the
+continuation. Successful file saves remove the old file and write the buffer;
+empty buffers save empty content rather than a display placeholder. File
+loading removes only the terminal delimiter element retained by native
+[`explode`](efun/explode.md), preserving real blank lines. LF-terminated files
+save unchanged; a final unterminated line retains the editor's existing
+normalization to a linefeed. Empty pager files take the empty-content branch
+and finish normally.
+
+Completion clears the editor's owned flag and removes the modal handler before
+calling the continuation. Both tools catch callback errors, destroy themselves
+and propagate the original error, preserving a live tool caller and the player
+context during the callback. A continuation can start another editor without
+losing its new handler or flag. Initial pager read errors also remove its
+handler and destroy the pager before propagating, including when the caller
+catches the error. Initial inline completion must not pop the shell a second
+time if its continuation fails.
+
+Input-stack teardown has already removed each handler before passing `-1`.
+The editor clears only the flag it owns, destroys itself and returns, without
+popping another handler or calling its continuation. Pager teardown retains
+its silent destruction behavior. This validates actual stack clearing, not
+network disconnect.
+
+Twenty-one cases pass: ten unchanged audit observations, five repaired
+regression cases and six additional file/lifecycle cases. Real shell/news
+posting, long reading, followups and aborts run through the tools. Tests also
+check six file-content forms, caught errors, callback context, chained editing,
+flag ownership, observer isolation and uncaught-entry rollback. Six focused
+compiles pass both adapted tools and the complete user/reader, retaining the
+preceding pager compile refusal and editor compile success as controls.
+Four gates, exact two-file patch replay and preservation checks pass for
+original/native sources, the previous overlay and 194 predecessor artifact/
+report sets. The active configuration changes only the library path.
+
+Distinct nil, preserved call-out players and four-second actions remain the
+target. Pinned source review is reused without upstream execution or a new
+fetch; no native API or broad compile survey is added. Line-editor integration,
+wizard file escapes, simultaneous nested editing, large files, mail, other
+continuation consumers, save-write failures, actual disconnect and broad
+startup remain unestablished.
+
 #### Lima pager and text editor audit
 
 The 3 October 2026 audit reviews pinned [pager][lima-pager],
