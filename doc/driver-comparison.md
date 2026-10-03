@@ -5151,6 +5151,43 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima who filtering and inactive users
+
+The 2 October 2026 [who][lima-who-command] audit follows native elapsed uptime
+support on the unchanged settings overlay. A separate diagnostic changes only
+`cmds/player/who.c`: the previously reviewed command adapter, explicit nil
+arguments and duration-helper selector, plus `filter(u, objectp)` before counting
+and rendering bodies. The original `u -= ({0})` retains nil returned by bodyless
+user objects, including the loaded user prototype. Its wizard-only `-m` view
+then fails with a string-plus-nil error. The body filter removes those entries
+while retaining disconnected users that still have bodies.
+
+Nine runtime cases cover real shell and menu rendering, player aliases,
+wizard/admin roles, visibility, native connection detach followed by Lima's
+`net_dead`, bodyless users, empty results, repeated frame initialization,
+state/account/output isolation and uncaught-error rollback of command loading
+and output. Ordinary users see visible connected bodies; wizards and admins
+include invisible ones. Ordinary `-m` falls back to the normal view. The pinned
+source's `-i` uses the same wizard filter as `-w`; its implementor label does
+not restrict it to admins. Unknown flags render the normal table, with the
+computed warning unused.
+
+Two existing mudlib limitations remain explicit. The frame renderer omits
+columns that do not fit: a long name can remove the Name column at width eighty,
+while width 120 restores it in these fixtures. Calling `get_who_string` without
+a player fails in `frame_init_user` despite the later no-user visibility branch.
+These are separate from the distinct-nil body filter. Plain mode, ASCII frames,
+the default human level and empty wizard positions are the checked settings;
+other client styles, level systems, positions and network lifecycle remain
+unchecked.
+
+The one-file diagnostic is ready for adoption independently of news. Three
+focused compiles retain the active who's missing-adapter control and pass the
+diagnostic who and complete active user. Four quality gates and exact patch
+checks pass. Native/original/active sources and 188 predecessor artifact/report
+sets remain unchanged. All new Lima actions retain distinct nil, preserved
+call-out players and the four-second allowance; no upstream driver was run.
+
 #### Lima elapsed uptime support
 
 The native addition after the 2 October 2026 command audit supplies
@@ -5168,8 +5205,9 @@ With the native clock, the frozen who diagnostic compiles and renders through
 real shell and menu input. Three Lima cases cover the unchanged active command's
 missing-adapter control, two-player listings and player-only aliases, repeated
 rendering, subhour footer text, account/channel isolation and menu/shell recovery.
-The active overlay is unchanged; role/visibility/linkdead/bodyless cases and
-adoption remain the next who work. News still needs its reader/daemon port.
+The active overlay is unchanged; the filtering audit above completes the
+role/visibility/linkdead/bodyless checks and stages a separate who adoption.
+News still needs its reader/daemon port.
 
 #### Lima news and who command entries
 
