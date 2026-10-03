@@ -5120,6 +5120,37 @@ linkdead/inactive/bodyless recipients, missing sender body, offline/NPC targets,
 history persistence, long pager interaction, complete vocabulary delivery, other
 SOUL consumers, logging, network, login and cold startup remain unestablished.
 
+#### Lima tell and reply migration
+
+The 2 October 2026 migration adopts the exact audited two-file tell/reply patch
+over the random-emote overlay on the same pinned Lima revision. Only
+`cmds/player/tell.c` and `cmds/player/reply.c` change; the entire adopted library
+matches the frozen diagnostic byte for byte. Protected CMD adapters allow ordinary
+discovery to load both commands. SOUL target lookup uses the destination body,
+and self-send suppression compares accounts. Targets receive their own perspective;
+self-tells deliver and record once while preserving the previous reply target.
+
+All twenty-two case bodies, assertions and normalized observations match the
+audit. Sixteen cases use the adopted overlay; four retain frozen previous-library
+controls, and two retain historical verbs sources/libraries. Six fixture/control
+files are copied unchanged, and support changes only the adopted directory.
+Private delivery, emote fallback, reply guards, literal no-redirection suffixes,
+bounded history, refusal paths, foreign shell context and rollback retain their
+audited behavior.
+
+All six focused compiles pass with identical audited diagnostics: SOUL, wish,
+secure/user, CMD_D, tell and reply. Six gates and exact adoption pass. Frozen
+evidence is reused without new fetches or upstream execution; no native suite,
+historical matrix or preload survey was rerun. Distinct nil, preserved call-out
+players and four-second actions remain the target. Original Lima, native sources,
+previous overlays and 179 predecessor artifact/report sets remain unchanged.
+
+Audit complete plmenu interaction and its known distinct-nil string-argument
+blocker next. Remote IMUD runtime, linkdead/inactive/bodyless recipients, missing
+sender body, offline/NPC targets, history persistence, long pager interaction,
+complete vocabulary delivery, other SOUL consumers, logging, network, login and
+cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
