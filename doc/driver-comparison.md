@@ -5151,6 +5151,30 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima who command migration
+
+The 2 October 2026 migration adopts the one-file [who][lima-who-command] patch
+audited below. Protected dispatch, explicit nil arguments, the duration-helper
+selector and actual body filtering now run in the active overlay. Disconnected
+bodies remain in the wizard/admin inactive view; prototype and bodyless nil
+entries are excluded. News is unchanged and still needs its reader/daemon port.
+
+All nine runtime cases and normalized observations match the audit, with
+unchanged assertions. The entire adopted library matches the frozen diagnostic
+byte for byte. Three fixture/control files are copied unchanged; shared support
+changes only the library selector, and the probes change two captured-output
+destinations and their line wrapping. Role/visibility filtering, menu recovery,
+frame-width and no-player limitations, the legacy nil failure control and
+uncaught-error rollback retain their audited behavior.
+
+Adopted who and complete user compile with the audited diagnostics. Four quality
+gates and exact adoption checks pass. Configuration changes only the library
+directory: distinct nil, preserved call-out players and four-second actions
+remain the target. Native source, original Lima, previous overlays and 189
+predecessor artifact/report sets remain unchanged. Frozen public source evidence
+is reused without new fetches or upstream execution; no native suite or broad
+compile survey is rerun. News reader/daemon and saved-news migration are next.
+
 #### Lima who filtering and inactive users
 
 The 2 October 2026 [who][lima-who-command] audit follows native elapsed uptime
@@ -5181,9 +5205,10 @@ the default human level and empty wizard positions are the checked settings;
 other client styles, level systems, positions and network lifecycle remain
 unchecked.
 
-The one-file diagnostic is ready for adoption independently of news. Three
-focused compiles retain the active who's missing-adapter control and pass the
-diagnostic who and complete active user. Four quality gates and exact patch
+The one-file diagnostic was ready for adoption independently of news; the
+migration above adopts it. Three focused compiles retain the active who's
+missing-adapter control and pass the diagnostic who and complete active user.
+Four quality gates and exact patch
 checks pass. Native/original/active sources and 188 predecessor artifact/report
 sets remain unchanged. All new Lima actions retain distinct nil, preserved
 call-out players and the four-second allowance; no upstream driver was run.
@@ -5205,9 +5230,9 @@ With the native clock, the frozen who diagnostic compiles and renders through
 real shell and menu input. Three Lima cases cover the unchanged active command's
 missing-adapter control, two-player listings and player-only aliases, repeated
 rendering, subhour footer text, account/channel isolation and menu/shell recovery.
-The active overlay is unchanged; the filtering audit above completes the
-role/visibility/linkdead/bodyless checks and stages a separate who adoption.
-News still needs its reader/daemon port.
+At the native-clock baseline the active overlay was unchanged. The audit and
+migration above complete the role/visibility/linkdead/bodyless checks and adopt
+the who-only patch. News still needs its reader/daemon port.
 
 #### Lima news and who command entries
 
