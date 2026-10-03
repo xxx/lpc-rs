@@ -5153,6 +5153,40 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima LPC indentation
+
+The 3 October 2026 port implements whole-buffer `I` in inherited `M_ED`;
+`set shiftwidth 1..15` now controls real indentation. Blocks and unbraced control
+bodies use that many spaces, continuations use half with a minimum of one, and
+switch labels align with the switch block. A structural lexer/parser handles
+LPC array/mapping/closure delimiters, native closure statements, nested if/else,
+loops, classes and catch blocks. It preserves token spelling and physical lines
+without compiling or expanding macros. No native editor API is added.
+
+Only leading whitespace changes; ordinary blank lines become empty. Multiline
+literal/comment continuation lines, directives and their continuations, and
+legacy text-block payload/terminators are retained exactly. The latter is editor
+preservation, not added compiler syntax. Malformed or unfinished input, ambiguous
+conditional delimiter branches, excessive parser nesting and growth beyond the
+existing line/buffer caps are refused before publishing text. Cursor and marks
+survive; dirty changes only when indentation changes. Input autoindent remains
+unavailable, and no byte-for-byte match to upstream formatting is claimed.
+
+Ninety-six actual-module cases pass, including 30 new cases and 1000-line
+formatting under 4000 ms; five formatted native examples compile. Six real Lima
+fallback regressions and Clippy/formatting/preservation gates pass, with 202
+predecessor evidence sets intact. Full frontend/account/codesay integration is
+unestablished. The module compiles while exact session/CMD blockers remain.
+Consumers still use the fallback. The next work is frontend callback/type/
+restriction/cleanup and wizard-lock repair, followed by consumer activation.
+
+The pinned [editor][fluffos-object-editor] and [codesay][lima-ed-codesay] sources
+were reviewed on this date using the previously recorded modern editor build
+settings. Upstream traversal mutates lines as it proceeds; the port validates a
+replacement buffer before publication. Source review is not upstream execution.
+Codesay's existing unqualified splitting of braces/semicolons can alter quoted
+contents; the consumer still needs that separate repair.
+
 #### Lima editor options and help
 
 The 3 October 2026 port extends inherited `M_ED` with `set`, output options,
