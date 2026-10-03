@@ -5151,6 +5151,51 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima news reader, daemon and saved data
+
+The 2 October 2026 audit reviews the pinned [reader][lima-news-reader],
+[daemon][lima-news-daemon] and [user news state][lima-newsdata] on the unchanged
+who overlay. A separate three-file compile diagnostic adds protected news
+dispatch, native serialization names, explicit nil, class-member dots and
+strict callback/type adaptations. It preserves the reader's unread-removal
+logic and the legacy named function literals so their runtime failures remain
+visible. The diagnostic is not adopted.
+
+Compilation alone is insufficient. Cold startup raises an error for a missing
+`recent` file: native [`read_file`](efun/read_file.md) does not return false for
+that case. With a test-only constructor control, real posts exist in memory but
+the legacy save callbacks write neither snapshot nor journal. Native
+`(: name, argument :)` is a comma-expression closure, not a bound call;
+use `&name(argument)` for `unguarded` callbacks and
+bare names when no arguments are bound. [Function values](lpc/function_type.md).
+
+The same literal mismatch makes the subscription predicate select unsubscribed
+groups and leaves the real reader's Yes/Quit callbacks ineffective. Its unread
+cache removes the active unread article, and legacy integer-highwater conversion
+reassigns a loop variable without updating the stored mapping. These are
+demonstrated lpc-rs source-port failures, not cross-driver execution results.
+
+Saved data needs its own conversion boundary. This Lima tree contains no news
+database. Source-reviewed FluffOS saves use a `#/` header, positional class
+records and raw carriage returns for saved linefeeds. Reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0`, with the core save/restore facilities,
+on 2 October 2026; public fetch attempts failed, and pinned local Git blobs were
+reviewed without upstream execution. [Save implementation][fl-news-save-source].
+Synthetic header/class samples are rejected without rewriting their files.
+Native news-class values round-trip with newlines. Explicit nil is a valid body,
+while zero remains zero and fails the declared string-field check. Merely renaming
+the serializer does not convert those formats. [Native save format](save-format.md).
+
+Nine runtime cases, ten focused compiles, four quality gates and exact diagnostic
+reproduction preserve the original, active and native sources and 190 predecessor
+artifact/report sets. Five cases use an explicit constructor control to reach
+the runtime failures; it is not part of the diagnostic. All actions retain
+distinct nil, preserved call-out players and four seconds. No native API or
+overview contract changes. Port daemon startup and fresh native persistence
+first, then reader callbacks and read-state logic. Existing-installation data
+conversion requires a separate schema-aware tool; real database migration,
+daemon restart/journal replay and a functioning complete reader remain untested.
+
 #### Lima who command migration
 
 The 2 October 2026 migration adopts the one-file [who][lima-who-command] patch
@@ -6515,6 +6560,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-who-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/who.c
 [lima-news-reader]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/newsreader.c
 [lima-news-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/news_d.c
+[fl-news-save-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/object.cc
 [fl-uptime-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L274
 [fl-uptime-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L2924-L2926
 [fl-uptime-reference]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/system/uptime.md
