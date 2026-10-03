@@ -5151,6 +5151,65 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima line-editor session and handoff audit
+
+The 3 October 2026 audit reviews [ED_SESSION][lima-ed-session] and the
+[text editor's][lima-text-editor] `~e` handoff over the pager/editor port.
+The active session fails compilation: `ed_start`, `ed_cmd` and `query_ed_mode`
+are absent, and `query_ed_setup()` declares void while returning a value.
+The text editor itself still compiles. A real line-editor backend remains
+unsupported.
+
+Entering `~e` stages the draft before loading the session. The input dispatcher
+catches the load failure, preserving the draft and text editor handler, but
+leaves the temporary file. Retrying appends another copy of the draft.
+Aborting or completing text entry leaves that temporary file behind. A real
+news post can still finish in text mode after the failed handoff. If the error
+escapes the task instead of being caught, temporary staging, output and state
+roll back; account bytes and a second user's state remain unchanged.
+
+Two separate wrapper controls provide a test-only command recorder and an
+integer setup getter. One retains legacy callbacks; the other changes input
+and prompt callbacks to bare function values. The recorder supplies selected
+mode/exit/error responses; it does not parse editor commands or edit files.
+Its results establish wrapper behavior, not line-editor compatibility.
+
+Legacy callbacks do not dispatch quit and return a function as the prompt.
+Bare callbacks establish controlled completion, setup forwarding and prompt
+selection. The restriction wrapper prints "Operation not allowed" for seven
+leading command letters but then forwards the commands to the backend.
+Whitespace and address prefixes also bypass that warning. This establishes
+forwarding defects; no actual unauthorized file operation is executed.
+Standalone input teardown destroys the session while leaving its owned
+editing flag set. Startup errors leave its object, handler and flag live;
+continuation errors pop input and clear the flag but leave the session alive.
+
+A controlled `~e` return imports an externally simulated file result, removes
+the temporary file and restores the parent text editor's handler/flag before
+normal completion. This exercises actual handoff callbacks and native files
+without claiming that the diagnostic backend performs editing.
+
+Thirteen cases pass: four active-library cases and nine wrapper controls.
+Seven focused compiles preserve all seven active session errors and pass the
+text editor, both controlled sessions and complete diagnostic user. Preliminary
+controls also retain the setup return-type failure before its diagnostic fix.
+Four gates and exact diagnostic replay preserve original/native sources,
+the active overlay/configuration and 195 predecessor artifact/report sets.
+Distinct nil, preserved call-out players and four-second actions remain the
+target; no native suite, broad compile survey or upstream driver is run.
+
+The recommended next patch repairs failed-handoff staging, cleanup and fallback
+feedback while keeping text entry usable. A real backend and session repairs
+need separate scope: bare callbacks, integer setup getter, command restrictions,
+owned-flag cleanup and destruction after startup/completion failures. The
+[wizard ed command][lima-ed-command] also uses session completion to unlock
+files. Pinned source review finds direct editor API consumers in
+[codesay][lima-ed-codesay], [find][lima-ed-find], [grep][lima-ed-grep],
+[locate][lima-ed-locate] and [replace][lima-ed-replace]; their adaptation and
+lock lifecycle remain separate.
+Real editing commands, file permissions, save failures and network disconnect
+remain unestablished. The test backend is not an adopted compatibility shim.
+
 #### Lima pager and text editor port
 
 The 3 October 2026 port changes only [the pager][lima-pager] and
@@ -6774,3 +6833,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-text-editor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/edit_ob.c
 [lima-more-helpers]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/more.c
 [lima-user-switch]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/sw_user.c
+[lima-ed-session]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/ed_session.c
+[lima-ed-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/ed.c
+[lima-ed-codesay]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/codesay.c
+[lima-ed-find]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/find.c
+[lima-ed-grep]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/grep.c
+[lima-ed-locate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/locate.c
+[lima-ed-replace]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/replace.c
