@@ -9,7 +9,12 @@ Elements that are not strings are ignored. `flag` is a bit set:
 - Bit 1 (`1`): put each string's one-based index in `strings` before it, so
   the result is `({ index1, match1, index2, match2, ... })`.
 
-The pattern is compiled once per call. An invalid pattern is an error.
+An invalid pattern raises a runtime error, including when `strings` is empty.
+Patterns compile on first use and share the VM's bounded cache with
+[regmatch](regmatch.md). The cache retains up to 64 pattern/compilation-option
+pairs, evicting the least recently used entry when full. `flag` affects the
+result only, so all its values reuse the same compiled pattern. Invalid
+patterns are not cached; evicted patterns compile again on their next use.
 
 ### Dialect
 

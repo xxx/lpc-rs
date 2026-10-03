@@ -15,9 +15,9 @@ use crate::command::{
     grammar::{
         Element, Grammar, GrammarBuilder, GrammarError, Label, Limits, Parse, lit, nt, parse, tok,
     },
-    memo::Memo,
     resolve::Kind,
 };
+use crate::util::memo::Memo;
 
 pub(crate) use matcher::arguments;
 

@@ -11,8 +11,8 @@ use ustr::Ustr;
 use crate::command::{
     frontend::native::{self, CaptureKind, Compiled, Group},
     grammar::GrammarError,
-    memo::Memo,
 };
+use crate::util::memo::Memo;
 
 /// Why a rule does not compile; the text reaches the LPC caller.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -26,6 +26,7 @@ mod initiate_login;
 mod object_initializers;
 mod preload;
 mod prioritize_call_out;
+pub(crate) mod regex_cache;
 
 pub mod binding;
 pub mod global_state;

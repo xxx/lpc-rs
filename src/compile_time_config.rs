@@ -42,3 +42,6 @@ pub const MAX_NESTING_DEPTH: usize = 256;
 /// costliest AST walk — together still three times over.
 /// Tests take the same through `RUST_MIN_STACK` in `.cargo/config.toml`.
 pub const THREAD_STACK: usize = 16 * 1024 * 1024;
+
+/// Compiled pattern and option pairs retained per VM, evicting least recent uses.
+pub(crate) const REGEX_CACHE_CAPACITY: usize = 64;

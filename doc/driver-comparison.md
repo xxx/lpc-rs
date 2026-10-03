@@ -569,7 +569,7 @@ save import still require further driver support. See [class support](lpc/classe
 |---|---|---|
 | Random selection helpers | `random(n)` selects an index below a positive bound and returns zero for a zero bound. Empty array indexing errors; string indexing at the final boundary returns integer zero. String positions are graphemes: the reviewed index helper can return only the first codepoint of a short multi-scalar cluster, while longer clusters can error. [Random][fl-random], [length][fl-grapheme-length], [indexing][fl-string-read], [UTF-8 helper][fl-string-read-scalar]. | Lima's `choice` can remain an LPC helper using predicates, [`random`](efun/random.md), [`keys`](efun/keys.md) and [indexing](lpc/indexing.md). Return array elements or mapping values with their existing identities; select mappings by entry, including repeated equal values. String input returns an integer Unicode scalar, with combining marks and joiners occupying separate positions. Preserve zero for an empty string and errors for empty arrays/maps. Guard legitimately empty lists before selecting: testing the result afterward cannot handle an indexing error. Recheck lists after actions that may change them, such as sweep's first hit. |
 | Array shuffling | `shuffle` reorders its argument in place, returns that same array, and leaves arrays shorter than two elements unchanged. Aliases observe the new order; element references are preserved. Requires `PACKAGE_CONTRIB`. [Reference][fl-shuffle], [implementation][fl-shuffle-source]. | There is no native `shuffle`; an LPC Fisher–Yates helper can use [`random`](efun/random.md) and array element assignments while preserving identity and aliases. A weighted selector such as Lima's `element_of_weighted` can omit its shuffle: for nonnegative integer weights with a positive, nonoverflowing total, each key still receives probability `weight / total`. A two-pass helper can total the weights and select with one draw, preserving the distribution while changing random-number consumption. Validate weights and overflow explicitly; choose the configured null result for empty/all-zero input. Native `random` rejects negative bounds, whereas the reviewed FluffOS entry point returns zero. [Source][fl-random]. |
-| Regex association | `reg_assoc` returns parallel arrays of alternating gaps/matches and their labels. Earliest matches win, with pattern order breaking ties. Each search uses the remaining suffix; the default gap label is integer zero. `pcre_assoc` uses PCRE. [Reference][fl-reg-assoc], [core source][fl-reg-assoc-source], [PCRE source][fl-pcre-assoc]. | A mudlib simul can build the association arrays with [`regmatch`](efun/regmatch.md) and `RE_MATCH_SUBS`; there is no native association efun. Preserve empty gaps and advance empty matches by a Unicode scalar without dropping intervening text. Use an explicit `0` default label when callers require numeric zero. Searching a suffix retains the legacy anchor context; an offset into the original text preserves its anchors instead. Review patterns for the [native regex dialect](efun/regexp.md#dialect), scalar indexing and embedded NUL support. This does not supply full PCRE compatibility. Repeated `regmatch` calls recompile their patterns, so measure frequent calls or inputs with many matches. |
+| Regex association | `reg_assoc` returns parallel arrays of alternating gaps/matches and their labels. Earliest matches win, with pattern order breaking ties. Each search uses the remaining suffix; the default gap label is integer zero. `pcre_assoc` uses PCRE. [Reference][fl-reg-assoc], [core source][fl-reg-assoc-source], [PCRE source][fl-pcre-assoc]. | A mudlib simul can build the association arrays with [`regmatch`](efun/regmatch.md) and `RE_MATCH_SUBS`; there is no native association efun. Preserve empty gaps and advance empty matches by a Unicode scalar without dropping intervening text. Use an explicit `0` default label when callers require numeric zero. Searching a suffix retains the legacy anchor context; an offset into the original text preserves its anchors instead. Review patterns for the [native regex dialect](efun/regexp.md#dialect), scalar indexing and embedded NUL support. This does not supply full PCRE compatibility. The existing regex efuns share a bounded compiled-pattern cache per VM; frequent calls reuse resident patterns with the same compilation options. |
 | Array and mapping predicates | `pointerp` tests arrays; `arrayp` is an alias. `mapp` tests mappings. Each returns integer `1` for its type and `0` otherwise. [Declarations][fl-core-spec], [implementations][fl-type-predicates]. | Use [`arrayp`](efun/arrayp.md) and [`mappingp`](efun/mappingp.md). Rename `pointerp` and `mapp` calls or provide simul wrappers. These predicates test container type, independently of whether the container is empty. |
 | Type inspection | `typeof` returns a string such as `"int"` or `"float"`; its `T_*` constants name those strings. [Reference][fl-typeof], [implementation][fl-typeof-source]. | [`typeof`](efun/typeof.md) returns an integer type tag. Replace simple checks with predicates such as [`intp`](efun/intp.md) and [`floatp`](efun/floatp.md), or define mudlib constants for the native tags when retaining a switch. String-valued foreign constants will not match. For a numeric variadic helper such as Lima's `sum`, validate each argument before adding it; numeric strings and nested arrays remain invalid. Call `sum(values...)` to spread an array, or use Lima's `array_sum(values)` wrapper. Preserve integer accumulation and the switch to floating arithmetic when a float is encountered; nil acts as zero only in zero mode. |
 | Character input | `get_char` delivers one UTF-8 character or control byte, then returns to line mode unless rearmed. Its reference specifies first-registration-wins and extra arguments after the input. [Reference][fl-get-char]. | [`get_char`](efun/get_char.md) shares transactional registration with `input_to`; the last registration wins across both APIs. Its second argument is boolean no-echo; use ordinary pointer binding for extra arguments, which precede the character. Classic SGA negotiation is supported; RFC LINEMODE is refused. Unread input is preserved across mode changes. Audit repeated registrations, callback argument order, and flag use. |
@@ -5151,6 +5151,69 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima compiled regex reuse
+
+The 2 October 2026 native change adds runtime compilation reuse to
+[`regmatch`](efun/regmatch.md) and [`regexp`](efun/regexp.md). Each VM retains
+up to 64 pattern/compilation-option pairs, evicting the least recently used
+entry. Capture/anchor flags, start offsets and filtering/index flags keep their
+existing meaning; only compilation options distinguish cached entries. Invalid patterns
+remain runtime errors. Compilation runs outside the cache lock, and concurrent
+misses use the first resident success. The shared command cache helper now lives
+under `util`, with command-cache behavior unchanged.
+
+On the unchanged Lima settings overlay, complete `frames themes` actions now
+finish in **950–960 ms in debug** and **91–94 ms optimized**, under the same
+4000 ms allowance. The optimized audit baseline was 945–1114 ms; debug reached
+the limit on all three attempts. All six new outputs match the frozen 1676-byte
+table exactly, with eleven themes, unchanged state/account bytes and a usable
+shell. This fixture uses plain mode, ASCII frames and width eighty. Separate
+ASCII/Unicode probes retain generation samples and conversion/wrapping byte
+counts for plain, ANSI and XTerm modes. No Lima source patch or configuration
+change is needed.
+
+Ten new native tests cover reuse, all compilation options, eviction, invalid
+patterns, concurrent callers, efun flag separation, validation precedence and
+configured nil/capture/offset results. The full workspace suite passes 4840 tests
+with two ignored. All twenty-six settings cases pass; the active copy replaces
+its former theme-timeout expectation with successful rendering. The other
+case bodies and frozen harnesses are unchanged. The optimized profile records
+zero regex-compilation frames among 194 CPU samples, compared with 86.19% in
+the earlier audit; the shorter sample is evidence of removed compilation cost,
+not a timing guarantee for other hosts or complete-table client combinations.
+
+Remaining information/reporting/remote command entries and broader Lima
+startup/network paths remain open. Previous artifacts, active/original sources,
+distinct nil and preserved call-out players remain the port's reference.
+
+#### Lima frame-theme listing cost
+
+The 2 October 2026 cost audit follows settings adoption on the same pinned Lima.
+The full theme table uses the real [frame module][lima-frame] and
+[colour/wrapping daemon][lima-xterm]. Three debug actions reach the unchanged
+four-second limit and retain rollback/recovery. Three final optimized actions
+complete in 0.94–1.11 seconds with all eleven themes and identical output, using
+the fixture's plain terminal, ASCII frames and width eighty. The timeout is
+build-sensitive; this is not a performance guarantee for other hosts or clients.
+
+The optimized CPU profile attributes 86.19% of samples to regex compilation.
+Gradients emit tokens per frame character; wrapping strips them for visible
+widths and final conversion scans them again. At the audited revision, the
+association simul called
+[`regmatch`](efun/regmatch.md) for every match, recompiling the same patterns.
+Separate ASCII/Unicode stage probes and an isolated reuse measurement preserve
+identical text pieces; the latter excludes LPC/STM and cache lookup costs.
+
+The debug reproduction and two optimized cases pass, with six quality gates and
+184 predecessor artifact/report sets verified. An initial Unicode stage fixture
+used ASCII match glyphs; its failure is preserved and the fixture corrected.
+Native/original/active sources and the 4000 ms budget stay unchanged. No cache,
+new regex API, mudlib patch, upstream execution or public fetch is introduced.
+
+This audit led to the compiled regex reuse described above, preserving flags,
+validation/errors, Unicode/nil/capture results and suffix-anchor behavior.
+Remaining information/reporting/remote entries follow afterward.
+
 #### Lima player-menu settings migration
 
 The 2 October 2026 migration adopts the exact eleven-file settings patch over
@@ -5169,11 +5232,10 @@ are unchanged; shared support changes only the adopted directory. All thirteen
 focused compiles pass with identical diagnostics. Six gates, exact adoption and
 183 predecessor artifact/report sets pass.
 
-Complete `frames themes` rendering still exceeds the four-second evaluation
-limit in the LPC regex/colour-wrapping path. Its explicit timeout case remains
-unchanged, including rollback and shell recovery; style listing and theme
-catalogue/selection are checked separately. Investigate this cost before the
-remaining information/reporting/remote command entries.
+At the settings-migration revision, complete `frames themes` rendering exceeded
+the four-second evaluation limit in the LPC regex/colour-wrapping path. The
+frozen timeout case retains rollback and shell recovery; the subsequent native
+cache change above replaces that expectation in the active regression harness.
 
 Configuration changes only the library directory. Distinct nil, preserved
 call-out players and four-second actions remain the target. Original Lima,

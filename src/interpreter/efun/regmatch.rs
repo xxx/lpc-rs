@@ -1,7 +1,7 @@
 //! The first regex match, optionally with captures and a continuation index.
 
+use crate::interpreter::vm::regex_cache::RegexOptions;
 use lpc_rs_errors::Result;
-use regex::RegexBuilder;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
@@ -56,13 +56,20 @@ pub fn regmatch<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
                 text.chars().count()
             ))
         })?;
-    let re = RegexBuilder::new(pattern)
-        .case_insensitive(flags & RE_CASELESS != 0)
-        .multi_line(flags & RE_MULTILINE != 0)
-        .dot_matches_new_line(flags & RE_DOTALL != 0)
-        .ignore_whitespace(flags & RE_EXTENDED != 0)
-        .swap_greed(flags & RE_UNGREEDY != 0)
-        .build()
+    let re = context
+        .task_context()
+        .global_state
+        .regex_cache
+        .get(
+            pattern,
+            RegexOptions {
+                case_insensitive: flags & RE_CASELESS != 0,
+                multi_line: flags & RE_MULTILINE != 0,
+                dot_matches_new_line: flags & RE_DOTALL != 0,
+                ignore_whitespace: flags & RE_EXTENDED != 0,
+                swap_greed: flags & RE_UNGREEDY != 0,
+            },
+        )
         .map_err(|e| {
             context.runtime_error(format!("regmatch: invalid pattern {pattern:?}: {e}"))
         })?;
@@ -95,6 +102,8 @@ pub fn regmatch<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_utils::config::ConfigBuilder;
+
     use crate::{
         interpreter::lpc_ref::LpcRef,
         test_support::{run_prog, try_run_prog},
@@ -322,5 +331,97 @@ mod tests {
                 .result(),
             Some(LpcRef::from("cd"))
         );
+    }
+
+    #[tokio::test]
+    async fn repeated_calls_keep_compilation_flags_isolated() {
+        let task = run_prog(&format!(
+            r#"{HEADER}
+            mixed *create() {{
+                return ({{
+                    regmatch("A", "a", RE_CASELESS),
+                    regmatch("A", "a"),
+                    regmatch("aaa", "a+"),
+                    regmatch("aaa", "a+", RE_UNGREEDY),
+                    regmatch("aaa", "a+"),
+                    regmatch("A", "a", RE_CASELESS)
+                }});
+            }}
+        "#
+        ))
+        .await;
+        let result = task
+            .result()
+            .unwrap()
+            .with_array(task.context.txn(), |a| {
+                a.iter().cloned().collect::<Vec<_>>()
+            })
+            .unwrap();
+        assert_eq!(
+            result,
+            vec![
+                LpcRef::from("A"),
+                0.into(),
+                "aaa".into(),
+                "a".into(),
+                "aaa".into(),
+                "A".into()
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn cached_patterns_preserve_captures_offsets_anchors_and_configured_nil() {
+        use crate::test_support::run_prog_with_config;
+        use lpc_rs_core::null_mode::NullMode;
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(
+                &format!(
+                    r#"{HEADER}
+                int create() {{
+                    string pattern = "(a)?(猫)";
+                    mixed *groups;
+                    regmatch("é猫", pattern);
+                    groups = regmatch("é猫", pattern, RE_MATCH_SUBS, 1);
+                    if (groups[0] != "猫" || groups[2] != "猫" || groups[3] != 2) return 0;
+                    if (!nilp(groups[1])) return 0;
+                    if (!nilp(regmatch("é猫", pattern, RE_ANCHORED))) return 0;
+                    if (regmatch("é猫", pattern, RE_ANCHORED, 1) != "猫") return 0;
+                    regmatch("ab", "^b");
+                    if (!nilp(regmatch("ab", "^b", 0, 1))) return 0;
+                    if (!nilp(regmatch("abc", "z"))) return 0;
+                    return nilp(regmatch("abc", "z", RE_MATCH_SUBS));
+                }}
+            "#
+                ),
+                config.into(),
+            )
+            .await;
+            assert_eq!(task.result(), Some(1.into()), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_hits_and_invalid_patterns_preserve_validation_precedence() {
+        let task = run_prog(
+            r#"
+            int create() {
+                mixed flag = "bad";
+                regmatch("a", "a");
+                if (strindex(catch(regmatch("a", "a", flag)), "flags must be an int") < 0) return 0;
+                if (strindex(catch(regmatch("a", "(", -1)), "unsupported flags") < 0) return 0;
+                if (strindex(catch(regmatch("a", "(", 0, 2)), "out of range") < 0) return 0;
+                if (strindex(catch(regmatch("a", "(")), "invalid pattern") < 0) return 0;
+                return strindex(catch(regmatch("a", "(")), "invalid pattern") >= 0;
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(task.result(), Some(1.into()));
     }
 }

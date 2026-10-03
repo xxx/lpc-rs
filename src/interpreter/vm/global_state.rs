@@ -97,6 +97,9 @@ pub struct GlobalState {
     pub registry: crate::interpreter::vm::binding::Registry,
 
     pub(crate) updates: super::object_update::Updates,
+
+    /// Pure compiled patterns shared by regex efuns, outside transactional state.
+    pub(crate) regex_cache: super::regex_cache::RegexCache,
 }
 
 impl GlobalState {
@@ -124,6 +127,7 @@ impl GlobalState {
             booted_at: std::time::SystemTime::now(),
             registry: Default::default(),
             updates: Default::default(),
+            regex_cache: Default::default(),
         }
     }
 

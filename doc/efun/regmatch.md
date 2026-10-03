@@ -37,7 +37,13 @@ These flags apply to `regmatch`; `regexp` has its own flag meanings.
 Patterns use the same Rust `regex` dialect as [regexp](regexp.md), including inline flags.
 Back-references, look-around, and selection of other regex engines are unsupported.
 Invalid patterns, unsupported flag bits, wrong argument types, and out-of-range
-start indices raise runtime errors. The pattern is compiled once per call.
+start indices raise runtime errors.
+
+Patterns compile on first use at runtime. The VM shares a cache with
+[regexp](regexp.md), retaining up to 64 pattern/compilation-option pairs and
+evicting the least recently used entry when full. `RE_ANCHORED`, `RE_MATCH_SUBS`
+and `start` do not require separate compiled entries. Invalid patterns are not
+cached, and evicted patterns compile again on their next use.
 
 ### Examples
 
