@@ -5151,6 +5151,56 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima in-game player menu interaction
+
+The 2 October 2026 audit follows the tell/reply migration on the same pinned Lima
+revision. This is the in-game [player menu][lima-semote-menu], separate from the
+account/character-selection menu. Its [command][lima-game-menu-command] lacks the
+protected CMD adapter, and plmenu passes integer zero to `complete_choice`'s
+string argument. An adapter/nil-only control opens and navigates, but its prompt
+and quit actions remain inert under native expression-closure semantics.
+
+The two-file diagnostic adds the adapter, uses nil for remote completion and
+converts sixty callback literals to bare/bound native functions. Eleven selected
+keys are bound explicitly: the generic menu's zero-prompt branch calls actions
+without arguments. This preserves generic dispatch while supplying `simple_cmd`
+and biff/snoopable their choices. An absent combat shell preference needs another
+nil check; comparing it with zero instead falls through to `explode(nil, "")`.
+The old check is reproduced, and the correction toggles the real hide-misses
+setting on and off through ordinary input.
+
+Actual shell/modal input covers rendering, help, navigation, quit, SOUL preview
+and listing, and personal-info setters/saves. Preview waits for Enter and returns
+without other-user delivery or changes to SOUL save bytes/channel state. Nested
+menus unwind independently; cancellation recovers the shell. Edit and quit
+rollback preserve saved/account/output and clone/modal state. Fake command calls,
+inline arguments and foreign menu-user reassignment are refused.
+
+The real biff/snoopable commands work with temporary dispatch adapters, proving
+bound yes/no choices; those adapters are controls, not adopted ports. The UI width
+prompt works, but its unported downstream command prevents the change. No stub
+replaces the menu, renderer, body or commands.
+
+Sixteen new cases and two unchanged verbs controls pass, with eighteen recorded
+observations. Thirty-four focused compile outcomes retain explicit original and
+downstream failures: sixteen pass, sixteen helpers lack the dispatch adapter,
+and the two original menu blockers remain visible. `emoteapropos` and `adverbs`
+already compile; shared dependencies are unchanged. Six gates, exact patch
+reproduction and 180 predecessor artifact/report sets pass. Fixture corrections
+are preserved. A previous historical control exceeded the four-second startup
+limit and passed unchanged on targeted retry; the final run includes both new
+combat cases. Distinct nil, preserved call-out players and four-second actions
+remain the target. Original Lima, native sources and active overlay stay unchanged.
+
+Pinned local originals match Git blobs. New public command/menu fetches failed;
+frozen semote evidence is reused, without upstream execution, a native suite,
+historical matrix or preload survey. Adopt the two-file patch next, then audit
+downstream player-menu command entries. Remote completion, full mail/reporting/
+network flows, all combat settings and terminal widths/themes remain unchecked.
+The unused completion handler retains its documented uninitialized menu. Full
+vocabulary delivery, other SOUL consumers, logging, login and cold startup remain
+unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -6160,5 +6210,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-tell-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/tell.c
 [lima-reply-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/reply.c
 [lima-tell-history]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/history.c
+[lima-game-menu-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/menu.c
 [fl-random-config-query]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/rc.cc
 [fl-random-mapping-limit]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/mapping.cc#L557-L562
