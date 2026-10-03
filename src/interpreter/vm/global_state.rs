@@ -93,6 +93,9 @@ pub struct GlobalState {
     /// When this state was built; MSSP's `UPTIME`.
     pub booted_at: std::time::SystemTime,
 
+    /// Monotonic startup time for elapsed VM uptime.
+    pub(crate) started_at: std::time::Instant,
+
     /// Every live connection; the loop registers and removes itself.
     pub registry: crate::interpreter::vm::binding::Registry,
 
@@ -125,6 +128,7 @@ impl GlobalState {
             committer_handle: Some(committer_handle),
             attempt_runner,
             booted_at: std::time::SystemTime::now(),
+            started_at: std::time::Instant::now(),
             registry: Default::default(),
             updates: Default::default(),
             regex_cache: Default::default(),
@@ -383,6 +387,50 @@ mod tests {
     };
     use thin_vec::thin_vec;
     use ustr::ustr;
+
+    #[tokio::test]
+    async fn uptime_is_independent_of_the_wall_clock_startup_timestamp() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(8);
+        let mut state = GlobalState::new(test_config(), tx);
+        state.started_at = std::time::Instant::now() - Duration::from_millis(125_250);
+        state.booted_at = std::time::UNIX_EPOCH + Duration::from_secs(4_000_000_000);
+        let state = Arc::new(state);
+        let before = state.started_at.elapsed().as_secs() as i64;
+        let result = state
+            .initialize_process_from_code("/clock.c", "int create() { return uptime(); }")
+            .await
+            .unwrap()
+            .result();
+        let after = state.started_at.elapsed().as_secs() as i64;
+        let Some(LpcRef::Int(seconds)) = result else {
+            panic!("expected an integer, got {result:?}");
+        };
+        assert!((before..=after).contains(&seconds.0), "{seconds}");
+    }
+
+    #[tokio::test]
+    async fn uptime_belongs_to_the_vm_and_is_not_reset_by_loading_objects() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(8);
+        let mut older = GlobalState::new(test_config(), tx.clone());
+        older.started_at = std::time::Instant::now() - Duration::from_secs(3600);
+        let older = Arc::new(older);
+        let newer = Arc::new(GlobalState::new(test_config(), tx));
+        for state in [older, newer] {
+            for path in ["/first.c", "/second.c"] {
+                let before = state.started_at.elapsed().as_secs() as i64;
+                let result = state
+                    .initialize_process_from_code(path, "int create() { return uptime(); }")
+                    .await
+                    .unwrap()
+                    .result();
+                let after = state.started_at.elapsed().as_secs() as i64;
+                let Some(LpcRef::Int(seconds)) = result else {
+                    panic!("expected an integer, got {result:?}");
+                };
+                assert!((before..=after).contains(&seconds.0), "{path}: {seconds}");
+            }
+        }
+    }
 
     #[test]
     fn committer_thread_exits_when_global_state_drops() {

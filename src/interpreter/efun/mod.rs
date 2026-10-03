@@ -145,6 +145,7 @@ pub(crate) mod trim;
 pub(crate) mod type_of;
 pub(crate) mod type_predicates;
 pub(crate) mod unique_array;
+pub(crate) mod uptime;
 pub(crate) mod users;
 pub(crate) mod variable_info;
 pub(crate) mod wildmatch;
@@ -785,6 +786,9 @@ efuns! {
         args: [LpcType::Int(false)],
     },
     time => {
+        returns: LpcType::Int(false),
+    },
+    uptime => {
         returns: LpcType::Int(false),
     },
     to_float [in conversions] => {
@@ -1591,6 +1595,7 @@ mod tests {
                 "min",
                 "random",
                 "time",
+                "uptime",
                 "to_float",
                 "to_int",
                 "to_string",

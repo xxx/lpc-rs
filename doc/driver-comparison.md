@@ -356,7 +356,7 @@ across all five drivers; the broader rows describe differences within each area.
 
 | Area | lpc-rs | CD | LDMud | FluffOS | DGD |
 |---|---|---|---|---|---|
-| Execution | Parallel LPC tasks; snapshot reads, atomic commits and conflict retries. [Runtime](../README.md#how-execution-works). | Tasks evaluated serially by the [backend loop][cd-backend]. | Sequential [backend evaluation][ld-backend]; explicit [coroutines][ld-async]. | Event-driven LPC; [async functions and promises][fl-async], with worker-thread I/O in the async package. | Explicit [atomic functions][dgd-lpc] roll back on errors; multicore acceleration is a separate [Hydra offering][dgd-readme]. |
+| Execution | Parallel LPC tasks; snapshot reads, atomic commits and conflict retries. [Runtime](../README.md#how-execution-works); [monotonic elapsed VM uptime](efun/uptime.md). | Tasks evaluated serially by the [backend loop][cd-backend]. | Sequential [backend evaluation][ld-backend]; explicit [coroutines][ld-async]. | Event-driven LPC; [async functions and promises][fl-async], with worker-thread I/O in the async package. | Explicit [atomic functions][dgd-lpc] roll back on errors; multicore acceleration is a separate [Hydra offering][dgd-readme]. |
 | Saving and restarting | [Object and mapping save files, including class records](save-format.md), with [`nosave` globals](lpc/nosave.md); [`save_value`](efun/save_value.md) / [`restore_value`](efun/restore_value.md) serialize individual values as strings. Whole-world snapshot/restart is not implemented. | [Object variable saves][cd-save]. | [Object saves][ld-save] with selectable formats and a serialised-string form. | [Object saves][fl-save] with flags, optional compression and a serialised-string form; [`nosave` globals][fl-nosave-keywords] with `SENSIBLE_MODIFIERS`; individual values through [`save_variable`][fl-save-variable] / [`restore_variable`][fl-restore-variable]. | Object saves plus [whole-system snapshots][dgd-dump] and [restart from a snapshot][dgd-intro]. |
 | Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
 | File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`rm`](efun/rm.md) checks its task's pending entry changes without reading contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
@@ -5151,22 +5151,43 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima elapsed uptime support
+
+The native addition after the 2 October 2026 command audit supplies
+[`int uptime()`](efun/uptime.md): whole monotonic seconds since this VM's state
+was created. It is shared by objects within the VM, independent of object loading
+and wall-clock adjustments, and read anew on each call or retry. MSSP's `UPTIME`
+continues to mean the Unix timestamp of startup.
+
+FluffOS's source-reviewed core implementation uses current time minus boot time;
+lpc-rs uses its monotonic startup clock. The reviewed revision, core guards and
+public sources are recorded in the command audit below. This does not establish
+cross-driver execution equivalence under clock adjustments or suspension.
+
+With the native clock, the frozen who diagnostic compiles and renders through
+real shell and menu input. Three Lima cases cover the unchanged active command's
+missing-adapter control, two-player listings and player-only aliases, repeated
+rendering, subhour footer text, account/channel isolation and menu/shell recovery.
+The active overlay is unchanged; role/visibility/linkdead/bodyless cases and
+adoption remain the next who work. News still needs its reader/daemon port.
+
 #### Lima news and who command entries
 
 The 2 October 2026 audit reviews [news][lima-news-command] and
 [who][lima-who-command] at the pinned Lima revision, on the unchanged settings
 overlay after compiled regex reuse. Both need protected command dispatch adapters.
 Who also needs explicit nil string arguments and `time_to_string(..., 0)`;
-its helper has a required long/short selector. Those edits leave only the missing
-native `uptime()` calls. No clock stub or command patch is adopted by this audit.
+its helper has a required long/short selector. At that baseline, those edits left
+only the missing native `uptime()` calls. No clock stub or command patch was
+adopted by the audit.
 
 FluffOS core declares `int uptime()` and subtracts driver boot time from current
 time. This was source-reviewed at `44532e02` on 2 October 2026, with `PACKAGE_CORE`
 and `F_UPTIME`, without upstream execution. [Declaration][fl-uptime-spec],
-[implementation][fl-uptime-source], [reference][fl-uptime-reference]. lpc-rs has no
-LPC uptime API yet; its MSSP `UPTIME` is the Unix timestamp of VM startup.
-A mudlib's own load timestamp need not match driver startup. General elapsed
-uptime support is the recommended next native addition.
+[implementation][fl-uptime-source], [reference][fl-uptime-reference]. At that audit
+baseline lpc-rs had no LPC uptime API; its MSSP `UPTIME` was already the Unix
+timestamp of VM startup. A mudlib's own load timestamp need not match driver
+startup. The elapsed uptime support described above removes this native blocker.
 
 The corrected news entry compiles but reaches four real
 [reader][lima-news-reader] diagnostics: mutable value-capture syntax, an integer
