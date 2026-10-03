@@ -5153,6 +5153,53 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima inherited editor core
+
+The 3 October 2026 port adds `M_ED`, an inherited mudlib module with protected
+`ed_start(path = "", restricted = 0, scroll = 20)`, `ed_cmd(command)` and
+`query_ed_mode()` methods. Buffers, cursor, marks and options are private,
+`nosave` state on each owner. The active local overlay adds this module and its
+header macro; Lima's six consumers do not inherit it yet. No native editor efun
+is added, and the existing text-editor fallback remains active.
+
+The core supports append/insert/change modes, printing/listing/numbering,
+delete/join/move/copy, marks, file load/read/name, overwrite/append, scroll and
+save/quit. Addresses include numbers, current/last line, offsets, marks,
+comma/semicolon ranges, whole-buffer `%` and wrapped forward/backward regex
+searches with remembered patterns. Searches use the native
+[regular-expression dialect](efun/regmatch.md). Command mode is 0, inactive is
+-1 and input mode reports the next positive line number. Invalid commands
+restore editor state; unsupported commands return errors.
+
+Limits are explicit: 8,192 UTF-8 bytes including each line's LF, 1,000 lines,
+2,048 bytes per line and 1,024 bytes per command or filename. Over-limit edits
+are refused without truncation. Files normalize the final line to LF.
+Restrictions are checked after address parsing; input-mode text is literal.
+File calls bind native efuns directly, retaining the owning object and defining
+module for the normal file-policy hooks. Because
+[`file_size`](efun/file_size.md) reports -1 for both denial and absence, accepting
+a new file also requires an authorized [`get_dir`](efun/get_dir.md) check of the
+literal filename. Denied metadata on an existing file is not accepted as empty.
+
+Saves use [`write_file`](efun/write_file.md) replacement without preliminary
+removal and report "Staged" rather than durable delivery. Full overwrite of
+the selected file clears the modified flag; partial writes and append preserve
+it. Permission refusal preserves the buffer and original file. Uncaught task
+errors discard editor mutations and file effects together.
+
+Twenty-two new tests execute the actual module with controlled file policies;
+six existing real Lima fallback cases pass against the new overlay. These
+validate the core and fallback separately, without an editor frontend workflow.
+Clippy and formatting pass. The module compiles; ED_SESSION retains its seven
+errors and codesay its four command-dependency errors. Original Lima, previous
+overlays, native implementation and 199 predecessor evidence sets are preserved.
+Lima keeps distinct nil, preserved call-out players and four-second actions.
+
+Global/inverse selection, substitution, setup/options, paged help and real LPC
+indentation remain unfinished; `I` errors rather than acting as a no-op.
+Session callbacks/types/cleanup and wizard locking still need integration.
+Full editor compatibility and upstream execution are not claimed.
+
 #### Lima editor save foundation
 
 The 3 October 2026 change adds general
