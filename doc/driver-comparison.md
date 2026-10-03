@@ -5006,6 +5006,65 @@ statistical distribution, remote-target execution, complete menu interaction,
 complete vocabulary delivery, other SOUL consumers, tell recipient typing,
 logging, remote IMUD, network, login and cold startup remain unestablished.
 
+#### Lima experimental random text generation
+
+The 2 October 2026 audit follows the selector migration on the same pinned Lima
+revision. [Random2][lima-random-generator] learns two-word forward/reverse contexts
+from SOUL templates. Its optional argument selects a training word, not the named
+recipient suggested by its usage text. Delivery independently chooses an adverb
+and a local attached body, including the actor.
+
+Active random2 retains its missing CMD adapter. Adapter-only compilation exposes
+four strict type errors; the frozen type-only control then exposes unknown
+`get_config`. Replacing that query with an LPC control value permits compilation,
+but long templates fail on nil/string context arithmetic. A separate context
+conversion control then exposes missing-counter increments. Short strings of
+three words or fewer and multipart arrays are skipped; an empty model lacks
+readiness and missing-context guards. These are isolated controls, not a port.
+
+The legacy `(: process :)` callback returns a function under native closure
+semantics. In a 101-entry short-template pool, the timer fires without consuming
+the last entry; an explicit process call consumes it. A separate bare-function
+control completes the batch. The reverse-model size guard runs after forward
+mutation and after scheduling the next batch. With initialized counters, explicit
+context conversion, a bare callback and a zero LPC probe limit, it leaves a
+forward-only prefix and still processes a later batch. The zero value is a policy
+boundary probe, not an alternate null mode or a native mapping limit.
+
+Manually seeded weighted lookups preserve membership and return nil for numeric/
+nil end transitions; this is not a distribution test or complete trained
+generation. Empty-string transitions remain truthy. Unknown-word status uses
+terminal `write` even in CMD pipeline mode. Direct delivery errors with no
+adverbs; self-target selection produces the existing duplicate actor/target
+messages, and a second local player receives the onlooker message.
+
+FluffOS's reviewed `get_config` reads indexed driver settings, and its mapping
+insertion enforces the configured entry cap. Source review uses
+`44532e0228f34be2184c701a361df4079371b8b0`, with `F_GET_CONFIG` in the core package;
+no upstream driver was executed. Native lpc-rs has no corresponding configured
+mapping-entry cap. Adding a query solely for this command would not repair its
+training policy. [Query implementation][fl-random-config-query],
+[mapping insertion][fl-random-mapping-limit].
+
+Sixteen new cases and two unchanged verbs controls pass, with eighteen recorded
+observations. Focused compilation has eight successes from eleven probes; the
+three failures remain explicit and all active diagnostics are unchanged.
+Six gates, exact probe reproduction and 177 predecessor artifact/report sets pass.
+Initial failed fixtures, callback findings and the subsequent lint correction
+are preserved. Pinned local originals match Git blobs; public pinned renderings
+could not be fetched, and current official configuration prose was reviewed as
+supplementary evidence. Distinct nil, preserved call-out players and four-second
+actions remain the target; original Lima, native sources and active overlay stay
+unchanged.
+
+Defer this experimental generator and audit tell recipient typing next. A future
+port needs explicit sentinels and structured contexts, initialized counters,
+template-shape policy, readiness checks, bounded generation, correct batch
+callbacks and a mudlib-owned model budget enforced before forward/reverse changes.
+End-to-end trained generation, full-stock training, adversarial termination,
+remote/offline/NPC targeting, complete menu interaction, other SOUL consumers,
+logging, remote IMUD, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -6012,3 +6071,5 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-random-emote]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/random.c
 [lima-random-generator]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/random2.c
+[fl-random-config-query]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/rc.cc
+[fl-random-mapping-limit]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/mapping.cc#L557-L562
