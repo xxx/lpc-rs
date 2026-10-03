@@ -146,8 +146,7 @@ pub(crate) enum Effect {
         contents: String,
     },
 
-    /// A save efun's committed write through a temporary sibling renamed over the target.
-    /// The temporary name is unique per flush, including concurrent writes to one target.
+    /// Whole-file replacement through a uniquely named temporary sibling renamed over the target.
     WriteFile {
         path: ResolvedPath,
         contents: String,
@@ -680,6 +679,31 @@ mod tests {
         .flush(&global_state())
         .await;
         assert_eq!(std::fs::read_to_string(&server).unwrap(), "b 2\n");
+    }
+
+    #[tokio::test]
+    async fn failed_replacement_preserves_the_target_and_cleans_up_the_temporary_file() {
+        let root = crate::test_support::TempLib::new("write-file-effect-failure");
+        let server = root.join("target");
+        std::fs::create_dir(&server).unwrap();
+        std::fs::write(server.join("original.txt"), "original").unwrap();
+        Effect::WriteFile {
+            path: lpc_rs_core::lpc_path::LibRoot::new(&*root)
+                .resolve("/target", "/")
+                .unwrap(),
+            contents: "replacement".to_owned(),
+        }
+        .flush(&global_state())
+        .await;
+        assert_eq!(
+            std::fs::read_to_string(server.join("original.txt")).unwrap(),
+            "original"
+        );
+        let entries: Vec<_> = std::fs::read_dir(&*root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries, ["target"]);
     }
 
     #[tokio::test]

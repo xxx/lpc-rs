@@ -732,8 +732,8 @@ efuns! {
     },
     write_file [async] => {
         returns: LpcType::Int(false),
-        arity: 2,
-        args: [LpcType::String(false), LpcType::String(false)],
+        arity: (3, 1),
+        args: [LpcType::String(false), LpcType::String(false), LpcType::Int(false)],
     },
     json_encode => {
         returns: LpcType::String(false),
