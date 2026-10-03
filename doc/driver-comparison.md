@@ -5151,6 +5151,35 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima in-game player menu migration
+
+The 2 October 2026 migration applies the exact two-file menu/plmenu patch from
+the interaction audit over the tell/reply overlay. The full adopted library
+matches the frozen diagnostic byte for byte. The protected command adapter,
+explicit nil absence checks and native bare/bound callbacks now run from the
+active overlay. Generic menu, renderer, modal input and native APIs are unchanged.
+
+All eighteen case bodies, assertions and normalized observations match the audit.
+Twelve cases use the adopted library; two retain previous-library controls, one
+retains the combat zero check and one uses temporary biff/snoopable adapters.
+Two historical verbs controls retain frozen libraries. Eight fixture/control
+files are copied unchanged; shared support changes only the adopted directory.
+All six focused compiles pass with unchanged diagnostics. Six gates, exact
+adoption and 181 predecessor artifact/report sets pass.
+
+Configuration changes only the library directory. Distinct nil, preserved
+call-out players and four-second actions remain the target. Original Lima,
+native sources, previous overlays and the diagnostic remain unchanged. Frozen
+source evidence is reused without new public fetches, upstream execution,
+a native suite rerun, historical matrix or preload survey.
+
+Next, audit downstream player-menu command entries: sixteen helpers lack the
+dispatch adapter, while `emoteapropos` and `adverbs` already compile. Temporary
+biff/snoopable adapters remain controls. Remote completion, full mail/reporting/
+network flows, all combat settings and terminal widths/themes, full vocabulary
+delivery, other SOUL consumers, logging, login and cold startup remain
+unestablished; the unused completion handler retains its documented limitation.
+
 #### Lima in-game player menu interaction
 
 The 2 October 2026 audit follows the tell/reply migration on the same pinned Lima
