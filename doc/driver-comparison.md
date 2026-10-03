@@ -5151,6 +5151,58 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima pager and text editor audit
+
+The 3 October 2026 audit reviews pinned [pager][lima-pager],
+[editor][lima-text-editor], [output helpers][lima-more-helpers] and
+[input stack][lima-inputsys] sources over the news reader port. The active
+library remains unchanged. A separate compile diagnostic replaces four typed
+zero assignments with nil and adapts scalar search to
+[`regmatch`](efun/regmatch.md). A second diagnostic also uses bare input,
+prompt and editor-completion function values. No repair is adopted yet.
+[Function values](lpc/function_type.md).
+
+The active pager fails compilation. Once it compiles, its legacy input and
+prompt literals still return function values rather than invoking callbacks:
+quit does not complete and prompt processing errors. The active editor compiles
+but ignores text, completion and abort inputs. Bare callbacks establish normal
+paging, forward/backward search, file navigation and text editing. Both nil
+and integer zero work as initial editor text in the configured distinct-nil
+mode; this does not require a second null mode or another adaptation.
+
+The diagnostic tools expose additional mudlib defects. Aborting a file edit
+deletes its original file. Saving unchanged LF-terminated text adds a blank
+line because native [`explode`](efun/explode.md) retains the terminal empty
+element and the editor appends a linefeed. Empty file paging displays a blank
+line because empty strings are true. Continuation errors remove modal handlers
+but prevent tool destruction. An initial directory-read error is caught by
+the pager constructor, which returns with a live, detached pager.
+
+Clearing the actual input stack removes the editor handler before delivering
+`-1`. The editor destructs without clearing its editing flag or returning
+before indexing that integer. This is input teardown, not an executed network
+disconnect. Preserve its silent teardown policy while clearing the flag,
+destroying the editor and returning; do not pop an already removed handler.
+The [user switch][lima-user-switch] uses this reset before changing bodies.
+
+Fifteen audit cases pass, retaining failures as assertions. Real shell/news
+input posts a sixty-line article, pages it, creates a followup, aborts another
+post and restores the shell. Uncaught entry errors roll back tool objects,
+handlers, flags, output and account bytes, with a second user unchanged.
+Eight focused compiles preserve the active pager failure and pass the active
+editor, both diagnostic variants and complete diagnostic user/reader.
+Four gates and exact diagnostic verification preserve original/native
+sources, the active overlay and 193 predecessor artifact/report sets.
+
+The recommended repair stays in the two tool files: adapt callbacks/types and
+scalar regex matching, preserve files on abort, handle empty/trailing-delimiter
+file content and guarantee error/teardown cleanup. No native API is needed.
+Distinct nil, preserved call-out players and four-second actions remain the
+target. Pinned local source review is separate from execution; no upstream
+driver or new public fetch is claimed. Line-editor integration, wizard file
+escapes, nested editing, large files, mail, other continuation consumers,
+actual disconnect and broad startup remain unestablished.
+
 #### Lima news command, reader callbacks and read state
 
 The 3 October 2026 reader port changes [news dispatch][lima-news-command],
@@ -6667,3 +6719,7 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-news-user-state]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c
 [lima-news-number-sets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_set.c
+[lima-pager]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/more_ob.c
+[lima-text-editor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/edit_ob.c
+[lima-more-helpers]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/more.c
+[lima-user-switch]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/sw_user.c
