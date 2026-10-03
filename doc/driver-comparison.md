@@ -5151,6 +5151,39 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima player-menu settings migration
+
+The 2 October 2026 migration adopts the exact eleven-file settings patch over
+the menu overlay. The full adopted library matches the frozen diagnostic byte
+for byte. Width, mode, simplify, emoji, metric, frames, biff and snoopable now
+have protected dispatch adapters; width retains its public main handler. Bare
+width uses its numeric-zero query behavior for missing input. Widgets use
+explicit integer conversions and truthy preference predicates; pshell admits
+simplify/metric in both allowlists. Negative widths skip both receive wrapping
+paths. Native type/null semantics and APIs are unchanged.
+
+All twenty-six case bodies, assertions and normalized observations match the
+audit. Eighteen cases use the adopted library; six retain previous-library
+controls and two retain historical verbs libraries. Twelve fixture/control files
+are unchanged; shared support changes only the adopted directory. All thirteen
+focused compiles pass with identical diagnostics. Six gates, exact adoption and
+183 predecessor artifact/report sets pass.
+
+Complete `frames themes` rendering still exceeds the four-second evaluation
+limit in the LPC regex/colour-wrapping path. Its explicit timeout case remains
+unchanged, including rollback and shell recovery; style listing and theme
+catalogue/selection are checked separately. Investigate this cost before the
+remaining information/reporting/remote command entries.
+
+Configuration changes only the library directory. Distinct nil, preserved
+call-out players and four-second actions remain the target. Original Lima,
+native sources, previous overlays and the diagnostic remain unchanged. Frozen
+source evidence is reused without new public fetches, upstream execution, a
+native suite rerun, historical matrix or preload survey. Actual mail/snooping,
+remote completion/network interactions, live terminal negotiation, extreme
+widths, every theme, general widget arithmetic, preference persistence, full
+vocabulary and cold startup remain unestablished.
+
 #### Lima player-menu UI and personal settings
 
 The 2 October 2026 audit follows the menu migration on the same pinned Lima.
