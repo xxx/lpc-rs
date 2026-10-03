@@ -5151,6 +5151,42 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima news and who command entries
+
+The 2 October 2026 audit reviews [news][lima-news-command] and
+[who][lima-who-command] at the pinned Lima revision, on the unchanged settings
+overlay after compiled regex reuse. Both need protected command dispatch adapters.
+Who also needs explicit nil string arguments and `time_to_string(..., 0)`;
+its helper has a required long/short selector. Those edits leave only the missing
+native `uptime()` calls. No clock stub or command patch is adopted by this audit.
+
+FluffOS core declares `int uptime()` and subtracts driver boot time from current
+time. This was source-reviewed at `44532e02` on 2 October 2026, with `PACKAGE_CORE`
+and `F_UPTIME`, without upstream execution. [Declaration][fl-uptime-spec],
+[implementation][fl-uptime-source], [reference][fl-uptime-reference]. lpc-rs has no
+LPC uptime API yet; its MSSP `UPTIME` is the Unix timestamp of VM startup.
+A mudlib's own load timestamp need not match driver startup. General elapsed
+uptime support is the recommended next native addition.
+
+The corrected news entry compiles but reaches four real
+[reader][lima-news-reader] diagnostics: mutable value-capture syntax, an integer
+used as an ID array, typed zero and a void return mismatch. The
+[daemon][lima-news-daemon] has ten diagnostics involving legacy serialization
+names, the restore preserve flag, typed zero and class arrow access. Use
+[`save_value`](efun/save_value.md)/[`restore_value`](efun/restore_value.md), drop
+restore flag `1`, use explicit nil and dot member access; persisted data needs a
+separate migration audit. The user news-data module's standalone `save_me`
+diagnostics are supplied by the complete user composition, which compiles.
+
+Seven runtime cases pass for shell/menu failure handling, prompts, recovery,
+caller guard, duration formatting and player/account isolation. Native
+`load_object` returns nil on compile failure, leading to shell unknown-command or
+channel fallback. Reader failures are caught and discarded by Lima modal input;
+the menu stack and prompts survive. Successful command loading survives catch,
+so these checks do not establish complete transactional rollback or working
+news/who output. Completed who filtering, articles, subscriptions, persisted
+news and remaining reporting/remote entries remain separate ports.
+
 #### Lima compiled regex reuse
 
 The 2 October 2026 native change adds runtime compilation reuse to
@@ -6390,3 +6426,11 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-ui-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/config.h
 [fl-random-config-query]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/rc.cc
 [fl-random-mapping-limit]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/mapping.cc#L557-L562
+
+[lima-news-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/news.c
+[lima-who-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/who.c
+[lima-news-reader]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/newsreader.c
+[lima-news-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/news_d.c
+[fl-uptime-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L274
+[fl-uptime-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L2924-L2926
+[fl-uptime-reference]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/system/uptime.md
