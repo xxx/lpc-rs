@@ -5151,6 +5151,56 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima player-menu UI and personal settings
+
+The 2 October 2026 audit follows the menu migration on the same pinned Lima.
+[Width][lima-width-command], mode, simplify, emoji, metric, frames, biff and
+snoopable lack protected
+dispatch adapters. An eleven-file diagnostic adds them, gives bare width's nil
+argument its numeric-zero query behavior, and makes eight
+[widget bar/slider][lima-widgets]
+counter conversions explicit with [`to_int`](efun/to_int.md). Widget preference
+predicates use truthiness for absent values. The
+[shell's set/unset allowlists][lima-pshell]
+also need `simplify` and `metric`; their omission is a defect in this Lima source.
+Negative widths add `NO_WRAP` before both [receive branches][lima-user-messages],
+fixing the original
+per-word newlines in no-wrap mode; a control retains that failure. Native type
+checking and null semantics are unchanged.
+
+Actual shell/menu input exercises all eight commands and six UI prompts,
+personal flag choices, real translations/emoji data, frame catalogue and
+style/theme selection, account saves, caller/player isolation and rollback.
+Adapters stay protected; width's existing public handler retains its visibility.
+Auto width uses Lima's [79-column default][lima-ui-config] in this fixture,
+independently of its
+saved manual width of eighty. Numeric width, auto and no-wrap modes are checked.
+
+Complete `frames themes` rendering remains blocked at the four-second evaluation
+limit in the LPC regex/colour-wrapping path. An unchanged retry confirms the
+boundary; a dedicated case verifies discarded output, unchanged state/saved
+bytes and shell recovery. Theme catalogue/selection and style listing are
+checked separately. The diagnostic does not solve the complete theme listing.
+
+Twenty-four new cases and two unchanged verbs controls pass, with twenty-six
+observations. Eighteen cases use the diagnostic, including that budget boundary.
+Twenty-five of thirty-four focused compiles pass; nine original dispatch/type
+blockers remain explicit, while all staged controls and diagnostic targets
+compile. Initial compile inventories and fixture corrections are preserved.
+An earlier body startup crossed four seconds and passed unchanged on retry;
+the action budget is preserved. Six gates, exact patch reproduction and
+182 predecessor artifact/report sets pass. Distinct nil, preserved call-out
+players and four-second actions remain
+the target. Original Lima, native sources and active overlay stay unchanged.
+
+Pinned local originals match Git blobs; public width/widgets fetches failed,
+and frozen menu evidence is reused. No upstream execution, native suite,
+historical matrix or preload survey was run. Adopt the diagnostic next, then
+investigate theme-listing evaluation cost before remaining information/reporting/
+remote commands. Actual mail/snooping, remote completion, live terminal negotiation,
+extreme widths, every theme, general widget arithmetic, preference persistence,
+full vocabulary and cold startup remain unestablished.
+
 #### Lima in-game player menu migration
 
 The 2 October 2026 migration applies the exact two-file menu/plmenu patch from
@@ -6240,5 +6290,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-reply-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/reply.c
 [lima-tell-history]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/history.c
 [lima-game-menu-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/menu.c
+[lima-width-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/width.c
+[lima-widgets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_widgets.c
+[lima-ui-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/config.h
 [fl-random-config-query]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/rc.cc
 [fl-random-mapping-limit]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/mapping.cc#L557-L562
