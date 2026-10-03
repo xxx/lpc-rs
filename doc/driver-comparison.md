@@ -5151,6 +5151,40 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima line-editor handoff port
+
+The 3 October 2026 port changes only the [text editor][lima-text-editor]
+over the pager/editor overlay. `~e` loads the session before staging a draft.
+The unsupported session now yields "Line editor unavailable; continue editing
+here." while preserving the buffer, text handler and editing flag. Repeated
+requests create no temporary file; normal text editing and real news posting
+continue. Direct callers receive the same fallback without needing to catch
+the load failure. Previously orphaned files remain untouched in this path.
+
+When a session can load, staging removes the old file before writing the draft.
+A staging failure gives feedback and removes the unused session using the
+editor's existing privilege mechanism. The parent tracks the staged path and
+removes it on return, completion, abort or input-stack teardown.
+
+Fourteen cases pass: four unchanged baseline cases, six real adapted-library
+cases and four labelled recorder controls. Real cases cover retries, Unicode
+and blank lines, text completion/abort/teardown, file save/abort, account and
+observer isolation, news posting and preservation of unowned old files.
+Controls cover replacement, simulated-result return, missing staging directory
+and retry, refusal to replace a directory and nested input-stack cleanup.
+The recorder implements no editing and is not adopted.
+
+Nine focused compiles pass seven targets and retain all seven [session][lima-ed-session]
+errors in both baseline and adopted libraries. Four gates, exact one-file patch
+replay and preservation checks cover original/native/baseline sources and 196
+predecessor sets. Distinct nil, preserved call-out player and four-second actions
+remain the target; no native API or upstream driver execution changes.
+
+A real backend still needs separate scope for editing commands, buffers, modes,
+setup and file authorization. Standalone session callback/type/restriction/lifecycle
+repairs, backend-start errors, cleanup I/O failures, network disconnect,
+simultaneous editors, wizard commands and direct API consumers remain open.
+
 #### Lima line-editor session and handoff audit
 
 The 3 October 2026 audit reviews [ED_SESSION][lima-ed-session] and the
