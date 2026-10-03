@@ -5151,6 +5151,62 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima news command, reader callbacks and read state
+
+The 3 October 2026 reader port changes [news dispatch][lima-news-command],
+[the reader][lima-news-reader], [user read state][lima-news-user-state] and
+[the numeric-set helper][lima-news-number-sets] over the daemon persistence
+port. Protected dispatch reaches the command's private entry. Callback values
+use bare names or `&name(arguments)`; message-mode search also binds its mode.
+The daemon, production access policy and native driver API are unchanged.
+[Function values](lpc/function_type.md).
+
+Build unread IDs from active articles minus saved read IDs, excluding removed
+articles and holes in the ID sequence. Queue refresh follows the selected
+thread or numeric order, retains queued read history and drops removed entries.
+Refreshing active messages also clears the other groups’ stale unread caches.
+Threading changes refresh that queue and save the preference. Group listing
+must not change the selected group; catch-up must refresh the unread cache.
+
+Missing user state returns empty group arrays and an empty read set. Directly
+reading an unregistered group records it as unsubscribed. Legacy highwater
+conversion writes back to the mapping: positive integers become read ranges,
+zero becomes an empty read set, and obsolete groups are pruned. This is
+schema-specific conversion after native restoration; ordinary saved zero stays
+zero. [Native save format](save-format.md).
+
+The set helper requires additional repairs: empty prefixes need explicit
+handling instead of `[0..-1]`, removal must preserve comma boundaries, adding an inverted interval leaves
+the set unchanged, and subtraction must preserve gaps between active ranges.
+Its validator fixes an assignment in the empty-set check and checks the parsed
+suffix, since native [`sscanf`](efun/sscanf.md) counts a trailing `%s` even when
+it captures an empty string. Malformed read sets retain Lima's warning and
+catch-up policy. The helpers remain mudlib code.
+
+Push the reader handler once and replace it for later menu transitions.
+Subscription `q` cancels the remaining signup prompts; a subsequent reader `q`
+returns to the previous handler. Missing-group and initial selection cancellation
+also remove the reader's handler. Real player-menu entry returns to the menu
+before returning to the shell.
+
+Forty-two cases pass: nineteen reader/set cases, fourteen retained daemon cases
+and nine retained who cases. The retained assertions and normalized observations
+are unchanged. Tests exercise actual user input, short `more` output, read-state
+saves and fresh-VM restoration, callback execution, sparse numeric-set checks,
+new arrivals at queue end, observer isolation and uncaught-error rollback.
+Four gates and exact four-file patch verification preserve original/native
+sources, prior overlays and 192 predecessor artifact/report sets.
+
+Focused compiles pass the command, reader, complete user, set helper, daemon
+and who while preserving the preceding command/reader failures. The pager still
+fails compilation; the editor compiles, but its interactive workflow remains
+separate work. Distinct nil, preserved call-out players and four-second actions
+remain the target. Pinned
+local source review is reused without upstream execution or a new fetch;
+no native suite or broad compile survey is rerun. Long paging, editor/mail
+flows, move callbacks, EOF/disconnect cleanup, the reader's unforwarded check
+flag, existing-installation conversion and broad startup remain unestablished.
+
 #### Lima news daemon startup and native persistence
 
 The 3 October 2026 daemon port changes only [news_d][lima-news-daemon] over the
@@ -6608,3 +6664,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-uptime-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L274
 [fl-uptime-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L2924-L2926
 [fl-uptime-reference]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/system/uptime.md
+
+[lima-news-user-state]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c
+[lima-news-number-sets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_set.c
