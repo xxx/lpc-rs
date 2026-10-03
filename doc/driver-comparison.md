@@ -5065,6 +5065,61 @@ End-to-end trained generation, full-stock training, adversarial termination,
 remote/offline/NPC targeting, complete menu interaction, other SOUL consumers,
 logging, remote IMUD, network, login and cold startup remain unestablished.
 
+#### Lima tell recipients and reply
+
+The 2 October 2026 audit follows the experimental generator audit on Lima
+`eefaff66adcae9b01e16059574c925b0d63e70a1`. Both [tell][lima-tell-command] and
+[reply][lima-reply-command] lack the protected CMD dispatch adapter. Adding the
+adapter alone lets plain tell work; no new native API is needed.
+
+Tell's two SOUL result declarations should be `mixed *`: the result contains a
+body-recipient array and a message array. Adapter-only and type-only controls both
+compile, so this is a contract correction rather than another observed compiler
+blocker. The destination from `find_user` is an account, while SOUL recipients are
+bodies. Use `who->query_body()` for recipient membership; otherwise the named
+account receives the onlooker message. A two-target template confirms the correct
+first/second perspectives while delivery stays private to the named account.
+
+The self-send guard compares an account with the sender's body and therefore
+delivers twice, records history twice and replaces reply with the sender's own
+userid. Compare `who` with `this_user()` instead. Plain and SOUL self-tells then
+record once, preserve reply and deliver only the sender copy.
+
+Reply works through ordinary command input and the existing protected resend
+contract. Both commands retain private handlers, protected adapters, caller guards
+and tell's reply-only resend permission. Uppercase account names, literal emote
+fallback, usage/refusal paths and private delivery are covered. Both commands
+retain `no_redirection()`: `>` and `|` remain literal message text, without creating
+a file or executing another command. Foreign shell player context cannot forge
+private delivery.
+
+[Tell history][lima-tell-history] retains the newest twenty messages per account.
+Displaying and clearing history works; clearing preserves the reply target.
+History and reply are nosave in the reviewed build. An outer failure after an
+actual tell rolls back output, account history/reply, shell/history, channel
+state, SOUL save data and parser registrations.
+
+Twenty new cases and two unchanged verbs controls pass, with twenty-two recorded
+observations. Four new cases use active/adapter/type controls; sixteen use the
+two-file diagnostic. Focused compilation has thirteen successes from fifteen
+probes; both original dispatch failures remain explicit, and shared dependencies
+are unchanged. Six gates and exact patch reproduction pass. An initial Rust build
+failure and its type-annotation correction are preserved; no runtime assertions
+changed. Distinct nil, preserved call-out players and four-second actions remain
+the target. Original Lima, native sources, active overlay and 178 predecessor
+artifact/report sets remain unchanged.
+
+Pinned local originals match Git blobs. New public tell/reply renderings could
+not be fetched; frozen SOUL evidence is reused. The active pipeline parser was
+reviewed as native overlay code, not pinned upstream source. No upstream execution,
+native suite rerun, historical matrix or preload survey was run.
+
+Adopt the exact tell/reply patch next, then audit complete plmenu interaction and
+its known distinct-nil string-argument blocker. Remote IMUD runtime,
+linkdead/inactive/bodyless recipients, missing sender body, offline/NPC targets,
+history persistence, long pager interaction, complete vocabulary delivery, other
+SOUL consumers, logging, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
@@ -6071,5 +6126,8 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-random-emote]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/random.c
 [lima-random-generator]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/random2.c
+[lima-tell-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/tell.c
+[lima-reply-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/reply.c
+[lima-tell-history]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/history.c
 [fl-random-config-query]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/rc.cc
 [fl-random-mapping-limit]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/mapping.cc#L557-L562
