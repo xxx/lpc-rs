@@ -5153,6 +5153,45 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima editor options and help
+
+The 3 October 2026 port extends inherited `M_ED` with `set`, output options,
+owner setup methods and paged help. `set number/nonumber`, `list/nolist` and
+`print/noprint` affect real output; `set scroll 1..100` controls scrolling/help.
+`set shiftwidth 1..15` stores the width for later LPC indentation, which remains
+unsupported. Unsupported options and malformed values are refused. Global
+bodies cannot change settings or enter help; input-mode text remains literal.
+
+Startup optionally calls the owner's public `query_ed_setup()` method;
+`set save` calls public `set_ed_setup(code)`, requiring both methods and an
+unrestricted session. No methods means defaults and unavailable persistence.
+Zero means unset; supported codes use the reviewed legacy number/list/print
+bits and low four-bit width. The eightbit bit is accepted and emitted while
+native strings always preserve Unicode. Other flags and invalid widths are
+refused. Setup callbacks use ordinary owner methods rather than legacy private
+master editor applies or a privileged simul-efun delegate. The completion
+message acknowledges handing preferences to the owner, not durable delivery.
+Hooks retain normal caught-error semantics for their own side effects.
+
+`h` and focused help topics return command text. Longer help enters mode -2;
+Return advances and `q` returns to command mode without exiting the editor.
+Invalid help input restores the page and buffer. The last page clears help
+state. Numbering/listing and automatic edit output retain the existing caps
+and rollback behavior.
+
+Sixty-six actual-module cases pass, including 20 new cases; six real Lima
+fallback regressions pass. Setup tests use controlled owner callbacks and file
+policy, not ED_SESSION/account integration. The module compiles while exact
+session/codesay dependency blockers remain. Clippy, formatting and preservation
+of 201 predecessor evidence sets pass. Native APIs and existing file policy
+are unchanged. The pinned [editor source][fluffos-object-editor] and Lima setup
+methods were source-reviewed on this date using the previously listed modern
+editor branch settings; no upstream execution is claimed.
+
+The local overlay changes only M_ED. Consumers still use the existing fallback;
+LPC indentation and frontend callback/type/cleanup/wizard-lock repairs remain
+open. No complete editor compatibility is claimed.
+
 #### Lima editor search and substitution
 
 The 3 October 2026 port extends the inherited `M_ED` module with `g`/`v` line
