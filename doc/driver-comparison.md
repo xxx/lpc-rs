@@ -5153,6 +5153,44 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima editor search and substitution
+
+The 3 October 2026 port extends the inherited `M_ED` module with `g`/`v` line
+selection and `s` substitution. Unaddressed selection covers the buffer;
+unaddressed substitution uses the current line. Printable punctuation delimiters
+other than backslash, escaped delimiters and shared remembered patterns are
+supported. Searches use the native [regex dialect and cache](efun/regmatch.md).
+Replacement supports full-match `&`, captures `\1` through `\9`, literal
+ampersand/backslash/delimiters and `\n`, `\r`, `\t`, `\b`. Missing optional
+captures expand to empty text; nonexistent capture references are errors.
+`g` replaces every occurrence per line and `p` prints changed lines. Unsupported
+or duplicate flags are refused. Unicode offsets, anchors and empty matches are
+handled without dropping text or repeating the boundary after a nonempty match.
+
+Global selection permits printing, listing, line numbers, deletion and
+substitution. It selects original lines once, tracks address-driven edits and
+does not reselect inserted lines. Nested selection, file operations, input-mode
+and exit commands are refused when executed in a global body. Whole-buffer
+substitution stages a replacement buffer before changing state; simple global
+deletion and substitution are batched to avoid repeated full-buffer work.
+Errors, including later invalid addresses and output/byte/line limits, restore
+the entire command's editor state. Existing save policy and staging semantics
+remain unchanged.
+
+Forty-six actual-module cases pass, including 24 new cases and 22 carried
+forward; six real Lima fallback regressions also pass. Full 1,000-line print,
+substitute, global substitute and delete operations fit the unchanged
+four-second action budget in these fixtures. This is module validation, not
+activation of find/grep/locate/replace or an ED_SESSION workflow. The module
+compiles, while the session's seven errors and codesay's four dependency errors
+remain. Clippy/formatting and preservation of 200 predecessor evidence sets
+pass. No native API, upstream execution or broader performance claim is added.
+
+The active local overlay changes only `std/modules/m_ed.c` over the core port.
+Distinct nil and preserved call-out players remain the target. Setup/options,
+paged help, LPC indentation and frontend lifecycle integration are still open;
+`set number` in Lima's replace consumer remains unsupported until options land.
+
 #### Lima inherited editor core
 
 The 3 October 2026 port adds `M_ED`, an inherited mudlib module with protected
