@@ -5151,6 +5151,50 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima news daemon startup and native persistence
+
+The 3 October 2026 daemon port changes only [news_d][lima-news-daemon] over the
+who overlay. It adopts the audited native serialization/type/member syntax and
+thread comparator, with integer thread-list results. Saves now pass bound efun
+pointers through Lima's real access wrapper. Snapshots checkpoint the full
+daemon; journal replacement records posts, replies, group changes, removals and
+header edits without rewriting the snapshot on each post.
+
+Check journal size before reading: missing and zero-byte files initialize empty
+deltas, while nonempty files must restore to a mapping. Replay and tombstone
+pruning traverse arrays of keys, so removal cannot shift the remaining mapping
+iteration. After replay, initialize empty journals for every surviving group,
+rebuild threads and checkpoint. An edited article must be added to its journal
+even when it was restored from an earlier snapshot. Native
+[`save_value`](efun/save_value.md), [`restore_value`](efun/restore_value.md),
+[`save_object`](efun/save_object.md) and [function values](lpc/function_type.md)
+provide these contracts without a new driver API.
+
+Fourteen news cases cover real native files, fresh-VM snapshot/journal replay,
+continued IDs, followups, nil-body tombstones, group changes, header edits,
+empty/sparse journals, malformed-input refusal, direct-write policy and
+uncaught-error rollback of live state, files, loading and output. Nine retained
+who cases keep their assertions and observations. Privileged group operations
+use test-only user callbacks through actual `unguarded`; no production security
+policy or service is replaced. No constructor control is needed.
+
+Six focused compiles preserve the preceding daemon and unchanged command/reader
+blockers while passing the adapted daemon, complete user and who. Four gates and
+exact patch verification preserve native/original sources, previous overlays and
+191 predecessor artifact/report sets. Distinct nil, preserved call-out players
+and four-second actions remain the target. Frozen pinned source evidence is
+reused without new fetches or upstream execution; no native suite or broad
+compile survey is rerun. The native references and overview contracts are unchanged.
+
+The files use the [native save format](save-format.md); existing-installation
+conversion remains separate work. Snapshots and journals are separate files,
+without tested recovery from an OS crash or delivery failure between writes.
+The listed malformed inputs do not establish complete schema validation.
+Archive/mail forwarding, wider restriction/thread policy and broad startup
+remain unchecked. Port news dispatch, reader callbacks, subscriptions, unread
+sets and legacy highwater updates next; this daemon port does not establish
+a functioning news UI.
+
 #### Lima news reader, daemon and saved data
 
 The 2 October 2026 audit reviews the pinned [reader][lima-news-reader],
