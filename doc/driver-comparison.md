@@ -4975,6 +4975,37 @@ random2's training and mapping-limit policy. Complete menu interaction, complete
 vocabulary delivery, other SOUL consumers, tell recipient typing, logging, remote
 IMUD, network, login and cold startup remain unestablished.
 
+#### Lima random emote selector migration
+
+The 2 October 2026 migration adopts the exact audited selector patch over the
+semote overlay. Only `cmds/player/random.c` changes; the entire adopted library
+matches the frozen diagnostic byte for byte. The protected CMD adapter allows
+ordinary command discovery to load random. Filtering eligible names once and
+refusing an empty result removes the empty-pool error and nonmatching-pool loop.
+Exact empty/LIV rules, normalized names, unknown-name fallback and empty-template
+truthiness retain their audited behavior. Original Lima and native sources remain
+unchanged.
+
+All twenty-three case bodies, assertions and normalized observations match the
+audit: seventeen adopted-library cases, four frozen previous-library controls
+and two historical verbs controls. Four fixture sources are copied unchanged;
+support changes only the adopted library directory. Action delivery, refusal
+redirects/appends and pipelines, caller checks, restore and rollback retain the
+audited results. Focused compilation has five successes from six probes, with
+identical outcomes and diagnostics; random2 retains its missing dispatch adapter.
+Six gates, exact adoption and 176 predecessor artifact/report sets pass.
+
+Configuration changes only its library directory. Lima keeps distinct nil,
+preserved call-out players and four-second actions. Frozen source evidence is
+reused without new public fetches, upstream execution, a native suite, historical
+matrix or preload survey; this adaptation adds no native API.
+
+Audit random2 training and mapping-limit policy next. Its staged compile controls
+remain separate evidence, not an adopted port. Full-stock selector performance,
+statistical distribution, remote-target execution, complete menu interaction,
+complete vocabulary delivery, other SOUL consumers, tell recipient typing,
+logging, remote IMUD, network, login and cold startup remain unestablished.
+
 #### Lima file metadata
 
 Lima's `file_length` callers test existence or non-emptiness; none needs a line
