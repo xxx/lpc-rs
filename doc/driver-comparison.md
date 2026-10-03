@@ -5151,6 +5151,50 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima editor backend scope
+
+The 3 October 2026 audit finds six Lima consumers with 26 calls to `ed_start`,
+`ed_cmd` and `query_ed_mode`. They need interactive editing, global searches,
+substitutions, file writes, numbering and LPC indentation. This is a full
+editor-engine scope; a command recorder cannot provide it.
+
+Pinned [FluffOS editor source][fluffos-object-editor] at
+`44532e0228f34be2184c701a361df4079371b8b0` is reviewed with `OLD_ED` disabled,
+`RECEIVE_ED` disabled, four-space indentation and `ED_INDENT_CASE` disabled.
+The checked-in defaults enable `OLD_ED`; no build or upstream execution is
+claimed. Public retrieval failed; reviewed local files match pinned Git blobs.
+The [specification][fluffos-object-editor-spec] declares three optional start
+arguments; the implementation treats a two-argument second value other than 1
+as scroll size. [Modes][fluffos-object-editor-mode] are command input 0,
+inactive -1, help paging -2 and a positive next input-line number. Restrictions
+are checked by the parsed engine, including addressed commands. Restricted
+sessions still permit writing/exiting through their selected file.
+
+Four isolated architecture probes establish that inherited LPC globals can
+hold separate buffers, inherited file calls authorize the owning object and
+defining module, and uncaught errors roll back buffer and file effects together.
+A caught write refusal after `rm()` commits the earlier deletion of the file.
+These prove runtime building blocks, not a Lima editor or command grammar.
+
+The recommended next change is general overwrite support for
+[write_file](efun/write_file.md), reusing the existing committed temporary-file
+replacement effect. [FluffOS write flags][fluffos-file-write-flags] include
+replace and compression bits; only uncompressed replacement is recommended
+here. Then a real inherited mudlib module can provide the editor API, grammar
+and state without new native editor efuns. Existing deferred I/O failure
+reporting remains; replacement does not imply a durable save acknowledgment.
+Session callbacks/types/restrictions/lifecycle and wizard locks need repairs.
+Regex dialect, full grammar, indentation, permissions and limits require
+implementation tests before editor compatibility can be claimed.
+
+Seven focused compiles preserve the session's seven errors. Six CMD-based
+consumers stop at four `dispatch_main` dependency errors each; those probes
+cannot establish their later editor diagnostics. Four gates and source/hash
+checks preserve native/original/active sources and 197 predecessor sets.
+The handoff overlay remains active in distinct nil with preserved call-out
+player and four-second actions. No engine, native API or configuration change
+is adopted by this audit.
+
 #### Lima line-editor handoff port
 
 The 3 October 2026 port changes only the [text editor][lima-text-editor]
@@ -6874,3 +6918,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-ed-grep]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/grep.c
 [lima-ed-locate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/locate.c
 [lima-ed-replace]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/replace.c
+[fluffos-object-editor]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/ed.cc
+[fluffos-object-editor-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec
+[fluffos-object-editor-mode]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc
+[fluffos-file-write-flags]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc
