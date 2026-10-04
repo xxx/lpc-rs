@@ -5153,6 +5153,52 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima editor session repair
+
+The 3 October 2026 port binds inherited M_ED to
+[ED_SESSION][lima-ed-session], corrects the setup getter/setter types and uses
+bare input/prompt callbacks. Ordinary calls to unshadowed native functions let
+the module load through the unchanged Lima master; no override-policy allowance
+is added. Native file authorization and parsed editor restrictions remain active.
+
+Single-entry startup validates the backend before publishing input/flag state.
+Idempotent termination releases owned state before callbacks, retires despite
+callback errors and preserves an editor started by a parent or completion
+callback. A separate optional cancellation callback handles EOF, failed startup,
+removal and abandoned-session cleanup without importing an unfinished draft.
+Automatic cleanup catches callback errors so teardown can commit; ordinary
+uncaught action errors retain native transaction rollback.
+
+[M_INPUT][lima-input-forwarding] clears its stored owner before forwarding
+pop/removal. The [user input system][lima-inputsys] checks callback ownership and
+removes the exact handler, preserving foreign handlers and notifying a parent
+only when removing the top entry. Existing editing flags are borrowed for normal
+LIFO nesting; arbitrary out-of-order closure of nested editors sharing that
+boolean flag is unestablished.
+
+The [text editor's][lima-text-editor] real `~e` handoff now edits and imports saved
+Unicode/blank-line drafts. Cancellation releases its staged file and preserves
+the parent's draft. Clone-specific filenames separate nested editors; an
+existing draft path is refused without claiming or deleting it. File-mode
+completion uses atomic overwrite, retaining the source and editable draft on a
+permission refusal. Real news composition edits/posts through the backend and
+restores reader/shell handlers. Failed startup retains usable text editing.
+
+Ninety-six module regressions, twenty-four new session cases and twelve new
+handoff cases pass. One late-startup failpoint and one forced load-refusal control
+are identified separately; no recorder backend or master allowance is used.
+Second-user isolation, warning-free workspace Clippy, formatting and preservation
+pass, with 204 predecessor evidence sets intact. Five repaired modules/complete
+user targets compile; the wizard command retains its exact four CMD errors.
+Distinct nil, preserved players and 4000 ms remain unchanged. Pinned Lima source
+review and lpc-rs execution do not establish upstream execution or full editor
+compatibility.
+
+The [wizard caller][lima-ed-command] still needs command dispatch and lock release
+on cancellation/start failure before activation. Account/codesay consumers,
+network disconnects, commit-time I/O failure and full startup remain open.
+No native editor or modal-ownership API is added.
+
 #### Lima editor session frontend audit
 
 The 3 October 2026 audit binds inherited `M_ED` to a temporary
