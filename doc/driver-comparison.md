@@ -5153,6 +5153,53 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima editor session frontend audit
+
+The 3 October 2026 audit binds inherited `M_ED` to a temporary
+[ED_SESSION][lima-ed-session] and corrects its setup getter to `int`; a second
+control uses bare input/prompt callbacks. The active overlay retains the
+fallback and its exact seven session compile errors. No native API or frontend
+repair is adopted.
+
+LPC-triggered loading also exposes a module policy blocker: the
+[master's][lima-master] `valid_override` rejects its explicit `efun::` calls.
+That refusal leaves no session, handler or flag changes. CLI compile-only
+success does not test this hook. Ten lifecycle controls narrowly allow those
+calls from M_ED in a temporary master while retaining runtime file permissions;
+they do not establish production activation or use a recorder backend.
+
+With the real engine bound, legacy callbacks return functions instead of
+calling the input/prompt methods. Directory or saved-setup startup refusals
+leave a handler, flag and inactive clone; repeated entry installs a duplicate
+handler before the backend refuses it. Input-stack teardown destroys the
+session but retains its owned editing flag. Completion errors leave a live
+inactive clone after popping input and clearing the flag.
+
+The [input system][lima-inputsys] invokes the parent's return callback during
+pop, before session flag cleanup; a throwing parent leaves the flag and clone
+live. An injected out-of-order close shows that
+[M_INPUT][lima-input-forwarding] removes the top handler even when another
+object owns it. This is an ownership control, not normal shell delivery to a
+covered handler. Clearing the old flag before completion correctly preserves
+a new editor started by that callback and should survive the repair.
+
+The first-character warning filter also warns on literal append text and still
+forwards current-file writes. Parsed module restrictions refuse an addressed
+write to another file; restricted handoff saves to the original staged file
+remain intentional. The [wizard command][lima-ed-command] releases filename
+locks only through completion. Lock retention after caught startup failure or
+EOF is a source inference; actual command execution remains blocked by four
+CMD dependency errors.
+
+Eleven new control cases and six unchanged real fallback regressions pass.
+Clippy, formatting, exact focused compile diagnostics and preservation pass,
+with 203 predecessor evidence sets intact. Distinct nil, preserved players and
+4000 ms remain unchanged. Next repair module compile policy, setup signatures,
+bare callbacks, single-entry startup and idempotent owned-state termination,
+including callback errors and targeted handler removal. Validate wizard-lock
+cleanup and real handoff before consumer activation. Source review of the
+pinned Lima files is not upstream execution or full editor compatibility.
+
 #### Lima LPC indentation
 
 The 3 October 2026 port implements whole-buffer `I` in inherited `M_ED`;
