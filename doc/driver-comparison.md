@@ -5153,6 +5153,52 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima wizard editor command audit
+
+The 3 October 2026 audit tests the [wizard `ed` caller][lima-ed-command] over the
+repaired session. The active command retains four missing `dispatch_main`
+errors. A diagnostic control adds only the protected CMD adapter and exercises
+ordinary wizard-shell input with real command rules, users, security and M_ED.
+It does not activate or repair the command in the active overlay.
+
+With dispatch alone, Unicode/blank-line editing, quoted filenames, new-file
+creation, current-file reuse and normal `q`/`Q` lock release work. Two wizards
+share canonical-path locks correctly until normal completion. Native permission
+refusal preserves the file and active session; caller/resend/handler guards hold.
+An uncaught outer action failure rolls back command/session state and output.
+
+Directory, setup, backend-size and clone/load refusals leave a stale filename
+lock after the session retires. Startup also changes current file before success,
+and modal input discards the error without command feedback. The command's
+1,000,000-byte guard does not cover the module's 8192-byte/1000-line caps. EOF and
+external removal release session input/flag/clone state but retain the caller's
+lock because it does not supply cancellation. A second wizard can remain denied
+with no live edit.
+
+[CMD stdio][lima-command-stdio] initializes routing before dispatch. In the
+diagnostic control, `ed file > file` removes the source and leaves a stale lock
+with no editor running. Native metadata observes pending removal while directory
+listing still reads disk; source review explains M_ED's startup refusal through
+that visibility difference, separately from the executed file-removal result.
+A real downstream `tell` in `ed file | tell ...` runs while editing remains active.
+These results require a routing policy before interactive command activation.
+
+Nineteen new command cases, twelve unchanged session/text/news handoff regressions
+and an isolated redirect follow-up pass their observed expectations. One command
+and one handoff case force backend load refusal using the old session. Clippy,
+formatting, four focused compiles and preservation pass, with 205 predecessor
+evidence sets intact. The active library/configuration, native sources and
+master policy remain unchanged. Distinct nil, preserved players and 4000 ms
+remain the target; pinned Lima source review is not upstream execution or complete
+wizard-editor compatibility.
+
+Next coordinate protected dispatch, owner-checked lock release, completion/
+cancellation and caught clone/start failure with feedback. Set current file after
+successful startup and block interactive routing before stdio mutations or
+downstream execution. Preserve command rules, quoted paths, backend caps and
+native file authorization. Account/codesay activation, network disconnects,
+command reload during editing, commit-time I/O failure and full startup remain open.
+
 #### Lima editor session repair
 
 The 3 October 2026 port binds inherited M_ED to
