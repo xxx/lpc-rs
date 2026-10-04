@@ -5157,6 +5157,41 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima didlog daemon repairs
+
+The 4 October 2026 local port repairs DID_D and the user's login display. The
+daemon needs explicit integer-zero and nil returns, an array regexp predicate
+(`sizeof(regexp(({row_text}), pattern))`), `mixed *` for timestamp/string rows,
+and export loops over the current version's rows. Native `__PORT__` supplies the
+untouched stock ports header; no diagnostic constant is installed.
+[Daemon][lima-did-daemon], [user display][lima-did-user],
+[native regexp](efun/regexp.md), [native macros](lpc/macros.md#predefined-macros).
+
+Version changes now check the existing `Mudlib:daemons` privilege before clearing
+rows or saving. Authorized selection of an existing version retains its explicit
+reset semantics. Login's off flag suppresses automatic display without advancing
+the last-read timestamp; enabling it restores display, and live notification
+muting remains intact. Future cutoffs still select all rows for the command's
+`-all` convention. A pattern with no matches retains the header-only result,
+while a timestamp-empty query runs its continuation. [Reader][lima-did-command].
+
+Nine focused tests/nineteen observations cover actual public wizard reconnect,
+the interactive takeover prompt, off/on display, pager quit, posting, notification
+muting, save/reload, pattern/cutoff selection, four plain/dated file exports and
+four version refusals with unchanged state/saved bytes plus an authorized reset.
+Role fixtures register named wizard privileges and mirror normal user-entry
+privilege assignment; they use direct calls through the existing guard.
+[Security setup][lima-security], [user entry][lima-body-switching].
+Eight uninstrumented compile checks make DID_D and USER_OB clean in the adopted
+overlay; `I` and `didlog` retain four CMD `dispatch_main` errors apiece.
+Workspace Clippy and formatting checks pass; no native code or master policy
+changes. Pinned source review is distinct from local execution. Lima keeps
+distinct nil, preserved players and four-second actions. Next port those CMD
+callers and their argument handling, then audit selected-character reconnect and
+takeover responses. Command/HTTP execution, full login/startup, old saves,
+malformed versions/rows, the special LIMA save/version path and concurrency
+remain unestablished.
+
 #### Lima native configured port macro
 
 The 4 October 2026 driver provides reserved integer `__PORT__` from the compiler
