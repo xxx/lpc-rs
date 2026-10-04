@@ -5157,6 +5157,54 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima selected-character reconnect and takeover audit
+
+The 4 October 2026 audit retains the didlog-command overlay. Existing-logon
+lookup matches account ID alone: reconnecting another character can take the
+wrong linkdead body or ask to throw off a different interactive character.
+The takeover callback drops the selected name on wizard no and after the old
+user disappears, and yes does not revalidate a changed predecessor body.
+The diagnostic matches account and actual body name, retains the name in callbacks
+and rejects ambiguous selected-character owners before transfer.
+[Body selection][lima-user-bodies], [existing logon and answers][lima-body-switching],
+[public entry][lima-login].
+
+Login initialization also runs while confirmation is pending. A long didlog
+pushes a pager above the question, so y pages instead of answering. The diagnostic
+defers channels/display until a body is accepted, including callback completion.
+Existing wizard no policy still creates a fresh selected-character body without
+retiring the old session; regular no still dismisses the newcomer.
+[Modal dispatch][lima-inputsys], [didlog display][lima-did-user].
+
+A loaded account mailbox exposes a separate local teardown refusal: MAILBOX_D
+calls `destruct(mailbox)` through a stack the master does not authorize. Modal
+catches conceal the error: a partial transfer can leave the predecessor live
+and the physical body link unchanged, or a dismissed newcomer still alive.
+The diagnostic calls the mailbox's existing public `remove()` for authorized
+self-removal, with master policy unchanged. Earlier reconnect fixtures did not
+load that mailbox and did not establish this cleanup path.
+[Mailbox daemon][lima-mailbox-daemon], [mailbox removal][lima-entry-mailbox],
+[native destruction authorization](apply/master/valid_destruct.md).
+
+Eleven tests/22 observations compare baseline reproductions and a three-file
+diagnostic through real saved users/bodies, shells, modal input, editors, pager
+and mailbox. Cases cover different characters, loaded-mailbox linkdead/yes/no
+teardown, invalid answers, predecessor disappearance/body change, pager ordering
+and duplicate selected-character owners. The disappearing-predecessor baseline
+first records the stock quit refusal, then explicitly prepares mailbox self-removal
+to isolate its wrong-character retry; the diagnostic needs no such preparation.
+Dirty editor source remains unsaved, and successful transfer checks the body link
+against the actual user object. Passing audit assertions reproduce known baseline
+failures as well as the corrected diagnostic behavior.
+
+Eight uninstrumented compile checks keep USER_OB, USER_D, MAILBOX_D and human clean
+in both libraries. Workspace Clippy/format checks and 220 frozen predecessor sets
+pass. Distinct nil, preserved players and four-second actions remain. The patch
+is not adopted; next adopt and validate it with the didlog command checks.
+Authentication, socket dispatch, backup/guest users, full startup, idle/shared
+mailbox lifetime, other-account takeover attempts and concurrency remain unchecked.
+Pinned upstream source review is distinct from local execution.
+
 #### Lima didlog command adapters
 
 The 4 October 2026 local port gives `I` and `didlog` protected `dispatch_main`
@@ -7849,6 +7897,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-did-post-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/I.c
 
 [lima-did-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/didlog.c
+[lima-mailbox-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/mailbox_d.c
 
 [fl-configured-port]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc#L3003-L3006
 
