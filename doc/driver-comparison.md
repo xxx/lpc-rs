@@ -5153,6 +5153,55 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima wizard-editor disconnect and reconnect audit
+
+Reviewed **3 October 2026** against pinned Lima [user][lima-entry-user],
+[inputsys][lima-inputsys], [body switching][lima-body-switching],
+[user shell][lima-user-shell], [body][lima-body], [editor session][lima-ed-session]
+and [editor command][lima-ed-command] sources. Execution uses the active local
+port at native revision `004d1f40`; no upstream driver execution is claimed.
+
+Native detach followed by Lima's real `net_dead()` apply retains the editor,
+unsaved buffer, modal stack and lock during its 300-second grace period. Later
+user removal tears down the body and shell without clearing modal handlers,
+leaving an orphan editor. Calling the protected body-transfer routine directly
+removes the old user but also leaves the session's owned `F_IN_EDIT` flag on the
+transferred body until session cleanup runs. The dead-owner lock entry is stale
+metadata, not a permanently blocking lock: the command checks owner liveness.
+Explicitly invoking the real session cleanup releases those remaining resources.
+
+A diagnostic one-line control clears the modal stack before user teardown,
+cancelling the editor while its owner is alive. It releases the flag/lock on
+scheduled removal, explicit removal and reconnect, without saving unfinished
+edits or changing the link-dead grace period. Ordinary editor quit and live-owner
+modal cancellation still release their resources. The control is recommended
+for local adoption; active sources/configuration and master policy are unchanged.
+
+Six tests/fourteen observations pass in debug; eight focused compiles and four
+quality gates pass, preserving 213 predecessor artifact/report sets. Fixtures
+use actual saved users/bodies, wizard shells, CMD discovery, master policy and
+modal/editor state. The actual recorded removal timer is checked in milliseconds
+and prioritized early through native dispatch, so natural 300-second expiry is
+not established. Reconnect seeds a fixture admin membership to enter existing-
+logon logic; authentication and full login are not exercised. Public native
+detach and a manual net_dead apply exercise this boundary; the socket loop and
+its private transport input-slot clearing are not executed.
+
+Distinct nil, preserved call-out players and four-second actions remain the Lima
+target. No native API change, historical/full native rerun, optimized performance,
+periodic world-cleanup sweep, other modal-consumer/callback-failure behavior,
+interactive takeover, hot reload, concurrency, commit-time I/O failure or complete
+startup claim is made. Adopt modal clearing before user removal next, with normal
+removal and protected body-transfer/cancellation validation.
+
+Normal enter_game after saved-account restore has a separate active-port USER_D
+blocker: its account lookup rejects the new and old link-dead user as duplicate
+live account objects before body transfer. Both variants record that refusal,
+then invoke protected existing-logon logic directly to test its cleanup boundary.
+This does not establish a successful complete reconnect. The modal-clear control
+leaves the registry guard unchanged; normal-entry account selection needs a
+subsequent repair. [Login][lima-login], [registry][lima-user-daemon].
+
 #### Lima wizard-editor pipeline guard adopted
 
 The 3 October 2026 local port adopts the exact three-file control from the
