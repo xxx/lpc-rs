@@ -621,12 +621,43 @@ mod tests {
     }
 
     mod test_predefined_macros {
+        use lpc_rs_utils::config::ConfigBuilder;
+
         use super::*;
         use crate::{
             compile_time_config::MAX_CALL_STACK_SIZE,
-            interpreter::vm::Vm,
+            interpreter::{lpc_ref::LpcRef, vm::Vm},
             test_support::{initialize_program, lib_holding, temp_lib_config},
         };
+
+        #[tokio::test]
+        async fn configured_port_is_an_integer_fixed_by_compilation() {
+            let root = lib_holding("configured-port-program", &[]);
+            for port in [33100, 44100] {
+                let config = ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .port(port)
+                    .build()
+                    .unwrap();
+                let compiled = Compiler::new(config)
+                    .compile_string("/service.c", "int create() { return __PORT__ + 3; }")
+                    .await
+                    .unwrap();
+                let runtime_config = ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .port(0)
+                    .build()
+                    .unwrap();
+                let vm = Vm::new(runtime_config);
+                let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                    compiled.program,
+                    vm.global_state.clone(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(task.result().unwrap(), LpcRef::from(i64::from(port) + 3));
+            }
+        }
 
         #[tokio::test]
         async fn directory_macros_resolve_inherits_and_parent_code_keeps_its_source() {

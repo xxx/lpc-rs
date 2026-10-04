@@ -243,6 +243,7 @@ impl Preprocessor {
                                     let appends = expand::Expander::new(
                                         &self.defines,
                                         &self.context.diagnostic_sources,
+                                        self.context.config.port,
                                     )
                                     .expand_use(&token, &mut iter)?;
 
@@ -576,8 +577,10 @@ impl Preprocessor {
         }
         match expr {
             PreprocessorNode::Var(x) => {
-                if Predefined::from_name(x).is_some() {
-                    return Ok(true);
+                match Predefined::from_name(x) {
+                    Some(Predefined::Port) => return Ok(self.context.config.port != 0),
+                    Some(_) => return Ok(true),
+                    None => {}
                 }
                 if hide.contains(&x.as_str()) {
                     return Ok(false); // hidden name reads as undefined
@@ -648,6 +651,9 @@ impl Preprocessor {
         }
         match expr {
             PreprocessorNode::Var(x) => {
+                if matches!(Predefined::from_name(x), Some(Predefined::Port)) {
+                    return Ok(self.context.config.port.into());
+                }
                 if hide.contains(&x.as_str()) {
                     // hidden name reads as undefined
                     return Err(lpc_error!(span, "unable to resolve into an int: `{}`", x));

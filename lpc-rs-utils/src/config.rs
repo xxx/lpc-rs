@@ -100,6 +100,7 @@ pub struct Config {
     #[builder(setter(custom), default = "vec![]")]
     pub system_include_dirs: Vec<Ustr>,
 
+    /// Plaintext listener port and the numeric `__PORT__` value used during compilation.
     #[builder(default = "24960")]
     pub port: u16,
 

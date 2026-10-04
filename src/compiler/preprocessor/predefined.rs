@@ -2,7 +2,10 @@ use lpc_rs_errors::{Result, lpc_bug, source_map::DiagnosticSources, span::Span};
 
 use crate::{
     compile_time_config::DRIVER_VERSION,
-    compiler::lexer::{Token, logos_token::StringToken},
+    compiler::lexer::{
+        Token,
+        logos_token::{IntToken, StringToken},
+    },
 };
 
 /// Reserved macros whose values are supplied by the compiler at the invocation site.
@@ -10,6 +13,7 @@ pub(super) enum Predefined {
     File,
     Dir,
     Version,
+    Port,
 }
 
 impl Predefined {
@@ -18,12 +22,19 @@ impl Predefined {
             "__FILE__" => Some(Self::File),
             "__DIR__" => Some(Self::Dir),
             "__VERSION__" => Some(Self::Version),
+            "__PORT__" => Some(Self::Port),
             _ => None,
         }
     }
 
-    pub(super) fn expand(self, span: Span, sources: &DiagnosticSources) -> Result<Token> {
+    pub(super) fn expand(
+        self,
+        span: Span,
+        sources: &DiagnosticSources,
+        port: u16,
+    ) -> Result<Token> {
         let value = match self {
+            Self::Port => return Ok(Token::IntLiteral(IntToken(span, port.into()))),
             Self::Version => DRIVER_VERSION.to_owned(),
             Self::File | Self::Dir => {
                 let sources = sources.read();
@@ -82,6 +93,164 @@ mod tests {
                 other => panic!("expected a string literal, got {other:?}"),
             })
             .collect()
+    }
+
+    #[tokio::test]
+    async fn default_port_expands_to_an_integer_literal() {
+        let tokens = fixture().scan("/root.c", "__PORT__").await.unwrap();
+        assert!(matches!(&tokens[..], [Token::IntLiteral(value)] if value.1 == 24960));
+    }
+
+    #[tokio::test]
+    async fn disabled_plaintext_telnet_keeps_its_configured_port_instead_of_the_tls_port() {
+        use lpc_rs_utils::tls::{CertificateFiles, TlsConfig};
+
+        let outside = lib_holding("configured-port-tls-files", &[]);
+        let config = ConfigBuilder::default()
+            .lib_dir("tests/fixtures/code")
+            .port(33100)
+            .telnet_enabled(false)
+            .tls(TlsConfig {
+                port: 44300,
+                files: CertificateFiles {
+                    certificate: outside.join("identity.pem"),
+                    private_key: outside.join("identity.pem"),
+                },
+            })
+            .build()
+            .unwrap();
+        let tokens = preprocessor(config, DiagnosticSources::scoped())
+            .scan("/root.c", "__PORT__")
+            .await
+            .unwrap();
+        assert!(matches!(&tokens[..], [Token::IntLiteral(value)] if value.1 == 33100));
+    }
+
+    #[tokio::test]
+    async fn configured_port_values_are_isolated_between_preprocessors() {
+        for port in [0, 4100, u16::MAX] {
+            let config = ConfigBuilder::default().port(port).build().unwrap();
+            let tokens = preprocessor(config, DiagnosticSources::scoped())
+                .scan("/root.c", "__PORT__")
+                .await
+                .unwrap();
+            assert!(
+                matches!(&tokens[..], [Token::IntLiteral(value)] if value.1 == u64::from(port))
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn configured_port_is_available_in_auto_includes_and_headers() {
+        let root = lib_holding(
+            "configured-port-headers",
+            &[
+                (
+                    "include/global.h",
+                    "__PORT__\n#define PORT_ALIAS __PORT__\n",
+                ),
+                ("include/extra.h", "__PORT__\n"),
+            ],
+        );
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .auto_include_file("/include/global.h")
+            .port(33100)
+            .build()
+            .unwrap();
+        let tokens = preprocessor(config, DiagnosticSources::scoped())
+            .scan(
+                "/root.c",
+                "#include \"/include/extra.h\"\nPORT_ALIAS __PORT__",
+            )
+            .await
+            .unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert!(
+            tokens
+                .iter()
+                .all(|token| matches!(token, Token::IntLiteral(value) if value.1 == 33100))
+        );
+    }
+
+    #[tokio::test]
+    async fn port_aliases_arguments_and_stringification_preserve_numeric_spelling() {
+        let config = ConfigBuilder::default().port(33100).build().unwrap();
+        let tokens = preprocessor(config, DiagnosticSources::scoped())
+            .scan(
+                "/root.c",
+                indoc! {r#"
+                #define PORT_ALIAS __PORT__
+                #define ID(x) x
+                #define STR(x) #x
+                #define STRINGIZE(x) STR(x)
+                #define SHADOW(__PORT__) __PORT__
+                ID(PORT_ALIAS) STR(__PORT__) STRINGIZE(PORT_ALIAS) SHADOW(7)
+            "#},
+            )
+            .await
+            .unwrap();
+        assert!(
+            matches!(&tokens[..], [Token::IntLiteral(port), Token::StringLiteral(raw), Token::StringLiteral(expanded), Token::IntLiteral(argument)]
+            if port.1 == 33100 && raw.1 == "__PORT__" && expanded.1 == "33100" && argument.1 == 7)
+        );
+    }
+
+    #[tokio::test]
+    async fn configured_port_supports_arithmetic_aliases_and_elif_conditions() {
+        let config = ConfigBuilder::default().port(4100).build().unwrap();
+        let tokens = preprocessor(config, DiagnosticSources::scoped())
+            .scan(
+                "/root.c",
+                indoc! {r#"
+                #define PORT_ALIAS __PORT__
+                #if __PORT__ + 3 != 4103 || PORT_ALIAS != 4100
+                #error incorrect configured port
+                #endif
+                #if !__PORT__ || !PORT_ALIAS
+                #error a nonzero port is truthy
+                #endif
+                #if 0
+                #error inactive branch
+                #elif PORT_ALIAS * 2 == 8200 && (__PORT__ >> 1) == 2050
+                "selected"
+                #else
+                #error incorrect port arithmetic
+                #endif
+            "#},
+            )
+            .await
+            .unwrap();
+        assert_eq!(strings(tokens), ["selected"]);
+    }
+
+    #[tokio::test]
+    async fn zero_configured_port_is_defined_but_false_in_conditions() {
+        let config = ConfigBuilder::default().port(0).build().unwrap();
+        let tokens = preprocessor(config, DiagnosticSources::scoped())
+            .scan(
+                "/root.c",
+                indoc! {r#"
+                #define PORT_ALIAS __PORT__
+                #ifndef __PORT__
+                #error missing port
+                #endif
+                #if defined(__PORT__) && !__PORT__ && !PORT_ALIAS && __PORT__ == 0
+                "zero"
+                #else
+                #error zero port is not false
+                #endif
+                #if 0
+                #elif __PORT__
+                #error zero port is not false in elif
+                #else
+                "zero elif"
+                #endif
+            "#},
+            )
+            .await
+            .unwrap();
+        assert_eq!(strings(tokens), ["zero", "zero elif"]);
     }
 
     #[tokio::test]
@@ -244,20 +413,25 @@ mod tests {
             .scan(
                 "/root.c",
                 indoc! {r#"
-            "__FILE__ __DIR__ __VERSION__"
-            // __FILE__
+            "__FILE__ __DIR__ __VERSION__ __PORT__"
+            // __FILE__ __PORT__
             /* __VERSION__ */
             #if 0
             __DIR__
             #define __FILE__ "changed"
             #undef __VERSION__
+            #define __PORT__ 7
+            #undef __PORT__
             #endif
             __FILE__
         "#},
             )
             .await
             .unwrap();
-        assert_eq!(strings(tokens), ["__FILE__ __DIR__ __VERSION__", "/root.c"]);
+        assert_eq!(
+            strings(tokens),
+            ["__FILE__ __DIR__ __VERSION__ __PORT__", "/root.c"]
+        );
     }
 
     #[tokio::test]
@@ -272,8 +446,8 @@ mod tests {
             #ifndef __DIR__
             #error missing directory
             #endif
-            #if defined(__FILE__) + defined(__DIR__) + defined(__VERSION__) == 3
-            "all three"
+            #if defined(__FILE__) + defined(__DIR__) + defined(__VERSION__) + defined(__PORT__) == 4
+            "all four"
             #endif
             #if not defined(__VERSION__)
             #error missing version
@@ -289,7 +463,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(strings(tokens), ["file", "all three", "version"]);
+        assert_eq!(strings(tokens), ["file", "all four", "version"]);
     }
 
     #[tokio::test]
@@ -319,7 +493,7 @@ mod tests {
 
     #[tokio::test]
     async fn predefined_names_cannot_be_redefined_or_undefined() {
-        for name in ["__FILE__", "__DIR__", "__VERSION__"] {
+        for name in ["__FILE__", "__DIR__", "__VERSION__", "__PORT__"] {
             for (directive, action) in [
                 (format!("#define {name} \"changed\""), "redefine"),
                 (format!("#define {name}() \"changed\""), "redefine"),
@@ -356,7 +530,7 @@ mod tests {
     async fn predefined_tokens_keep_use_site_spans_and_warning_policy() {
         let sources = DiagnosticSources::scoped();
         let mut pp = preprocessor(ConfigBuilder::default().build().unwrap(), sources.clone());
-        let tokens = pp.scan("/root.c", "#define FILE __FILE__\n#define ID(x) x\n#pragma no_warnings\nFILE ID(__DIR__) __VERSION__").await.unwrap();
+        let tokens = pp.scan("/root.c", "#define FILE __FILE__\n#define ID(x) x\n#pragma no_warnings\nFILE ID(__DIR__) __VERSION__ __PORT__").await.unwrap();
         let spelling: Vec<_> = tokens
             .iter()
             .map(|token| {
@@ -365,7 +539,7 @@ mod tests {
                 span.code_in(&sources.read()).unwrap()
             })
             .collect();
-        assert_eq!(spelling, ["FILE", "__DIR__", "__VERSION__"]);
+        assert_eq!(spelling, ["FILE", "__DIR__", "__VERSION__", "__PORT__"]);
     }
 
     #[tokio::test]

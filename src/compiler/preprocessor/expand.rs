@@ -50,6 +50,7 @@ pub(super) struct Expanded {
 pub(super) struct Expander<'a> {
     defines: &'a HashMap<String, Define>,
     sources: &'a DiagnosticSources,
+    port: u16,
 }
 
 impl<'a> Expander<'a> {
@@ -57,8 +58,13 @@ impl<'a> Expander<'a> {
     pub(super) fn new(
         defines: &'a HashMap<String, Define>,
         sources: &'a DiagnosticSources,
+        port: u16,
     ) -> Self {
-        Self { defines, sources }
+        Self {
+            defines,
+            sources,
+            port,
+        }
     }
 
     /// Expand one potential macro use. `cursor` is the stream the use sits
@@ -79,7 +85,7 @@ impl<'a> Expander<'a> {
         let span = token.span();
         if let Some(predefined) = Predefined::from_name(name) {
             return Ok(Some(Expanded {
-                tokens: vec![predefined.expand(span, self.sources)?],
+                tokens: vec![predefined.expand(span, self.sources, self.port)?],
                 use_span: span,
             }));
         }
@@ -95,6 +101,7 @@ impl<'a> Expander<'a> {
         let mut expansion = Expansion {
             defines: self.defines,
             sources: self.sources,
+            port: self.port,
             top: name,
             use_span: span,
             hide: vec![],
@@ -119,6 +126,7 @@ impl<'a> Expander<'a> {
 struct Expansion<'a> {
     defines: &'a HashMap<String, Define>,
     sources: &'a DiagnosticSources,
+    port: u16,
     /// The top-level macro, named by the cap diagnostic.
     top: &'a str,
     /// Every body-derived token emits with this span: the use-site
@@ -355,7 +363,7 @@ impl<'a> Expansion<'a> {
                 continue;
             };
             if let Some(predefined) = Predefined::from_name(identifier) {
-                token.token = predefined.expand(token.token.span(), self.sources)?;
+                token.token = predefined.expand(token.token.span(), self.sources, self.port)?;
                 token.origin = None;
                 self.emit(token, out)?;
                 continue;
@@ -551,6 +559,7 @@ mod tests {
         let expander = Expander::new(
             &preprocessor.defines,
             &preprocessor.context.diagnostic_sources,
+            preprocessor.context.config.port,
         );
         let mut cursor = LexWrapper::new(src, 0).peekable();
         let mut out = vec![];
@@ -735,7 +744,11 @@ mod tests {
     #[tokio::test]
     async fn body_tokens_take_the_use_site_span() {
         let pp = table("#define FOO 42\n").await;
-        let expander = Expander::new(&pp.defines, &pp.context.diagnostic_sources);
+        let expander = Expander::new(
+            &pp.defines,
+            &pp.context.diagnostic_sources,
+            pp.context.config.port,
+        );
         let mut cursor = LexWrapper::new("FOO", 0).peekable();
         let Some(Ok(Token::Id(st))) = cursor.next() else {
             panic!("expected an Id");
@@ -751,7 +764,11 @@ mod tests {
     #[tokio::test]
     async fn argument_tokens_keep_their_own_spans() {
         let pp = table("#define ID(x) x\n").await;
-        let expander = Expander::new(&pp.defines, &pp.context.diagnostic_sources);
+        let expander = Expander::new(
+            &pp.defines,
+            &pp.context.diagnostic_sources,
+            pp.context.config.port,
+        );
         let src = "ID(marf)";
         let mut cursor = LexWrapper::new(src, 0).peekable();
         let Some(Ok(Token::Id(st))) = cursor.next() else {
@@ -791,7 +808,11 @@ mod tests {
     #[tokio::test]
     async fn body_tokens_of_a_call_take_the_whole_call_span() {
         let pp = table("#define F(x) x + 1\n").await;
-        let expander = Expander::new(&pp.defines, &pp.context.diagnostic_sources);
+        let expander = Expander::new(
+            &pp.defines,
+            &pp.context.diagnostic_sources,
+            pp.context.config.port,
+        );
         let src = "F(9)";
         let mut cursor = LexWrapper::new(src, 0).peekable();
         let Some(Ok(Token::Id(st))) = cursor.next() else {

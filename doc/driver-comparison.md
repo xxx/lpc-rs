@@ -599,7 +599,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Class visibility | Accepts visibility modifiers on class definitions but discards them; inheritance copies classes regardless of the modifier. [Grammar][fl-class-grammar], [declarations][fl-class-declarations], [inheritance][fl-class-inheritance]. | Enforces `private class`: descendants cannot name the class or access its members, including through `mixed`. Public and protected classes remain inheritable, subject to inherit visibility. Defining code retains access. If descendants rely on an upstream private declaration being exposed, make it public/protected or include its definition explicitly. [Reference](lpc/classes.md#declaration-visibility). |
 | Inheritance visibility | Supports access modifiers on inherits; private functions and globals become hidden when inherited again. The reviewed build enables `SENSIBLE_MODIFIERS`, so explicit public declarations do not defeat a private inherit. [Grammar rules][fl-inherit-grammar], [compiler][fl-pragma-compiler], [defaults][fl-options]. | Supports public, protected and private inheritance, including local access and restricted simul-efun exports. Other inherit modifiers remain unsupported. [Reference](lpc/inheritance.md). |
 | Inherited function qualifiers | Named qualifiers match direct-parent path suffixes with the source extension removed. Both named qualifiers and unqualified `::foo()` search direct parents in declaration order for the first defining the function. Qualified calls through a private direct inherit are rejected. Basic-type keywords can qualify calls, including `object::`. [Compiler, `arrange_call_inherited`][fl-pragma-compiler], [keyword grammar][fl-type-qualifiers]. | Source basenames and unqualified `::foo()` search direct parents in reverse declaration order, giving later inherits precedence. Explicit aliases select one parent and take precedence over automatic names; use an alias for a type-keyword basename such as `object`. Path-suffix qualifiers are unsupported. Private imports remain callable within the importing source. [Reference](lpc/inheritance.md#calls-and-aliases). |
-| Predefined source macros | `__FILE__` names the current in-game source; `__DIR__` includes a trailing `/`. Both expand at use time, including in macro bodies. `__VERSION__` is the build's version string. These names cannot be redefined or undefined. [Expansion and protection][fl-predefined], [version registration][fl-pragma-lexer]. `__PORT__` expands to the first configured listener's numeric port. [Registration][fl-configured-port]. | Provides `__FILE__`, `__DIR__`, and `__VERSION__`; the version identifies `lpc-rs` and its package version. Does not provide `__PORT__`; driver-specific configuration checks still need adaptation. [Reference](lpc/macros.md#predefined-macros). |
+| Predefined source macros | `__FILE__` names the current in-game source; `__DIR__` includes a trailing `/`. Both expand at use time, including in macro bodies. `__VERSION__` is the build's version string. These names cannot be redefined or undefined. [Expansion and protection][fl-predefined], [version registration][fl-pragma-lexer]. `__PORT__` expands to the first configured listener's numeric port. [Registration][fl-configured-port]. | Provides `__FILE__`, `__DIR__`, `__VERSION__`, and numeric `__PORT__`; the version identifies `lpc-rs` and its package version. `__PORT__` uses the compiler configuration's primary plaintext port, even when plaintext Telnet is disabled; it does not report a secondary TLS listener or an actual bound socket. Other driver-specific configuration checks still need adaptation. [Reference](lpc/macros.md#predefined-macros). |
 | Warning and type-retention pragmas | `warnings` / `no_warnings` switch warning reporting as compilation proceeds; includes share the setting. `save_types` / `no_save_types` control retention of argument types. Both positive flags are enabled by the reviewed defaults. Unknown pragmas warn. [Pragmas][fl-pragmas], [lexer][fl-pragma-lexer], [compiler][fl-pragma-compiler], [defaults][fl-options]. | `warnings` / `no_warnings` follow each warning's primary source location, including repeated includes and macro invocations. This can differ from FluffOS's reporting-time setting for delayed warnings. `save_types` is accepted silently because function types are always retained. `no_save_types` and other unknown pragmas remain errors even with warnings disabled. [Reference](lpc/pragmas.md). |
 | Constructor arguments | `clone_object(path, ...)` forwards extra arguments to the new object's `create`. [Reference][fl-clone]. | `clone_object` forwards extra arguments after global initialisation. Constructors also run without arguments when loading prototypes; use defaults or handle `0`. Supplied declared arguments are type-checked. [Reference](efun/clone_object.md). |
 | Call-out player context | With `this_player in call_out` enabled (the default), captures the scheduling command giver; if it is unavailable, uses an `O_LISTENER` callback owner, following shadowing when supported. `this_interactive` is cleared. [Implementation][fl-callouts], [default][fl-runtime-settings]. | Enable `LPC_CALL_OUT_PRESERVE_PLAYER=true`. A missing or destructed saved player remains nil; there is no owner fallback. Repeats and transaction retries restore the originally captured player, and `this_interactive()` remains nil. The setting applies to call-outs; other deferred APIs retain their own contracts. [Native reference](efun/call_out.md). |
@@ -5156,6 +5156,45 @@ blocker next. Remote IMUD runtime, linkdead/inactive/bodyless recipients, missin
 sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
+
+#### Lima native configured port macro
+
+The 4 October 2026 driver provides reserved integer `__PORT__` from the compiler
+configuration's primary plaintext port. Default is 24960; `LPC_PORT` overrides its
+`PORT` alias. Headers, auto-includes, aliases, argument expansion, stringification
+and integer `#if`/`#elif` expressions use that value. Zero is defined but false;
+active redefinition/undefinition is rejected. Compiled objects retain the literal
+even under a different runtime configuration. The macro remains the configured
+plaintext port when plaintext Telnet is disabled, without substituting a TLS
+port or discovering an actual socket/ephemeral binding.
+[Native macros](lpc/macros.md#predefined-macros).
+
+Eight new tracked regressions and extended predefined checks pass: 304
+preprocessor tests, 3 compiler macro tests and 4865 full workspace tests (2 existing
+ignored tests), including doctests. Workspace build, all-target/all-feature
+warning-free Clippy, warning-free docs, formatting and whitespace checks pass.
+Six distinct-nil Lima CLI probes use the rebuilt binary and untouched stock
+`ports.h`: default base/HTTP/FTP/RCP are 24960/24963/24964/24965, alias base 33100
+and prefixed-over-alias base 44200 produce their offsets, and disabled plaintext
+with base zero/TLS 4040 yields 0/3/4/5. These executable header fixtures use one
+new source in a disposable library copy; they add no port shim or listener.
+The actual active USER_OB compiles; DID_D's four diagnostics reduce to its two
+existing return-type errors. [Ports header][lima-did-ports],
+[didlog daemon][lima-did-daemon].
+
+Original/active Lima sources and configuration, master policy and all 217 frozen
+predecessor artifact/report sets remain unchanged. Source review reuses the
+4 October pinned FluffOS registration evidence without upstream execution; its
+macro reads the first configured listener, which can differ from our explicit
+primary plaintext port. [FluffOS registration][fl-configured-port].
+The initial out-of-root CLI fixture refusal and corrected Rust fixture builds
+are retained. Lima keeps distinct nil, preserved players and four-second actions;
+shared builds use two jobs/serial tests without overlapping CLI work or copying
+build artifacts. Actual binds, TLS handshakes, stock DID_D runtime and full startup
+are not claimed. Next adopt the daemon's explicit returns and local data/permission
+repairs, preserving the reader's future-cutoff `-all` convention, then port its
+CMD callers and audit selected-character/takeover behavior. Historical diagnostic
+shims must be removed before running their adapted sources on the native macro.
 
 #### Lima didlog daemon and wizard login audit
 

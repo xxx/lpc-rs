@@ -29,13 +29,14 @@ same expansion path.
 
 ## Predefined macros
 
-These reserved names expand to string literals:
+These reserved names expand to literals:
 
-| Name | Value |
-|---|---|
-| `__FILE__` | The current source's absolute in-game filename, including its extension. |
-| `__DIR__` | That file's in-game directory, including the trailing `/`; a file at the mudlib root yields `/`. |
-| `__VERSION__` | `lpc-rs ` followed by the compiler package version, for example `lpc-rs 0.1.0`. |
+| Name | Type | Value |
+|---|---|---|
+| `__FILE__` | `string` | The current source's absolute in-game filename, including its extension. |
+| `__DIR__` | `string` | That file's in-game directory, including the trailing `/`; a file at the mudlib root yields `/`. |
+| `__VERSION__` | `string` | `lpc-rs ` followed by the compiler package version, for example `lpc-rs 0.1.0`. |
+| `__PORT__` | `int` | The compilation configuration's primary plaintext listener port, default `24960`. |
 
 For `/areas/example/room.c`:
 
@@ -44,6 +45,7 @@ inherit __DIR__ "base"; // Inherits /areas/example/base.c.
 
 string source_file() { return __FILE__; } // "/areas/example/room.c"
 string driver_version() { return __VERSION__; }
+int service_port() { return __PORT__ + 3; }
 ```
 
 `__FILE__` and `__DIR__` follow the source currently being preprocessed.
@@ -56,11 +58,20 @@ Paths use the same normalized in-game names as compiler diagnostics. For a
 host-facing compile outside the configured mudlib, both path macros yield the
 opaque label `<outside mudlib>`.
 
-All three names are defined from the start, including in auto-includes.
+All four names are defined from the start, including in auto-includes.
 `#ifdef`, `#ifndef`, and `defined(NAME)` recognize them. Redefining or undefining
-them in active source is a compile error. In `#if` and `#elif`, they follow the
-existing string-expression rules: truthy in boolean positions, with no integer
-arithmetic or string comparison support.
+them in active source is a compile error. In `#if` and `#elif`, the string macros
+follow the existing string-expression rules: truthy in boolean positions, with
+no integer arithmetic or string comparison support. `__PORT__` supports integer
+arithmetic and comparisons; a configured zero is defined but false in boolean
+positions.
+
+`__PORT__` reads `LPC_PORT` (or its `PORT` alias) from the compiler configuration;
+`LPC_PORT` takes precedence when both are set. It remains available when plaintext
+Telnet is disabled and does not report a TLS port or an actual bound socket.
+A configured zero expands to zero, even if a later listener binds an ephemeral
+port. Each compiled object retains its literal value until recompiled, including
+when executed with a different runtime configuration.
 
 They expand in LPC source and macro replacements, excluding quoted literals,
 comments, and inactive conditional branches. `#include` still requires a
