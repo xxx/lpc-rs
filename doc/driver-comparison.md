@@ -5153,6 +5153,46 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima incoming wizard-editor pipeline audit
+
+Reviewed **3 October 2026** against pinned Lima [ed][lima-ed-command],
+[CMD][lima-command-base], [stdio][lima-command-stdio], [wish][lima-wish]
+and [command daemon][lima-command-daemon] sources. Tests execute the active local
+port at native revision `2b2a1754`; its coordinated pipeline module is local port
+code absent from that upstream snapshot. No upstream driver execution is claimed.
+
+`producer | ed filename` runs the producer and opens the editor on the named file,
+ignoring piped text. With an additional outgoing pipe, the editor's suffix guard
+refuses after the producer runs: no editor or downstream tell starts, but the
+producer's committed effects remain. CMD's `no_redirection()` selects raw dispatch
+and discards stdin; it does not declare pipeline membership unsupported. The
+editor's raw suffix omits earlier pipeline stages, and its normal refusal does
+not roll back those stages.
+
+A diagnostic three-file control adds explicit CMD `no_pipeline()` metadata,
+enables it in ed and checks membership during preparation before any stage's
+main/stdio execution. Ordinary pipelines, direct editing and quoted operator
+filenames still work. Raw codesay still allows incoming pipelines and delivers
+its own argument literally. Command lookup can lazily create objects before the
+check, so refusal before arbitrary constructor effects is not established.
+The control is recommended for local adoption; the active overlay is unchanged.
+
+Six tests/24 observations pass in debug. Synthetic feed/pass commands register
+through actual CMD discovery and record native transactional file effects;
+actual saved users, wizard shells, master policy, modal input and editor state
+are exercised. Cases cover adjacent pipes, empty output, two producers, explicit
+ed paths, quoted Unicode/operator filenames, producer file input/missing input,
+missing editor filenames, outgoing refusal and raw codesay. Eight concrete/module
+compiles are clean; two standalone CMD checks retain the same four existing
+missing-`dispatch_main` diagnostics supplied by concrete commands. Four quality
+gates pass and 211 predecessor artifact/report sets remain intact.
+
+Native/original/active sources, configuration and master policy remain unchanged.
+Distinct nil, preserved call-out players and four-second actions remain the Lima
+target. No optimized performance repeat, historical/full native rerun, hot-reload,
+concurrency, commit-time I/O failure or full login/network/startup claim is made.
+Adopt the reviewed control and validate existing editor routing next.
+
 #### Lima wizard shell tokenizer character cache adopted
 
 The 3 October 2026 local port adopts the exact one-file character-cache control
