@@ -5153,6 +5153,44 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima wizard shell tokenizer character cache adopted
+
+The 3 October 2026 local port adopts the exact one-file character-cache control
+from the preceding cost audit, over the editor account/codesay repair. The
+[tokenizer][lima-shell-getopt] caches each character in its quoted and unquoted
+inner loops. Escape handling, closing-quote index advancement, delimiters, token
+spans and spacing retain their behavior. This reduces redundant native indexing;
+the native Unicode scalar contract and remaining per-index copy/walk cost stay
+unchanged. No native API or master-policy change; configuration changes only the
+local library path.
+
+Twenty focused tests/31 observations pass in each of debug and optimized builds:
+13 copied codesay cases, five copied editor-routing cases and two adoption cases.
+All 33 reviewed token/spacing expectations match, including operators, escapes,
+unfinished input, tabs/newlines and Unicode. Nine near-limit dispatches per build
+reach normal size-refusal feedback before broadcasting, then recover with ordinary
+self/room delivery. Every action keeps the 4000 ms budget; no expected deadline
+is accepted. The slowest measured debug action takes 1.06 seconds; optimized warm
+medians are 3.39–6.49 ms. First commands include lazy loading, not complete startup.
+
+Codesay retains literal payloads, independent users/account preferences, another
+user's live editor, scratch-file preservation and caller/resend/visibility guards.
+Editor quoted Unicode/operator filenames and retained escape spelling still save
+correctly. Output/input/append/adjacent/missing-target routes refuse before file
+effects, and a downstream tell receives no message. Account/modal state and
+scratch-file absence remain checked on large input.
+
+Four focused compiles and four quality gates pass, with exact adoption and all
+210 predecessor artifact/report sets intact. Pinned source review remains separate
+from native execution; no upstream driver was run. Distinct nil, preserved call-out
+players, two Cargo jobs, serial tests, shared nonincremental builds and debug level
+1 remain in force; release retains thin LTO. Frozen historical harnesses, the full
+native suite, unrelated module/handoff matrices and profiling were not repeated.
+The multiline case uses direct modal input, not network multiline framing.
+Measured results establish these parsing/refusal shapes, not large-message delivery
+or every near-limit input. Incoming editor pipelines, full login/network lifecycle,
+concurrency and complete startup remain separate.
+
 #### Lima near-limit wizard shell input cost audit
 
 Reviewed **3 October 2026** against the pinned [tokenizer][lima-shell-getopt],
