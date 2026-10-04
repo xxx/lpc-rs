@@ -5153,6 +5153,44 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima wizard editor command repair
+
+The 3 October 2026 local port activates the [wizard `ed` caller][lima-ed-command]
+over the repaired session with one command-file change. Protected dispatch uses
+CMD's disabled-routing argument convention; main remains private and nomask.
+The existing wizard command rules, caller/resend guards, canonical paths and
+native file authorization remain active.
+
+The command captures the initiating user and releases only its matching filename
+lock. Both session completion and cancellation use that callback. Caught
+clone/start failure retires any surviving session, unlocks and reports the error;
+current file changes only after successful startup. Failure of that assignment
+also retires the already-started editor. EOF/removal and cancellation from another
+user's action now unlock correctly while preserving unrelated editing sessions.
+Backend limits and permission refusal remain unchanged.
+
+Creation disables [CMD stdio routing][lima-command-stdio]. Reusing the shell's
+tokenizer refuses unquoted pipes/input/output/append in the editor suffix before
+file mutation or downstream execution. Same-file redirection preserves its
+source, and a downstream real tell sends no message. Quoted routing characters
+remain usable in filenames; existing escaped arguments retain their backslash.
+Incoming pipelines are not established by these checks.
+
+Twenty-four command tests produce 33 passing observations; twelve unchanged
+text/file/news handoff regressions retain exactly their preceding observations.
+Marked controls force backend load, late session output and current-file setter
+failures. The command, wish, session and complete user compile, with the command's
+four prior CMD errors resolved. Warning-free locked workspace Clippy, formatting
+and preservation pass with all 206 predecessor evidence sets intact. Lima uses
+distinct nil, preserved call-out players and 4000 ms actions; no native API or
+master-policy change is needed. Pinned upstream source review remains separate
+from these lpc-rs executions.
+
+Next audit account editor settings/persistence and codesay consumers. Full network
+disconnect behavior, command reload during editing, commit-time I/O failure and
+full startup remain unestablished. The audit below describes the preceding
+unrepaired overlay and dispatch-only diagnostic control.
+
 #### Lima wizard editor command audit
 
 The 3 October 2026 audit tests the [wizard `ed` caller][lima-ed-command] over the
