@@ -5153,6 +5153,50 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima reconnect account selection adopted
+
+The 4 October 2026 local port repairs USER_D registry validation during overlapping
+logons. Normal `enter_game()` registers the selected character before body
+transfer; global lookup previously rejected the newly restored user and its
+link-dead predecessor as duplicate live account objects. Existing owning-user
+authorization now returns that exact caller, whose body records register/remove
+validate. Privileged other-account operations retain global/offline lookup. The
+global duplicate-account guard, query/set routing, authorization predicate,
+record schema and character ownership/name conflict checks remain unchanged.
+Missing or malformed requestor records refuse without consulting the old account.
+[Registry][lima-user-daemon], [login][lima-login],
+[body switching][lima-body-switching].
+
+Nine tests/seventeen observations pass directly on the adopted one-file overlay,
+without a protected-transfer bypass or control replacement. They cover ordinary
+player entry, wizard transfer/interactive prompting, requestor-only records,
+missing/malformed records, four permission refusals, three privileged duplicate
+lookup refusals, two ownership/name conflicts, and offline privileged registration/
+removal. Six focused compiles are clean; one DID_D check retains four known
+diagnostics. Four quality gates pass and 215 predecessor artifact/report sets
+remain intact. Native/original/previous sources and master policy are unchanged;
+configuration changes only the library path. Distinct nil, preserved call-out
+players and four-second actions remain the Lima target.
+
+Regular-player entry completes in the fixture. Wizard entry now transfers the
+same body, removes the old user/shell/editor, clears its flag/lock and cancels
+the removal timer, without saving unfinished edits. Its later login display
+fails compiling DID_D: undefined `__PORT__` variable/symbol, a bare int-function
+return and an integer-zero string-array return. Interactive wizard entry installs
+the existing takeover prompt without transferring the body, then reaches the
+same didlog failure. Caught errors retain those earlier effects; this does not
+establish complete wizard reconnect. Audit DID_D and the wizard login display next.
+[Didlog daemon][lima-did-daemon].
+
+The initial failing runtime is retained; an unprivileged test forwarder was
+replaced with direct owner-scoped privileged calls, while the real DID_D error
+remains explicit. Native detach/manual net_dead apply, saved-account restore and
+fixture admin membership define the tested boundary. Authentication/full login,
+socket-loop/private input-slot clearing, natural timer expiry, takeover responses,
+different selected characters, backup reconnect, concurrency, hot reload,
+commit-time I/O failure, optimized performance, historical/full native reruns and
+complete startup remain unestablished; no upstream execution is claimed.
+
 #### Lima wizard-editor user removal cleanup adopted
 
 The 3 October 2026 local port adopts the exact one-line control from the
@@ -7308,6 +7352,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-inputsys]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/inputsys.c
 [lima-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/login.c
 [lima-user-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/user_d.c
+[lima-did-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/did_d.c
 [lima-user-gmcp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/gmcp.c
 [lima-frame]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_frame.c
 [lima-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/menu.c
