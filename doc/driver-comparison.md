@@ -5153,6 +5153,46 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima wizard-editor user removal cleanup adopted
+
+The 3 October 2026 local port adopts the exact one-line control from the
+disconnect/reconnect audit, over the editor pipeline guard overlay. User
+`remove()` clears modal handlers while its owner still exists, before
+mailbox/body/shell teardown. This cancels the editor and releases its session,
+owned editing flag and command lock immediately. The 300-second link-dead grace
+period remains intact; unfinished edits are discarded at removal and earlier
+explicit saves remain on disk. Protected existing-logon body transfer preserves
+the same body and its new user link while releasing the old editor's flag/lock.
+[User][lima-entry-user], [inputsys][lima-inputsys],
+[body switching][lima-body-switching], [session][lima-ed-session].
+
+Nine tests/ten observations pass directly on the adopted overlay, without
+injecting control replacements or manually cleaning abandoned sessions. Four
+uninstrumented user/editor/human/wizard-shell compiles and four quality gates
+pass, preserving 214 predecessor artifact/report sets. Besides the audited
+disconnect/removal/transfer cases, ordinary user removal without an editor
+still works, a synthetic throwing child modal handler is logged without stopping
+editor/user teardown, and an explicitly saved edit survives owner removal.
+Native/original/previous sources and master policy are unchanged; configuration
+changes only the library path. Distinct nil, preserved call-out players and
+four-second actions remain the Lima target.
+
+Normal `enter_game()` after saved-account restore still refuses the new and old
+link-dead user as duplicate live account objects in the port's USER_D registry.
+That refusal is recorded before directly testing protected existing-logon logic;
+the adoption does not establish a complete successful reconnect. Repair legitimate
+account selection next, retaining authorization and duplicate-account guards.
+[Login][lima-login], [registry][lima-user-daemon].
+
+The actual scheduled removal callback is prioritized early through native
+dispatch; natural timer expiry is not established. Native detach followed by a
+manual net_dead apply, owner-side observation wrappers and fixture admin
+membership define the tested boundary. Authentication/full login,
+socket-loop/private transport input-slot clearing, other modal consumers,
+arbitrary reentrant callbacks, periodic world cleanup, concurrency, commit-time
+I/O failure, optimized performance, historical/full native reruns and complete
+startup remain unestablished; no upstream execution is claimed.
+
 #### Lima wizard-editor disconnect and reconnect audit
 
 Reviewed **3 October 2026** against pinned Lima [user][lima-entry-user],
