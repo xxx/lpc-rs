@@ -5157,6 +5157,50 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima shared mailbox lifetime and idle cleanup audit
+
+The 4 October 2026 audit retains the reconnect/takeover overlay. MAILBOX_D caches
+one mailbox per account, but each user removal unconditionally unloads it.
+Retiring either of two characters, a wizard duplicate session, or a bodyless
+newcomer after regular no invalidates another session's cached mailbox. Yes can
+also invalidate a cache the newcomer already acquired. Idle close retains only
+interactive `users()`, so a bodyful linkdead user can lose its mailbox before its
+removal timer fires. MAIL_D's source also calls close after delivery; actual
+delivery is not executed here. [Mailbox daemon][lima-mailbox-daemon],
+[user removal][lima-entry-user], [mail daemon][lima-mail-daemon],
+[native users](efun/users.md).
+
+The mailer stores a mailbox reference. Calls through a destructed reference
+return native nil; the standard prompt then fails at index plus one. The audit
+uses a cache/prompt observer with the actual mailbox, rather than the mailer UI.
+MAILER currently fails to parse `(void)printf(...)`; standard and Mh inherit that
+blocker. The mail command also lacks the protected CMD dispatch adapter. Further
+errors remain unchecked beyond these compile blockers.
+[Mailer base][lima-mailer-base], [standard handler][lima-mailer-standard],
+[Mh handler][lima-mailer-mh], [mail command][lima-mail-command].
+
+A one-file daemon diagnostic retains a mailbox while another standard USER_OB
+clone owns the account, excluding the retiring caller on explicit unload. Idle
+close uses live USER_OB account IDs, including linkdead sessions. Last-session
+release, existing authorized self-removal, account-wide cursor and cursor reset
+on reload remain. The active library and master policy are unchanged.
+
+Eight tests/sixteen observations compare known baseline losses with this
+diagnostic through real accounts/bodies, public entry, user removal, modal
+answers, connection detach/net_dead and mailbox save/restore. Explicit cleanup
+keeps connected accounts, closes offline caches and returns ASK_AGAIN; the
+diagnostic additionally keeps linkdead caches. Synthetic saved keys/flags reload
+after last-session release with saved bytes unchanged. Actual message bodies,
+mail UI and delivery are not exercised.
+
+Fourteen uninstrumented checks keep six lifecycle compositions clean and reproduce
+eight mailer/mail-command blockers. Workspace Clippy/format checks and 222 frozen
+predecessor sets pass; pinned upstream review is distinct from local execution.
+Distinct nil, preserved players and four-second actions remain. The diagnostic
+is not adopted; next adopt its daemon guard, then establish mail-handler
+compatibility. Backup/guest users, detached handlers, natural idle scheduling,
+authentication, sockets, full startup and concurrency remain unchecked.
+
 #### Lima selected-character reconnect and takeover repair
 
 The 4 October 2026 local port adopts the audited three-file repair. Existing-logon
@@ -5192,8 +5236,8 @@ didlog clean in preceding/adopted libraries. Workspace Clippy/format checks and
 native/original sources remain unchanged. Distinct nil, preserved players and
 four-second actions remain. Authentication, sockets, backup/guest users, full
 startup, idle/shared mailbox lifetime and concurrency remain unchecked. Pinned
-upstream source review is distinct from local execution. Shared mailbox lifetime
-and idle cleanup are the next audit boundary.
+upstream source review is distinct from local execution. The subsequent shared
+mailbox lifetime and idle cleanup audit is described above.
 
 #### Lima selected-character reconnect and takeover audit
 
@@ -7936,6 +7980,10 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-did-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/didlog.c
 [lima-mailbox-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/mailbox_d.c
+[lima-mailer-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/mailer.c
+[lima-mailer-standard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/standard.c
+[lima-mailer-mh]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/Mh.c
+[lima-mail-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mail.c
 
 [fl-configured-port]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc#L3003-L3006
 
