@@ -5157,6 +5157,45 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima didlog command adapters
+
+The 4 October 2026 local port gives `I` and `didlog` protected `dispatch_main`
+adapters that pass raw arguments to their private main functions. Existing CMD
+shell/resend guards remain. `didlog` uses nil for absent string values and its
+continuation, guards the absent pattern before `strlen`, and retains the default
+singular day heading. Its seven parameter-taking aliases refuse missing, empty
+or next-option values before mutation. Existing single-token parsing remains.
+[Posting command][lima-did-post-command], [reader][lima-did-command],
+[CMD][lima-command-base], [command lookup][lima-command-daemon].
+
+The preceding DID_D guard also blocked legitimate admin commands: their maximum
+privilege is `Mudlib:wizcmds`, which does not imply `Mudlib:daemons`. The setter
+retains its daemon privilege path and additionally accepts the exact loaded
+`/cmds/wiz/didlog` command, an admin user and a successful
+`check_previous_privilege("Mudlib:wizcmds")`. This checks every caller while
+skipping the daemon's own different privilege. Other wizard commands cannot
+use the allowance, even in an admin context. Authorized reset still clears the
+selected version's rows. The security database and master policy are unchanged.
+[Privilege hierarchy and stack checks][lima-security].
+
+Nine focused tests/45 observations cover real shell input, empty commands,
+posting/live notices/save/reload, day/all/version/glob reports, option aliases,
+fourteen missing-value refusals, off/on display, file redirection, literal posting
+suffixes, direct/command permissions and entry/visibility guards. Modal input
+catches command errors; denial cases also repeat through the actual shell with
+the caller stack retained to capture the refusal. Inaccessible private/protected
+methods return native nil without mutation. [Shell][lima-wish],
+[native call_other](efun/call_other.md).
+
+Eight dispatch-only compile checks expose three further `didlog` string-sentinel
+errors; eight final uninstrumented checks make DID_D, USER_OB and both commands
+clean, preserving both baseline successes. Workspace Clippy/formatting checks
+pass. Native/original/previous sources remain unchanged, and pinned source review
+is distinct from local execution. Lima keeps distinct nil, preserved players and
+four-second actions. Selected-character reconnect and takeover responses follow;
+HTTP delivery, authentication, special LIMA version handling, old/malformed saves,
+full login/startup and concurrency remain unestablished.
+
 #### Lima didlog daemon repairs
 
 The 4 October 2026 local port repairs DID_D and the user's login display. The
