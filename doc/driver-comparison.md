@@ -5153,6 +5153,48 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima editor accounts and codesay audit
+
+The 3 October 2026 audit exercises real [user editor settings][lima-editor-account]
+through the repaired wizard session. Saved packed flags/shiftwidth reach the
+account file, restore into a fresh user and return on editor reentry. Unsaved
+options and scroll remain session-local; two users save independent accounts,
+restricted saving is refused, and uncaught outer errors roll back value and save.
+Private master setup hooks are not public setters; M_ED's owner methods suffice.
+
+The existing public setter accepts invalid integers and foreign-user context.
+Invalid persisted codes refuse startup without a stale lock and can be reset to
+zero. An injected immediate save_me exception is caught by ED after the setter
+changes memory, leaving the old disk value. Commit-time I/O failure is unchecked.
+
+Active [codesay][lima-ed-codesay] retains four CMD errors; dispatch-only control
+reveals three unresolved editor calls. A diagnostic one-file M_ED binding then
+executes the original main through real wizard input. Simple indentation, real
+self/room delivery, raw operators, caller/visibility guards and isolation from
+another user's wizard editor work. No control is adopted or codesay activated.
+
+Blind punctuation splitting changes string/character literals and line comments,
+then broadcasts after ignoring indentation diagnostics. Overlong-line refusal
+follows scratch overwrite without useful feedback. Sequential users share the
+retained fixed scratch path; concurrent scheduling is unchecked. Ordinary
+[user message wrapping][lima-user-messages] also collapses indentation and spaces
+inside literals. NO_ANSI plus NO_WRAP preserves spaces but strips literal colour
+markers. The declared TREAT_AS_BLOB flag has no active user-receiver behavior.
+
+Twenty-six tests produce 30 passing observations, including marked dispatch,
+backend, immediate-save and message-flag controls. Five focused compiles, locked
+warning-free workspace Clippy, formatting and preservation pass with 207 prior
+evidence sets intact. Native/original/active sources, master policy and configuration
+remain unchanged. Lima uses distinct nil, preserved players and 4000 ms actions;
+pinned source review and lpc-rs execution are separate from upstream execution.
+
+Next validate account setup values and restore the prior value on immediate save
+failure. Bind codesay to bounded in-memory indentation preserving physical lines
+and literal/comment payloads, with explicit refusal feedback; inline snippets may
+stay inline initially. Honor TREAT_AS_BLOB for literal message delivery. These
+mudlib repairs need no native API. Caller-ownership policy, guest/full login,
+reconnect, command reload, incoming pipelines and full startup remain separate.
+
 #### Lima wizard editor command repair
 
 The 3 October 2026 local port activates the [wizard `ed` caller][lima-ed-command]
@@ -7282,3 +7324,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [fluffos-object-editor-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec
 [fluffos-object-editor-mode]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc
 [fluffos-file-write-flags]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc
+[lima-editor-account]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/userinfo.c
