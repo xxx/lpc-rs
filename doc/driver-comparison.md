@@ -5153,6 +5153,49 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima editor account and codesay repair
+
+The 3 October 2026 local port changes four mudlib files over the audited editor
+command overlay. The [account setter][lima-editor-account] now refuses unsupported
+setup codes before changing memory or saving: zero selects defaults; nonzero
+codes fit in one byte and have shiftwidth 1–15. An immediate save_me exception
+restores the previous value and propagates for session feedback. Ordinary saves,
+fresh-user restore, reentry, independent accounts, restrictions and outer rollback
+retain their behavior. Its public caller policy and private master hooks stay
+unchanged; commit-time I/O recovery remains unchecked.
+
+[Codesay][lima-ed-codesay] adds protected raw CMD dispatch and M_ED inheritance.
+The module's protected indent_code helper shares the existing I indenter using
+local lines/width, preserving live editor input, marks, search, settings and files.
+It retains physical lines/final-newline presence and literal/comment/directive/
+text-block payloads while normalizing leading indentation. Inline code remains
+inline. Input/output use the module's 8192 UTF-8 byte, 2048-byte line, 1000-line
+and 64-level nesting bounds; widths are 1–15 and codesay keeps default four.
+
+Codesay formats in memory, validates delivery size including headers, and gives
+refusal feedback before broadcasting. It uses no scratch file, account save or
+editor session. The [user receiver][lima-user-messages] implements the existing
+TREAT_AS_BLOB flag as literal delivery, bypassing wrapping, colour substitution,
+simplify formatting and emoji replacement. Spaces, Unicode and colour-marker
+source text survive self/room delivery. Prompt newline and optional debug-prefix
+behavior remain, as does ordinary message formatting. Command caller/resend/
+visibility checks and raw-operator behavior stay active. No native API changes.
+
+Twenty-eight consumer cases, 101 module cases and 12 handoff regressions pass,
+with 141 observations, five focused compiles and four quality gates. All 208
+predecessor artifact/report sets and native/original/prior sources remain intact.
+The module suite includes 96 copied scenarios and five helper cases; corrupt
+legacy account setup is restored from disk for its fallback scenario. Pinned
+source review is separate from native execution; no upstream driver was run.
+
+The initial full run hit the unchanged 4000 ms deadline on a near-limit snippet
+while finding/loading codesay, before formatting. Its message-size guard passes
+through a marked direct command observer with the same budget; ordinary-input
+cases separately cover dispatch and delivery. Near-limit shell performance,
+guest/full login, reconnect/disconnect teardown, incoming pipelines, command
+reload, concurrent scheduling, commit-time I/O failure and complete startup
+remain separate. Older frozen harnesses and the full native suite were not rerun.
+
 #### Lima editor accounts and codesay audit
 
 The 3 October 2026 audit exercises real [user editor settings][lima-editor-account]
