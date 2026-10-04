@@ -5153,6 +5153,50 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima near-limit wizard shell input cost audit
+
+Reviewed **3 October 2026** against the pinned [tokenizer][lima-shell-getopt],
+[wish][lima-wish], [shell][lima-shell] and [command daemon][lima-command-daemon]
+sources. Timing checks execute the active local port on native revision
+`246456a2`, with distinct nil, preserved call-out players and unchanged 4000 ms
+actions. Debug/test and release builds use debug level 1, no incremental
+compilation, two Cargo jobs and serial tests; release retains thin LTO.
+Upstream source review is separate from execution; no upstream driver was run.
+
+The original local tokenizer completes all measured optimized ordinary-input
+cases within budget. The two recorded comparisons put near-limit unquoted
+snippets at about 16–26 ms warm, and quoted snippets at 5–7 ms. First-command
+measurements include lazy command loading, with the largest at 83 ms; these are
+not complete startup measurements.
+In debug builds, unquoted near-limit input reaches the deadline, while quoted
+input completes. Isolated optimized measurements put tokenization at 16–22 ms for
+8183 bytes, versus under 1 ms each for suffix extraction, warm command lookup,
+pipeline preparation and indentation. Length scaling and native source review
+identify repeated string indexing as the expensive path: each index copies the
+string and walks to the requested character.
+
+A marked one-file diagnostic control caches each character in the quoted and
+unquoted tokenizer loops. Warm optimized near-limit unquoted dispatch falls to
+about 3–6 ms; all nine large control dispatches complete in debug too, under
+1.2 seconds. Thirty-three token/spacing cases match the original exactly,
+including operators, escapes, unfinished quotes, tabs/newlines and Unicode.
+Refusal still precedes broadcast, ordinary source text reaches self/room intact,
+and account/modal state and scratch-file absence remain intact. Recommend the
+local character cache; it is not yet adopted. No native API or budget change.
+
+Five tests/eight observations pass in each build, alongside four focused
+compiles and four quality gates. An optimized tokenizer-only profile excludes
+bootstrap; 62 of its 67 samples include the native indexing handler, with 27 in
+character traversal. The short capture supports component attribution rather
+than a precise system-wide percentage. All 209 predecessor artifact/report sets
+and active/native/original sources remain intact. Expected debug deadline
+observations remain visible rather than being treated as command success.
+Optimized timings establish these input shapes, not every near-limit input.
+The multiline size case enters the real modal dispatcher directly and does not
+establish network multiline framing. Incoming pipelines, full network/login
+behavior, concurrent scheduling and complete startup remain separate. Frozen
+historical harnesses and the full native suite were not rerun.
+
 #### Lima editor account and codesay repair
 
 The 3 October 2026 local port changes four mudlib files over the audited editor
