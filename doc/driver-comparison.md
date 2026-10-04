@@ -5157,6 +5157,44 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima selected-character reconnect and takeover repair
+
+The 4 October 2026 local port adopts the audited three-file repair. Existing-logon
+selection matches account ID and the actual body's character name, skips bodyless
+sessions and refuses multiple owners of the selected character. Takeover callbacks
+retain that name through retry and wizard no; yes revalidates the predecessor's
+current account/body before transfer. Different characters on one account enter
+separately. Existing wizard no still creates a fresh selected-character body and
+keeps the old session; regular no retires only the newcomer.
+[Body selection][lima-user-bodies], [existing logon and answers][lima-body-switching].
+
+Login initialization waits for a body, including successful callback paths.
+A long didlog opens its pager after the takeover answer and completed transfer.
+MAILBOX_D unloads through the mailbox's existing public `remove()` for authorized
+self-destruction. The idle close loop uses the same method, but its execution
+and shared mailbox lifetime are not established. Master policy remains unchanged.
+[Public entry][lima-login], [didlog display][lima-did-user],
+[mailbox daemon][lima-mailbox-daemon], [mailbox removal][lima-entry-mailbox].
+
+Twenty tests/56 observations run against the adopted library: eleven reconnect
+cases and nine didlog command tests/45 observations. Real saved accounts/bodies,
+shell/modal input, loaded mailboxes, editors and pager cover linkdead/yes/no
+cleanup, separate characters, invalid answers, predecessor disappearance/body
+change, deferred paging and ambiguity refusal. Successful transfers check the
+actual body link, old user/editor retirement and timer cancellation; dirty source
+stays unsaved. Normal quit before yes needs no prepared mailbox cleanup. Didlog
+command output, persistence and existing permission/visibility guards remain.
+No diagnostic production sources are substituted by this adoption harness.
+
+Twelve uninstrumented CLI checks keep USER_OB, USER_D, MAILBOX_D, human, I and
+didlog clean in preceding/adopted libraries. Workspace Clippy/format checks and
+221 frozen predecessor sets pass. The adopted patch matches the audit exactly;
+native/original sources remain unchanged. Distinct nil, preserved players and
+four-second actions remain. Authentication, sockets, backup/guest users, full
+startup, idle/shared mailbox lifetime and concurrency remain unchecked. Pinned
+upstream source review is distinct from local execution. Shared mailbox lifetime
+and idle cleanup are the next audit boundary.
+
 #### Lima selected-character reconnect and takeover audit
 
 The 4 October 2026 audit retains the didlog-command overlay. Existing-logon
@@ -5200,7 +5238,7 @@ failures as well as the corrected diagnostic behavior.
 Eight uninstrumented compile checks keep USER_OB, USER_D, MAILBOX_D and human clean
 in both libraries. Workspace Clippy/format checks and 220 frozen predecessor sets
 pass. Distinct nil, preserved players and four-second actions remain. The patch
-is not adopted; next adopt and validate it with the didlog command checks.
+was diagnostic at this audit; its subsequent adoption is described above.
 Authentication, socket dispatch, backup/guest users, full startup, idle/shared
 mailbox lifetime, other-account takeover attempts and concurrency remain unchecked.
 Pinned upstream source review is distinct from local execution.
