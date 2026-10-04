@@ -118,6 +118,10 @@ and saved types. [Build defaults][fl-options].
 FluffOS's predefined source macros were also reviewed on **21 September 2026**:
 the path macros are unconditional, and `__VERSION__` comes from the build's
 `PROJECT_VERSION`. [Expansion][fl-predefined], [registration][fl-pragma-lexer].
+The configured `__PORT__` macro was reviewed on **4 October 2026** at
+`44532e0228f34be2184c701a361df4079371b8b0`: it expands numerically from
+`external_port[0].port`, without an optional-package guard. This is source review,
+with no FluffOS execution. [Registration][fl-configured-port].
 
 Inheritance visibility was reviewed on **21 September 2026** against the same
 FluffOS revision, with `SENSIBLE_MODIFIERS` enabled. This is source review;
@@ -595,7 +599,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Class visibility | Accepts visibility modifiers on class definitions but discards them; inheritance copies classes regardless of the modifier. [Grammar][fl-class-grammar], [declarations][fl-class-declarations], [inheritance][fl-class-inheritance]. | Enforces `private class`: descendants cannot name the class or access its members, including through `mixed`. Public and protected classes remain inheritable, subject to inherit visibility. Defining code retains access. If descendants rely on an upstream private declaration being exposed, make it public/protected or include its definition explicitly. [Reference](lpc/classes.md#declaration-visibility). |
 | Inheritance visibility | Supports access modifiers on inherits; private functions and globals become hidden when inherited again. The reviewed build enables `SENSIBLE_MODIFIERS`, so explicit public declarations do not defeat a private inherit. [Grammar rules][fl-inherit-grammar], [compiler][fl-pragma-compiler], [defaults][fl-options]. | Supports public, protected and private inheritance, including local access and restricted simul-efun exports. Other inherit modifiers remain unsupported. [Reference](lpc/inheritance.md). |
 | Inherited function qualifiers | Named qualifiers match direct-parent path suffixes with the source extension removed. Both named qualifiers and unqualified `::foo()` search direct parents in declaration order for the first defining the function. Qualified calls through a private direct inherit are rejected. Basic-type keywords can qualify calls, including `object::`. [Compiler, `arrange_call_inherited`][fl-pragma-compiler], [keyword grammar][fl-type-qualifiers]. | Source basenames and unqualified `::foo()` search direct parents in reverse declaration order, giving later inherits precedence. Explicit aliases select one parent and take precedence over automatic names; use an alias for a type-keyword basename such as `object`. Path-suffix qualifiers are unsupported. Private imports remain callable within the importing source. [Reference](lpc/inheritance.md#calls-and-aliases). |
-| Predefined source macros | `__FILE__` names the current in-game source; `__DIR__` includes a trailing `/`. Both expand at use time, including in macro bodies. `__VERSION__` is the build's version string. These names cannot be redefined or undefined. [Expansion and protection][fl-predefined], [version registration][fl-pragma-lexer]. | Provides `__FILE__`, `__DIR__`, and `__VERSION__`; the version identifies `lpc-rs` and its package version. Driver-specific configuration checks still need adaptation. [Reference](lpc/macros.md#predefined-macros). |
+| Predefined source macros | `__FILE__` names the current in-game source; `__DIR__` includes a trailing `/`. Both expand at use time, including in macro bodies. `__VERSION__` is the build's version string. These names cannot be redefined or undefined. [Expansion and protection][fl-predefined], [version registration][fl-pragma-lexer]. `__PORT__` expands to the first configured listener's numeric port. [Registration][fl-configured-port]. | Provides `__FILE__`, `__DIR__`, and `__VERSION__`; the version identifies `lpc-rs` and its package version. Does not provide `__PORT__`; driver-specific configuration checks still need adaptation. [Reference](lpc/macros.md#predefined-macros). |
 | Warning and type-retention pragmas | `warnings` / `no_warnings` switch warning reporting as compilation proceeds; includes share the setting. `save_types` / `no_save_types` control retention of argument types. Both positive flags are enabled by the reviewed defaults. Unknown pragmas warn. [Pragmas][fl-pragmas], [lexer][fl-pragma-lexer], [compiler][fl-pragma-compiler], [defaults][fl-options]. | `warnings` / `no_warnings` follow each warning's primary source location, including repeated includes and macro invocations. This can differ from FluffOS's reporting-time setting for delayed warnings. `save_types` is accepted silently because function types are always retained. `no_save_types` and other unknown pragmas remain errors even with warnings disabled. [Reference](lpc/pragmas.md). |
 | Constructor arguments | `clone_object(path, ...)` forwards extra arguments to the new object's `create`. [Reference][fl-clone]. | `clone_object` forwards extra arguments after global initialisation. Constructors also run without arguments when loading prototypes; use defaults or handle `0`. Supplied declared arguments are type-checked. [Reference](efun/clone_object.md). |
 | Call-out player context | With `this_player in call_out` enabled (the default), captures the scheduling command giver; if it is unavailable, uses an `O_LISTENER` callback owner, following shadowing when supported. `this_interactive` is cleared. [Implementation][fl-callouts], [default][fl-runtime-settings]. | Enable `LPC_CALL_OUT_PRESERVE_PLAYER=true`. A missing or destructed saved player remains nil; there is no owner fallback. Repeats and transaction retries restore the originally captured player, and `this_interactive()` remains nil. The setting applies to call-outs; other deferred APIs retain their own contracts. [Native reference](efun/call_out.md). |
@@ -5153,6 +5157,69 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima didlog daemon and wizard login audit
+
+The 4 October 2026 audit retains the reconnect-account overlay. DID_D has four
+baseline diagnostics: undefined `__PORT__` variable/symbol, a bare return from an
+int function and a zero return from a string-array function. A temporary two-file
+control defines port 24960 and makes those returns `0` and `nil` respectively.
+It does not add native port support or change the active library. Eight compile
+checks improve clean targets from one to two out of four: USER_OB stays clean,
+DID_D becomes clean, and both `I` and `didlog` still stop at four inherited
+`dispatch_main` errors. Their option handling remains unchecked; typed-string
+zero sentinels and `strlen(pattern)` also need review after command adaptation.
+[Daemon][lima-did-daemon], [ports][lima-did-ports],
+[posting command][lima-did-post-command], [reader command][lima-did-command].
+
+Nine tests/twelve observations pass as audit assertions on the compile-only
+control. Public wizard reconnect now completes with the same body, discarded
+unfinished edits, old editor/flag/lock cleanup, timer cancellation and setup help.
+Interactive entry keeps its takeover prompt and leaves the newcomer bodyless;
+no response is tested. Short login output excludes entries at/before the cutoff,
+and long output pages through the stock 40-line limit. Modal `q` destroys the
+pager and returns to the shell. Login advances read time before paging completes
+and still displays with `didlog_off=1`; that flag does suppress live notices.
+Actual posting records timestamp/string rows, excludes the poster, notifies a
+wizard peer and preserves data through native save/reload. `dump_entries` is
+misdeclared `string *` despite returning nested rows.
+[User didlog handling][lima-did-user], [pager][lima-pager],
+[more helpers][lima-more-helpers].
+
+Several independent defects remain explicit: both plain-text export modes
+index the version mapping with integers and fail on nil before writing; an unprivileged regular player can call `set_version`
+and persistently erase the current version's records. Web formatting with an
+explicit version works, with diagnostic HTTP links at base+3, but actual CGI/HTTP
+entry is unchecked. Pattern queries fail because DID_D passes scalar strings to
+native `regexp`; use the existing one-element array/`sizeof` adaptation.
+Pattern-selection behavior remains unchecked.
+[Native regexp](efun/regexp.md), [daemon][lima-did-daemon].
+
+Implement configured numeric `__PORT__` next, then adopt explicit daemon returns,
+array-based pattern checks, current-version export indexing and row typing.
+Preserve the future-cutoff all-entry sentinel supplied by `didlog -all`; it is
+a caller convention, not a driver timestamp defect. Review login-off behavior
+and protect the public version setter using existing daemon/admin privilege
+conventions. FluffOS's port macro
+uses the first configured listener, without an optional-package guard; its core
+scalar regexp form returns a numeric match result (`F_REGEXP` enabled). Both
+sources were reviewed at `44532e0228f34be2184c701a361df4079371b8b0`, without
+upstream execution. After daemon repairs, port both commands to CMD dispatch and
+verify their version/pattern arguments before returning to character matching and
+takeover responses. [Port macro][fl-configured-port],
+[scalar regexp][fl-scalar-regexp], [declaration][fl-scalar-regexp-spec].
+
+Four quality gates and all 216 predecessor artifact/report sets remain intact.
+Initial fixture failures and the real scalar-regexp blocker are retained. Native,
+original and active library/configuration sources and master policy are unchanged;
+distinct nil, preserved players and four-second actions remain the Lima target.
+Synthetic timestamps/version seeds and an admin observer define the fixture
+boundary. The special LIMA save/version identity, old save migration, deletion,
+unknown/malformed versions and rows, missing/bodyless recipients, paging during
+takeover, authentication/socket loop/private input clearing, natural timer expiry,
+backup or different-character reconnect, command/HTTP execution, concurrency,
+hot reload, commit-time I/O failures, optimized performance, historical/full
+native reruns and complete startup remain unestablished.
+
 #### Lima reconnect account selection adopted
 
 The 4 October 2026 local port repairs USER_D registry validation during overlapping
@@ -7661,3 +7728,17 @@ semantics. Leave unresolved questions explicitly not checked.
 [fluffos-object-editor-mode]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc
 [fluffos-file-write-flags]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc
 [lima-editor-account]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/userinfo.c
+
+[lima-did-ports]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/ports.h
+
+[lima-did-user]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/misc.c
+
+[lima-did-post-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/I.c
+
+[lima-did-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/didlog.c
+
+[fl-configured-port]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc#L3003-L3006
+
+[fl-scalar-regexp]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L1797-L1827
+
+[fl-scalar-regexp-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L152
