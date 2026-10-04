@@ -5153,6 +5153,43 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima wizard-editor pipeline guard adopted
+
+The 3 October 2026 local port adopts the exact three-file control from the
+preceding incoming-pipeline audit, over the tokenizer cache overlay. CMD gains
+protected `no_pipeline()` metadata and a public nomask query; ed opts in, and
+pipeline preparation checks membership before stage mains/stdio execute. Incoming
+producers therefore do not run before an interactive-editor refusal. Outgoing
+editor pipes now get preparation-time pipeline feedback; direct redirection keeps
+the editor's suffix guard. Raw `no_redirection()` dispatch remains a separate
+contract. No native API or master-policy change; configuration changes only the
+local library path.
+
+Eleven tests/26 observations pass in debug, using the adopted overlay directly
+without injected control files. Six pipeline tests/twelve observations cover the
+reviewed shapes; five copied editor-routing tests/fourteen observations protect
+quoted Unicode/operator filenames, retained escape spelling, successful saves,
+redirection refusal and downstream pipes. Five incoming shapes preserve actual
+command/session state, account bytes and source contents, leave no producer event,
+then recover through ordinary editing. With pipes before and after ed, no
+downstream tell is delivered. Ordinary pipelines and incoming raw codesay still propagate or
+deliver their literal payloads through actual CMD discovery/stdio, users, wizard
+shells, master policy and modal/editor state. Producer/sink commands are explicit
+synthetic fixtures with native transactional file events.
+
+Seven concrete/module/fixture compiles are clean; standalone CMD retains its four
+known missing-`dispatch_main` diagnostics, supplied by concrete commands. Four
+quality gates, exact patch adoption and all 212 predecessor artifact/report sets
+pass. Original Lima, native sources and previous overlays remain unchanged.
+Distinct nil, preserved call-out players and four-second actions remain the target.
+Pinned [ed][lima-ed-command], [CMD][lima-command-base], [stdio][lima-command-stdio],
+[wish][lima-wish] and [CMD_D][lima-command-daemon] source evidence remains separate
+from execution on lpc-rs; the coordinated pipeline module is local port code.
+No upstream execution, optimized performance repeat, historical/full native rerun,
+hot reload, concurrency, commit-time I/O failure or complete startup is claimed.
+Lookup may lazily create commands before refusal, so arbitrary constructor effects
+remain outside the guard. Audit editor disconnect/reconnect cleanup next.
+
 #### Lima incoming wizard-editor pipeline audit
 
 Reviewed **3 October 2026** against pinned Lima [ed][lima-ed-command],
