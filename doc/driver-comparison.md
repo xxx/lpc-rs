@@ -5157,6 +5157,42 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail persistence and local delivery audit
+
+The 4 October 2026 audit of [MAIL_D][lima-mail-daemon] finds a one-file porting
+patch. Use distinct nil at its four class/message absence sites. Replace five
+`(: function, arguments :)` literals with explicit calls inside closures: native
+comma expressions do not invoke their first operand. The old message-key loop
+returns a filename and reaches the 4,000 ms limit. Drop `restore_object`'s legacy
+flag `1`; native restoration already preserves globals omitted from the file.
+Filter empty recipient strings before group expansion, and lowercase/deduplicate
+plain local addresses together. Blank Cc otherwise reaches USER_D's canonical-name
+error; case-variant duplicates inflate the recipient count and spuriously enter
+the unported I3 mail daemon. Native APIs and master policy do not change.
+
+The diagnostic patch is **not adopted**. **Sixteen tests and sixteen observations
+pass**: eleven working diagnostic cases and five controls for the original
+class-null error, bounded comma-expression loop, restore arity, duplicate local
+routing and blank Cc. Actual saved class bodies round-trip through MAIL_D and
+MAILBOX, including reload, local/group delivery, offline receipt/cache cleanup,
+last-recipient file removal, missing-body nil cleanup, mailbox reconstruction,
+sender/owner checks and outer-transaction abort. Public shell/editor/Cc composition
+now sends a real local body and removes its draft. The duplicate-routing control
+reports an I3 error after its local body/receipts commit; a caught error does not
+roll back those writes. No prepared mail-body provider
+or replacement mailbox cleanup is injected. Ten selected compile checks improve
+**4/5 → 5/5**; four quality gates and integrity checks preserve 226 predecessor
+artifact/report sets.
+
+The active overlay remains at the preceding mail-handler adoption. Recommend
+adopting this one-file patch, then auditing nonempty handler read/reply/forward
+flows and the remaining consumers. I3/remote delivery, local `user@mud` addresses,
+Mh shortcut wiring, body-mailbase callers, historical save files, long pager
+interaction, failure reporting, full startup and concurrency remain unchecked.
+Source review is pinned to the Lima revision below, reviewed **4 October 2026**;
+local execution uses distinct nil, preserved call-out players and 4,000 ms actions,
+without upstream execution or rerunning historical harnesses.
+
 #### Lima mail handler adoption
 
 The 4 October 2026 local port adopts the exact audited four-file patch to the
