@@ -5157,6 +5157,61 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima saved-mail retrieval error audit
+
+The 5 October 2026 local audit of [MAIL_D][lima-mail-daemon],
+[mailbox][lima-entry-mailbox] and the [base mailer][lima-mailer-base] finds that
+message retrieval exceptions still escape body reads, headers, replies and
+forwarding. Real standard/Mh dispatch suppresses them, emitting only the prompt;
+bound-handler catches expose the failures. Truncated native syntax, invalid
+class field values, nonclass/foreign-class globals and pending-list/member
+errors preserve exact damaged save bytes, both receipts/unread/cursor state
+and composition text, but give no useful read/header feedback. A bad middle
+header suppresses all accumulated healthy rows; selecting healthy ranges works
+with original numbering and unread markers. Pending failures also block reply,
+forwarding and body-only export silently, leaving tools/output files intact.
+
+Present nil-message, empty and message-less saves restore successfully but yield
+no message. MAIL_D returns nil, and each requesting mailbox prunes its receipt
+as if the file were missing; the exact damaged file remains. These cases start
+with a clean temporary daemon slot. Nonclass and foreign-class globals leave
+that slot invalid after a nominal consumption error; the daemon observer then
+encounters the same error. Native [restore_object](efun/restore_object.md)
+intentionally retains absent globals and does not check global assignment types;
+serialized class fields validate their declared types, and scalar class globals
+enforce nominal identity when consumed. The fix belongs in the daemon's temporary
+slot lifecycle and the mailer's error handling.
+
+**Eighteen newly written tests/observations pass** against the unchanged active
+overlay. Two real stock users/bodies receive daemon sends into native class saves
+and owned mailboxes. Only temporary saved files change; real standard/Mh commands,
+bound handlers, header paging, exports, reads, reload and deletion are exercised.
+Repairing a native sender field restores normal reading and changes only the
+caller's unread marker, with the peer's body preserved through reload. Physical
+missing-file header rows still retain healthy rows and prune only the caller's
+receipt. Foreign/direct callers are rejected before malformed parsing. The
+preceding deletion repair already reports native restore failures once without
+removing the save or receipts. No corruption frequency is established.
+
+Recommend clearing the daemon's temporary slot before and after caught restore,
+propagating errors and rejecting a successful restore with no message. Preserve
+invalid present saves/receipts for repair; retain native missing/unreadable-file
+semantics. Catch retrieval errors before actions change state and report the
+selected number/reason once. Catch each header retrieval independently, add a
+numbered error row with its unread marker, and continue other selected headers.
+Infer no owners, rewrite no fields and retain caller checks before restore.
+This recommendation is **not implemented** and needs no native API change.
+
+Seven CLI targets and four quality gates pass, including warning-free workspace
+Clippy. Integrity checks preserve original/native/master inputs and 246
+predecessor artifact/report sets. Eight pinned Lima source reviews below and
+three native source/reference reviews are dated **5 October 2026**. Execution is
+local lpc-rs only, using distinct nil, preserved call-out players and 4,000 ms
+actions. Historical harnesses and observation values are not rerun or compared;
+original keys/current displayed positions avoid timestamp assumptions. No native
+overview changes. Arbitrary unreadable-file I/O, legacy save import, remote queues,
+mailbox nuke/rebuild, stale cursors and commit-time failures remain separate work.
+
 #### Lima pending-owner mail deletion guards
 
 The 5 October 2026 local port changes [MAIL_D][lima-mail-daemon] and the
@@ -5195,8 +5250,8 @@ warning-free workspace Clippy. Exact two-file patch/configuration checks preserv
 original/native/master inputs and 245 predecessor artifact/report sets. Pinned
 source review below is dated **5 October 2026**; execution is local lpc-rs only,
 with distinct nil, preserved call-out players and 4,000 ms actions. No native API,
-master policy or overview feature changes. Next audit native malformed-save and
-pending-list errors in owned read/header presentation. Mailbox nuke/rebuild,
+master policy or overview feature changes. The retrieval audit above establishes
+malformed-save and pending-list read/header failures. Mailbox nuke/rebuild,
 stale cursors, remote queues and commit-time failures remain separate work.
 
 #### Lima pending-owner mail deletion audit
