@@ -5157,6 +5157,45 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mailbox cursor audit
+
+Reviewed **5 October 2026** against pinned [mailbox][lima-entry-mailbox],
+[base mailer][lima-mailer-base], [standard mailer][lima-mailer-standard] and
+[Mh mailer][lima-mailer-mh]. An owned read prunes/saves a physically missing
+message's receipt without adjusting the cursor. Removing an earlier sorted key
+changes the selected message; removing the selected last key leaves an index
+outside the remaining mailbox. Reload persists receipt removal but resets the
+`nosave` cursor to zero. Corrupt records and foreign reads preserve state;
+ordinary deletion already adjusts/clamps the cursor correctly.
+
+The base mailer displays a lost-message placeholder and unconditionally assigns
+the old requested position afterward, so a mailbox-only correction would be
+overwritten. Both mailers can then report out-of-bounds reads; standard mail can
+show `[3 of 2] mail:`. Headers retain numbers computed before pruning: losing
+the first of three messages leaves healthy rows labelled 2 and 3 in a two-message
+mailbox, making the displayed 3 unselectable. Selected ranges have the same
+problem; missing records outside a selected range remain untouched.
+
+**Recommendation:** share receipt-only removal, cursor adjustment/clamping and
+save bookkeeping between successful ordinary deletion and owned missing reads.
+In the base mailer, avoid overwriting selection/read flags for a pruned read key,
+number retained headers at their current positions, and leave lost rows
+unnumbered. Preserve initial range selection and lost-message feedback. No native
+API, global reconciliation or recovery-insertion policy change is needed.
+
+**Fifteen fresh tests/observations pass**, with actual Users/bodies, connections,
+sends, native saves, owned mailboxes and both mailers' real input paths. Valid
+read recovery, peer isolation, ordinary deletion, reload, corrupt/foreign reads
+and uncaught rollback are covered. Seven core CLI checks and four quality gates
+pass, including warning-free workspace Clippy. Ten pinned Lima files and five
+native sources/references are reviewed; all 252 predecessor artifact/report
+sets are preserved. Execution is local lpc-rs only, with distinct nil, preserved
+call-out players and 4,000 ms actions. Historical harnesses/clocks are not
+rerun/compared. The recovery overlay, original/native/master inputs and overview
+cells remain unchanged; this audit does not adopt its recommendation. Longer
+pager/range interaction, exports, unread selection, forward/reply, concurrent
+maintenance, remote queues, full account deletion and startup remain separate.
+
 #### Lima mailbox recovery repair
 
 The **5 October 2026** local port changes only [MAIL_D][lima-mail-daemon] and
@@ -5188,8 +5227,8 @@ inputs and 251 predecessor artifact/report sets. Fourteen pinned Lima sources
 and five native sources/references are reviewed on **5 October 2026**. Execution
 is local lpc-rs only, with distinct nil, preserved call-out players and 4,000 ms
 actions; historical harnesses/clocks are not rerun/compared. Native APIs and
-overview cells are unchanged. Next audit cursor behavior when owned reads prune
-missing messages; concurrent maintenance, bulk reconciliation, remote queues,
+overview cells are unchanged. The cursor audit above recommends a coordinated
+mailbox/mailer repair; concurrent maintenance, bulk reconciliation, remote queues,
 full account deletion, other commit-time I/O failures and startup remain separate.
 
 #### Lima mailbox recovery audit
