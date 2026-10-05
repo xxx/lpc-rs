@@ -5157,6 +5157,57 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima saved message metadata UI audit
+
+The 5 October 2026 local audit of the [mail class][lima-mail-message-class] and
+[base mailer][lima-mailer-base] finds that the saved-body guard does not validate
+header or recipient metadata. Native class restoration rejects integer
+sender/subject values and nil dates, preserving the damaged file and mailbox
+receipt; repairing those files restores reading. It accepts nil strings,
+unrepresentable integer dates and arbitrary mixed To/Cc shapes. Nil sender or
+subject and an out-of-range date break headered reads, replies and forwarding.
+A bad record also aborts the entire header batch, hiding healthy siblings.
+Actual [standard][lima-mailer-standard]/[Mh][lima-mailer-mh] dispatch suppresses
+these exceptions without a useful result.
+
+Optional nil To/Cc lists display normally but fail array concatenation in
+reply-all. An integer To value is silently omitted from read headers, while a
+scalar string or mapping recipient list fails formatting. An array containing
+an integer opens the reply-all editor, then [MAIL_D][lima-mail-daemon] silently
+filters that element by sizeof and delivers to the valid string recipient.
+The successful send removes the accepted draft; the source save stays intact.
+Basic replies and forwarding ignore unused recipient fields. Body-only export
+recovers exact Unicode and blank-line text despite unusable metadata, preserving
+the save, unread state and existing composition. Empty subjects/recipient arrays
+and representable zero/negative dates remain usable.
+
+**Sixteen newly written tests/observations pass** against the unchanged active
+library. Real daemon sends create native saves and owned receipts; the temporary
+fixture changes saved field values after opening the actual UI. Standard modal
+commands, Mh shell shortcuts, bound-handler observation catches, actual editing
+and owned mailbox reads establish errors, repair, filtered delivery and body-only
+recovery. No prepared message provider or daemon failure hook is installed.
+Seven CLI targets and four quality gates pass, including warning-free workspace
+Clippy. Integrity checks preserve original/native/master inputs and 242
+predecessor artifact/report sets. Historical harnesses and observation values
+are not rerun or compared, and receipt selection assumes no clock ordering.
+
+Recommend checks where each action consumes metadata: string sender/subject,
+dates that [ctime](efun/ctime.md) can represent and optional arrays of string
+To/Cc recipients.
+Validate reply-all recipients before opening its editor, treating nil lists as
+empty only when assembling recipients. Leave stored fields, basic reply/forward
+unused fields and body-only export alone. Header enumeration should show an
+invalid-metadata row and continue to healthy messages. Preserve existing
+malformed-save rejection and missing-file pruning. This recommendation is
+**not implemented** and requires no native API or new recipient-routing policy.
+
+Pinned source review below is dated **5 October 2026**; local execution uses
+distinct nil, preserved call-out players and 4,000 ms actions, without upstream
+driver or remote execution. No native overview feature changes. Pending-owner
+metadata, stale cursors, malformed native-save feedback, remote queues and
+persistent news recovery remain separate work.
+
 #### Lima mail delivery error reporting and news reply recovery
 
 The 5 October 2026 local port changes the [base mailer][lima-mailer-base] and
@@ -5194,7 +5245,7 @@ actions, without upstream-driver or remote execution. No native overview feature
 changes. This adds live news text recovery rather than a persistent news draft
 or delivery rollback.
 
-Next audit saved message metadata used in mail headers, replies and forwarding.
+The metadata audit above identifies the next base-mailer guards.
 Persistent news drafts/metadata, remote queues, commit-time disk failure,
 disconnect recovery, concurrent composition and full startup remain separate
 boundaries.
@@ -8654,3 +8705,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-scalar-regexp]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L1797-L1827
 
 [fl-scalar-regexp-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L152
+
+[lima-mail-message-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/mailmsg.c
