@@ -5157,6 +5157,40 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima nonempty mail handler audit
+
+The 4 October 2026 follow-up audit finds three small mudlib repairs. The
+[mailbox][lima-entry-mailbox] uses unread count to adjust its cursor after
+deletion; deleting the only read message leaves index `-1`, so a default reply
+fails even after new mail arrives. Adjust by the deleted message's sorted
+position and clamp to the remaining range, using zero for an empty mailbox.
+The [Mh handler][lima-mailer-mh] calls `to_int(nil)` for bare `#`; supply integer
+zero for its current-message default. The [base mailer][lima-mailer-base] appends
+a fresh reply quotation to the retained draft; abort/retry duplicates quoted text.
+Replace the quotation seed when starting a new reply. Cancellation still retains
+the draft, while successful delivery removes it. Native APIs and master policy
+do not change.
+
+The three-file diagnostic patch is **not adopted**. **Sixteen new tests and
+sixteen observations pass**: thirteen working cases and three controls for those
+failures. Actual saved bodies support standard read/header ranges/next unread,
+long-message paging, default/numbered/reply-all editor callbacks, real Cc delivery,
+forwarding, saved copies and deletion ranges/cursor repair. Saved-copy testing
+initializes wizard membership and home-directory owner protection through Lima's
+security daemon. Mh public parsing supports the selected read/reply/forward/delete
+flows, returning to the shell; stock `M…` shortcuts remain unwired. Ten selected
+compile checks remain **5/5 → 5/5**, since these are runtime behavior failures.
+Four quality gates and integrity checks preserve 228 predecessor artifact/report
+sets. Historical harnesses are not rerun.
+
+**Recommendation:** adopt these three repairs, then audit remaining mail
+consumers, Mh integration and failure reporting. Independent body-mailbase
+callers, missing/malformed body handling in the UI, remote/local-at-mud delivery,
+historical saves, draft recovery, detached handlers, authentication/sockets,
+complete startup and concurrency remain unchecked. Source review is pinned to
+the Lima revision below, reviewed **4 October 2026**, with distinct nil, preserved
+call-out players, 4,000 ms actions and no upstream-driver execution.
+
 #### Lima mail delivery adoption
 
 The 4 October 2026 local port adopts the exact audited one-file
