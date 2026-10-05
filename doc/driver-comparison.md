@@ -5157,6 +5157,37 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mailbox setter ownership repair
+
+The **5 October 2026** local port adds owning User context checks to both public
+[mailbox][lima-entry-mailbox] setters. Foreign ordinary/privileged Users and
+absent User context are rejected before state changes, including already-read
+or absent-key no-ops. Denied calls preserve receipts, cursors, saved bytes and
+message records. Owners retain public access through the mailer and User;
+MAIL_D delivery/recovery need no exception. No privilege bypass, cursor clamping,
+saved-data migration or native/master change is introduced.
+
+The private [User body setup][lima-body-switching] routine is executed on a real
+User through an invocation suffix in its module. It keeps the first unread
+selection and alert, the last position when all mail is read, and -1 for an
+empty mailbox. Flags and saves stay unchanged. This covers the internal routine
+under owner context, without establishing complete login or body switching.
+Real [standard][lima-mailer-standard]/[Mh][lima-mailer-mh] input retains unread
+selection/persistence, navigation/header/export policies, missing-record pruning,
+damaged-record retention and uncaught-error rollback.
+
+**Twenty-two fresh tests/observations pass**, including two fresh controls that
+reproduce the previous overlay's foreign flag/cursor writes. Fourteen core CLI
+checks remain 7/7 → 7/7; four quality gates pass, including warning-free workspace
+Clippy. Eleven pinned Lima and five native reviews are reused; original sources,
+native/master inputs and all 255 predecessor artifact/report sets are preserved.
+The exact patch changes only the mailbox. Execution is local lpc-rs only with
+distinct nil, preserved call-out players and 4,000 ms actions; `USE_USER_MENU` is
+enabled and saves use `.o`. Overview cells stay unchanged. Historical harnesses
+and clocks are not rerun/compared. Audit forward/reply composition next; long
+paging/ranges, lost exports, concurrent maintenance, remote queues, full account
+deletion and startup remain separate.
+
 #### Lima unread mail audit
 
 Reviewed **5 October 2026** against pinned [mailbox][lima-entry-mailbox],
