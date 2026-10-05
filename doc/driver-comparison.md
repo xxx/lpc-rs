@@ -5157,6 +5157,57 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mailbox maintenance audit
+
+Reviewed **5 October 2026** against the pinned [MAIL_D][lima-mail-daemon],
+[mailbox][lima-entry-mailbox], [privilege wrapper][lima-access] and
+[security daemon][lima-security], using the current distinct-nil port.
+Nuke denies ordinary owners and foreign callers; privileged deletion preserves
+shared peers and removes the saved message at the last owner. The extra argument
+in stock nuke callers is accepted by the dynamic call, so it is not a blocker.
+Full account deletion remains unestablished.
+
+Rebuild has no privilege gate: an ordinary User can rebuild other users' boxes
+and reset read flags. Receipt delivery's caller check is commented out, allowing
+foreign insertion of a receipt for a nonexistent message. Rebuild bypasses the
+pending-owner validator: numeric owners can fail after earlier recipients have
+changed, nonaccount owners acquire saved boxes, and an empty owner returns
+success despite a NUL-path save failure logged at delivery. Its unsaved receipt
+disappears on reload. Empty pending lists leave stale receipts; duplicates
+replace the same flag. Nonnumeric saved basenames are interpreted as key zero
+rather than consuming the listed file.
+
+A caught nuke failure can commit earlier pending-owner deletions while retaining
+all mailbox receipts, causing later reads of those healthy records to fail their
+owner check. Caught rebuild failures can likewise retain earlier file/recipient
+updates. Uncaught errors discard those transactional changes; `catch` itself
+provides no rollback. See [catch](efun/catch.md) and
+[save delivery](efun/save_object.md).
+
+**Recommendation:** guard rebuild with previous privilege 1, require MAIL_D for
+receipt delivery, and validate canonical save basenames and the complete pending
+list/local account names before per-record delivery. During nuke, remove and
+persist each successful receipt deletion before processing the next key; stop
+and propagate the first damaged-record error while retaining remaining mail.
+Keep privileged foreign-owner deletion, shared ownership and ordinary abort
+semantics. No owner inference, save rewriting or native API change is needed.
+This recommendation is **not implemented**; the active overlay remains the
+retrieval repair. Rebuild's unread/reset policy and stale-receipt reconciliation
+remain separate decisions.
+
+Twenty fresh local cases cover these paths with two stock Users/bodies, daemon
+sends, native class saves and real mailboxes. Actual map/directory order selects
+partial failures without historical clock assumptions. The seven core CLI mail
+targets remain clean; suicide retains four inherited CMD `dispatch_main` errors,
+and admtool's user module retains two base/menu type errors. Neither complete
+caller workflow was executed. Four quality gates pass, including warning-free
+workspace Clippy; integrity checks preserve 248 predecessor artifact/report sets.
+Fourteen pinned Lima sources and five native sources/references are reviewed.
+Execution is local lpc-rs only, with distinct nil, preserved call-out players and
+4,000 ms actions. Other commit-time I/O failures, concurrent maintenance, remote
+queues and full startup remain unestablished. No overview feature, native/master
+input or active-library change is made.
+
 #### Lima saved-mail retrieval error handling
 
 The 5 October 2026 local port changes [MAIL_D][lima-mail-daemon] and the
