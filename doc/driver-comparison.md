@@ -5157,18 +5157,50 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima composition draft recovery adoption
+
+The 4 October 2026 local port adopts the exact one-file retention/reporting patch
+in the [base mailer][lima-mailer-base]. Unsuccessful composition sends keep their
+saved body; successful sends remove it. Missing/unreadable drafts explicitly
+report that nothing was sent, and empty readable drafts remain valid. Catchable
+send errors report possible prior delivery and keep the draft. Reopening saved
+text announces that the user must check the new recipient and subject.
+Wizard `dead.letter` appends and explicit abort semantics remain unchanged.
+
+**Fourteen tests and fourteen observations pass** through the adopted files.
+Working-case assertions, common Rust helpers and copied LPC helpers match the
+audit after removing the overlay selector and diagnostic logging argument.
+Real standard/Mh commands, modal auto-pop, editor, native saves and owned mailbox
+reads cover failed/successful sends, explicit resend, wizard fallback, mixed
+recipients, missing/unreadable/empty files, abort and shared draft recovery.
+Two cases retain failure hooks in the actual MAIL_D in the temporary test library:
+a late exception can retain local delivery, and a manual retry duplicates it.
+The active library has no hooks. The four historical controls stay frozen, and
+observation labels remain without clock-dependent value comparison.
+
+Ten compile checks stay **5/5 → 5/5**; four quality gates and exact patch/integrity
+checks retain 238 predecessor artifact/report sets. Original Lima, native APIs
+and master policy remain unchanged; historical harnesses are not rerun. Source
+review remains pinned below, reviewed **4 October 2026**. Execution uses distinct
+nil, preserved call-out players and 4,000 ms actions, without upstream execution.
+
+Next protect a retained composition draft when reply editing is aborted: reply
+quoting still replaces that file before the edit is accepted. Metadata storage,
+automatic retries, remote queuing, forwarding/news-reply errors, deletion failures,
+concurrent composition and full startup remain separate boundaries.
+
 #### Lima composition draft recovery audit
 
 Reviewed **4 October 2026** against the pinned [base mailer][lima-mailer-base],
 [text editor][lima-text-editor], [input dispatcher][lima-inputsys] and
-[mail daemon][lima-mail-daemon]. After an edited message reaches Cc, the active
+[mail daemon][lima-mail-daemon]. After an edited message reaches Cc, the preceding
 mailer deletes its draft even when delivery reports no valid destination.
 Ordinary users lose the body; the wizard-only `dead.letter` fallback retains
 body text without subject or recipient metadata. Catchable send exceptions leave
 the draft but disappear inside modal dispatch. An exception after local saves
 can leave a delivered message, so a manual retry can duplicate it.
 
-The **one-file diagnostic patch, not yet adopted**, removes a composition draft
+The **one-file diagnostic patch, adopted above**, removes a composition draft
 only after a successful send. Missing/unreadable drafts report that nothing was
 sent; empty readable drafts remain valid. Send exceptions report possible prior
 delivery and retain the draft. Reopening saved text announces that the user must
@@ -5190,7 +5222,7 @@ Ten compile checks stay **5/5 → 5/5**; four quality gates and integrity checks
 retain 237 predecessor artifact/report sets. Active/original/native/master
 inputs remain unchanged; historical harnesses are not rerun.
 
-Recommend adopting the retention/reporting patch, then protecting a retained
+The retention/reporting patch is adopted above. Next protect a retained
 composition draft when a reply is aborted. Metadata persistence, automatic
 retries, remote queuing, forwarding/news-reply errors, draft deletion failures,
 concurrent composition and full startup remain unestablished. Execution uses
