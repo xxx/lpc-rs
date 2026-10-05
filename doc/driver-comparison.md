@@ -5157,6 +5157,39 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima saved message body UI audit
+
+Reviewed **4 October 2026** against the pinned
+[base mailer][lima-mailer-base], [mail daemon][lima-mail-daemon] and
+[mailbox][lima-entry-mailbox]. A present saved record can have a nil body;
+reading then fails at concatenation and replying/forwarding fail in `map`.
+Restored array fields check their outer type, so an invalid integer line can
+also reach quotation and be forwarded as text.
+
+The **one-file diagnostic guard, not yet adopted**, requires an array of strings
+before reading, quoting or forwarding. Empty arrays are valid. Invalid bodies
+produce an explicit error while retaining the unread receipt and any existing
+draft; they open no pager/editor, create no saved copy and deliver no mail.
+Native restore still rejects scalar bodies and corrupt value syntax. Those
+files and receipts remain available for administrator repair; the audit verifies
+retry after repairing the save. Missing files retain the existing lost-message
+report and persisted stale-receipt removal.
+
+**Eighteen tests/observations pass: fourteen diagnostic cases and four active
+controls.** Real saved messages feed standard modal input and the caller-checked
+Mh parser. The working cases cover read/reply/forward in both handlers, invalid
+lines, parser rejection/retry, empty arrays, missing files and Unicode forwarding
+through the actual shell shortcut and recipient-owned mailbox. Controls reproduce
+the nil errors and integer-line forwarding. Delivery assertions do not depend on
+timestamp ordering. Ten compile checks stay **5/5 → 5/5**; four quality gates and
+integrity checks retain 235 predecessor artifact/report sets. Native APIs and
+master policy remain unchanged. Execution uses distinct nil, preserved call-out
+players and 4,000 ms actions, without upstream execution or historical reruns.
+
+Adopt this guard next, then audit cancellation draft recovery and delivery
+failure reporting. Other malformed header/recipient fields, multi-message cursor
+handling after stale-file pruning, remote delivery and full startup remain separate.
+
 #### Lima body mailbase and contributed board replies
 
 Reviewed **4 October 2026** against the pinned Lima sources below. Stock
@@ -5195,8 +5228,8 @@ send/callback expressions, not complete board delivery. Four quality gates and
 preservation checks retain 234 predecessor artifact/report sets. Execution uses
 distinct nil, preserved call-out players and 4,000 ms actions, without upstream
 driver execution. No stock patch or native feature is warranted by this audit.
-Keep the legacy boards optional; next audit missing/malformed saved message
-bodies through the actual mail-reader UI.
+Keep the legacy boards optional; the saved message body UI audit above addresses
+their proposed follow-up.
 
 #### Lima newsreader mail reply adoption
 
