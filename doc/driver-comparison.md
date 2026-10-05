@@ -5157,6 +5157,46 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima Mh shortcut integration audit
+
+The 4 October 2026 source review finds no caller for
+[Mh's `parse_Mh_cmd`][lima-mailer-mh] in either stock shell, despite the handler
+advertising `M?`, `M#` and related shortcuts. Its caller check is also unfinished,
+and a malformed two-character suffix such as `hX` executes as `h`.
+
+A three-file diagnostic repair routes uppercase `M` shortcuts after alias
+expansion in the [shared shell][lima-shell], through the
+[user mailbase][lima-user-mailbase] to the selected stock Mh handler. An idle
+standard/default handler is not instantiated by this hook. Cached selection
+matches ordinary `query_mailer()` behavior until the handler is unloaded. Mh
+commands receive their text before wizard argument/pipeline expansion; unknown
+or malformed shortcuts fall back to ordinary shell dispatch. The bridge checks
+the current user and owned shell; Mh checks the current user, selected handler
+and mailbox owner. Empty/malformed suffixes return unhandled. Native APIs and
+master policy do not change.
+
+The diagnostic patch is **not adopted**. **Sixteen new tests and sixteen
+observations pass**: twelve working cases and four controls reproducing the two
+unwired shells, unchecked caller and malformed suffix. Actual player/wizard input
+supports lazy selection, aliases and alias bypass, standard/cached fallback,
+read/header ranges/cursor/next unread/deletion, subject/editor/Cc delivery,
+literal editor input, reply abort/retry, help paging, wizard saved copies and
+forwarding. Foreign object/user calls and absent player context are rejected
+without reading the guarded message. Ten selected compile checks remain
+**4/5 → 4/5**: user, both concrete shells and Mh compile; the abstract shared
+shell retains its four unresolved hook calls when compiled alone. Four quality
+gates and integrity checks preserve 230 predecessor
+artifact/report sets.
+
+**Recommendation:** adopt the exact three-file patch, then audit remaining mail
+consumers and failure reporting, starting with newsreader mail replies. Body
+mailbase consumers, missing/malformed bodies in the UI, remote/local-at-mud
+delivery, historical saves, detached ownership, delayed error-log flush,
+authentication/sockets, full startup and concurrency remain unchecked. Source
+review stays pinned to the Lima revision below, reviewed **4 October 2026**, with
+distinct nil, preserved call-out players and 4,000 ms actions. This is local
+lpc-rs execution; upstream drivers and historical harnesses are not rerun.
+
 #### Lima mail reader adoption
 
 The 4 October 2026 local port adopts the exact audited three-file repair:
@@ -5180,8 +5220,8 @@ predecessor transcripts. The three original failure controls remain frozen in th
 audit. Ten selected compile checks remain **5/5 → 5/5**; four quality gates and
 integrity checks preserve 229 predecessor artifact/report sets.
 
-The active overlay now includes all three repairs. Next audit Mh shortcut
-integration and remaining mail consumers/failure reporting. Independent body
+The active overlay now includes all three repairs. Mh shortcut integration is
+audited above; remaining mail consumers/failure reporting follow. Independent body
 mailbase callers, missing/malformed body handling in the UI, remote/local-at-mud
 delivery, historical saves, draft recovery, detached ownership, delayed error-log
 flush, authentication/sockets, full startup and concurrency remain unchecked.
@@ -8218,6 +8258,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-mailer-standard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/standard.c
 [lima-mailer-mh]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/Mh.c
 [lima-mail-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mail.c
+[lima-user-mailbase]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/mailbase.c
 
 [fl-configured-port]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc#L3003-L3006
 
