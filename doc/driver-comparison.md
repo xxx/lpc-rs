@@ -5157,6 +5157,38 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail reader adoption
+
+The 4 October 2026 local port adopts the exact audited three-file repair:
+[MAILBOX][lima-entry-mailbox] adjusts/clamps the cursor by the deleted message's
+sorted position, [Mh][lima-mailer-mh] supplies zero for bare `#`'s current-message
+default, and the [base mailer][lima-mailer-base] replaces a fresh reply's quotation
+seed. Aborting then restarting a reply no longer duplicates quoted text.
+Cancellation retains the draft; successful delivery removes it. Native APIs and
+master policy do not change.
+
+**Forty-three tests and forty-three observations pass** through the adopted files
+without diagnostic production replacement: thirteen reader cases, eleven delivery
+cases, eleven handler cases and eight mailbox lifetime cases. Actual saved bodies,
+standard read/header ranges/next unread, long paging, editor/reply-array/reply-all
+and Cc callbacks, forwarding, wizard saved copies and deletion ranges/cursor repair
+work alongside retained persistence, local/group/offline delivery, access checks,
+transaction abort, public composition and account lifetime behavior. Retained test
+bodies and assertions match after fixture/observation wiring and one reader test
+rename. Observation values are recorded without comparing clock-dependent
+predecessor transcripts. The three original failure controls remain frozen in the
+audit. Ten selected compile checks remain **5/5 → 5/5**; four quality gates and
+integrity checks preserve 229 predecessor artifact/report sets.
+
+The active overlay now includes all three repairs. Next audit Mh shortcut
+integration and remaining mail consumers/failure reporting. Independent body
+mailbase callers, missing/malformed body handling in the UI, remote/local-at-mud
+delivery, historical saves, draft recovery, detached ownership, delayed error-log
+flush, authentication/sockets, full startup and concurrency remain unchecked.
+Source review stays pinned to the Lima revision below, reviewed **4 October 2026**,
+with distinct nil, preserved call-out players, 4,000 ms actions and no
+upstream-driver execution. Historical harnesses are not rerun.
+
 #### Lima nonempty mail handler audit
 
 The 4 October 2026 follow-up audit finds three small mudlib repairs. The
@@ -5171,8 +5203,9 @@ Replace the quotation seed when starting a new reply. Cancellation still retains
 the draft, while successful delivery removes it. Native APIs and master policy
 do not change.
 
-The three-file diagnostic patch is **not adopted**. **Sixteen new tests and
-sixteen observations pass**: thirteen working cases and three controls for those
+The three-file diagnostic patch was **not adopted during this audit**; its later
+adoption is described above. **Sixteen new tests and sixteen observations pass**:
+thirteen working cases and three controls for those
 failures. Actual saved bodies support standard read/header ranges/next unread,
 long-message paging, default/numbered/reply-all editor callbacks, real Cc delivery,
 forwarding, saved copies and deletion ranges/cursor repair. Saved-copy testing
