@@ -5157,6 +5157,46 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima forwarding and news reply delivery-error audit
+
+The 5 October 2026 local audit finds two gaps in the [base mailer][lima-mailer-base]
+and [newsreader][lima-news-reader]. Composition catches delivery errors, but
+forwarding and news replies bypass that continuation. The [modal dispatcher][lima-inputsys]
+catches exceptions without reporting them. Failed forwards therefore return to
+their prompts without a delivery result; the original message and composition
+draft remain. A failed news reply also loses its edited buffer after the
+[text editor][lima-text-editor] cleans up. Invalid destinations are reported,
+but undeliverable news reply text is still discarded.
+
+**Fifteen newly written tests/observations pass** against the unchanged active
+library. Nine activate temporary one-shot hooks in the real [MAIL_D][lima-mail-daemon]
+before local receipt delivery or immediately before return. Actual standard
+modal commands, Mh shell shortcuts and plain/quoted news editing demonstrate
+silent errors, buffer loss and retained late delivery. Explicit forwarding retry
+after a late error creates a duplicate. Six controls cover invalid destinations,
+normal sends, abort and caller/private-callback guards. Existing composition
+text remains unchanged. Receipt assertions select by subject/original key rather
+than timestamp ordering; historical harnesses and observation values are not
+rerun or compared.
+
+Seven composed-object CLI targets compile; a standalone input fragment requires
+its user host. Four quality gates and integrity checks preserve 240 predecessor
+artifact/report sets. Only temporary fixtures contain failure hooks; the active
+library/configuration, original Lima, native APIs and master policy remain
+unchanged. Source review is pinned below, reviewed **5 October 2026**, with
+local execution using distinct nil, preserved call-out players and 4,000 ms
+actions. These injections test error handling, without establishing error
+frequency or executing remote delivery. No native overview feature changes.
+
+Recommend catching delivery errors in the shared mailer and returning send
+status to the newsreader. Reopen failed news replies with their original edited
+lines and captured subject/recipient, warning that another completion retries
+the send and recipients may already have mail. Resending remains explicit;
+forwarding needs no new draft because its original survives. This two-file
+mudlib recommendation is not implemented. Persistent news drafts, disconnect
+recovery, delivery atomicity, remote queues, concurrency and full startup remain
+separate boundaries.
+
 #### Lima reply draft preservation
 
 The 5 October 2026 local port changes the [base mailer][lima-mailer-base] to use
@@ -5186,7 +5226,7 @@ pinned below, reviewed **5 October 2026**. Local execution uses distinct nil,
 preserved call-out players and 4,000 ms actions, without upstream execution or
 historical harness reruns. This adds no native API or overview feature.
 
-Next audit delivery-error reporting for forwarding and newsreader mail replies,
+The delivery-error audit above covers forwarding and newsreader mail replies,
 which bypass the composition Cc callback. Metadata storage, automatic retry,
 remote queuing, commit-time disk failure, disconnect recovery, concurrent
 composition and full startup remain separate boundaries.
