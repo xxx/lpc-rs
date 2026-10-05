@@ -5157,6 +5157,40 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima reply draft preservation
+
+The 5 October 2026 local port changes the [base mailer][lima-mailer-base] to use
+the existing [text editor][lima-text-editor] for replies. Quoted lines stay in
+memory until editing finishes, so abort leaves an existing composition draft
+unchanged and creates no persistent quote file when no draft existed. A private
+completion saves the accepted reply before the existing Cc/send path. Catchable
+save errors reopen the same buffer for retry. Nil means abort; an empty completed
+buffer remains valid. Finishing the reply intentionally replaces previous saved
+text, and the UI announces that boundary.
+
+**Fifteen new tests/observations pass: thirteen adopted cases and two fresh
+previous-overlay controls.** Real standard/Mh commands, modal dispatch, editor,
+line editor, owned mailbox reads and native message saves cover aborts,
+reply-all, absent/unreadable previous files, Unicode and blank lines, empty source
+and edited bodies, save error/retry and abort, input-stack teardown, nested staging
+cleanup and accepted-reply retention after failed delivery. Directory targets
+trigger native preflight write errors; no send-failure hooks or prepared message
+providers are used. The previous controls demonstrate overwrite and quote-file
+creation on abort. Receipt checks do not assume timestamp ordering or compare
+historical observation values.
+
+Ten compile checks stay **5/5 → 5/5**; four quality gates and exact patch/integrity
+checks retain 239 predecessor artifact/report sets. Only the base mailer changes;
+original Lima, native APIs and master policy remain unchanged. Source review is
+pinned below, reviewed **5 October 2026**. Local execution uses distinct nil,
+preserved call-out players and 4,000 ms actions, without upstream execution or
+historical harness reruns. This adds no native API or overview feature.
+
+Next audit delivery-error reporting for forwarding and newsreader mail replies,
+which bypass the composition Cc callback. Metadata storage, automatic retry,
+remote queuing, commit-time disk failure, disconnect recovery, concurrent
+composition and full startup remain separate boundaries.
+
 #### Lima composition draft recovery adoption
 
 The 4 October 2026 local port adopts the exact one-file retention/reporting patch
@@ -5184,10 +5218,10 @@ and master policy remain unchanged; historical harnesses are not rerun. Source
 review remains pinned below, reviewed **4 October 2026**. Execution uses distinct
 nil, preserved call-out players and 4,000 ms actions, without upstream execution.
 
-Next protect a retained composition draft when reply editing is aborted: reply
-quoting still replaces that file before the edit is accepted. Metadata storage,
-automatic retries, remote queuing, forwarding/news-reply errors, deletion failures,
-concurrent composition and full startup remain separate boundaries.
+Reply draft preservation above now protects previous saved text until the edit
+is accepted. Metadata storage, automatic retries, remote queuing,
+forwarding/news-reply errors, deletion failures, concurrent composition and full
+startup remain separate boundaries.
 
 #### Lima composition draft recovery audit
 
