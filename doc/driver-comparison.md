@@ -5157,6 +5157,36 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail handler adoption
+
+The 4 October 2026 local port adopts the exact audited four-file patch to the
+[base mailer][lima-mailer-base], [standard handler][lima-mailer-standard],
+[Mh handler][lima-mailer-mh] and [public command][lima-mail-command]. Explicit void
+returns, distinct nil for absent strings, bare unbound callbacks, applied bound
+callbacks and a mixed editor recipient parameter replace their stock assumptions.
+Protected CMD dispatch preserves the private main function and inherited caller
+check. Native APIs and master policy do not change.
+
+**Twenty tests and twenty observations pass** through the adopted library without
+diagnostic production replacements: twelve mailer cases and eight retained mailbox
+lifetime cases. Standard modal navigation, help paging, handler recreation,
+composition/abort/Cc and command access checks work alongside account cache
+retention and last-session release. Mailer observations match the audit exactly;
+mailbox observations preserve all assertions and normalize only three login
+timestamps. Sixteen compile checks improve **3/8 → 7/8**; the remaining MAIL_D
+class-null assignment failure is unchanged. Four quality gates and integrity
+checks preserve 225 predecessor artifact/report sets.
+
+[MAIL_D][lima-mail-daemon] still blocks real message bodies and delivery. Stock
+modal input catches the Cc failure silently and leaves the staged draft. Mh's
+public parser works for selected empty-inbox commands, while its advertised M
+shortcuts remain unwired in both stock shells. Actual read/reply/forward/delete,
+address/group/I3 paths, body-mailbase consumers, detached handlers, full startup
+and concurrency remain unchecked. The next audit covers MAIL_D persistence and
+real local delivery. Source review remains pinned to the Lima revision below,
+reviewed **4 October 2026**; local execution uses distinct nil, preserved call-out
+players and 4,000 ms actions, without upstream execution.
+
 #### Lima mail handlers and public command audit
 
 The reviewed [base mailer][lima-mailer-base], [standard handler][lima-mailer-standard],
@@ -5168,7 +5198,8 @@ in four local files. Use explicit output followed by `return;` for void returns,
 The public command needs a protected CMD dispatch adapter; its private entry point
 and inherited [caller check][lima-command-base] remain.
 
-The diagnostic patch is **not adopted**. Selected compilation improves **3/8 →
+The diagnostic patch was **not adopted during this audit**; its later adoption is
+described above. Selected compilation improves **3/8 →
 7/8**, preserving lifecycle successes. The remaining [MAIL_D][lima-mail-daemon]
 blocker assigns integer zero to a class-valued saved message. **Fifteen new tests
 and fifteen observations pass**, covering actual shell command dispatch, standard
