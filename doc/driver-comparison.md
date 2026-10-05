@@ -5157,6 +5157,38 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail handlers and public command audit
+
+The reviewed [base mailer][lima-mailer-base], [standard handler][lima-mailer-standard],
+[Mh handler][lima-mailer-mh] and [public command][lima-mail-command] need adaptations
+in four local files. Use explicit output followed by `return;` for void returns,
+`nil` for absent strings/output filenames, bare names for unbound callbacks and
+`&name(args)` for bound callbacks. The editor completion recipient parameter needs
+`mixed`: new mail binds recipient text, while replies bind a recipient array.
+The public command needs a protected CMD dispatch adapter; its private entry point
+and inherited [caller check][lima-command-base] remain.
+
+The diagnostic patch is **not adopted**. Selected compilation improves **3/8 →
+7/8**, preserving lifecycle successes. The remaining [MAIL_D][lima-mail-daemon]
+blocker assigns integer zero to a class-valued saved message. **Fifteen new tests
+and fifteen observations pass**, covering actual shell command dispatch, standard
+modal input, empty-inbox navigation,
+help paging, handler destruction/recreation and composition through the real editor
+and Cc prompt. The actual bound Cc callback exposes the daemon compile error; stock
+[modal input][lima-inputsys] catches it silently, returns to the shell and leaves
+the draft file. Successful delivery is not established.
+
+Mh's public parser handles the selected empty-inbox cases directly. Its advertised
+`M…` shortcuts have no stock caller in either [player shell][lima-pshell] or
+[wizard shell][lima-wish]; selecting Mh and entering `M$` still reaches ordinary
+command lookup. Wire that mudlib integration separately. Real message
+read/reply/forward/delete, recipient processing, local/I3 delivery, body-mailbase
+callers, detached handlers, full startup and concurrency remain unchecked.
+Source review is pinned to the Lima revision below, reviewed **4 October 2026**;
+this is local execution in distinct nil mode with preserved call-out players and
+4,000 ms actions, without upstream execution or native/master changes. The next
+recommendation is to adopt the four-file handler patch, then audit MAIL_D.
+
 #### Lima shared mailbox lifetime repair
 
 The 4 October 2026 local port adopts the audited one-file MAILBOX_D guard.
