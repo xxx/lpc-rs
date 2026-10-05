@@ -5157,6 +5157,51 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mailbox maintenance guards
+
+The **5 October 2026** local port changes only [MAIL_D][lima-mail-daemon] and
+[the mailbox][lima-entry-mailbox]. Rebuild checks previous privilege 1 before
+scanning. Each basename must match a nonnegative integer key and the configured
+save extension exactly; aliases, signs and overflow are rejected before restore.
+The entire pending list must pass shape and local-account/canonical-name checks
+before this record delivers any receipt. Missing/invalid records report errors;
+files and prior receipts remain available for repair. No owner inference,
+normalization or saved-data rewrite is added. Receipt delivery requires the
+actual MAIL_D caller before flags, saves or notifications change.
+
+A private helper shares ordinary deletion's ownership/receipt removal, cursor
+adjustment and save with nuke. Nuke persists each completed receipt deletion
+before the next key, then stops and propagates the first damaged-record error,
+keeping remaining mail. A caller catching that error commits consistent completed
+shared/last-owner deletions, including after reload. Uncaught errors retain normal
+transaction abort semantics. Successful/empty nuke resets the cursor and unlinks
+its save. Ordinary owner checks, privileged foreign-owner access and the stock
+extra argument keep their behavior. The helper is hidden from external calls.
+
+**Twenty-five new tests/observations pass:** twenty-two adopted cases and three
+fresh previous-overlay controls, using two real stock Users/bodies, actual sends,
+native class saves and owned mailboxes. Tests cover guard precedence, receipt
+injection/reset denial, helper invisibility, healthy/partial/empty nuke, cursor
+behavior, shared/final-owner deletion, exact retained damaged bytes, reload,
+whole-list validation, bad account/save names, overflow, authorized rebuild,
+peer reconstruction and caught/uncaught record boundaries. The controls reproduce
+previous unguarded rebuild, foreign receipt insertion and stale nuke receipts.
+Actual map/directory order selects failures without historical clock comparisons;
+no historical harness or observation values are rerun/compared.
+
+Fourteen CLI checks remain **7/7 → 7/7**; four quality gates pass, including
+warning-free workspace Clippy. Exact two-file patch/configuration checks preserve
+native/master/original inputs and 249 predecessor artifact/report sets. Fourteen
+pinned Lima sources below and seven native sources/references are reviewed on
+**5 October 2026**. Execution is local lpc-rs only, using distinct nil, preserved
+call-out players and 4,000 ms actions. No native API or overview feature changes.
+Rebuild keeps its unread/reset and empty/duplicate/stale-receipt policies; a caught
+later record failure can retain earlier valid record updates. Next audit those
+read-state/reconciliation policies before changing them. Account-deletion caller
+blockers remain the preceding audit's evidence; full account deletion, other
+commit-time I/O failures, concurrent maintenance, remote queues and startup
+remain unestablished.
+
 #### Lima mailbox maintenance audit
 
 Reviewed **5 October 2026** against the pinned [MAIL_D][lima-mail-daemon],
@@ -5191,8 +5236,8 @@ persist each successful receipt deletion before processing the next key; stop
 and propagate the first damaged-record error while retaining remaining mail.
 Keep privileged foreign-owner deletion, shared ownership and ordinary abort
 semantics. No owner inference, save rewriting or native API change is needed.
-This recommendation is **not implemented**; the active overlay remains the
-retrieval repair. Rebuild's unread/reset policy and stale-receipt reconciliation
+At audit completion this recommendation was not implemented; the adoption above
+now applies it. Rebuild's unread/reset policy and stale-receipt reconciliation
 remain separate decisions.
 
 Twenty fresh local cases cover these paths with two stock Users/bodies, daemon
