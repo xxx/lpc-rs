@@ -5157,6 +5157,32 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima newsreader mail reply adoption
+
+The 4 October 2026 local port adopts the exact one-file repair in the
+[newsreader][lima-news-reader]. Plain and quoted replies reject absent/removed
+articles before editing. A private continuation captures the starting subject
+and destination and supplies the recipient array required by the
+[mailer's API][lima-mailer-base]. A started draft can finish after subject edits
+or group removal; external calls cannot invoke the completion method. Existing
+quotation, wrapping and display-poster addressing remain.
+
+**Twelve tests and twelve observations pass** through the adopted overlay with
+unchanged working-case assertions and common helpers after removing the fixture
+selector. Actual posts, reader/editor input, standard/Mh handlers and saved local
+mail cover plain/quoted replies, Unicode, removed entry, captured context,
+private callback access, cancellation/retry, wrapping and invalid destinations.
+Observation labels are retained without comparing clock-dependent transcripts;
+the five failure controls remain frozen in the audit. Ten focused compile checks
+stay **5/5 → 5/5**; four quality gates and integrity checks preserve 233 predecessor
+artifact/report sets. Historical harnesses and upstream drivers are not rerun.
+
+Next audit the independent body mailbase and contributed board reply callers.
+Remote delivery, malformed saved bodies in the UI, historical saves and draft
+recovery remain separate boundaries. Source review stays pinned to the Lima
+revision below, reviewed **4 October 2026**; execution uses distinct nil,
+preserved call-out players and 4,000 ms actions.
+
 #### Lima newsreader mail reply audit
 
 The 4 October 2026 local audit of [newsreader replies][lima-news-reader] finds that
@@ -5166,7 +5192,7 @@ callback also fetches the article again, so an author's subject edit changes the
 reply subject and removing the group breaks delivery. The public callback can
 send mail when invoked externally without an editor.
 
-A **one-file diagnostic repair, not yet adopted**, rejects absent/removed
+The **one-file diagnostic repair, adopted above**, rejects absent/removed
 articles before editing, binds the starting subject and recipient to a private
 continuation, and supplies the recipient array declared by the
 [mailer's API][lima-mailer-base]. Ordinary replies already deliver with the old
@@ -5184,8 +5210,8 @@ remain **5/5 → 5/5**; four quality gates and integrity checks preserve 232 fro
 predecessor sets. The active Mh overlay, original Lima, native APIs and master
 policy remain unchanged. Historical harnesses and upstream drivers are not rerun.
 
-**Recommendation:** adopt the one-file repair, then audit the independent body
-mailbase and contributed board reply callers. Remote delivery, UI handling of
+The adopted repair is described above; independent body mailbase and contributed
+board reply callers follow. Remote delivery, UI handling of
 malformed saved bodies, draft recovery and full startup remain unchecked. Source
 review stays pinned to the Lima revision below, reviewed **4 October 2026**;
 execution uses distinct nil, preserved call-out players and 4,000 ms actions.
