@@ -5157,6 +5157,43 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima shared mailbox lifetime repair
+
+The 4 October 2026 local port adopts the audited one-file MAILBOX_D guard.
+Explicit unload retains the account mailbox while another standard USER_OB clone
+owns that account, excluding the calling user that is retiring. Idle close uses
+live USER_OB account IDs, including linkdead sessions, instead of interactive
+`users()`. Pending account sessions count too. Last-session release still uses
+the existing authorized self-removal path. The shared message cursor and its
+nosave reset on reload remain. [Mailbox daemon][lima-mailbox-daemon],
+[user removal][lima-entry-user], [mailbox][lima-entry-mailbox].
+
+Nineteen tests/nineteen observations run through the adopted overlay: eight
+mailbox lifetime cases and eleven reconnect cases in a new harness. Interactive
+and linkdead peers, wizard duplicates, regular no, affirmative takeover and
+another account's unload request retain live cached references. Explicit cleanup
+keeps connected/linkdead caches, closes offline caches and returns ASK_AGAIN.
+The last owning session releases the mailbox despite an unrelated observer;
+saved synthetic keys/flags reload with saved bytes unchanged. Reconnect checks
+retain selected identity, body links, editor/timer cleanup without saving edits,
+callback retry/revalidation, deferred didlog paging and ambiguity refusal.
+
+Cache/prompt observers use actual mailboxes and the standard prompt expression;
+actual mailer UI and MAIL_D delivery/content/deletion are not exercised. Fourteen
+uninstrumented checks keep six lifecycle compositions clean and retain eight
+independent mailer/mail-command blockers. MAILER's void-cast parser blocker and
+the mail command's missing protected CMD adapter are the next audit boundary;
+further errors remain unchecked behind them. [Mailer base][lima-mailer-base],
+[standard handler][lima-mailer-standard], [Mh][lima-mailer-mh],
+[mail command][lima-mail-command].
+
+Workspace Clippy/format checks and 223 frozen predecessor sets pass. The adopted
+patch matches the audit exactly; native/original/master sources remain unchanged.
+Distinct nil, preserved players and four-second actions remain. Backup/guest
+ownership, detached handlers, natural idle scheduling, authentication, sockets,
+full startup and concurrency remain unchecked. Pinned upstream source review is
+distinct from local execution.
+
 #### Lima shared mailbox lifetime and idle cleanup audit
 
 The 4 October 2026 audit retains the reconnect/takeover overlay. MAILBOX_D caches
@@ -5197,8 +5234,8 @@ Fourteen uninstrumented checks keep six lifecycle compositions clean and reprodu
 eight mailer/mail-command blockers. Workspace Clippy/format checks and 222 frozen
 predecessor sets pass; pinned upstream review is distinct from local execution.
 Distinct nil, preserved players and four-second actions remain. The diagnostic
-is not adopted; next adopt its daemon guard, then establish mail-handler
-compatibility. Backup/guest users, detached handlers, natural idle scheduling,
+was not adopted at this audit; its subsequent adoption is described above.
+Backup/guest users, detached handlers, natural idle scheduling,
 authentication, sockets, full startup and concurrency remain unchecked.
 
 #### Lima selected-character reconnect and takeover repair
