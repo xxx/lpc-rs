@@ -5157,6 +5157,48 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima unread mail audit
+
+Reviewed **5 October 2026** against pinned [mailbox][lima-entry-mailbox],
+[base mailer][lima-mailer-base], [standard][lima-mailer-standard],
+[Mh][lima-mailer-mh] and [User body setup][lima-body-switching]. Both mailers' `n`
+commands choose the first unread sorted key, regardless of the cursor. Healthy
+displayed reads select that key, clear only its owner's unread flag and save it
+through reload. Headers, navigation and raw owned reads preserve flags; wizard
+Mh export also preserves flags/selection. New delivery becomes unread at its
+actual sorted position. Standard blank input reads unread mail, then exits when
+exhausted; explicit `n` reports exhaustion and keeps the modal mailer open.
+
+Missing unread records prune one owner's receipt, allowing the next command to
+read the next survivor. Corrupt records or invalid display metadata retain their
+unread flags and bytes, so repeated `n` reports the same first damaged record.
+Explicit healthy numeric reads still work. Uncaught outer errors after actual
+standard/Mh input roll back flags, cursor, saves and delivered output.
+
+Both public mailbox setters lack the ownership check used by reads/deletion.
+Calls under an ordinary foreign User context can clear another account's unread
+flag persistently or change its live `nosave` cursor. A privileged foreign User
+is denied an owned
+read but succeeds through both setters. **Recommendation:** check owning User
+context before `set_message_read` and `set_message_index`, while preserving
+their owner mailer/User callers and current no-op, unread/error/export policies.
+No MAIL_D-only restriction, privilege bypass or native API change is needed.
+User body setup also calls the cursor setter; source review shows that its
+empty-mailbox position is -1, so cursor clamping would be a separate change.
+
+**Seventeen fresh tests/observations pass**, using real Users/bodies, connections,
+sends, native saves, owned mailboxes and both mailers' normal input. Seven core
+CLI checks and four quality gates pass, including warning-free workspace Clippy.
+Eleven pinned Lima files and five native sources/references are reviewed; all
+254 predecessor artifact/report sets are preserved. Execution is local lpc-rs
+only, with distinct nil, preserved call-out players and 4,000 ms actions;
+`USE_USER_MENU` is enabled and saves use `.o`. The active cursor overlay,
+original/native/master inputs and overview cells remain unchanged. Historical
+harnesses/clocks are not rerun/compared; no repair is adopted by this audit.
+Body setup is source-reviewed rather than executed. Full login/body switching,
+long paging, lost-message exports, forward/reply, concurrent maintenance, remote
+queues, full account deletion and startup remain separate.
+
 #### Lima mailbox cursor repair
 
 The **5 October 2026** local port changes only [the mailbox][lima-entry-mailbox]
@@ -5191,8 +5233,8 @@ Ten pinned Lima reviews and five native reviews are reused from the audit; the
 changed files are reviewed on **5 October 2026**. Execution is local lpc-rs only,
 with distinct nil, preserved call-out players and 4,000 ms actions;
 `USE_USER_MENU` is enabled and saves use `.o`. Historical harnesses/clocks are not
-rerun/compared. Native APIs and overview cells are unchanged. Next audit unread
-selection and read-flag persistence through normal mailer commands; long paging,
+rerun/compared. Native APIs and overview cells are unchanged. The unread audit
+above recommends ownership checks on the two setters; long paging,
 exports, forward/reply, concurrent maintenance, remote queues, full account
 deletion and startup remain separate.
 
