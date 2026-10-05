@@ -5157,6 +5157,52 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima saved-mail retrieval error handling
+
+The 5 October 2026 local port changes [MAIL_D][lima-mail-daemon] and the
+[base mailer][lima-mailer-base]. The daemon clears its temporary message before
+restore and after every outcome, propagating restore/nominal consumption errors
+after cleanup. A successful restore without a message now raises an invalid-save
+error, retaining the present file and both receipts for repair. Native
+missing/unreadable-file returns and permission errors keep their semantics;
+caller and owner checks still precede restore. No owners are inferred, fields
+rewritten or mailboxes scanned. The mixed class/API and native restore policy
+remain unchanged.
+
+Reads, body-only exports, replies and forwards catch retrieval failures before
+changing state. A shared private reporter prints the selected number and reason
+once, including default current-message selections. Failed actions leave unread
+flags, cursor, tools, composition text and export files intact. Headers catch
+each retrieval separately, keep the original number and unread marker in its
+error row, then continue healthy selected headers. Filtered ranges retain
+original numbers. Existing metadata/body guards, physical missing-file rows,
+pending-owner guards and deletion error reporting retain their behavior. Later
+filesystem/commit failures do not gain a rollback guarantee.
+
+**Twenty-two newly written tests/observations pass:** twenty adopted cases and
+two fresh previous-overlay controls, all in distinct nil mode. Two real stock
+users/bodies, daemon sends, native class saves, owned mailboxes and standard/Mh
+dispatch cover corrupt syntax/field/global/nominal types, pending shape/member
+errors, nil/empty/message-less files, slot cleanup, healthy header continuation,
+selected/default numbering, failed actions, repair/read/reload, physical missing
+files, deletion, caller precedence and preceding field guards. Exact damaged
+save bytes and both receipts survive; repairing the record restores reading
+without redelivery, with the peer still unread and its body preserved through
+reload. The controls reproduce previous silent errors/invalid slot retention and
+present-nil pruning. No prepared provider or daemon failure hook is installed.
+Historical harnesses and observation values are not rerun or compared; original
+keys/current displayed positions avoid clock ordering assumptions.
+
+Fourteen CLI checks stay **7/7 → 7/7**; four quality gates pass, including
+warning-free workspace Clippy. Exact two-file patch/configuration checks preserve
+original/native/master inputs and 247 predecessor artifact/report sets. Eight
+pinned Lima sources below and three native source/reference reviews are dated
+**5 October 2026**. Execution is local lpc-rs only, using distinct nil, preserved
+call-out players and 4,000 ms actions. No native API, master policy or overview
+feature changes. Next audit mailbox nuke/rebuild authorization and partial
+failures with damaged saves. Arbitrary unreadable-file I/O, legacy import, stale
+cursors, remote queues and commit-time failures remain separate work.
+
 #### Lima saved-mail retrieval error audit
 
 The 5 October 2026 local audit of [MAIL_D][lima-mail-daemon],
@@ -5200,7 +5246,8 @@ semantics. Catch retrieval errors before actions change state and report the
 selected number/reason once. Catch each header retrieval independently, add a
 numbered error row with its unread marker, and continue other selected headers.
 Infer no owners, rewrite no fields and retain caller checks before restore.
-This recommendation is **not implemented** and needs no native API change.
+At audit completion this recommendation was not implemented; the adoption above
+now applies it without a native API change.
 
 Seven CLI targets and four quality gates pass, including warning-free workspace
 Clippy. Integrity checks preserve original/native/master inputs and 246
