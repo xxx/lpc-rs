@@ -5157,6 +5157,46 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima composition draft recovery audit
+
+Reviewed **4 October 2026** against the pinned [base mailer][lima-mailer-base],
+[text editor][lima-text-editor], [input dispatcher][lima-inputsys] and
+[mail daemon][lima-mail-daemon]. After an edited message reaches Cc, the active
+mailer deletes its draft even when delivery reports no valid destination.
+Ordinary users lose the body; the wizard-only `dead.letter` fallback retains
+body text without subject or recipient metadata. Catchable send exceptions leave
+the draft but disappear inside modal dispatch. An exception after local saves
+can leave a delivered message, so a manual retry can duplicate it.
+
+The **one-file diagnostic patch, not yet adopted**, removes a composition draft
+only after a successful send. Missing/unreadable drafts report that nothing was
+sent; empty readable drafts remain valid. Send exceptions report possible prior
+delivery and retain the draft. Reopening saved text announces that the user must
+check the new recipient and subject. Wizard dead letters and explicit abort
+semantics remain: abort discards new buffer edits and leaves an existing disk
+draft unchanged. Reply quoting still replaces that disk draft before editing,
+even when the reply is later aborted; that is a separate repair boundary.
+
+**Eighteen tests/observations pass: fourteen diagnostic cases and four active
+controls.** Commands use the real standard modal dispatcher or guarded Mh entry,
+then real subject/editor/Cc dispatch, account-owned mailbox receipts and native
+message saves. Tests cover failed/successful sends, wizard fallback, explicit
+resend with new metadata, mixed recipients, missing/unreadable/empty files,
+fresh/resumed abort, shared recovery across handlers and reply overwrite. Four
+cases inject early/late failures into the actual local mail daemon; they establish
+local save retention and duplicate manual retry, without executing remote mail.
+No prepared message provider or clock-dependent transcript comparison is used.
+Ten compile checks stay **5/5 → 5/5**; four quality gates and integrity checks
+retain 237 predecessor artifact/report sets. Active/original/native/master
+inputs remain unchanged; historical harnesses are not rerun.
+
+Recommend adopting the retention/reporting patch, then protecting a retained
+composition draft when a reply is aborted. Metadata persistence, automatic
+retries, remote queuing, forwarding/news-reply errors, draft deletion failures,
+concurrent composition and full startup remain unestablished. Execution uses
+distinct nil, preserved call-out players and 4,000 ms actions, without upstream
+execution. This library-only audit adds no native API or overview feature.
+
 #### Lima saved message body guard adoption
 
 The 4 October 2026 local port adopts the exact one-file guard in the
@@ -5177,10 +5217,10 @@ Ten compile checks remain **5/5 → 5/5**; four quality gates and integrity chec
 retain 236 predecessor artifact/report sets. Original Lima, native APIs and
 master policy remain unchanged; historical harnesses are not rerun.
 
-Next audit cancellation draft recovery and delivery failure reporting through
-the adopted UI. Other malformed header/recipient fields, multi-message cursor
-handling after stale-file pruning, remote delivery and full startup remain
-separate. Source review remains pinned below, reviewed **4 October 2026**;
+The composition draft recovery audit above covers cancellation and delivery
+reporting. Other malformed header/recipient fields, multi-message cursor handling
+after stale-file pruning, remote delivery and full startup remain separate.
+Source review remains pinned below, reviewed **4 October 2026**;
 execution uses distinct nil, preserved call-out players and 4,000 ms actions.
 
 #### Lima saved message body UI audit
