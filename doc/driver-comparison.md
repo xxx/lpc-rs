@@ -5157,6 +5157,48 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima pending-owner mail deletion guards
+
+The 5 October 2026 local port changes [MAIL_D][lima-mail-daemon] and the
+[base mailer][lima-mailer-base]. Saved local pending owners must be an array
+of nonempty strings before owned reads/deletes use the list. Reading retains
+its owner-membership rule; deletion now requires membership before subtracting
+names, saving or removing the message. Caller checks still precede restore and
+metadata inspection. Empty lists cannot remove shared saves, and absent owners
+retain stale receipts until repair. Duplicates remain valid and are removed
+together. No account-existence check, recipient inference, normalization or
+repair machinery is added; the mixed class field and remote numeric form remain.
+
+Each selected mailer deletion catches its own failure, reports the original
+selected message number and reason once, then continues other selections.
+Successful deletions retain their ordinary confirmation. Invalid pending fields
+leave exact save bytes and both owners' receipts/unread/cursor state intact;
+the existing descending loop and snapshot of keys still determine selections.
+Later filesystem/commit failures do not gain a rollback guarantee.
+
+**Nineteen newly written tests/observations pass:** seventeen adopted cases and
+two fresh previous-overlay controls, all in distinct nil mode. Two real stock
+users/bodies, daemon sends, native saved classes, owned reads/deletes and
+standard/Mh dispatch cover invalid shapes/elements, membership, preservation,
+field repair followed by shared deletion, duplicate handling, healthy remaining
+owner reload/last deletion, caller precedence, batch continuation and missing
+files. Both interfaces report the damaged first selection once and still delete
+the healthy selection. Composition text remains intact. Missing-save delete
+failure is now visible; ordinary header retrieval still prunes only the caller's
+missing receipt. The controls reproduce previous shared-save loss and silent
+batch abortion. No prepared provider or daemon failure hook is installed.
+Historical harnesses and observation values are not rerun or compared; selection
+uses original keys/current displayed positions without timestamp assumptions.
+
+Fourteen CLI checks stay **7/7 → 7/7**; four quality gates pass, including
+warning-free workspace Clippy. Exact two-file patch/configuration checks preserve
+original/native/master inputs and 245 predecessor artifact/report sets. Pinned
+source review below is dated **5 October 2026**; execution is local lpc-rs only,
+with distinct nil, preserved call-out players and 4,000 ms actions. No native API,
+master policy or overview feature changes. Next audit native malformed-save and
+pending-list errors in owned read/header presentation. Mailbox nuke/rebuild,
+stale cursors, remote queues and commit-time failures remain separate work.
+
 #### Lima pending-owner mail deletion audit
 
 The 5 October 2026 local audit of [MAIL_D][lima-mail-daemon] and
@@ -5196,7 +5238,8 @@ for repair, including the absent-owner case; retain duplicate handling. Catch
 and report each selected deletion failure in the [base mailer][lima-mailer-base],
 then continue other requested messages. Infer no owners, rewrite no damaged
 fields, impose no account-existence rule and retain the mixed provider field.
-This recommendation is **not implemented** and needs no native API.
+At audit completion this recommendation was not implemented; the adoption above
+now applies it without a native API change.
 
 Seven CLI targets and four quality gates pass, including warning-free workspace
 Clippy. Integrity checks preserve original/native/master inputs and 244
@@ -5247,7 +5290,7 @@ Source review uses the pinned links below, reviewed **5 October 2026**. Local
 execution uses distinct nil, preserved call-out players and 4,000 ms actions,
 without upstream-driver or remote execution. No native overview feature changes.
 
-The pending-owner audit above identifies the next deletion guards. Native malformed
+The pending-owner adoption above applies the deletion guards. Native malformed
 save feedback, stale cursors, remote queues, persistent news recovery, commit-time
 disk errors, disconnects, concurrent composition and full startup remain separate
 work. No recipient-routing or account-validation policy is added.
