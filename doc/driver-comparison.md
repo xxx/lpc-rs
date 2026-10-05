@@ -5157,6 +5157,48 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail delivery error reporting and news reply recovery
+
+The 5 October 2026 local port changes the [base mailer][lima-mailer-base] and
+[newsreader][lima-news-reader]. Shared mailer error handling reports catchable
+MAIL_D failures and returns failure to composition, forwarding and news replies.
+Composition retains its saved draft; forwarding retains its original message.
+Caller-checked news sending returns a result, and the private continuation
+reopens failed replies in the existing [text editor][lima-text-editor], with
+original edited lines and captured subject/recipient. Delivery uses a separately
+wrapped copy. The UI says finishing attempts another send, and caught delivery
+errors warn that recipients may already have mail. Reopening sends nothing;
+abort discards unsaved news text, while empty completed arrays remain valid.
+Successful sends return to the reader. A separate composition file stays intact.
+
+**Eighteen new tests/observations pass: sixteen repaired cases and two fresh
+previous-overlay controls.** Real standard modal commands, Mh shell shortcuts,
+NEWS_D, editor, [MAIL_D][lima-mail-daemon], native class saves and owned mailbox
+reads cover early/late errors, single reporting, retained forwarding originals,
+exact plain/quoted news buffers, manual retry/abort, invalid destinations,
+empty completion, Unicode/blank and long lines, captured metadata after article
+removal, composition retention and caller/private-callback security. Thirteen
+repaired cases and both controls activate temporary one-shot daemon hooks.
+Late errors can leave delivered mail; explicit retries can duplicate it. No
+production hook or automatic retry is installed. Current message assertions
+account for terminal wrapping; body/buffer assertions remain exact. Historical
+harnesses and observation values are not rerun or compared, and receipt selection
+does not assume timestamp ordering.
+
+Fourteen compile checks remain **7/7 → 7/7**; four quality gates, exact patch
+application and integrity checks preserve 241 predecessor artifact/report sets.
+Only the two mudlib files change; original Lima, native APIs and master policy
+remain unchanged. Source review is pinned below, reviewed **5 October 2026**.
+Local execution uses distinct nil, preserved call-out players and 4,000 ms
+actions, without upstream-driver or remote execution. No native overview feature
+changes. This adds live news text recovery rather than a persistent news draft
+or delivery rollback.
+
+Next audit saved message metadata used in mail headers, replies and forwarding.
+Persistent news drafts/metadata, remote queues, commit-time disk failure,
+disconnect recovery, concurrent composition and full startup remain separate
+boundaries.
+
 #### Lima forwarding and news reply delivery-error audit
 
 The 5 October 2026 local audit finds two gaps in the [base mailer][lima-mailer-base]
@@ -5192,10 +5234,10 @@ Recommend catching delivery errors in the shared mailer and returning send
 status to the newsreader. Reopen failed news replies with their original edited
 lines and captured subject/recipient, warning that another completion retries
 the send and recipients may already have mail. Resending remains explicit;
-forwarding needs no new draft because its original survives. This two-file
-mudlib recommendation is not implemented. Persistent news drafts, disconnect
-recovery, delivery atomicity, remote queues, concurrency and full startup remain
-separate boundaries.
+forwarding needs no new draft because its original survives. The repair above
+implements this two-file mudlib recommendation. Persistent news drafts,
+disconnect recovery, delivery atomicity, remote queues, concurrency and full
+startup remain separate boundaries.
 
 #### Lima reply draft preservation
 
