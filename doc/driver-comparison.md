@@ -5157,6 +5157,47 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima body mailbase and contributed board replies
+
+Reviewed **4 October 2026** against the pinned Lima sources below. Stock
+[body composition][lima-body-mail-composition] does not inherit the
+[body mailbase][lima-body-mailbase]; its declaration in the
+[body command module][lima-body-mail-command]
+has no caller there. Stock mail entry uses the user-owned handler instead.
+Isolated execution of the unused module creates a separate cached handler;
+changing its preference does not replace that handler until unload.
+
+The [contributed board][lima-contrib-board] and
+[replynote command][lima-contrib-replynote] still call
+`this_body()->query_mailer()`. Their installation is incomplete in this checkout:
+the [instructions][lima-contrib-board-installation] require an absent
+`boarddata.c`, and the [portable-board example][lima-portable-board] references
+an undefined `BOARD_OB`.
+The contributions also need nil returns, current command dispatch and other
+ordinary LPC adaptations before execution. The first reported compiler errors
+are an inventory, not a complete migration checklist.
+
+Isolated callback controls using the real editor show that their comma-style
+functionals return the final expression without invoking the receiver. Use an
+explicit bound pointer such as `&receive_reply(id)` for editor completion.
+Changing to the user mailer alone is insufficient: the
+[base mailer][lima-mailer-base] authorizes only NEWSREADER for `send_news_reply`.
+An optional board port needs a deliberate sender permission policy, recipient
+arrays and captured subject/destination data. Source review also finds message
+re-fetching at completion and unconditional success output; these paths were not
+executed through the unported contributions.
+
+**Seven runtime tests/observations pass; six of twelve compile checks are
+clean.** One failure is an abstract body command module whose concrete body
+compiles; the other five concern contributions or the portable-board example.
+The runtime checks cover stock ownership, the isolated unused module and copied
+send/callback expressions, not complete board delivery. Four quality gates and
+preservation checks retain 234 predecessor artifact/report sets. Execution uses
+distinct nil, preserved call-out players and 4,000 ms actions, without upstream
+driver execution. No stock patch or native feature is warranted by this audit.
+Keep the legacy boards optional; next audit missing/malformed saved message
+bodies through the actual mail-reader UI.
+
 #### Lima newsreader mail reply adoption
 
 The 4 October 2026 local port adopts the exact one-file repair in the
@@ -5177,7 +5218,7 @@ the five failure controls remain frozen in the audit. Ten focused compile checks
 stay **5/5 → 5/5**; four quality gates and integrity checks preserve 233 predecessor
 artifact/report sets. Historical harnesses and upstream drivers are not rerun.
 
-Next audit the independent body mailbase and contributed board reply callers.
+The body mailbase and contributed board reply audit above closes that boundary.
 Remote delivery, malformed saved bodies in the UI, historical saves and draft
 recovery remain separate boundaries. Source review stays pinned to the Lima
 revision below, reviewed **4 October 2026**; execution uses distinct nil,
@@ -8349,6 +8390,13 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-did-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/didlog.c
 [lima-mailbox-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/mailbox_d.c
 [lima-mailer-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/mailer.c
+[lima-body-mail-composition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body.c
+[lima-body-mailbase]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/mailbase.c
+[lima-body-mail-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/cmd.c
+[lima-portable-board]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/portable_board.c
+[lima-contrib-board]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/board.c
+[lima-contrib-replynote]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/boards/replynote.c
+[lima-contrib-board-installation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/boards/installation
 [lima-mailer-standard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/standard.c
 [lima-mailer-mh]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/Mh.c
 [lima-mail-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mail.c
