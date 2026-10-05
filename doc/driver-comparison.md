@@ -5157,6 +5157,37 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail delivery adoption
+
+The 4 October 2026 local port adopts the exact audited one-file
+[MAIL_D][lima-mail-daemon] repair: four class/message absence sites use nil,
+five privileged callbacks make explicit calls, restoration uses the native
+one-argument API, empty recipients are filtered and plain local addresses are
+lowercased/deduplicated together. Native APIs and master policy do not change.
+
+**Thirty tests and thirty observations pass** through the adopted library without
+diagnostic production replacements: eleven delivery cases, eleven retained mailer
+cases and eight retained mailbox lifetime cases. Actual saved class bodies,
+reload, shared deletion, offline/group delivery, missing-body cleanup, rebuilding,
+access checks, transaction abort and public composition work alongside the
+existing modal/editor/pager and account lifetime behavior. All retained assertions
+are unchanged. Mailer observations match exactly; mailbox comparison normalizes
+three login timestamps. Delivery comparison normalizes generated message keys,
+transaction timing, directory order and clock-dependent ordering in the two-body
+case. Five historical controls remain frozen in the audit; its failed mailer Cc
+compile boundary is superseded by actual public delivery. Ten selected compile
+checks improve **4/5 → 5/5**. Four quality gates and integrity checks preserve
+227 predecessor artifact/report sets.
+
+The active overlay now includes the MAIL_D repair. The next audit covers nonempty
+handler read/reply/forward flows and remaining consumers. I3/remote and local
+`user@mud` delivery, Mh shortcuts, body-mailbase callers, historical/malformed save
+files, long paging, failure reporting, complete startup and concurrency remain
+unchecked. A caught I3 failure can still leave prior local deliveries committed;
+the plain-local duplicate repair avoids that unnecessary path. Source review
+remains pinned to the Lima revision below, reviewed **4 October 2026**, with
+distinct nil, preserved call-out players, 4,000 ms actions and no upstream execution.
+
 #### Lima mail persistence and local delivery audit
 
 The 4 October 2026 audit of [MAIL_D][lima-mail-daemon] finds a one-file porting
@@ -5170,8 +5201,8 @@ plain local addresses together. Blank Cc otherwise reaches USER_D's canonical-na
 error; case-variant duplicates inflate the recipient count and spuriously enter
 the unported I3 mail daemon. Native APIs and master policy do not change.
 
-The diagnostic patch is **not adopted**. **Sixteen tests and sixteen observations
-pass**: eleven working diagnostic cases and five controls for the original
+The diagnostic patch was **not adopted during this audit**; its later adoption
+is described above. **Sixteen tests and sixteen observations pass**: eleven working diagnostic cases and five controls for the original
 class-null error, bounded comma-expression loop, restore arity, duplicate local
 routing and blank Cc. Actual saved class bodies round-trip through MAIL_D and
 MAILBOX, including reload, local/group delivery, offline receipt/cache cleanup,
