@@ -5157,6 +5157,32 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima saved message body guard adoption
+
+The 4 October 2026 local port adopts the exact one-file guard in the
+[base mailer][lima-mailer-base]. Reading, quoting and forwarding require an
+array of string lines; empty arrays remain valid. Invalid bodies report an error
+before changing unread flags, draft files, saved copies, editor/pager state or
+delivery. Scalar/syntax restore errors remain visible, while missing files keep
+the existing lost-message report and persisted stale-receipt removal.
+
+**Fourteen tests and fourteen observations pass** through the adopted files.
+Working-case assertions and shared helpers match the audit after removing the
+fixture selector and diagnostic logging flag. Real native saves, standard modal
+input, guarded Mh parsing and shell shortcut forwarding cover nil/non-string
+bodies, parser rejection and file repair/retry, empty arrays, missing files,
+draft preservation and Unicode delivery. Observation labels remain without
+clock-dependent transcript comparison; the four failure controls stay frozen.
+Ten compile checks remain **5/5 → 5/5**; four quality gates and integrity checks
+retain 236 predecessor artifact/report sets. Original Lima, native APIs and
+master policy remain unchanged; historical harnesses are not rerun.
+
+Next audit cancellation draft recovery and delivery failure reporting through
+the adopted UI. Other malformed header/recipient fields, multi-message cursor
+handling after stale-file pruning, remote delivery and full startup remain
+separate. Source review remains pinned below, reviewed **4 October 2026**;
+execution uses distinct nil, preserved call-out players and 4,000 ms actions.
+
 #### Lima saved message body UI audit
 
 Reviewed **4 October 2026** against the pinned
@@ -5166,7 +5192,7 @@ reading then fails at concatenation and replying/forwarding fail in `map`.
 Restored array fields check their outer type, so an invalid integer line can
 also reach quotation and be forwarded as text.
 
-The **one-file diagnostic guard, not yet adopted**, requires an array of strings
+The **one-file diagnostic guard, adopted above**, requires an array of strings
 before reading, quoting or forwarding. Empty arrays are valid. Invalid bodies
 produce an explicit error while retaining the unread receipt and any existing
 draft; they open no pager/editor, create no saved copy and deliver no mail.
@@ -5186,8 +5212,8 @@ integrity checks retain 235 predecessor artifact/report sets. Native APIs and
 master policy remain unchanged. Execution uses distinct nil, preserved call-out
 players and 4,000 ms actions, without upstream execution or historical reruns.
 
-Adopt this guard next, then audit cancellation draft recovery and delivery
-failure reporting. Other malformed header/recipient fields, multi-message cursor
+Next audit cancellation draft recovery and delivery failure reporting through
+the adopted UI. Other malformed header/recipient fields, multi-message cursor
 handling after stale-file pruning, remote delivery and full startup remain separate.
 
 #### Lima body mailbase and contributed board replies
