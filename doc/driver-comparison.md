@@ -5157,6 +5157,51 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima saved message metadata guards
+
+The 5 October 2026 local port changes only the [base mailer][lima-mailer-base].
+Before headered reads, replies or forwards change state, it requires string
+sender/subject values and an integer date that [ctime](efun/ctime.md) can represent.
+Headered reads and reply-all also require each consumed To/Cc field to be nil or
+an array of strings. Invalid metadata is reported before marking read, opening
+tools, replacing a draft or sending. Header enumeration displays a numbered
+invalid-metadata row with its unread marker and continues to healthy records.
+It checks only the fields used in the summary. Basic replies and forwarding
+ignore unused recipient fields; body-only export bypasses metadata checks.
+
+Reply-all treats whole nil To/Cc lists as empty only while assembling recipients.
+Saved [mail class][lima-mail-message-class] fields stay unchanged. Integer zero
+lists and non-string elements are rejected under distinct nil. Empty subjects,
+empty arrays and representable zero/negative dates retain their behavior. Existing
+body guards remain first. Native malformed-class-value rejection still preserves
+files and receipts for repair, and missing files still prune their own receipts.
+The new header row handles invalid metadata in records that restore successfully;
+feedback for malformed native saves remains a separate boundary.
+
+**Twenty-three new tests/observations pass: twenty-one repaired cases and two
+fresh previous-overlay controls.** Real standard modal commands, Mh shell
+shortcuts, editor/Cc continuations, [MAIL_D][lima-mail-daemon], native saves and
+owned mailbox reads cover reported errors, healthy headers, intact saves/drafts,
+normal nil-list reply-all delivery, body-only recovery, empty/date values, class
+rejection with repair, body guards and missing-file pruning. The two newly written
+controls retain prior header suppression and nil-list reply-all failure. No
+prepared message provider or daemon failure hook is installed. Current status
+checks account for terminal wrapping; bodies, drafts and saved files remain exact.
+Historical harnesses and observation values are not rerun or compared, and receipt
+selection assumes no clock ordering.
+
+Fourteen CLI checks remain **7/7 → 7/7**; four quality gates, including warning-free
+workspace Clippy, and exact patch/integrity checks preserve 243 predecessor
+artifact/report sets. Original Lima, native APIs and master policy remain unchanged.
+Source review uses the pinned links below, reviewed **5 October 2026**. Local
+execution uses distinct nil, preserved call-out players and 4,000 ms actions,
+without upstream-driver or remote execution. No native overview feature changes.
+
+Next audit pending-owner metadata used when deleting saved mail. Native malformed
+save feedback, stale cursors, remote queues, persistent news recovery, commit-time
+disk errors, disconnects, concurrent composition and full startup remain separate
+work. No recipient-routing or account-validation policy is added.
+
 #### Lima saved message metadata UI audit
 
 The 5 October 2026 local audit of the [mail class][lima-mail-message-class] and
@@ -5200,7 +5245,8 @@ empty only when assembling recipients. Leave stored fields, basic reply/forward
 unused fields and body-only export alone. Header enumeration should show an
 invalid-metadata row and continue to healthy messages. Preserve existing
 malformed-save rejection and missing-file pruning. This recommendation is
-**not implemented** and requires no native API or new recipient-routing policy.
+**not implemented** at audit completion; the adoption above implements it
+without a native API or new recipient-routing policy.
 
 Pinned source review below is dated **5 October 2026**; local execution uses
 distinct nil, preserved call-out players and 4,000 ms actions, without upstream
@@ -5245,7 +5291,7 @@ actions, without upstream-driver or remote execution. No native overview feature
 changes. This adds live news text recovery rather than a persistent news draft
 or delivery rollback.
 
-The metadata audit above identifies the next base-mailer guards.
+The metadata guard adoption above applies those base-mailer checks.
 Persistent news drafts/metadata, remote queues, commit-time disk failure,
 disconnect recovery, concurrent composition and full startup remain separate
 boundaries.
