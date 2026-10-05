@@ -5157,6 +5157,39 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima newsreader mail reply audit
+
+The 4 October 2026 local audit of [newsreader replies][lima-news-reader] finds that
+removed articles retain their record with a nil body: plain replies still open,
+while quoted replies fail when mapping the missing body. The editor completion
+callback also fetches the article again, so an author's subject edit changes the
+reply subject and removing the group breaks delivery. The public callback can
+send mail when invoked externally without an editor.
+
+A **one-file diagnostic repair, not yet adopted**, rejects absent/removed
+articles before editing, binds the starting subject and recipient to a private
+continuation, and supplies the recipient array declared by the
+[mailer's API][lima-mailer-base]. Ordinary replies already deliver with the old
+scalar argument through its normalization helper; no native typing relaxation
+is needed. Existing lowercased display-poster addressing, quotation and wrapping
+remain. System display labels may have no corresponding mail account; the
+existing no-destination report is retained.
+
+**Seventeen tests/observations pass: twelve working cases and five controls.**
+Actual news posts, reader input, modal editors, standard/Mh handlers and saved
+local mail cover plain/quoted replies, Unicode, removed entry, captured context,
+private callback access, cancellation/retry, wrapping and invalid destinations.
+Mailbox bodies are read in the recipient's context. Ten focused compile checks
+remain **5/5 → 5/5**; four quality gates and integrity checks preserve 232 frozen
+predecessor sets. The active Mh overlay, original Lima, native APIs and master
+policy remain unchanged. Historical harnesses and upstream drivers are not rerun.
+
+**Recommendation:** adopt the one-file repair, then audit the independent body
+mailbase and contributed board reply callers. Remote delivery, UI handling of
+malformed saved bodies, draft recovery and full startup remain unchecked. Source
+review stays pinned to the Lima revision below, reviewed **4 October 2026**;
+execution uses distinct nil, preserved call-out players and 4,000 ms actions.
+
 #### Lima Mh shortcut integration adoption
 
 The 4 October 2026 local port adopts the exact audited three-file repair in the
@@ -5182,8 +5215,8 @@ the four audit failure controls remain frozen. Ten selected compile checks stay
 shell retains four unresolved hook calls when compiled alone. Four quality gates
 and integrity checks preserve 231 predecessor artifact/report sets.
 
-Next audit remaining mail consumers and failure reporting, starting with
-newsreader mail replies. Independent body mailbase consumers, missing/malformed
+Newsreader mail replies are audited above. Independent body mailbase consumers,
+missing/malformed
 bodies in the UI, remote/local-at-mud delivery, historical saves, draft recovery,
 detached ownership, delayed error-log flush, authentication/sockets, full startup
 and concurrency remain unchecked. Source review stays pinned to the Lima revision
