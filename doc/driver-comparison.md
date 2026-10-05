@@ -5157,6 +5157,41 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mailbox recovery repair
+
+The **5 October 2026** local port changes only [MAIL_D][lima-mail-daemon] and
+[the mailbox][lima-entry-mailbox]. Rebuild calls a separate `recover_message`
+method after its existing filename and complete pending-owner/account checks.
+Recovery requires the actual MAIL_D caller, preserves any known receipt's flags
+and the live cursor, and inserts/saves an absent receipt unread. It sends no BIFF
+alerts, including for newly reconstructed mailboxes. Repeated/duplicate recovery
+leaves known mail alone. Ordinary new-mail delivery keeps its guard, unread save
+and notifications; see [BIFF settings][lima-mail-biff].
+
+Missing receipts in an older mailbox backup are recovered without resetting its
+known read flags or the peer's state, and persist through reload. The cursor
+still starts at zero on normal reload because it is `nosave`. Stale-receipt policy
+is unchanged: missing message reads prune only that owner's receipt, while
+present corrupt records or ownership disagreements error and retain evidence.
+Empty/omitted pending owners and obsolete backups are not globally reconciled.
+A caught later-file error can retain earlier new receipts/saves; uncaught errors
+discard them, with no recovery alerts or known-flag resets in either case.
+
+**Nineteen fresh tests/observations pass:** seventeen adopted cases and two fresh
+previous-overlay controls for read reset and repeated BIFF. Actual Users/bodies,
+connections, sends and native saves cover live flags/cursor, repeated/duplicate
+recovery, lost/partial boxes, caller checks, pending validation, reload, ordinary
+delivery, stale receipts and caught/uncaught boundaries. Fourteen core CLI checks
+remain **7/7 → 7/7**; four quality gates pass, including warning-free workspace
+Clippy. Exact two-file/configuration checks preserve original/native/master
+inputs and 251 predecessor artifact/report sets. Fourteen pinned Lima sources
+and five native sources/references are reviewed on **5 October 2026**. Execution
+is local lpc-rs only, with distinct nil, preserved call-out players and 4,000 ms
+actions; historical harnesses/clocks are not rerun/compared. Native APIs and
+overview cells are unchanged. Next audit cursor behavior when owned reads prune
+missing messages; concurrent maintenance, bulk reconciliation, remote queues,
+full account deletion, other commit-time I/O failures and startup remain separate.
+
 #### Lima mailbox recovery audit
 
 Reviewed **5 October 2026** against pinned [MAIL_D][lima-mail-daemon],
@@ -5188,9 +5223,9 @@ Fourteen pinned Lima sources and five native sources/references are reviewed;
 250 predecessor artifact/report sets are preserved without rerunning historical
 harnesses or comparing historical clocks/values. Execution is local lpc-rs only,
 with distinct nil, preserved call-out players and 4,000 ms actions. The active
-maintenance overlay, native APIs, master policy and overview cells are unchanged;
-the recommendation is not yet adopted. Full account deletion, stale cursor
-adjustment, concurrent maintenance, remote queues, other commit-time I/O failures
+maintenance overlay, native APIs, master policy and overview cells are unchanged
+by this audit; the recovery port above adopts its recommendation. Full account
+deletion, stale cursor adjustment, concurrent maintenance, remote queues, other commit-time I/O failures
 and startup remain unestablished.
 
 #### Lima mailbox maintenance guards
