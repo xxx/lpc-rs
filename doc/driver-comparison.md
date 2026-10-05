@@ -5157,6 +5157,40 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima Mh shortcut integration adoption
+
+The 4 October 2026 local port adopts the exact audited three-file repair in the
+[shared shell][lima-shell], [user mailbase][lima-user-mailbase] and
+[Mh handler][lima-mailer-mh]. Uppercase `M` shortcuts now reach the selected stock
+Mh after alias expansion through both player and wizard shells. The bridge and
+parser validate the user, owned shell, selected handler and mailbox owner.
+Unknown/malformed shortcuts fall back to ordinary shell handling; standard mail
+retains its modal behavior. Cached selection follows `query_mailer()` until
+unloaded. Native APIs and master policy do not change.
+
+**Fifty-five tests and fifty-five observations pass** through the adopted files:
+twelve Mh cases, thirteen reader cases, eleven delivery cases, eleven handler
+cases and eight mailbox lifetime cases. Actual shells, aliases and fallback,
+caller checks, reads/navigation/deletion, composition/editor/Cc, replies, paging,
+saved copies and forwarding work alongside retained persistence, delivery,
+access, transaction abort and account lifetime behavior. Fifty-four test bodies
+and assertions match after removing the Mh fixture selector. One existing test
+is renamed and now requires successful shell dispatch instead of its absence.
+Observation values are recorded without comparing clock-dependent transcripts;
+the four audit failure controls remain frozen. Ten selected compile checks stay
+**4/5 → 4/5**: user, both concrete shells and Mh compile, while the abstract shared
+shell retains four unresolved hook calls when compiled alone. Four quality gates
+and integrity checks preserve 231 predecessor artifact/report sets.
+
+Next audit remaining mail consumers and failure reporting, starting with
+newsreader mail replies. Independent body mailbase consumers, missing/malformed
+bodies in the UI, remote/local-at-mud delivery, historical saves, draft recovery,
+detached ownership, delayed error-log flush, authentication/sockets, full startup
+and concurrency remain unchecked. Source review stays pinned to the Lima revision
+below, reviewed **4 October 2026**, with distinct nil, preserved call-out players
+and 4,000 ms actions. This is local lpc-rs execution; historical harnesses and
+upstream drivers are not rerun.
+
 #### Lima Mh shortcut integration audit
 
 The 4 October 2026 source review finds no caller for
@@ -5175,7 +5209,8 @@ the current user and owned shell; Mh checks the current user, selected handler
 and mailbox owner. Empty/malformed suffixes return unhandled. Native APIs and
 master policy do not change.
 
-The diagnostic patch is **not adopted**. **Sixteen new tests and sixteen
+The diagnostic patch was **not adopted during this audit**; its later adoption
+is described above. **Sixteen new tests and sixteen
 observations pass**: twelve working cases and four controls reproducing the two
 unwired shells, unchecked caller and malformed suffix. Actual player/wizard input
 supports lazy selection, aliases and alias bypass, standard/cached fallback,
