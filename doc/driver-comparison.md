@@ -691,8 +691,8 @@ Use `lower_case(query_name())` for the logout record.
 [Body entry][lima-body-switching], [body cleanup][lima-body],
 [last-login records][lima-startup-last-login].
 
-After the verb and race adaptations below, the listener still starts with
-**three failed preloads**: the IMUD daemon, RST generation and intermud mail.
+After the verb, race and RST adaptations below, the listener still starts with
+**two failed preloads**: the IMUD daemon and intermud mail.
 Those syntax, nil/type, callback and missing-API failures are remaining port
 blockers. Successful login does not establish a clean preload or a complete
 port. Unrelated mudlib hardening remains separate work.
@@ -767,6 +767,36 @@ listening, transfer and write efuns, plus `external_start`; these APIs are absen
 from the native efun registry. A working intermud service needs a broader
 network API decision and further daemon adaptations. Router connectivity and
 upstream execution remain unchecked.
+
+#### Lima RST generation
+
+The [RST daemon][lima-rst-generation] was additionally reviewed on
+**5 October 2026** at the listed Lima revision. Replace its `private:` section
+with individual private declarations. Directory scans use the names returned
+by [`get_dir`](efun/get_dir.md), with [`file_size`](efun/file_size.md) for
+directory detection and [`file_time`](efun/file_time.md) for incremental scans;
+there is no metadata flag or tuple form of `get_dir`.
+
+Use scalar [`regmatch`](efun/regmatch.md) for warning prefixes and function
+prototypes. Native [`sscanf`](efun/sscanf.md) has no regex conversion, and
+[`regexp`](efun/regexp.md) accepts arrays. Its indexed result puts the one-based
+index before the matched string; adapt the prototype window accordingly.
+Translate Spencer word boundaries to Rust regex `\b`. Copy the UTF-8 usage
+text with `read_file` and overwriting `write_file`, replacing the absent `cp`.
+
+Pass actual function values to `unguarded` and `call_out`, binding paths where
+needed and using bare names otherwise. A closure such as `(: write_indices :)`
+returns the function value without invoking it. Keep the existing ten-item
+scan batches, filtered directories, saved modification watermark and daily
+self-rescheduling sweep. [Function values](lpc/function_type.md),
+[timers](efun/call_out.md).
+
+Native validation checks annotated Unicode output, category indices, incremental
+callback batches and restoring the saved watermark. A real cold boot preloads
+RST and generates 468 pages containing 1,075 function entries under the unchanged
+four-second task budget; HELP_D consumes the pages and saves its index.
+Complete RST formatting compatibility and upstream execution remain unchecked;
+this adaptation adds no native API.
 
 #### Lima event and help timers
 
@@ -9290,6 +9320,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
 [lima-startup-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/verb_d.c
 [lima-startup-last-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/last_login_d.c
+[lima-rst-generation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/rst_d.c
 [lima-imud-auth]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/auth.c
 [lima-imud-who]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/who.c
 [lima-imud-socket]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/socket.c
