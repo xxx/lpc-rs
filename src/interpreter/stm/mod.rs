@@ -631,6 +631,11 @@ impl Transaction {
         self.changeset.clone()
     }
 
+    /// Validate a failed attempt while discarding all writes and physical publications.
+    pub(crate) fn validation_changeset(&self) -> Changeset {
+        self.changeset.validation_only()
+    }
+
     /// Commit the changeset and take the effects for delivery.
     pub(crate) async fn commit(
         mut self,

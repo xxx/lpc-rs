@@ -833,9 +833,19 @@ one unpublished slot while a listener waits for a connection. Accepted-child rea
 and queued writes stay paused until its listener event succeeds; failure or listener
 close discards undelivered children. EOF preserves the write side, and repeated
 output-empty transitions share one pending `drained` wakeup. Deterministic native
-and local loopback tests cover this layer. Retryable LPC callback dispatch, socket
-efuns and Lima transport remain unimplemented; the driver does not start these
-workers automatically.
+and local loopback tests cover this layer. An explicitly attached native runtime
+now dispatches three-argument LPC callbacks serially per handle while allowing
+other sockets to progress independently. Every attempt leases the same event with
+the current owner and pointer; callback writes and acknowledgement commit together.
+Uncaught errors abort callback writes, validate the failed attempt's reads, report
+through the existing runtime-error path and discard only that registration's event.
+An ownership change invalidates a stale error as well as a successful old callback.
+Failed accepts retire undelivered children, and terminal errors still retire metadata;
+an unresolvable pointer retires the socket. Entries use driver origin, no player or
+command context, and the scheduling owner as caller even for another receiver.
+Native pointer type checks, named-function rebinding and retained closure code apply.
+Socket efuns, master authorization and Lima transport remain unimplemented; runtime
+attachment is explicit and the driver does not start these workers automatically.
 
 #### Lima RST generation
 

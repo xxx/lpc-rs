@@ -1,6 +1,6 @@
 //! Transactional TCP resource bookkeeping and commit-ordered transport commands.
 //!
-//! TCP workers are attached explicitly; the LPC interface and event dispatcher are not enabled.
+//! TCP workers and callback dispatch are attached explicitly; LPC efuns are not enabled.
 //! Efun adapters must authorize operations and establish ownership-offer consent.
 
 use std::{
@@ -24,12 +24,14 @@ use crate::interpreter::{
     task_context::TaskContext,
 };
 
+mod callbacks;
 mod events;
 mod transport;
 
 use events::Inbox;
 pub use events::{SocketAcceptPermit, SocketAdmission, SocketEvent, SocketEventData, SocketLease};
 
+pub use callbacks::SocketRuntime;
 pub use transport::{SocketCloseReason, SocketIoEvent, SocketOperation, SocketTransport};
 
 #[cfg(test)]

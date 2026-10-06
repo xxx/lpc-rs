@@ -1,6 +1,8 @@
 use lpc_rs_core::mangle::Mangle;
 use lpc_rs_core::null_mode::NullMode;
 mod advance;
+mod driver_callback;
+pub(crate) use driver_callback::DriverCallbackError;
 pub mod apply_function;
 mod assign_index;
 pub mod eval_loop;
