@@ -655,6 +655,48 @@ separate native tests for each. Distinct nil does not emulate FluffOS
 `undefinedp` metadata; mapping membership and omitted arguments still need
 the adaptations described below.
 
+#### Lima cold startup and login
+
+The adapted library was exercised through the actual driver and Telnet listener
+on **5 October 2026**, against the Lima revision listed above. New-account
+registration, human character creation/selection, entry into the configured
+Grand Hall, `look`, `inventory`, logout, and saved-account login after a driver
+restart work. The stock configuration grants the first account wizard/admin
+status, so this exercises the wizard shell. These are lpc-rs execution results;
+upstream execution and complete gameplay compatibility remain unchecked.
+
+Keep cold compilation out of a single login or daemon-constructor task. Expand
+the master's preload list into separate entries for races, verbs and recipes,
+and preload the starting room's object and room dependencies in order. Each
+[`preload`](apply/master/preload.md) receives its own unchanged 4,000 ms budget.
+The verb daemon must retain already preloaded verbs instead of destroying and
+recompiling them. Preload the concrete player/wizard shells, rather than shared
+modules whose hooks are supplied by their final compositions.
+[Master][lima-master], [preload list][lima-preload],
+[verb daemon][lima-startup-verbs].
+
+The starting room also needs ordinary typing/dispatch adaptations: match the
+portal's inherited callback arity, separate void calls from `return`, return
+nil for an absent readable string, and accept simple-item constructor data
+through a variadic collector compatible with its inherited constructor.
+Resolve the names module's optional `invis_name` hook through its final object.
+Add the protected `dispatch_main` adapters required by the adapted CMD base to
+`inventory` and `quit`; their `main` functions remain private.
+[Inheritance](lpc/inheritance.md), [CMD base][lima-command-base].
+
+Logout must record the same character key that entry records. The original
+body uses the account ID, which differs when an account owns named characters;
+the missing last-login record then sends nil to a string formatter on lpc-rs.
+Use `lower_case(query_name())` for the logout record.
+[Body entry][lima-body-switching], [body cleanup][lima-body],
+[last-login records][lima-startup-last-login].
+
+The listener still starts with **17 failed preloads**: thirteen verb objects,
+the troll race, IMUD authentication, RST generation and intermud mail.
+Those syntax, nil/type, callback and missing-API failures are remaining port
+blockers. Successful login does not establish a clean preload or a complete
+port. Unrelated mudlib hardening remains separate work.
+
 #### Lima event and help timers
 
 Arguments after FluffOS's `call_out` delay are callback data. Native
@@ -8551,9 +8593,10 @@ inherited-program handling and completion reporting explicitly.
 
 Lima's [master][lima-master] and [preload list][lima-preload] were reviewed on
 **24 September 2026** at `eefaff66adcae9b01e16059574c925b0d63e70a1`.
-The adapted master and complete simul library were exercised on lpc-rs. This
-establishes the tested startup contracts, not a complete Lima
-boot or execution on FluffOS.
+The adapted master and complete simul library were exercised on lpc-rs. That
+review established the bootstrap contracts; the later
+[cold startup and login smoke](#lima-cold-startup-and-login) exercises the actual
+driver. Neither establishes execution on FluffOS.
 
 File policies need the native argument order:
 `(string path, string func, object caller, string program)`. Return integer
@@ -8572,7 +8615,8 @@ Lima's `preload` catches `load_object` without checking its result. Native
 [`load_object`](efun/load_object.md) returns the configured null on failure:
 test the returned object and report the failed path. An error in one
 [`preload`](apply/master/preload.md) does not prevent later entries from running.
-The reviewed list's `/secure/obj/shell` entry must be `/obj/secure/shell`.
+The reviewed list's `/secure/obj/shell` typo initially needs correcting;
+the active preload list uses the concrete player/wizard shells described above.
 
 Replace the master's structured-trace formatter with the native
 [`error_handler`](apply/master/error_handler.md) mapping's rendered `diagnostic`;
@@ -8589,8 +8633,8 @@ under native [slice semantics](lpc/indexing.md). This termination fix does not
 adapt the virtual factory contract: native
 [`compile_object`](apply/master/compile_object.md) requires a blueprint path,
 whereas Lima returns a configured object. Preserve constructor and instance
-state when porting those factories. Lifecycle permissions, factory adaptation
-and user login remain separate porting work.
+state when porting those factories. Factory adaptation and lifecycle paths
+beyond the tested startup/login remain separate porting work.
 
 #### Lima security initialization
 
@@ -9173,6 +9217,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-text-encoding]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/encoding.cc
 [lima-json]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/json.c
 [lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
+[lima-startup-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/verb_d.c
+[lima-startup-last-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/last_login_d.c
 [lima-security]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/secure_d.c
 [lima-access]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_access.c
 [lima-daemon-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_daemon_data.c
