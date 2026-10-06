@@ -691,8 +691,8 @@ Use `lower_case(query_name())` for the logout record.
 [Body entry][lima-body-switching], [body cleanup][lima-body],
 [last-login records][lima-startup-last-login].
 
-After the verb adaptations below, the listener still starts with **four failed
-preloads**: the troll race, IMUD authentication, RST generation and intermud mail.
+After the verb and race adaptations below, the listener still starts with
+**three failed preloads**: IMUD authentication, RST generation and intermud mail.
 Those syntax, nil/type, callback and missing-API failures are remaining port
 blockers. Successful login does not establish a clean preload or a complete
 port. Unrelated mudlib hardening remains separate work.
@@ -728,6 +728,22 @@ reading and dropping the stock Grand Hall map, checking inventory and room
 contents as well as messages. The preceding overlay reproduces all thirteen
 compile failures. Successful trade, board composition, inscription and every
 registered rule remain unchecked by this smoke; no upstream execution is claimed.
+
+#### Lima troll race
+
+The [troll race][lima-troll-race] was additionally reviewed on **5 October 2026**
+at the listed Lima revision. Replace its `@LONG` description with adjacent
+quoted strings containing explicit newlines, and use `evt.data` for the two
+class-field writes in `health_modify_event`. Keep object method calls as arrows;
+[class members](lpc/classes.md#construction-and-members) use dots.
+The description, racial statistics and damage adjustment remain unchanged.
+
+Real Telnet validation checks the offered race list and complete troll help,
+creates and selects a troll character, exercises room/item commands and logout,
+then selects the saved troll again after starting a fresh driver process.
+The saved account retains the troll body path and race. Both boots preload the
+troll successfully. This smoke does not exercise combat damage or establish
+ordinary-player-only paths; no upstream execution is claimed.
 
 #### Lima event and help timers
 
@@ -9251,6 +9267,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
 [lima-startup-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/verb_d.c
 [lima-startup-last-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/last_login_d.c
+[lima-troll-race]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/race/troll.c
 [lima-drop-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/drop.c
 [lima-get-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/get.c
 [lima-write-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/write.c
