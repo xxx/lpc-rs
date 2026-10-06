@@ -857,7 +857,8 @@ inspection and synchronous ownership offers, gated by [valid_socket](apply/maste
 Acquisition requires the named recipient's active offer call. Offers use efun origin
 and native catch semantics: a caught error retains prior acquisition, while an
 uncaught transaction abort discards it. The driver starts TCP before preloads and
-stops it before closing the committer. Lima's wrapper/I3 adaptation remains unimplemented.
+stops it before closing the committer. Lima's bounded I3 codec is validated in
+diagnostic copies; its TCP wrapper adaptation remains unimplemented.
 
 #### Lima TCP wrapper and I3 adaptation
 
@@ -868,13 +869,19 @@ accepted children during the listener callback, and deliver `(wrapper, nil)` onc
 before the child's packets. Keep numeric wire zero unchanged; normalize only
 nullable fields before calling typed protocol handlers.
 
-Implement bounded framing and an explicit value codec in the mudlib. Native
+Use bounded framing and an explicit value codec in the mudlib. Native
 [`restore_value`](efun/restore_value.md) also has different string escape/newline
 semantics and accepts native value forms that do not belong in I3. String and bytes
 concatenation have an 8 KiB result limit; conversions can create larger values.
 Use bounded fragments or preallocated byte arrays, and send larger frames through
 admitted chunks. The native input/output queue budget is not an I3 frame limit.
-The codec's complete runtime cost and useful frame limit still need validation.
+The diagnostic codec supports a 256 KiB payload, including its terminating NUL,
+64 container levels and 32,768 values. It preserves integer wire zero and encodes
+native nil as zero. It rejects unsupported values, malformed or incomplete
+payloads, duplicate wire keys and nonfinite floats. Floats use the reviewed
+writer's six-decimal precision; distinct float keys that alias after formatting
+are rejected. Framing extracts one packet at a time, retains unread input and
+requires reset after a caught framing or decoding error.
 
 Lima's wrapper closes and immediately destroys its owner. Native destruction
 retires queued output, so keep a deliberately closing wrapper alive until its own
@@ -890,8 +897,16 @@ new inspection operations and ownership recipients. Preserve the wrapper's outgo
 privilege check. The absent `send_telnet_nop` keepalive and swallowed outgoing-mail
 send failures are existing Lima concerns for integration, not reasons to add native
 Telnet framing or weaken queue bounds. Fresh distinct-nil probes and compile controls
-support these adaptations; no wrapper patch, complete codec, mock-peer exchange or
-actual-router execution is claimed yet.
+support these adaptations.
+
+The diagnostic codec passes compilation and 52 LPC case groups, including
+source-derived golden frames, arbitrary fragmentation, coalescing, malformed
+input, exact limits and large mudlist/file/mail-shaped packets. Four runtime
+tests cover transaction rollback, committed failure/reset, concurrent cursors
+and a maximum-size frame received across 33 committed input calls. All checks
+use the unchanged four-second task budget; the runtime tests bootstrap the actual
+Lima master/simuls. FluffOS is not executed. The active overlay is unchanged. Wrapper integration,
+mock-peer exchanges and actual-router execution remain unestablished.
 
 #### Lima RST generation
 
