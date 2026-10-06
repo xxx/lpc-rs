@@ -763,10 +763,51 @@ the full IMUD daemon still fails in `who.c` on `string title = 0`.
 [Who handler][lima-imud-who].
 
 The [socket object][lima-imud-socket] also calls socket creation, connection,
-listening, transfer and write efuns, plus `external_start`; these APIs are absent
-from the native efun registry. A working intermud service needs a broader
-network API decision and further daemon adaptations. Router connectivity and
-upstream execution remain unchecked.
+listening, transfer and write efuns; these APIs are absent from the native efun
+registry. Its `external_start` branch is optional subprocess support, not an
+IMUD transport operation. A working intermud service needs the network API
+decision below and further daemon adaptations. Router connectivity and upstream
+execution remain unchecked.
+
+#### Lima IMUD networking audit
+
+The [IMUD daemon][lima-imud-daemon], [OOB module][lima-imud-oob] and
+[socket wrapper][lima-imud-socket] were reviewed on **5 October 2026** at the
+listed Lima revision. IMUD uses outgoing TCP to its router, an OOB listener on
+`__PORT__ + 1`, and outgoing OOB connections for mail/file transfers. These paths
+all use MUD mode; an outgoing-only connector is insufficient. The wrapper's UDP
+and subprocess branches are not used by these paths. Excluding optional
+`external_start` support from a port adapter requires no subprocess efun.
+
+FluffOS's socket implementation and value serializer were source-reviewed at
+`44532e0228f34be2184c701a361df4079371b8b0`, with `PACKAGE_SOCKETS` relevant to
+sockets and `PACKAGE_EXTERNAL` to subprocesses; IPv6 paths depend on `IPV6`.
+No upstream build or execution was performed. MUD mode frames serialized values
+with a four-byte network-order length, including the payload's terminal NUL.
+Its write results distinguish rejected data from accepted, buffered data, and
+release/acquire transfers ownership through a synchronous callback.
+[Socket implementation][fl-network-sockets], [value serializer][fl-network-values],
+[package signatures][fl-network-signatures], [subprocess implementation][fl-network-external].
+
+The audit recommends a reusable native TCP service carrying
+[`bytes`](lpc/types.md), with function callbacks, transactional ownership
+and bounded output, and an explicit I3 codec in the mudlib. Native
+[`save_value`](efun/save_value.md) has different nil, floating and string forms;
+its output cannot be sent directly as an I3 packet. Preserve wire numeric zero
+and normalize only nullable protocol fields before typed handler calls.
+
+Socket operations must fit the driver's transaction model: physical IO follows
+commit, so admitted bind/connect requests need asynchronous success/failure
+events. Preserve per-socket commit order and stable input events across retries.
+The logical ownership-transfer callback can run within the current transaction.
+Callback context, draining, owner destruction, GC roots and master authorization
+need explicit contracts before implementation; the existing interactive
+[`write_socket`](efun/write_socket.md) does not provide general TCP sockets.
+
+Compile-only controls also expose ordinary port changes in channel/user-cache
+handlers, OOB timers and reply markers, and file metadata/callback reduction.
+Later errors remain masked by the file-handler frontier. No production patch,
+clean complete-daemon compile, transport execution or new native API is claimed.
 
 #### Lima RST generation
 
@@ -9350,6 +9391,12 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-imud-auth]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/auth.c
 [lima-imud-who]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/who.c
 [lima-imud-socket]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/socket.c
+[lima-imud-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud_d.c
+[lima-imud-oob]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/oob.c
+[fl-network-sockets]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/sockets/socket_efuns.cc
+[fl-network-values]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/object.cc
+[fl-network-signatures]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/sockets/sockets.spec
+[fl-network-external]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/external/external.cc
 [lima-troll-race]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/race/troll.c
 [lima-drop-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/drop.c
 [lima-get-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/get.c
