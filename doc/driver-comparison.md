@@ -809,6 +809,15 @@ handlers, OOB timers and reply markers, and file metadata/callback reduction.
 Later errors remain masked by the file-handler frontier. No production patch,
 clean complete-daemon compile, transport execution or new native API is claimed.
 
+The subsequent TCP interface proposal combines connect/listen setup and uses
+one event callback for completion, accepted streams, raw reads, EOF and closure.
+Writes admit a whole bytes buffer or refuse it without taking a prefix; the
+driver handles partial OS writes. Accepted-stream reads pause during their
+listener callback so ownership can be assigned synchronously. Socket commands
+need ordered publication through the committer before independent task effect
+delivery; physical IO remains outside the committer. This interface is a
+proposal, not implemented driver behavior.
+
 #### Lima RST generation
 
 The [RST daemon][lima-rst-generation] was additionally reviewed on
