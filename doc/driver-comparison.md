@@ -5157,6 +5157,48 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima lost-message file export audit
+
+Reviewed **5 October 2026** against pinned [base mailer][lima-mailer-base],
+[standard][lima-mailer-standard], [Mh][lima-mailer-mh] and
+[mailbox][lima-entry-mailbox], alongside the [master][lima-master],
+[security][lima-security] and [input forwarding][lima-input-forwarding] contracts.
+Both normal mailers, through both header and body export, write the missing-message
+display marker to a new or existing destination and claim a successful save.
+The owner's stale receipt is pruned; other owners retain theirs. Existing export
+bytes receive the marker appended without a trailing newline.
+
+Healthy exports preserve Unicode, header/body selection, unread flags, cursors,
+saved receipts and message bytes. Bare filenames use the wizard Mail directory;
+explicit paths remain explicit, and omitted numbers use the actual selected
+second sorted key. Corrupt saves or invalid bodies retain evidence and block
+export. Invalid sender metadata blocks headers while raw body export remains
+available; nil recipient lists omit those header lines. Invalid arguments and
+protected remote entry write nothing.
+
+Native [`write_file`](efun/write_file.md) raises for missing parent directories
+and directory destinations. Normal User input catches those errors and recaptures
+the prompt, skipping the mailer's failure feedback. A failed lost export still
+commits its earlier receipt pruning. Uncaught outer errors discard file creation
+or marker appends, pruning, saves and output; retries remain usable. Commit-time
+I/O failures remain separate. **Recommendation:** display the lost warning and
+return nil from the shared builder, and catch/report export write refusals in
+`cmd_read`. Preserve reads, pruning, append semantics and rollback; no native
+change is needed, and no repair is adopted by this audit.
+
+**Seventeen fresh tests/observations pass**, covering real Users, bodies,
+connections, daemon sends, native saved classes, owned mailboxes and standard/Mh
+input. Seven core CLI checks and four quality gates pass, including warning-free
+workspace Clippy. Nineteen pinned Lima and eleven native reviews are recorded;
+all 258 predecessor artifact/report sets
+remain intact. Development fixture and diagnostic-build corrections retain their
+receipts. The active help overlay/configuration, original/native/master inputs
+and overview cells remain unchanged. Execution is local lpc-rs only with distinct
+nil, preserved call-out players, 4,000 ms actions, `USE_USER_MENU` and `.o` saves;
+no upstream execution, fresh public-source fetch or historical harness rerun.
+Remote routing, other delivery faults, long paging/ranges, concurrency, disconnect
+recovery, account deletion and startup remain separate.
+
 #### Lima mail help correction
 
 The **5 October 2026** local port corrects displayed strings in the
