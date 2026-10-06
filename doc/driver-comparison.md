@@ -691,11 +691,43 @@ Use `lower_case(query_name())` for the logout record.
 [Body entry][lima-body-switching], [body cleanup][lima-body],
 [last-login records][lima-startup-last-login].
 
-The listener still starts with **17 failed preloads**: thirteen verb objects,
-the troll race, IMUD authentication, RST generation and intermud mail.
+After the verb adaptations below, the listener still starts with **four failed
+preloads**: the troll race, IMUD authentication, RST generation and intermud mail.
 Those syntax, nil/type, callback and missing-API failures are remaining port
 blockers. Successful login does not establish a clean preload or a complete
 port. Unrelated mudlib hardening remains separate work.
+
+#### Lima verb preloads and parser feedback
+
+The thirteen failing verb files were additionally reviewed on **5 October 2026**
+at the listed Lima revision. All compile and preload after adapting nullable
+object/string values to nil, separating void calls from returns, and matching
+`write`'s inherited `can_verb_rule(string verb, string rule)` signature.
+Numeric predicates and counts remain integers. The `drop` emptiness test can
+use `sizeof(all_inventory(this_body()))`; it does not need a native
+`first_inventory` helper. [Drop][lima-drop-verb], [write][lima-write-verb].
+
+Translate named callbacks to actual function values: use `get_one` in
+`handle_obs`, and `all_inventory` in the readable-item traversal. Native
+`(: get_one :)` returns a function value without performing the action.
+When forwarding a relation to `get_one(object, object, string)`, insert nil
+for the absent tool before the relation. The plural `put` callback needs the
+same function-value adaptation. [Get][lima-get-verb],
+[function values](lpc/function_type.md).
+
+Board scans should test `ob->is_bulletin_board()` directly: an absent method
+returns nil in this configuration, and casting that result to int raises an
+error. In the master's [`parser_error_message`](apply/master/parser_error_message.md),
+the object supplying a refusal can be a plain verb handler with no `short()`.
+Add the object prefix only when that call returns a string, preserving the
+reason itself. [Master][lima-master],
+[parser callbacks](apply/object/parser_handlers.md).
+
+Real Telnet validation exercises vendor/board absence feedback and taking,
+reading and dropping the stock Grand Hall map, checking inventory and room
+contents as well as messages. The preceding overlay reproduces all thirteen
+compile failures. Successful trade, board composition, inscription and every
+registered rule remain unchecked by this smoke; no upstream execution is claimed.
 
 #### Lima event and help timers
 
@@ -9219,6 +9251,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
 [lima-startup-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/verb_d.c
 [lima-startup-last-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/last_login_d.c
+[lima-drop-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/drop.c
+[lima-get-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/get.c
+[lima-write-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/write.c
 [lima-security]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/secure_d.c
 [lima-access]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_access.c
 [lima-daemon-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_daemon_data.c
