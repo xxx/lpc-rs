@@ -858,8 +858,9 @@ Acquisition requires the named recipient's active offer call. Offers use efun or
 and native catch semantics: a caught error retains prior acquisition, while an
 uncaught transaction abort discards it. The driver starts TCP before preloads and
 stops it before closing the committer. Lima's bounded I3 codec, MUD-mode TCP
-wrapper and tested IMUD router/OOB exchanges are validated in diagnostic copies;
-full-overlay startup and production adoption remain pending.
+wrapper and tested IMUD router/OOB exchanges are adopted in the local Lima port.
+Fresh full-overlay startup and saved-state IMUD/login checks pass; a separate RST
+cleanup failure remains on restart.
 
 #### Lima TCP wrapper and I3 adaptation
 
@@ -937,9 +938,18 @@ and asynchronous connection failure. A quota-exhaustion test checks listener
 construction cleanup. Failed send admission retains unsent mail.
 Router headers and control bodies are checked before their state updates; this
 is not a complete I3 service security audit. The absent Telnet keepalive call is
-removed from the I3 stream. The active overlay and native sources remain unchanged.
-Full-overlay preload/login startup, actual local-player mail delivery, file put/get,
-other socket consumers and actual-router execution remain unestablished.
+removed from the I3 stream.
+
+The coordinated thirteen-file patch is now adopted in the local Lima overlay.
+A fresh full driver boot attempts 151 preloads with zero failures and completes
+real Telnet account/character creation, gameplay commands and logout. A second
+boot restores the account, character and router password; both boots pass local
+mock-router and advertised-port OOB authentication/file-listing checks and stop
+with exit zero. The restart also reproduces Lima's previously documented RST
+stale-output cleanup permission failure, so a clean full restart is not established.
+No RST repair or native change accompanies this adoption. Temporary loopback
+configuration and runtime files are not adopted. Actual local-player mail delivery,
+file put/get, other socket consumers and actual-router execution remain unestablished.
 
 #### Lima RST generation
 
