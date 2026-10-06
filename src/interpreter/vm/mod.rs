@@ -43,6 +43,8 @@ pub struct Vm {
     /// The listener; one loop per accepted connection.
     telnet: Telnet,
 
+    sockets: Option<crate::interpreter::sockets::SocketRuntime>,
+
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
 }
@@ -58,6 +60,7 @@ impl Vm {
         Self {
             global_state: Arc::new(GlobalState::new(config, tx)),
             telnet: Telnet::new(),
+            sockets: None,
             rx,
         }
     }
@@ -76,6 +79,7 @@ impl Vm {
     /// then start the main loop.
     pub async fn boot(&mut self) -> lpc_rs_errors::Result<i32> {
         self.bootstrap().await?;
+        self.start_sockets()?;
         self.preload().await;
 
         let config = &self.global_state.config;
@@ -112,6 +116,7 @@ impl Vm {
     /// Returns the process exit code: `shutdown(code)`'s, 0 on a signal.
     #[instrument(skip_all)]
     pub async fn run(&mut self) -> lpc_rs_errors::Result<i32> {
+        self.start_sockets()?;
         let mut exit_code = 0;
         let gc_interval = self.global_state.config.gc_interval;
         // `interval` panics on a zero period; a disabled collector is gated off at the arm.
@@ -191,7 +196,7 @@ impl Vm {
     }
 
     /// Shut down the [`Vm`], and all subsystems: stop accepting, tell every
-    /// connection, run the master's `shutdown()`, unbind and close every
+    /// connection, stop raw TCP, run the master's `shutdown()`, unbind and close every
     /// connection while the committer is still open, then wait for the
     /// loops to finish flushing.
     pub async fn shutdown(&mut self) -> Result<()> {
@@ -201,6 +206,10 @@ impl Vm {
             let _ = connection.send(ConnectionOp::Shutdown);
         }
         global_state.with_call_outs_mut(|c| c.clear());
+
+        if let Some(sockets) = self.sockets.take() {
+            sockets.shutdown().await?;
+        }
 
         match apply_function_in_master(
             SHUTDOWN,
@@ -244,6 +253,17 @@ impl Vm {
             );
         }
 
+        Ok(())
+    }
+
+    /// Start TCP callbacks and IO once; boot and run call this automatically.
+    /// Embedded users may call this after installing their master policy.
+    pub fn start_sockets(&mut self) -> Result<()> {
+        if self.sockets.is_none() {
+            self.sockets = Some(crate::interpreter::sockets::SocketRuntime::start(
+                &self.global_state,
+            )?);
+        }
         Ok(())
     }
 }

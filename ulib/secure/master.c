@@ -141,6 +141,11 @@ int valid_snoop(object caller, object observer, object target, string operation,
     return 0;
 }
 
+/** Deny raw TCP operations and inspection; ulib uses only player Telnet sessions. */
+int valid_socket(object caller, string operation, mixed *info) {
+    return 0;
+}
+
 /**
  * Authorise caller inspecting target's globals with variable_info(target).
  * program is the source defining the inspection request; the operation can
@@ -256,7 +261,7 @@ mapping get_mud_stats() {
  * Notify clients during the driver's final LPC hook on an orderly shutdown.
  * No arguments or useful return value; missing this hook adds no farewell.
  * Output can still reach connected bodies, including unnamed guests, but
- * new commands and call-outs will not run and net_dead() is not called.
+ * new commands, call-outs and raw TCP callbacks will not run; net_dead() is not called.
  * ulib has no account or world state to save before the process exits.
  */
 void shutdown() {

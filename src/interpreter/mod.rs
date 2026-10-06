@@ -51,6 +51,8 @@ pub const MODIFY_COMMAND: &str = "modify_command";
 pub const VALID_EXEC: &str = "valid_exec";
 /// Master apply: authorizes snoop attachment, removal and inspection.
 pub const VALID_SNOOP: &str = "valid_snoop";
+/// Master apply: authorizes native TCP operations and inspection.
+pub const VALID_SOCKET: &str = "valid_socket";
 /// Observer apply: receives decoded input or output from a snooped connection.
 pub const RECEIVE_SNOOP: &str = "receive_snoop";
 /// Master apply: whether calling code may destroy an object (`doc/apply/master/valid_destruct.md`).

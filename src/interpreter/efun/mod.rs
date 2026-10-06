@@ -125,6 +125,7 @@ pub(crate) mod shadow;
 pub(crate) mod shutdown;
 pub(crate) mod sizeof;
 pub(crate) mod snoop;
+pub(crate) mod sockets;
 pub(crate) mod sort_array;
 pub(crate) mod source_cache_stats;
 pub(crate) mod sprintf;
@@ -1325,6 +1326,38 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false)],
     },
+
+    socket_connect [async in sockets] => {
+        returns: LpcType::Int(false), arity: 3,
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Function(false)],
+    },
+    socket_listen [async in sockets] => {
+        returns: LpcType::Int(false), arity: 3,
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Function(false)],
+    },
+    socket_write [async in sockets] => {
+        returns: LpcType::Int(false), arity: 2,
+        args: [LpcType::Int(false), LpcType::Bytes(false)],
+    },
+    socket_close [async in sockets] => {
+        returns: LpcType::Void, arity: 1, args: [LpcType::Int(false)],
+    },
+    socket_release [async in sockets] => {
+        returns: LpcType::Int(false), arity: 3,
+        args: [LpcType::Int(false), LpcType::Object(false), LpcType::Function(false)],
+    },
+    socket_acquire [async in sockets] => {
+        returns: LpcType::Void, arity: 2,
+        args: [LpcType::Int(false), LpcType::Function(false)],
+    },
+    socket_info [async in sockets] => {
+        returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
+    },
+    query_sockets [async in sockets] => {
+        returns: LpcType::Mapping(true), arity: (1, 1),
+        args: [LpcType::Object(false) | LpcType::Int(false)],
+    },
+
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1701,6 +1734,14 @@ mod tests {
                 "query_snoop",
                 "query_snooping",
                 "nilp",
+                "socket_connect",
+                "socket_listen",
+                "socket_write",
+                "socket_close",
+                "socket_release",
+                "socket_acquire",
+                "socket_info",
+                "query_sockets",
             ]
         );
     }

@@ -49,7 +49,7 @@ ones are in [examples/master.c](../examples/master.c).
 | `error_handler(mapping error)` | Handle a runtime error in a fresh transaction. Keys: `error`, `location`, `object`, `diagnostic`. The driver always logs the diagnostic; `this_interactive()` identifies the affected connection for commands and input callbacks. Without this hook the driver also sends its diagnostic to that player. | Live: send a short notice. |
 | `warning_handler(mapping warning)` | Handle a compiler warning in the compiling transaction. Keys: `message`, `location`, `file`, `diagnostic`. Omission logs it; implementing this hook makes logging your responsibility. | Live: write the diagnostic to the debug log. |
 | `get_mud_stats()` | Return an MSSP mapping. Custom fields override defaults; omit `PLAYERS` to retain the driver's live connection count. Custom values are cached for each connection. | Live: set `NAME` and `FAMILY`. |
-| `shutdown()` | Last LPC hook during an orderly stop; client output can still be delivered, but new commands and call-outs do not run. | Live: broadcast a farewell. |
+| `shutdown()` | Last LPC hook during an orderly stop; client output can still be delivered, but new commands, call-outs and raw TCP callbacks do not run. Raw TCP workers stop before the hook. | Live: broadcast a farewell. |
 
 ### Policy
 
@@ -69,6 +69,7 @@ from the caller object's name through inheritance or virtual objects.
 | `valid_destruct(object caller, object target, string program)` | Object destruction, including self-destruction. | Only `caller == target`. |
 | `valid_exec(string program, object new_body, object old_body)` | Moving a connection between bodies with `exec()`. `program` has a leading slash and `.c`; the driver's initial attachment after `connect()` does not need this grant. | Deny. |
 | `valid_snoop(object caller, object observer, object target, string operation, string program)` | Start, stop or inspect a snoop relationship. Operation selects the endpoint meanings; runs in the requesting transaction with its player context. Missing policy denies even self-inspection. | Deny. |
+| `valid_socket(object caller, string operation, mixed *info)` | Authorize raw TCP creation, mutation, offers or inspection. The five info slots describe handle, owner, endpoint and recipient; state is rechecked after policy returns. Runs in the requesting transaction with its player context. | Deny; ulib uses player Telnet sessions only. |
 | `valid_variable_info(object caller, object target, string program)` | Inspecting another object's globals, including private ones; inspecting self does not ask. | Deny. |
 | `valid_store_variable(object caller, object target, string name, string declaring_program, mixed value, string program)` | Replacing another object's named global. The requested source selector may be nil; declaration lookup and type checks follow authorization. Self-writes do not ask. | Deny. |
 | `valid_recompile(object prototype, object caller, string program)` | In-place upgrades of a prototype and its current clones, including system prototypes; checked when requested and before compilation, under old system policy. Also permits other objects to query a job's status using the querying caller, program and command giver; a missing target is 0. The original requester reads its own status directly. | Deny. |

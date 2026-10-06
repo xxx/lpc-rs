@@ -105,3 +105,8 @@ parser examples are separate because this mudlib uses the smaller
 
 The driver repository's tests compile the live files and the enabled examples,
 then boot a copied mudlib and exercise it through real network connections.
+
+Raw TCP efuns are separate from player Telnet sessions. The live master denies
+all operations through `valid_socket`; adding an external protocol service requires
+a deliberate policy for its executing object, destinations and delegation. See
+the local [apply reference](applies.md) for the authorization hook.

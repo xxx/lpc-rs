@@ -405,6 +405,16 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         })));
     }
 
+    pub(crate) fn socket_offer(&self) -> Option<Arc<crate::interpreter::efun::sockets::Offer>> {
+        self.stack
+            .iter()
+            .rev()
+            .find_map(|frame| match frame.pending.as_deref() {
+                Some(Pending::Efun(continuation)) => continuation.state.socket_offer().cloned(),
+                _ => None,
+            })
+    }
+
     /// Resolve `path` against the current process's in-game directory.
     pub fn in_game_path(&self, path: &str) -> LpcPath {
         LpcPath::new_in_game(path, self.in_game_cwd(), &*self.config().lib_dir)

@@ -24,6 +24,11 @@ pub(crate) trait Continuation: Send + Sync + Debug {
 
     /// A copy, for the frame's `Clone`.
     fn clone_box(&self) -> Box<dyn Continuation>;
+
+    /// An ownership offer exists only while its efun callback is on this stack.
+    fn socket_offer(&self) -> Option<&Arc<crate::interpreter::efun::sockets::Offer>> {
+        None
+    }
 }
 
 impl Clone for Box<dyn Continuation> {

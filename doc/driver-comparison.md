@@ -375,7 +375,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
-| Connection model | [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). Connection metadata supplies idle time for [Lima player naming](#lima-player-naming). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
+| Connection model | [Raw TCP sockets](tcp-sockets.md) and [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). Connection metadata supplies idle time for [Lima player naming](#lima-player-naming). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
 | Build and configuration | [Cargo build and installation](../README.md#build-and-install), [environment settings and explicit dotenv files](../default.env). | [Make-based build][cd-readme], with settings in [config.h][cd-config]. | [Configure/Make build][ld-install], with [command-line options and argument files][ld-invocation]. | [CMake build][fl-readme] and a [runtime configuration file][fl-config]. | [Make-based build][dgd-build] and a separate [driver configuration file][dgd-config]. |
 
 Async I/O and resumable LPC functions do not by themselves establish parallel
@@ -825,7 +825,7 @@ owned records transactionally, and GC traces registered callback captures.
 Retired handles disappear from inspection immediately while retaining their count
 charge until queued commands, workers and pending descriptor handoffs are disposed;
 retirement cannot bypass the bounds on buffered output by reusing quota early.
-Explicitly attached native TCP workers now resolve/connect or bind, finish partial
+Native TCP workers resolve/connect or bind, finish partial
 writes in order, drain graceful closes with a timeout, and interrupt retirement.
 Readiness, raw input, EOF, accepted children, full-buffer completion and terminal
 state publish through the native transaction runner. Transactional FIFO inboxes
@@ -839,8 +839,8 @@ output-empty transitions share one pending `drained` wakeup. Close and terminal
 failure remove queued drained wakeups. Accepted descriptor handoff survives listener
 close after successful notification, and activation checks both the scheduling owner
 and the callback's owner/receiver. Deterministic native
-and local loopback tests cover this layer. An explicitly attached native runtime
-now dispatches three-argument LPC callbacks serially per handle while allowing
+and local loopback tests cover this layer. The native runtime
+dispatches three-argument LPC callbacks serially per handle while allowing
 other sockets to progress independently. Every attempt leases the same event with
 the current owner and pointer; callback writes and acknowledgement commit together.
 Uncaught errors abort callback writes, validate the failed attempt's reads, report
@@ -850,8 +850,12 @@ Failed accepts retire undelivered children, and terminal errors still retire met
 an unresolvable pointer retires the socket. Entries use driver origin, no player or
 command context, and the scheduling owner as caller even for another receiver.
 Native pointer type checks, named-function rebinding and retained closure code apply.
-Socket efuns, master authorization and Lima transport remain unimplemented; runtime
-attachment is explicit and the driver does not start these workers automatically.
+The [eight TCP efuns](tcp-sockets.md) expose creation, whole-buffer writes, close,
+inspection and synchronous ownership offers, gated by [valid_socket](apply/master/valid_socket.md).
+Acquisition requires the named recipient's active offer call. Offers use efun origin
+and native catch semantics: a caught error retains prior acquisition, while an
+uncaught transaction abort discards it. The driver starts TCP before preloads and
+stops it before closing the committer. Lima's wrapper/I3 adaptation remains unimplemented.
 
 #### Lima RST generation
 

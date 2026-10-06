@@ -1,7 +1,6 @@
 //! Transactional TCP resource bookkeeping and commit-ordered transport commands.
 //!
-//! TCP workers and callback dispatch are attached explicitly; LPC efuns are not enabled.
-//! Efun adapters must authorize operations and establish ownership-offer consent.
+//! Efun adapters authorize operations and establish synchronous ownership-offer consent.
 
 use std::{
     net::SocketAddr,
@@ -487,7 +486,17 @@ impl SocketAccess<'_> {
         })
     }
 
-    /// Read metadata; the future efun adapter authorizes foreign inspection.
+    /// Read registration metadata without observing output or input progress.
+    pub(crate) fn registration(&self, handle: SocketHandle) -> Option<SocketInfo> {
+        self.txn.with(|txn| {
+            self.sockets
+                .record(txn, handle)
+                .ok()
+                .map(|(_, record)| record.info)
+        })
+    }
+
+    /// Read metadata; the efun adapter authorizes foreign inspection.
     pub fn info(&self, handle: SocketHandle) -> Option<SocketInfo> {
         self.txn.with(|txn| {
             let (cells, record) = self.sockets.record(txn, handle).ok()?;
