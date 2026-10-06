@@ -857,8 +857,8 @@ inspection and synchronous ownership offers, gated by [valid_socket](apply/maste
 Acquisition requires the named recipient's active offer call. Offers use efun origin
 and native catch semantics: a caught error retains prior acquisition, while an
 uncaught transaction abort discards it. The driver starts TCP before preloads and
-stops it before closing the committer. Lima's bounded I3 codec is validated in
-diagnostic copies; its TCP wrapper adaptation remains unimplemented.
+stops it before closing the committer. Lima's bounded I3 codec and MUD-mode TCP
+wrapper are validated in diagnostic copies; full IMUD integration remains pending.
 
 #### Lima TCP wrapper and I3 adaptation
 
@@ -905,8 +905,27 @@ input, exact limits and large mudlist/file/mail-shaped packets. Four runtime
 tests cover transaction rollback, committed failure/reset, concurrent cursors
 and a maximum-size frame received across 33 committed input calls. All checks
 use the unchanged four-second task budget; the runtime tests bootstrap the actual
-Lima master/simuls. FluffOS is not executed. The active overlay is unchanged. Wrapper integration,
-mock-peer exchanges and actual-router execution remain unestablished.
+Lima master/simuls. FluffOS is not executed.
+
+The diagnostic MUD-mode wrapper and narrow master grant now pass 16 integration
+tests with actual Lima master/simuls/security, loopback peers and deterministic
+pre-readiness controls. Output retains at most 512 KiB including frame headers
+and 64 frames, retries rejected native writes in order and uses 8 KiB chunks;
+the configured native output allowance must admit an individual chunk. Input
+dispatches eight packets per batch through transactional continuations. Tests
+cover maximum-size frames, accepted-peer nil ordering and independence, EOF
+response drain, malformed/truncated input, consumer catches, intentional close,
+aborted sends, asynchronous bind failure and foreign-caller restrictions.
+
+The creator controls wrapper mutation; codec methods are protected, native event
+pointers private, and endpoint accessors return copies. The original outgoing
+privilege check remains; listening retains its existing creation permission.
+Only MUD-mode TCP styles are implemented by this adapter. Its write callback
+notifies drained output and does not interpret return values as producer data.
+A ten-second wrapper deadline bounds closing owners; its cleanup path is tested
+by direct driver entry, without timing a real stalled expiry. Native sources and
+the active overlay are unchanged. Ordinary IMUD ports, mock-router/OOB exchanges,
+other socket consumers and actual-router execution remain unestablished.
 
 #### Lima RST generation
 
