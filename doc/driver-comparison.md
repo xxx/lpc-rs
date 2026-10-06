@@ -5157,6 +5157,59 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail export authorization and command exposure audit
+
+Reviewed **5 October 2026** against pinned [standard][lima-mailer-standard],
+[Mh][lima-mailer-mh], [base mailer][lima-mailer-base],
+[User mail bridge][lima-user-mailbase], [shared shell][lima-shell],
+[player shell][lima-pshell], [wizard shell][lima-wish] and
+[mail command][lima-mail-command]. Both mailers hide file exports from nonwizards
+in help, but accept them through normal input. Nonwizards can create and append
+header/body exports under the stock public `/tmp` protection, including current
+message defaults, without changing unread state or saved receipts.
+
+Native [`write_file`](efun/write_file.md) still consults the
+[master][lima-master] and [security daemon][lima-security]. Bare filenames resolve
+to the wizard Mail directory and are refused in the ordinary fixture; secure and
+foreign wizard destinations retain their bytes and show path/reason feedback.
+Missing-message exports nevertheless prune and save the owner's stale receipt
+before any write check. Other owners retain theirs. Invalid arguments and outer
+rollback keep their existing policies.
+
+The actual player shell reaches standard modal mail through `mail` and lazily
+creates selected Mh on `M` shortcuts. Standard selection leaves those shortcuts
+to ordinary command lookup. Nonwizard help and reads remain usable. Wizard
+controls retain export help and owned saves. Removing fixture wizard membership
+while retaining a bound handler hides help immediately but leaves public exports
+available; complete privilege revocation and shell replacement remain separate.
+Protected `cmd_read`, foreign Mh parsing and foreign User bridge calls retain
+their existing caller guards.
+
+The wizard-only help suggests a wizard-only export policy. **Recommendation:**
+check current wizard membership inside shared `cmd_read` when a destination is
+supplied, before selecting or building the message. Refuse clearly, preventing
+both hidden exports and rejected-export pruning, while preserving ordinary
+reads, wizard exports and native file authorization. No native/master change is
+needed. The active export overlay remains unchanged; this audit adopts no repair.
+
+**Fourteen fresh tests/observations pass** with real stock Users, bodies,
+connections, daemon sends, native saved classes, owned mailboxes and standard/Mh
+input. Eight CLI checks pass **7/8**: the standalone shared shell reports
+unresolved hooks supplied by its concrete programs, and both actual shells pass.
+Four quality gates pass, including fresh workspace Clippy with all targets/features
+and warnings denied.
+Twenty-five pinned Lima reviews include nineteen reused and six additional
+reviews; eleven native reviews retain their hashes. All 260 predecessor
+artifact/report sets remain intact. Development cursor expectation and
+existing-handler preparation corrections retain their receipts.
+
+Execution is local lpc-rs only, with distinct nil, preserved call-out players,
+4,000 ms actions, `USE_USER_MENU` and `.o` saves. Upstream-driver execution and a
+fresh public-source fetch remain unchecked; original Lima and overview cells
+remain unchanged. Other public handler entry points, long paging/ranges, remote
+routing, concurrency, account deletion, disconnect recovery and startup remain
+separate.
+
 #### Lima lost-message file export repair
 
 The **5 October 2026** local port changes only the shared
