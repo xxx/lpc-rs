@@ -5157,6 +5157,68 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima public mailer entry and ownership audit
+
+Reviewed **5 October 2026** against the pinned
+[User facade][lima-user-mailbase], [base mailer][lima-mailer-base],
+[standard][lima-mailer-standard], [Mh][lima-mailer-mh],
+[mail command][lima-mail-command], [mailbox][lima-entry-mailbox],
+[master][lima-master] and [destruction simul][lima-overrides].
+A foreign cold `query_mailer()` caches a handler for the caller's mailbox in
+another User; subsequent owner calls reuse that wrong binding. A public
+constructor call can also rebind an existing handler. Mailbox content
+checks and Mh's selected-owner checks continue to refuse the mismatched context;
+both accounts retain their receipts, unread state, cursor and saved bytes.
+
+An idle standard `begin_mail(nil)` can assign foreign modal input before its
+header reads are refused, leaving the owner unable to enter. The existing
+input-owner check blocks foreign nil entry after assignment, but the recipient
+branch can still push a Subject prompt on the caller's User. Mh `begin_mail`
+remains informational; composition uses `Mm`. Arbitrary programs in the correct
+owner context can currently begin either handler, and warm cached queries work
+without a player.
+
+Foreign `unload_mailer()`/`remove()` requests destroy the handler, though explicit
+destruction through the simul is refused to the same unprivileged caller.
+`remove()` delegates self-destruction, which the stock master intentionally allows.
+This does not bypass native authorization. A foreign default-selection request
+accepts an unlisted public fixture program; the cached handler remains until
+unloading, and the next owned query clones the chosen program. This establishes
+unrestricted selection, not a load-permission or privilege bypass.
+
+Owned reads, full standard/Mh composition/delivery, lazy selection and restart
+remain usable. News replies reject an unrelated caller. Separate original and
+saved receipt bytes remain intact during these context failures. Uncaught outer
+errors roll back cached clones, input changes, default changes, rebinding,
+destruction and output. The menu's `start_mail` call and legacy body facade are
+source-reviewed; complete execution of those paths remains unchecked.
+
+**Recommendation:** guard User lazy creation/configuration/unload and mailer
+ownership before effects, restrict default choices to supported handlers, prevent
+constructor rebinding and guard removal. Preserve owned commands, menu/news
+callers and self/owned or already authorized cleanup. A command-only caller list
+would exclude stock entry sites. No native or master-policy change is indicated;
+this audit adopts no patch, and the active export-access overlay stays unchanged.
+
+**Sixteen fresh cases pass** using two actual Users, bodies, connections,
+separate daemon-sent originals, native saved classes and real standard/Mh input.
+Ten fresh CLI checks pass **9/10**, including the stock menu and User facade;
+only the standalone shared shell retains its four unresolved concrete hooks,
+and both actual shells pass. Four quality gates pass, including warning-free
+workspace Clippy across all targets/features. Full menu execution remains
+unchecked. Thirty pinned Lima reviews include twenty-five reused and five additional
+reviews; seventeen native reviews retain their source hashes. All 262 predecessor
+artifact/report sets remain preserved. The initial fixture's explicit native
+`destruct` reference was refused at compile time by `valid_override`, even in an
+unused branch; corrected probes use the guarded simul, with diagnostic receipts
+retained. This was a fixture correction, without production permission changes.
+
+Execution is local lpc-rs with distinct nil, preserved call-out players,
+4,000 ms actions, `USE_USER_MENU` and `.o` saves. Native overview cells and original
+Lima remain unchanged. Upstream-driver execution and a fresh public-source fetch
+remain unchecked. Full menu/login, legacy body mail, disconnect/account cleanup,
+concurrent initialization, remote delivery and startup remain separate.
+
 #### Lima mail export authorization repair
 
 The **5 October 2026** local port adds a current `wizardp(this_user())` check to
