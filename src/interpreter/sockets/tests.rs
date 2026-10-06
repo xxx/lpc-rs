@@ -473,6 +473,103 @@ fn close_cancels_setup_and_is_idempotent_within_the_transaction() {
 }
 
 #[test]
+fn retirement_cannot_reuse_quota_while_its_commands_and_buffers_are_pending() {
+    let mut f = Fixture::new(1, 8, 1);
+    let txn = f.begin();
+    let handle = f
+        .access(&txn)
+        .connect(&f.owner, "localhost".into(), 9, callback(&f.owner))
+        .unwrap();
+    assert!(
+        f.access(&txn)
+            .write(&f.owner, handle, Bytes::copy_from_slice(b"12345678"))
+            .unwrap()
+    );
+    txn.with(|t| f.sockets.retire_object(t, &f.owner));
+    assert!(f.access(&txn).info(handle).is_none());
+    assert!(
+        f.access(&txn)
+            .connect(&f.owner, "other".into(), 9, callback(&f.owner))
+            .is_err()
+    );
+    f.commit(&txn);
+    for _ in 0..32 {
+        assert!(
+            f.access(&f.begin())
+                .connect(&f.owner, "other".into(), 9, callback(&f.owner))
+                .is_err()
+        );
+    }
+    let batch = f.commands.recv().unwrap();
+    assert!(
+        matches!(&batch[..], [SocketCommand::Open { .. }, SocketCommand::Write { data, .. }, SocketCommand::Retire { handle: retired }] if data.len() == 8 && *retired == handle)
+    );
+    drop(batch);
+    let txn = f.begin();
+    assert!(f.access(&txn).disposed(handle));
+    f.commit(&txn);
+    assert!(
+        f.access(&f.begin())
+            .connect(&f.owner, "other".into(), 9, callback(&f.owner))
+            .is_ok()
+    );
+}
+
+#[test]
+fn aborted_disposal_keeps_a_retired_sockets_quota_charge() {
+    let mut f = Fixture::new(1, 8, 1);
+    let handle = f.connect();
+    let txn = f.begin();
+    txn.with(|t| f.sockets.retire_object(t, &f.owner));
+    f.commit(&txn);
+    f.commands.recv().unwrap();
+    let aborted = f.begin();
+    assert!(f.access(&aborted).disposed(handle));
+    drop(aborted);
+    assert!(
+        f.access(&f.begin())
+            .connect(&f.owner, "other".into(), 9, callback(&f.owner))
+            .is_err()
+    );
+    let txn = f.begin();
+    assert!(f.access(&txn).disposed(handle));
+    assert!(!f.access(&txn).disposed(handle));
+    f.commit(&txn);
+    assert!(
+        f.access(&f.begin())
+            .connect(&f.owner, "other".into(), 9, callback(&f.owner))
+            .is_ok()
+    );
+}
+
+#[test]
+fn late_completions_and_repeated_retirement_cannot_revive_a_retired_socket() {
+    let mut f = Fixture::new(1, 8, 1);
+    let handle = f.connect();
+    let txn = f.begin();
+    assert!(!f.access(&txn).disposed(handle));
+    assert!(
+        f.access(&txn)
+            .write(&f.owner, handle, Bytes::from_static(b"x"))
+            .unwrap()
+    );
+    txn.with(|t| f.sockets.retire_object(t, &f.owner));
+    txn.with(|t| f.sockets.retire_object(t, &f.owner));
+    assert!(!f.access(&txn).complete_write(handle, 1).unwrap());
+    assert!(
+        !f.access(&txn)
+            .ready(handle, endpoint(1), Some(endpoint(2)))
+            .unwrap()
+    );
+    assert!(f.access(&txn).lease(handle).unwrap().is_none());
+    f.commit(&txn);
+    assert!(matches!(
+        &f.commands.recv().unwrap()[..],
+        [SocketCommand::Write { .. }, SocketCommand::Retire { .. }]
+    ));
+}
+
+#[test]
 fn established_close_drains_and_invalidates_a_concurrent_write() {
     let mut f = Fixture::new(1, 4, 2);
     let handle = f.connect();
@@ -518,6 +615,18 @@ fn terminal_records_hold_quota_until_dispatch_cleanup() {
     );
     f.access(&txn).finish_closed(handle).unwrap();
     assert!(f.access(&txn).info(handle).is_none());
+    assert!(
+        f.access(&txn)
+            .connect(&f.owner, "other".into(), 9, callback(&f.owner))
+            .is_err()
+    );
+    f.commit(&txn);
+    assert_eq!(
+        &f.commands.recv().unwrap()[..],
+        &[SocketCommand::Retire { handle }]
+    );
+    let txn = f.begin();
+    assert!(f.access(&txn).disposed(handle));
     let next = f
         .access(&txn)
         .connect(&f.owner, "other".into(), 9, callback(&f.owner))
@@ -543,10 +652,7 @@ fn owner_retirement_rolls_back_or_discards_output_after_commit() {
     assert!(f.access(&f.begin()).info(handle).is_none());
     assert_eq!(
         &f.commands.recv().unwrap()[..],
-        &[SocketCommand::Close {
-            handle,
-            drain: false
-        }]
+        &[SocketCommand::Retire { handle }]
     );
 }
 
@@ -768,10 +874,7 @@ async fn native_destruction_and_gc_follow_the_socket_registry() {
     drop(live);
     assert_eq!(
         &commands.recv().unwrap()[..],
-        &[SocketCommand::Close {
-            handle,
-            drain: false
-        }]
+        &[SocketCommand::Retire { handle }]
     );
     global.gc().await.unwrap().unwrap();
 
@@ -832,10 +935,7 @@ async fn caught_initializer_failure_retires_the_failed_owners_sockets() {
                     port: 9
                 }
             },
-            SocketCommand::Close {
-                handle,
-                drain: false
-            },
+            SocketCommand::Retire { handle },
         ]
     );
 }

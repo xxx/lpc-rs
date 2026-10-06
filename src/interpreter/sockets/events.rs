@@ -114,6 +114,19 @@ pub(super) fn inbox(txn: &mut Transaction, cell: VarId) -> Inbox {
 }
 
 impl Sockets {
+    pub(super) fn cancel_drained(&self, txn: &mut Transaction, cells: Cells) {
+        let mut pending = inbox(txn, cells.inbox);
+        if pending.drained {
+            pending.events = pending
+                .events
+                .into_iter()
+                .filter(|event| event.data != SocketEventData::Drained)
+                .collect();
+            pending.drained = false;
+            txn.write_socket(cells.inbox, Value::Inbox(pending));
+        }
+    }
+
     pub(super) fn queue_event_for(
         &self,
         txn: &mut Transaction,
@@ -162,7 +175,7 @@ impl Sockets {
         pending.accept_slot = None;
         txn.write_socket(cells.inbox, Value::Inbox(pending));
         for child in children {
-            self.remove(txn, child, true);
+            self.remove(txn, child);
         }
     }
 }
@@ -199,6 +212,23 @@ impl SocketAccess<'_> {
         if !self.txn.same_transaction(&lease.txn) {
             return Err(error("event lease belongs to another transaction"));
         }
+        let callback_live = if let SocketEventData::Accept(child) = lease.event.data {
+            let callback = self.txn.with(|txn| {
+                self.sockets
+                    .record(txn, child)
+                    .ok()
+                    .map(|(_, record)| record.callback)
+            });
+            callback.is_some_and(|callback| {
+                callback
+                    .owner
+                    .upgrade()
+                    .is_some_and(|owner| owner.is_live(&self.txn))
+                    && callback.receiver_is_live(&self.txn)
+            })
+        } else {
+            true
+        };
         self.txn.with(|txn| {
             let handle = lease.event.handle;
             let Ok((cells, _)) = self.sockets.record(txn, handle) else {
@@ -227,7 +257,7 @@ impl SocketAccess<'_> {
                             .owner
                             .upgrade()
                             .is_some_and(|owner| owner.is_live_in(txn));
-                        if succeeded && owner_live {
+                        if succeeded && owner_live && callback_live {
                             record.accepted_by = None;
                             if record.info.state == SocketState::Closed {
                                 txn.write_socket(child_cells.record, Value::Record(record));
@@ -240,12 +270,12 @@ impl SocketAccess<'_> {
                                 );
                             }
                         } else {
-                            self.sockets.remove(txn, child, true);
+                            self.sockets.remove(txn, child);
                         }
                     }
                 }
                 SocketEventData::Closed { .. } => {
-                    self.sockets.remove(txn, handle, false);
+                    self.sockets.remove(txn, handle);
                     return Ok(true);
                 }
                 _ => {}
@@ -446,6 +476,7 @@ impl SocketAccess<'_> {
                 return Ok(false);
             }
             self.sockets.cancel_accepts(txn, cells);
+            self.sockets.cancel_drained(txn, cells);
             self.sockets.queue_event_for(txn, cells, handle, data)?;
             record.info.state = SocketState::Closed;
             let mut output = output(txn, cells.output);

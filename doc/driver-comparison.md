@@ -822,6 +822,9 @@ The native bookkeeping foundation now provides transactional socket records,
 owner inventories, count/output limits, whole-buffer write admission and
 commit-ordered command batches. Destruction and failed initialization retire
 owned records transactionally, and GC traces registered callback captures.
+Retired handles disappear from inspection immediately while retaining their count
+charge until queued commands, workers and pending descriptor handoffs are disposed;
+retirement cannot bypass the bounds on buffered output by reusing quota early.
 Explicitly attached native TCP workers now resolve/connect or bind, finish partial
 writes in order, drain graceful closes with a timeout, and interrupt retirement.
 Readiness, raw input, EOF, accepted children, full-buffer completion and terminal
@@ -832,7 +835,10 @@ limits. Pending accepts also reserve VM quota before the physical accept, includ
 one unpublished slot while a listener waits for a connection. Accepted-child reads
 and queued writes stay paused until its listener event succeeds; failure or listener
 close discards undelivered children. EOF preserves the write side, and repeated
-output-empty transitions share one pending `drained` wakeup. Deterministic native
+output-empty transitions share one pending `drained` wakeup. Close and terminal
+failure remove queued drained wakeups. Accepted descriptor handoff survives listener
+close after successful notification, and activation checks both the scheduling owner
+and the callback's owner/receiver. Deterministic native
 and local loopback tests cover this layer. An explicitly attached native runtime
 now dispatches three-argument LPC callbacks serially per handle while allowing
 other sockets to progress independently. Every attempt leases the same event with

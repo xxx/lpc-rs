@@ -143,6 +143,7 @@ impl SocketTransport {
             close_timeout,
             workers: HashMap::new(),
             tasks: JoinSet::new(),
+            disposals: JoinSet::new(),
         };
         let task = tokio::spawn(manager(commands, stopping, routing, accepted_rx));
         Self {
@@ -245,6 +246,8 @@ struct Worker<W> {
     close: watch::Sender<Option<Close>>,
     activated: watch::Sender<bool>,
     resource: Option<tokio::sync::oneshot::Sender<Resource<W>>>,
+    finished: bool,
+    retiring: bool,
 }
 
 struct NativeIo<B: Backend> {
@@ -259,6 +262,7 @@ struct Routing<B: Backend> {
     close_timeout: Duration,
     workers: HashMap<SocketHandle, Worker<B::Writer>>,
     tasks: JoinSet<SocketHandle>,
+    disposals: JoinSet<()>,
 }
 
 impl<B: Backend> Routing<B> {
@@ -276,6 +280,8 @@ impl<B: Backend> Routing<B> {
                             close: close_tx,
                             activated,
                             resource: None,
+                            finished: false,
+                            retiring: false,
                         },
                     );
                     let io = self.io.clone();
@@ -296,6 +302,8 @@ impl<B: Backend> Routing<B> {
                             close: close_tx,
                             activated: activated_tx,
                             resource: Some(resource_tx),
+                            finished: false,
+                            retiring: false,
                         },
                     );
                     let publisher = self.io.publisher.clone();
@@ -325,6 +333,18 @@ impl<B: Backend> Routing<B> {
                         });
                     }
                 }
+                SocketCommand::Retire { handle } => {
+                    if let Some(worker) = self.workers.get_mut(&handle) {
+                        worker.retiring = true;
+                        worker.close.send_replace(Some(Close {
+                            drain: false,
+                            deadline: Instant::now(),
+                        }));
+                        self.settle(handle);
+                    } else {
+                        self.dispose(handle);
+                    }
+                }
                 SocketCommand::Activate { handle } => {
                     if let Some(worker) = self.workers.get(&handle) {
                         let _ = worker.activated.send(true);
@@ -332,6 +352,33 @@ impl<B: Backend> Routing<B> {
                 }
             }
         }
+    }
+
+    fn settle(&mut self, handle: SocketHandle) {
+        if self
+            .workers
+            .get(&handle)
+            .is_some_and(|worker| worker.finished && worker.resource.is_none())
+        {
+            let worker = self
+                .workers
+                .remove(&handle)
+                .expect("finished worker exists");
+            let retiring = worker.retiring;
+            drop(worker);
+            if retiring {
+                self.dispose(handle);
+            }
+        }
+    }
+
+    fn dispose(&mut self, handle: SocketHandle) {
+        let publisher = self.io.publisher.clone();
+        self.disposals.spawn(async move {
+            if let Err(e) = publisher.publish(Update::Disposed(handle)).await {
+                tracing::error!("TCP disposal publication failed for {}: {e}", handle.get());
+            }
+        });
     }
 }
 
@@ -345,9 +392,15 @@ async fn manager<B: Backend>(
         tokio::select! {
             _ = stopping.changed() => break,
             finished = routing.tasks.join_next(), if !routing.tasks.is_empty() => match finished {
-                Some(Ok(handle)) => { routing.workers.remove(&handle); }
+                Some(Ok(handle)) => {
+                    if let Some(worker) = routing.workers.get_mut(&handle) { worker.finished = true; }
+                    routing.settle(handle);
+                }
                 Some(Err(e)) => { tracing::error!("TCP worker failed: {e}"); break; }
                 None => {}
+            },
+            finished = routing.disposals.join_next(), if !routing.disposals.is_empty() => {
+                if let Some(Err(e)) = finished { tracing::error!("TCP disposal worker failed: {e}"); break; }
             },
             batch = commands.recv_async() => match batch { Ok(batch) => routing.batch(batch), Err(_) => break },
             accepted = accepted_rx.recv_async() => if let Ok((handle, resource)) = accepted {
@@ -357,11 +410,14 @@ async fn manager<B: Backend>(
                     && let Some(sender) = worker.resource.take() {
                     let _ = sender.send(resource);
                 }
+                routing.settle(handle);
             }
         }
     }
     routing.tasks.abort_all();
+    routing.disposals.abort_all();
     while routing.tasks.join_next().await.is_some() {}
+    while routing.disposals.join_next().await.is_some() {}
 }
 
 async fn run_worker<B: Backend>(
@@ -602,10 +658,9 @@ async fn listen<B: Backend>(
                 return Terminal::failed(SocketOperation::Accept, io::Error::other(e.to_string()));
             }
         };
-        tokio::select! {
-            biased;
-            _ = wait_close(close) => return Terminal::local(),
-            _ = accepted.send_async((child, resource)) => {}
+        // Committed accept delivery may already have made the child independent of its listener.
+        if accepted.send_async((child, resource)).await.is_err() {
+            return Terminal::local();
         }
         if !publisher
             .emit(SocketIoEvent::Accept { handle, child }, close)
@@ -796,6 +851,7 @@ struct Publisher {
 enum Update {
     Opening(SocketHandle, SocketState),
     Present(SocketHandle),
+    Disposed(SocketHandle),
     Event(SocketIoEvent),
     InputCapacity(SocketHandle),
     ReserveAccept(SocketHandle),
@@ -905,8 +961,9 @@ impl AttemptBody for Publication {
                         .is_ok_and(|(_, record)| record.info.state == *state)
                 }),
                 Update::Present(handle) => {
-                    txn.with(|txn| self.gs.sockets.cells(txn, *handle).is_some())
+                    txn.with(|txn| self.gs.sockets.record(txn, *handle).is_ok())
                 }
+                Update::Disposed(handle) => access.disposed(*handle),
                 Update::Event(SocketIoEvent::Ready {
                     handle,
                     local,

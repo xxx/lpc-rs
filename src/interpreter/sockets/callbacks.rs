@@ -367,7 +367,7 @@ impl AttemptBody for Cleanup<'_> {
             && std::ptr::eq(self.callback.as_ptr(), Arc::as_ptr(lease.callback()))
         {
             if self.retire {
-                txn.with(|t| self.gs.sockets.remove(t, self.event.handle, true));
+                txn.with(|t| self.gs.sockets.remove(t, self.event.handle));
             } else {
                 access.acknowledge(&lease, false)?;
             }

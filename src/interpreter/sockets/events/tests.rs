@@ -407,12 +407,16 @@ fn failed_accept_retires_child_and_returns_listener_and_vm_capacity() {
     );
     assert_eq!(
         &f.commands.recv().unwrap()[..],
-        &[SocketCommand::Close {
-            handle: child,
-            drain: false
-        }]
+        &[SocketCommand::Retire { handle: child }]
     );
     assert!(f.access(&f.begin()).info(child).is_none());
+    let txn = f.begin();
+    assert_eq!(
+        f.access(&txn).reserve_accept(parent).unwrap(),
+        SocketAdmission::Full
+    );
+    assert!(f.access(&txn).disposed(child));
+    f.commit(&txn);
     let next = reserve(&mut f, parent);
     assert!(next.child.get() > child.get());
 }
@@ -449,10 +453,7 @@ fn listener_close_discards_undelivered_children_even_after_their_transfer() {
     assert_eq!(
         &f.commands.recv().unwrap()[..],
         &[
-            SocketCommand::Close {
-                handle: child,
-                drain: false
-            },
+            SocketCommand::Retire { handle: child },
             SocketCommand::Close {
                 handle: parent,
                 drain: false
@@ -511,7 +512,13 @@ fn closed_event_is_final_and_failed_delivery_still_retires_metadata() {
         SocketEventData::Closed { .. }
     ));
     assert!(f.access(&f.begin()).info(handle).is_none());
-    assert!(f.commands.is_empty());
+    assert_eq!(
+        &f.commands.recv().unwrap()[..],
+        &[SocketCommand::Retire { handle }]
+    );
+    let txn = f.begin();
+    assert!(f.access(&txn).disposed(handle));
+    f.commit(&txn);
     f.connect();
 }
 
@@ -543,6 +550,68 @@ fn drained_is_a_bounded_wakeup_and_is_suppressed_while_closing() {
     f.access(&txn).complete_write(handle, 4).unwrap();
     f.commit(&txn);
     assert!(f.access(&f.begin()).lease(handle).unwrap().is_none());
+}
+
+#[test]
+fn close_cancels_pending_drained_without_dropping_reads_and_aborted_close_preserves_it() {
+    let mut f = fixture(1, 2, 1);
+    let handle = stream(&mut f);
+    let txn = f.begin();
+    f.access(&txn)
+        .write(&f.owner, handle, Bytes::from_static(b"a"))
+        .unwrap();
+    f.access(&txn).complete_write(handle, 1).unwrap();
+    f.access(&txn)
+        .read(handle, 1, Bytes::from_static(b"x"))
+        .unwrap();
+    f.commit(&txn);
+    f.commands.recv().unwrap();
+    let aborted = f.begin();
+    f.access(&aborted).close(&f.owner, handle).unwrap();
+    assert_eq!(
+        f.access(&aborted)
+            .lease(handle)
+            .unwrap()
+            .unwrap()
+            .event()
+            .data,
+        SocketEventData::Read(Bytes::from_static(b"x"))
+    );
+    drop(aborted);
+    let stale = f.begin();
+    let lease = f.access(&stale).lease(handle).unwrap().unwrap();
+    assert_eq!(lease.event().data, SocketEventData::Drained);
+    f.access(&stale).acknowledge(&lease, true).unwrap();
+    let txn = f.begin();
+    f.access(&txn).close(&f.owner, handle).unwrap();
+    f.commit(&txn);
+    assert!(
+        f.committer
+            .commit(stale.with(Transaction::take_changeset))
+            .is_err()
+    );
+    assert_eq!(
+        settle(&mut f, handle, true).data,
+        SocketEventData::Read(Bytes::from_static(b"x"))
+    );
+    assert!(f.access(&f.begin()).lease(handle).unwrap().is_none());
+}
+
+#[test]
+fn terminal_failure_suppresses_an_already_queued_drained_wakeup() {
+    let mut f = fixture(1, 2, 1);
+    let handle = stream(&mut f);
+    let txn = f.begin();
+    f.access(&txn)
+        .write(&f.owner, handle, Bytes::from_static(b"a"))
+        .unwrap();
+    f.access(&txn).complete_write(handle, 1).unwrap();
+    f.access(&txn).closed(handle);
+    f.commit(&txn);
+    assert!(matches!(
+        settle(&mut f, handle, true).data,
+        SocketEventData::Closed { .. }
+    ));
 }
 
 #[test]

@@ -183,6 +183,11 @@ impl GlobalState {
         state
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_attempt_runner(&mut self, runner: Arc<stm::AttemptRunner>) {
+        self.attempt_runner = runner;
+    }
+
     /// Tell the committer to shut down. Idempotent: the committer exits on
     /// the first `Close`; later sends just fail (channel closed).
     pub fn close_committer(&self) {

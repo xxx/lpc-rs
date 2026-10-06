@@ -83,8 +83,10 @@ pub enum SocketCommand {
         sequence: u64,
         data: Bytes,
     },
-    /// Drain admitted output for explicit close, or discard it for owner retirement.
+    /// Drain admitted output for an established close, or cancel setup.
     Close { handle: SocketHandle, drain: bool },
+    /// Discard remaining work and release quota only after transport disposal.
+    Retire { handle: SocketHandle },
     /// Prepare a worker for an already admitted physical accepted stream.
     OpenAccepted { handle: SocketHandle },
     /// Release a delivered child from its listener notification gate.
@@ -184,6 +186,7 @@ pub(crate) enum Value {
     Record(Record),
     Output(Output),
     Inbox(Inbox),
+    Retired,
 }
 
 #[derive(Debug)]
@@ -263,21 +266,18 @@ impl Sockets {
         match txn.read_value(cells.record) {
             Some(WorldValue::Socket(value)) => match value.as_ref() {
                 Value::Record(record) => Ok((cells, record.clone())),
+                Value::Retired => Err(error("stale handle")),
                 _ => unreachable!("socket record cell holds metadata"),
             },
             _ => Err(error("stale handle")),
         }
     }
 
-    fn remove(&self, txn: &mut Transaction, handle: SocketHandle, close: bool) {
+    fn remove(&self, txn: &mut Transaction, handle: SocketHandle) {
         let Ok((cells, record)) = self.record(txn, handle) else {
             return;
         };
         self.cancel_accepts(txn, cells);
-        let registry = self.registry();
-        let mut all = index(txn, registry);
-        all.remove(&handle);
-        txn.write_socket(registry, Value::Index(all));
         if let Some(owner) = record.info.owner.upgrade() {
             let cell = owner_index(&owner);
             let mut owned = index(txn, cell);
@@ -286,20 +286,13 @@ impl Sockets {
         }
         txn.drop_var(cells.output);
         txn.drop_var(cells.inbox);
-        // Closed workers may still be waiting to publish a terminal notification.
-        if close {
-            txn.publish_socket(
-                cells.record,
-                None,
-                &self.queue().sender,
-                SocketCommand::Close {
-                    handle,
-                    drain: false,
-                },
-            );
-        } else {
-            txn.drop_var(cells.record);
-        }
+        // The hidden registry entry charges queued buffers and workers until disposal commits.
+        txn.publish_socket(
+            cells.record,
+            Some(Value::Retired),
+            &self.queue().sender,
+            SocketCommand::Retire { handle },
+        );
     }
 
     pub(crate) fn retire_object(&self, txn: &mut Transaction, owner: &Process) {
@@ -307,7 +300,7 @@ impl Sockets {
             return;
         };
         for handle in index(txn, *cell).keys().copied().collect::<Vec<_>>() {
-            self.remove(txn, handle, true);
+            self.remove(txn, handle);
         }
         txn.drop_var(*cell);
     }
@@ -479,6 +472,7 @@ impl SocketAccess<'_> {
             let sender = self.sockets.sender()?;
             let drain = record.info.state == SocketState::Open;
             self.sockets.cancel_accepts(txn, cells);
+            self.sockets.cancel_drained(txn, cells);
             let mut output = output(txn, cells.output);
             output.closing = true;
             txn.write_socket(cells.output, Value::Output(output));
@@ -560,7 +554,9 @@ impl SocketAccess<'_> {
             let Some(cells) = self.sockets.cells(txn, handle) else {
                 return Ok(false);
             };
-            let mut output = output(txn, cells.output);
+            let Some(mut output) = pending_output(txn, cells.output) else {
+                return Ok(false);
+            };
             let Some(head) = output.pending.front() else {
                 return Ok(false);
             };
@@ -634,8 +630,26 @@ impl SocketAccess<'_> {
             if record.info.state != SocketState::Closed {
                 return Err(error("socket is not closed"));
             }
-            self.sockets.remove(txn, handle, false);
+            self.sockets.remove(txn, handle);
             Ok(())
+        })
+    }
+
+    /// Release a hidden retirement charge after its queued commands and worker are disposed.
+    pub fn disposed(&self, handle: SocketHandle) -> bool {
+        self.txn.with(|txn| {
+            let Some(cells) = self.sockets.cells(txn, handle) else {
+                return false;
+            };
+            if !matches!(txn.read_value(cells.record), Some(WorldValue::Socket(value)) if matches!(value.as_ref(), Value::Retired)) {
+                return false;
+            }
+            let registry = self.sockets.registry();
+            let mut all = index(txn, registry);
+            all.remove(&handle);
+            txn.write_socket(registry, Value::Index(all));
+            txn.drop_var(cells.record);
+            true
         })
     }
 }
@@ -656,12 +670,17 @@ fn index(txn: &mut Transaction, cell: VarId) -> Index {
 }
 
 fn output(txn: &mut Transaction, cell: VarId) -> Output {
+    pending_output(txn, cell).expect("a registered socket has an output cell")
+}
+
+fn pending_output(txn: &mut Transaction, cell: VarId) -> Option<Output> {
     match txn.read_value(cell) {
         Some(WorldValue::Socket(value)) => match value.as_ref() {
-            Value::Output(output) => output.clone(),
+            Value::Output(output) => Some(output.clone()),
             _ => unreachable!("socket output cell holds admission state"),
         },
-        _ => unreachable!("a registered socket has an output cell"),
+        None => None,
+        _ => unreachable!("socket output cell holds a socket value"),
     }
 }
 

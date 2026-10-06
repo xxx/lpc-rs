@@ -236,6 +236,7 @@ enum Action {
     Transfer(SocketHandle, Arc<Process>, Arc<Process>, Arc<FunctionPtr>),
     Destruct(Arc<Process>),
     Update(Arc<crate::interpreter::vm::object_update::UpdateRequest>),
+    Close(SocketHandle, Arc<Process>),
 }
 
 struct Race<'a> {
@@ -286,6 +287,11 @@ impl AttemptBody for Race<'_> {
                     let status = self.body.gs.updates.get(request.id).unwrap();
                     assert_eq!(status.state, "succeeded", "{}", status.error);
                 }
+                Action::Close(handle, owner) => SocketAccess {
+                    sockets: &self.body.gs.sockets,
+                    txn: txn.clone(),
+                }
+                .close(&owner, handle)?,
             }
             other.disarm();
             commit_changeset(tx, txn.with(Transaction::take_changeset))
@@ -920,4 +926,109 @@ async fn evaluation_timeout_reports_and_discards_the_event_without_callback_writ
     f.dispatch(handle).await;
     assert_eq!(f.global(&receiver, "count"), LpcRef::from(1));
     f.gs().gc().await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn accept_closes_child_when_its_callback_destroys_its_receiver() {
+    for pointer_owned_by_receiver in [true, false] {
+        let f = Fixture::new(RECORDER).await;
+        let receiver = f
+            .object(
+                "/receiver.c",
+                r#"
+        void event(int h, string e, mixed d) {
+            if (e == "accept") destruct(this_object());
+        }
+    "#,
+            )
+            .await;
+        let (txn, live) = f.begin().await;
+        let mut callback = f.pointer(&receiver, "event").await;
+        if !pointer_owned_by_receiver {
+            callback = Arc::new(
+                FunctionPtrBuilder::default()
+                    .owner(Arc::downgrade(&f.owner))
+                    .address(callback.address.clone())
+                    .build()
+                    .unwrap(),
+            );
+        }
+        let listener = f
+            .access(&txn)
+            .listen(&f.owner, endpoint(0), callback)
+            .unwrap();
+        f.commit(&txn, live).await;
+        f.ready(listener).await;
+        f.dispatch(listener).await;
+        let (txn, live) = f.begin().await;
+        let super::super::SocketAdmission::Admitted(permit) =
+            f.access(&txn).reserve_accept(listener).unwrap()
+        else {
+            panic!("permit");
+        };
+        f.commit(&txn, live).await;
+        let (txn, live) = f.begin().await;
+        f.access(&txn)
+            .accepted(permit, endpoint(1000), endpoint(2000))
+            .unwrap();
+        f.commit(&txn, live).await;
+        f.dispatch(listener).await;
+        let (txn, _live) = f.begin().await;
+        assert!(!receiver.is_live(&txn));
+        assert!(f.owner.is_live(&txn));
+        let capacity = f.access(&txn).input_capacity(permit.child).unwrap();
+        assert_eq!(capacity, None);
+        assert!(pending(f.gs()).await.unwrap().is_empty());
+        assert!(
+            f.info(permit.child).await.is_none(),
+            "accepted child retained and activated a dead callback"
+        );
+    }
+}
+
+#[tokio::test]
+async fn close_suppresses_a_queued_drained_callback_but_delivers_closed() {
+    let f = Fixture::new(RECORDER).await;
+    let handle = f.stream().await;
+    let (txn, live) = f.begin().await;
+    assert!(
+        f.access(&txn)
+            .write(&f.owner, handle, Bytes::from_static(b"a"))
+            .unwrap()
+    );
+    f.access(&txn).complete_write(handle, 1).unwrap();
+    f.commit(&txn, live).await;
+    let (txn, live) = f.begin().await;
+    f.access(&txn).close(&f.owner, handle).unwrap();
+    f.commit(&txn, live).await;
+    assert!(pending(f.gs()).await.unwrap().is_empty());
+    let (txn, live) = f.begin().await;
+    f.access(&txn).closed(handle);
+    f.commit(&txn, live).await;
+    f.dispatch(handle).await;
+    assert_eq!(f.global(&f.owner, "events"), LpcRef::from("ready:closed:"));
+}
+
+#[tokio::test]
+async fn close_invalidates_a_running_drained_callback_and_rolls_back_its_writes() {
+    let f = Fixture::new(RECORDER).await;
+    let handle = f.stream().await;
+    let (txn, live) = f.begin().await;
+    assert!(
+        f.access(&txn)
+            .write(&f.owner, handle, Bytes::from_static(b"a"))
+            .unwrap()
+    );
+    f.access(&txn).complete_write(handle, 1).unwrap();
+    f.commit(&txn, live).await;
+    let stats = raced(
+        &f,
+        f.head(handle).await,
+        Action::Close(handle, f.owner.clone()),
+    )
+    .await;
+    assert!(stats.conflicts > 0);
+    assert_eq!(f.global(&f.owner, "events"), LpcRef::from("ready:"));
+    assert_eq!(f.global(&f.owner, "count"), LpcRef::from(1));
+    assert!(pending(f.gs()).await.unwrap().is_empty());
 }

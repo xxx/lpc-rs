@@ -84,7 +84,7 @@ pub struct Config {
     #[builder(setter(into), default = "65536")]
     pub max_pending_snoop: usize,
 
-    /// Live or pending native TCP resources per VM; must be positive.
+    /// Native TCP resources per VM, including pending transport disposal; must be positive.
     #[builder(default = "256")]
     pub max_sockets: usize,
 

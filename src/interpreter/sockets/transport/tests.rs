@@ -66,19 +66,18 @@ impl Fixture {
             .unwrap()
     }
     async fn connect(&self, host: &str, port: u16) -> SocketHandle {
-        let (txn, live) = self.begin().await;
-        let handle = self.connect_in(&txn, host, port);
-        self.commit(&txn, live).await;
-        handle
+        self.transact(|access| self.connect_in(&access.txn, host, port))
+            .await
     }
     async fn write(&self, handle: SocketHandle, data: &'static [u8]) {
-        let (txn, live) = self.begin().await;
-        assert!(
-            self.access(&txn)
-                .write(&self.owner, handle, Bytes::from_static(data))
-                .unwrap()
-        );
-        self.commit(&txn, live).await;
+        self.transact(|access| {
+            assert!(
+                access
+                    .write(&self.owner, handle, Bytes::from_static(data))
+                    .unwrap()
+            )
+        })
+        .await;
     }
     async fn transact<T>(&self, mut action: impl FnMut(&SocketAccess<'_>) -> T) -> T {
         for _ in 0..100 {
@@ -120,6 +119,174 @@ impl Fixture {
     fn simulated(&self, backend: Simulated) -> SocketTransport {
         SocketTransport::spawn(&self.gs, self.gs.sockets.take_commands().unwrap(), backend)
     }
+    async fn wait_disposed(&self, handle: SocketHandle) {
+        let mut commits = self.gs.attempt_runner.commit_watch().unwrap();
+        timeout(Duration::from_secs(3), async {
+            loop {
+                commits.borrow_and_update();
+                let present = {
+                    let (txn, _live) = self.begin().await;
+                    txn.with(|t| self.gs.sockets.cells(t, handle).is_some())
+                };
+                if !present {
+                    return;
+                }
+                commits.changed().await.unwrap();
+            }
+        })
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn starting_transport_disposes_retired_queued_output_before_releasing_quota() {
+    let f = Fixture::with_config(ConfigBuilder::default().max_sockets(1).build().unwrap());
+    let (txn, live) = f.begin().await;
+    let handle = f.connect_in(&txn, "test", 9);
+    f.access(&txn)
+        .write(&f.owner, handle, Bytes::copy_from_slice(b"buffer"))
+        .unwrap();
+    txn.with(|t| f.gs.sockets.retire_object(t, &f.owner));
+    f.commit(&txn, live).await;
+    let (txn, _live) = f.begin().await;
+    assert!(
+        f.access(&txn)
+            .connect(
+                &f.owner,
+                "test".into(),
+                9,
+                Arc::new(
+                    FunctionPtrBuilder::default()
+                        .owner(Arc::downgrade(&f.owner))
+                        .address(FunctionAddress::Efun(ustr::ustr("dump")))
+                        .build()
+                        .unwrap()
+                )
+            )
+            .is_err()
+    );
+    drop(txn);
+    drop(_live);
+    let script = Script::new([]);
+    let (backend, opened) = Simulated::single(&script);
+    let transport = f.simulated(backend);
+    f.wait_disposed(handle).await;
+    assert!(opened.is_empty());
+    assert!(script.bytes().is_empty());
+    let next = f.connect("test", 9).await;
+    assert!(
+        matches!(event(&transport).await, SocketIoEvent::Ready { handle, .. } if handle == next)
+    );
+    transport.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn retiring_an_unattached_child_keeps_quota_until_its_descriptor_is_dropped() {
+    let f = Fixture::with_config(ConfigBuilder::default().max_sockets(2).build().unwrap());
+    let commands = f.gs.sockets.take_commands().unwrap();
+    let callback = Arc::new(
+        FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&f.owner))
+            .address(FunctionAddress::Efun(ustr::ustr("dump")))
+            .build()
+            .unwrap(),
+    );
+    let (txn, live) = f.begin().await;
+    let listener = f
+        .access(&txn)
+        .listen(&f.owner, endpoint(0), callback)
+        .unwrap();
+    f.access(&txn)
+        .ready(listener, endpoint(1234), None)
+        .unwrap();
+    f.commit(&txn, live).await;
+    commands.recv().unwrap();
+    f.settle(listener, true).await;
+    let permit = f
+        .transact(|access| {
+            let SocketAdmission::Admitted(permit) = access.reserve_accept(listener).unwrap() else {
+                panic!("permit");
+            };
+            permit
+        })
+        .await;
+    f.transact(|access| {
+        access
+            .accepted(permit, endpoint(1234), endpoint(9))
+            .unwrap()
+    })
+    .await;
+    let (events, _events_rx) = flume::bounded(2);
+    let mut routing = Routing {
+        io: Arc::new(NativeIo {
+            backend: Arc::new(TokioBackend),
+            publisher: Publisher::new(&f.gs, events),
+            connect_timeout: Duration::from_secs(1),
+            accepted: flume::bounded(2).0,
+        }),
+        close_timeout: Duration::from_secs(1),
+        workers: HashMap::new(),
+        tasks: JoinSet::new(),
+        disposals: JoinSet::new(),
+    };
+    routing.batch(commands.recv().unwrap());
+    f.settle(listener, false).await;
+    routing.batch(commands.recv().unwrap());
+    let finished = timeout(Duration::from_secs(3), routing.tasks.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    routing.workers.get_mut(&finished).unwrap().finished = true;
+    routing.settle(finished);
+    assert!(routing.disposals.is_empty());
+    f.transact(|access| {
+        assert_eq!(
+            access.reserve_accept(listener).unwrap(),
+            SocketAdmission::Full
+        )
+    })
+    .await;
+    let physical_listener = TcpListener::bind(endpoint(0)).await.unwrap();
+    let mut peer = TcpStream::connect(physical_listener.local_addr().unwrap())
+        .await
+        .unwrap();
+    let (writer, remote) = physical_listener.accept().await.unwrap();
+    let local = writer.local_addr().unwrap();
+    let resource = Resource::Stream {
+        writer,
+        local,
+        remote,
+    };
+    let _ = routing
+        .workers
+        .get_mut(&finished)
+        .unwrap()
+        .resource
+        .take()
+        .unwrap()
+        .send(resource);
+    routing.settle(finished);
+    timeout(Duration::from_secs(3), routing.disposals.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    f.wait_disposed(permit.child).await;
+    let mut byte = [0];
+    assert_eq!(
+        timeout(Duration::from_secs(3), peer.read(&mut byte))
+            .await
+            .unwrap()
+            .unwrap(),
+        0
+    );
+    assert!(matches!(
+        f.transact(|access| access.reserve_accept(listener).unwrap())
+            .await,
+        SocketAdmission::Admitted(_)
+    ));
 }
 
 async fn event(transport: &SocketTransport) -> SocketIoEvent {
@@ -884,7 +1051,7 @@ async fn retiring_a_closed_record_cancels_a_backpressured_terminal_notification(
     txn.with(|txn| f.gs.sockets.retire_object(txn, &f.owner));
     f.commit(&txn, live).await;
     assert!(
-        matches!(&commands.recv_async().await.unwrap()[..], [SocketCommand::Close { handle: h, drain: false }] if *h == handle)
+        matches!(&commands.recv_async().await.unwrap()[..], [SocketCommand::Retire { handle: h }] if *h == handle)
     );
     close_tx
         .send(Some(Close {
@@ -1304,4 +1471,115 @@ async fn tiny_reads_do_not_retain_unused_receive_buffer_capacity() {
         .expect("retired input has no inbox or worker references");
     assert_eq!(owned.capacity(), 1);
     transport.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn listener_close_preserves_an_already_delivered_child_descriptor() {
+    let mut f = Fixture::new();
+    let actual = f.gs.committer_tx.clone();
+    let (proxy_tx, proxy_rx) = flume::unbounded();
+    let (committed_tx, committed_rx) = flume::bounded(1);
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    let proxy_gate = gate.clone();
+    let proxy = tokio::spawn(async move {
+        while let Ok(message) = proxy_rx.recv_async().await {
+            match message {
+                CommitProtocol::Commit {
+                    changeset,
+                    releases_base,
+                    reply,
+                } if changeset.socket_publications.iter().any(|publication| {
+                    publication
+                        .commands
+                        .iter()
+                        .any(|command| matches!(command, SocketCommand::OpenAccepted { .. }))
+                }) =>
+                {
+                    let (response, result) = flume::bounded(1);
+                    actual
+                        .send(CommitProtocol::Commit {
+                            changeset,
+                            releases_base,
+                            reply: response,
+                        })
+                        .unwrap();
+                    let committed = result.recv_async().await.unwrap();
+                    if committed.is_ok() {
+                        committed_tx.send(()).unwrap();
+                        proxy_gate.acquire().await.unwrap().forget();
+                    }
+                    reply.send(committed).unwrap();
+                }
+                message => actual.send(message).unwrap(),
+            }
+        }
+    });
+    let watch = f.gs.attempt_runner.commit_watch();
+    Arc::get_mut(&mut f.gs)
+        .unwrap()
+        .set_attempt_runner(Arc::new(crate::interpreter::stm::AttemptRunner::new(
+            proxy_tx, watch,
+        )));
+    let listener = TcpListener::bind(endpoint(0)).await.unwrap();
+    let local = listener.local_addr().unwrap();
+    let callback = Arc::new(
+        FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&f.owner))
+            .address(FunctionAddress::Efun(ustr::ustr("dump")))
+            .build()
+            .unwrap(),
+    );
+    let (txn, live) = f.begin().await;
+    let handle = f.access(&txn).listen(&f.owner, local, callback).unwrap();
+    f.access(&txn).ready(handle, local, None).unwrap();
+    f.commit(&txn, live).await;
+    f.settle(handle, true).await;
+    let (events_tx, _events_rx) = flume::bounded(f.gs.config.max_sockets);
+    let publisher = Publisher::new(&f.gs, events_tx);
+    let (accepted_tx, accepted_rx) = flume::bounded(f.gs.config.max_sockets);
+    let (close_tx, mut close) = watch::channel(None);
+    let listening = tokio::spawn(async move {
+        listen(
+            handle,
+            listener,
+            Arc::new(TokioBackend),
+            &publisher,
+            &mut close,
+            accepted_tx,
+        )
+        .await
+    });
+    let mut peer = TcpStream::connect(local).await.unwrap();
+    timeout(Duration::from_secs(3), committed_rx.recv_async())
+        .await
+        .unwrap()
+        .unwrap();
+    let super::super::SocketEventData::Accept(child) = f.settle(handle, true).await.data else {
+        panic!("accept");
+    };
+    f.close(handle).await;
+    close_tx
+        .send(Some(Close {
+            drain: false,
+            deadline: Instant::now() + Duration::from_millis(100),
+        }))
+        .unwrap();
+    gate.add_permits(1);
+    timeout(Duration::from_secs(3), listening)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(f.info(child).await.unwrap().state, SocketState::Open);
+    let (_, Resource::Stream { mut writer, .. }) = accepted_rx.recv_async().await.unwrap() else {
+        panic!("stream");
+    };
+    writer.write_all(b"x").await.unwrap();
+    let mut byte = [0];
+    let read = timeout(Duration::from_secs(3), peer.read(&mut byte))
+        .await
+        .unwrap()
+        .unwrap();
+    proxy.abort();
+    assert_eq!(read, 1);
+    assert_eq!(byte, [b'x']);
 }

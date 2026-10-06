@@ -482,7 +482,8 @@ impl Committer {
                     work.push(MarkWork::Ref(LpcRef::Function(record.callback.clone())));
                 }
                 crate::interpreter::sockets::Value::Output(_)
-                | crate::interpreter::sockets::Value::Inbox(_) => {}
+                | crate::interpreter::sockets::Value::Inbox(_)
+                | crate::interpreter::sockets::Value::Retired => {}
             },
             WorldValue::Connection(maybe_connection) => {
                 if let Some(connection) = maybe_connection
