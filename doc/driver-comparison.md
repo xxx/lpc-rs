@@ -5157,6 +5157,52 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail export authorization repair
+
+The **5 October 2026** local port adds a current `wizardp(this_user())` check to
+shared [base mailer][lima-mailer-base] `cmd_read` whenever a destination is
+supplied. Nonwizards receive a clear refusal before message selection, building,
+path expansion or file authorization. Both [standard][lima-mailer-standard] modal
+input and selected [Mh][lima-mailer-mh] shortcuts therefore refuse hidden exports,
+including public `/tmp` create/append requests and default message numbers.
+Rejected lost-message exports retain the owner's stale receipt and saved bytes.
+
+Ordinary reads pass nil for the destination and retain their behavior. Wizard
+exports keep header/body selection, wizard Mail paths and native
+[`write_file`](efun/write_file.md) authorization through the
+[master][lima-master] and [security daemon][lima-security]. Authorized lost
+reads/exports still warn and prune only the owner's stale receipt without
+writing a marker. Wizard file refusals retain path/reason feedback and subsequent
+owned exports remain usable. Outer aborts discard writes or refusal feedback.
+For parsed nonwizard exports, membership refusal precedes message-number bounds;
+malformed syntax retains command usage. Wizards retain bounds feedback.
+
+The same bound handler refuses exports after fixture wizard membership removal;
+the retained wizard shell does not bypass the check. Complete production demotion
+and shell replacement remain unchecked. Help, reads, actual player-shell routing,
+protected `cmd_read` and foreign User/Mh caller guards retain their policies.
+Only one Lima file changes; native APIs, master policy, original Lima and overview
+cells remain unchanged.
+
+**Nineteen fresh cases pass:** seventeen adopted-overlay cases and two
+previous-overlay controls reproducing hidden public exports and preauthorization
+lost-message pruning. Both real mailers use stock Users, bodies, connections,
+daemon sends, native saved classes and owned mailboxes. Sixteen CLI checks retain
+**7/8 clean on each overlay**, including both complete shells. Standalone shared
+shell checks report the same unresolved `query_save_path` (twice),
+`execute_command` and `query_shellname` hooks. Four quality gates pass, including
+fresh warning-free workspace Clippy across all targets/features.
+
+Twenty-five pinned Lima source reviews are reused with original/previous/adopted
+hashes; eleven native reviews retain their source hashes. All 261 predecessor
+artifact/report sets remain preserved. Execution is local lpc-rs with distinct
+nil, preserved call-out players, 4,000 ms actions, `USE_USER_MENU` and `.o` saves.
+Upstream-driver execution and a fresh public-source fetch remain unchecked.
+Other public mailer entry points and owner/player context, starting with
+`begin_mail`, are the next boundary; remote routing, long paging/ranges,
+concurrency, full account deletion, disconnect recovery and startup remain
+separate.
+
 #### Lima mail export authorization and command exposure audit
 
 Reviewed **5 October 2026** against pinned [standard][lima-mailer-standard],
