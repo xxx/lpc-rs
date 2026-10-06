@@ -5157,6 +5157,28 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima mail help correction
+
+The **5 October 2026** local port corrects displayed strings in the
+[standard][lima-mailer-standard] and [Mh][lima-mailer-mh] mailers. New-mail and
+forwarding help shows comma-separated destinations; forwarding includes its
+required recipient list. Forwarding and reply help/usage shows optional message
+numbers, with the existing current-selection explanation. Both screens explain
+spaces around commas and use comma-based group examples with their own `m`/`Mm`
+command. The [base mailer][lima-mailer-base] recipient parser and all executable
+code remain unchanged; masking string contents reproduces both previous files
+byte for byte. Native APIs, master policy and overview cells remain unchanged.
+
+**Four fresh CLI checks pass**, covering both mailers on the previous and adopted
+overlays; workspace formatting and tracked whitespace also pass. The preceding
+forward/reply audit's nineteen runtime cases and warning-free workspace Clippy
+are retained as earlier evidence, without new runtime tests or a Clippy rerun for
+this text-only correction. Three pinned Lima source reviews are reused and all
+257 predecessor artifact/report sets remain intact. Execution is local lpc-rs
+compilation only with distinct nil, preserved call-out players, 4,000 ms actions,
+`USE_USER_MENU` and `.o` saves; no upstream-driver execution or fresh public-source
+fetch. Lost-message file export is next.
+
 #### Lima forwarding and reply audit
 
 Reviewed **5 October 2026** against pinned [base mailer][lima-mailer-base],
