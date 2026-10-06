@@ -822,8 +822,13 @@ The native bookkeeping foundation now provides transactional socket records,
 owner inventories, count/output limits, whole-buffer write admission and
 commit-ordered command batches. Destruction and failed initialization retire
 owned records transactionally, and GC traces registered callback captures.
-This does not yet provide TCP IO, event dispatch, socket efuns or Lima transport;
-the listener/stream workers and completion callbacks remain to be implemented.
+Explicitly attached native TCP workers now resolve/connect or bind, finish partial
+writes in order, drain graceful closes with a timeout, and interrupt retirement.
+Readiness, full-buffer completion and terminal state publish through the native
+transaction runner; deterministic IO tests and local loopback tests cover this
+layer. Bounded input/accept queues, retryable LPC event dispatch, socket efuns and
+Lima transport remain unimplemented; the driver does not start these workers
+automatically.
 
 #### Lima RST generation
 

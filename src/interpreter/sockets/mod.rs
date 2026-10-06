@@ -1,6 +1,6 @@
 //! Transactional TCP resource bookkeeping and commit-ordered transport commands.
 //!
-//! This is native plumbing, not an LPC interface or a running TCP transport.
+//! TCP workers are attached explicitly; the LPC interface and event dispatcher are not enabled.
 //! Efun adapters must authorize operations and establish ownership-offer consent.
 
 use std::{
@@ -23,6 +23,10 @@ use crate::interpreter::{
     stm::{Transaction, TxnHandle, VarId, WorldValue},
     task_context::TaskContext,
 };
+
+mod transport;
+
+pub use transport::{SocketCloseReason, SocketIoEvent, SocketOperation, SocketTransport};
 
 #[cfg(test)]
 mod tests;
@@ -259,7 +263,8 @@ impl Sockets {
             txn.write_socket(cell, Value::Index(owned));
         }
         txn.drop_var(cells.output);
-        if close && record.info.state != SocketState::Closed {
+        // Closed workers may still be waiting to publish a terminal notification.
+        if close {
             txn.publish_socket(
                 cells.record,
                 None,

@@ -96,6 +96,14 @@ pub struct Config {
     #[builder(default = "128")]
     pub max_pending_socket_writes: usize,
 
+    /// Milliseconds allowed for native TCP DNS resolution and connection; must be positive.
+    #[builder(default = "10000")]
+    pub socket_connect_timeout: usize,
+
+    /// Milliseconds allowed to drain an explicitly closed TCP stream; must be positive.
+    #[builder(default = "10000")]
+    pub socket_close_timeout: usize,
+
     /// Seconds between garbage-collection passes; `0` disables them.
     #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
     pub gc_interval: u64,
@@ -191,6 +199,8 @@ impl ConfigBuilder {
         }
         for (name, value) in [
             ("MAX_SOCKETS", config.max_sockets),
+            ("SOCKET_CONNECT_TIMEOUT", config.socket_connect_timeout),
+            ("SOCKET_CLOSE_TIMEOUT", config.socket_close_timeout),
             (
                 "MAX_PENDING_SOCKET_OUTPUT",
                 config.max_pending_socket_output,
@@ -247,6 +257,16 @@ impl ConfigBuilder {
 
         Ok(Self {
             max_sockets: socket_setting(&env, "MAX_SOCKETS", self.max_sockets)?,
+            socket_connect_timeout: socket_setting(
+                &env,
+                "SOCKET_CONNECT_TIMEOUT",
+                self.socket_connect_timeout,
+            )?,
+            socket_close_timeout: socket_setting(
+                &env,
+                "SOCKET_CLOSE_TIMEOUT",
+                self.socket_close_timeout,
+            )?,
             max_pending_socket_output: socket_setting(
                 &env,
                 "MAX_PENDING_SOCKET_OUTPUT",
@@ -543,6 +563,50 @@ mod tests {
             for value in ["bad", "-1", "99999999999999999999999999999999"] {
                 env.insert(format!("LPC_{key}"), value.to_string());
                 assert!(socket_setting(&env, key, None).is_err());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn native_socket_timeouts_are_positive_milliseconds_and_load_both_names() {
+        let defaults = Config::default();
+        assert_eq!(
+            (
+                defaults.socket_connect_timeout,
+                defaults.socket_close_timeout
+            ),
+            (10000, 10000)
+        );
+        for builder in [
+            ConfigBuilder::default().socket_connect_timeout(0),
+            ConfigBuilder::default().socket_close_timeout(0),
+        ] {
+            assert!(builder.build().is_err());
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("socket-timeouts.env");
+        fs::write(
+            &path,
+            "SOCKET_CONNECT_TIMEOUT=321\nSOCKET_CLOSE_TIMEOUT=654\nLPC_SOCKET_CLOSE_TIMEOUT=987\n",
+        )
+        .unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (config.socket_connect_timeout, config.socket_close_timeout),
+            (321, 987)
+        );
+        for key in ["SOCKET_CONNECT_TIMEOUT", "SOCKET_CLOSE_TIMEOUT"] {
+            for invalid in ["0", "bad", "-1", "999999999999999999999999999999999"] {
+                fs::write(&path, format!("LPC_{key}={invalid}\n")).unwrap();
+                assert!(match ConfigBuilder::default().load_env(Some(&path)).await {
+                    Ok(builder) => builder.build().is_err(),
+                    Err(_) => true,
+                });
             }
         }
     }
