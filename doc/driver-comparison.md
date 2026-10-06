@@ -5157,6 +5157,46 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima forwarding and reply audit
+
+Reviewed **5 October 2026** against pinned [base mailer][lima-mailer-base],
+[standard][lima-mailer-standard], [Mh][lima-mailer-mh],
+[text editor][lima-text-editor] and [input forwarding][lima-input-forwarding].
+Actual normal input forwards and replies to explicit or current message numbers,
+including a selected second sorted key. Quotation preserves Unicode, blank and
+last lines. Plain replies target the sender; reply-all unions the sender and
+original To/Cc recipients, including self, with one delivery per account.
+Original bytes/unread flags and numeric cursors remain unchanged; new own copies
+can occupy a different position, and replies/forwards use fresh thread IDs.
+
+Real reply editing/Cc callbacks preserve prior drafts on abort, save accepted
+text, remove successful drafts and return to the mailer/shell. Blank Cc stores
+one empty string that routing drops, consistent with native
+[`explode`](efun/explode.md). Nil original recipient lists remain usable;
+malformed lists block reply-all while plain reply/forward retain their routing.
+Missing messages prune one owner; corrupt/invalid metadata retains evidence.
+Invalid arguments, nonpublic remote entry and uncaught outer forward/reply-send
+errors preserve the appropriate state; retries remain usable.
+
+Both mailers' help advertises space-separated recipients, while the base mailer
+splits comma-separated strings. A real spaced forward fails with delivery-error
+feedback because USER_D rejects the combined canonical name; a comma list works.
+Help also obscures optional numbers and omits the forwarding destination in its
+main list. **Recommendation:** correct both help/usage texts and their group
+examples, preserving the existing parser and mail policies. No native change is
+needed; lost-message file export remains the next runtime boundary.
+
+**Nineteen fresh tests/observations pass**, with real Users, bodies, connections,
+daemon sends, native saves, owned reads and editor/Cc input. Seven core CLI checks
+and four quality gates pass, including warning-free workspace Clippy. Sixteen
+pinned Lima and seven native reviews are recorded; all 256 predecessor
+artifact/report sets remain intact. The active setter overlay/configuration,
+original/native/master inputs and overview cells stay unchanged. Execution is
+local lpc-rs only with distinct nil, preserved call-out players, 4,000 ms actions,
+`USE_USER_MENU` and `.o` saves. Historical harnesses and clocks are not
+rerun/compared. Group expansion is source-reviewed here; remote routing, delivery
+faults, long paging, concurrency, disconnect recovery and startup stay separate.
+
 #### Lima mailbox setter ownership repair
 
 The **5 October 2026** local port adds owning User context checks to both public
