@@ -857,8 +857,9 @@ inspection and synchronous ownership offers, gated by [valid_socket](apply/maste
 Acquisition requires the named recipient's active offer call. Offers use efun origin
 and native catch semantics: a caught error retains prior acquisition, while an
 uncaught transaction abort discards it. The driver starts TCP before preloads and
-stops it before closing the committer. Lima's bounded I3 codec and MUD-mode TCP
-wrapper are validated in diagnostic copies; full IMUD integration remains pending.
+stops it before closing the committer. Lima's bounded I3 codec, MUD-mode TCP
+wrapper and tested IMUD router/OOB exchanges are validated in diagnostic copies;
+full-overlay startup and production adoption remain pending.
 
 #### Lima TCP wrapper and I3 adaptation
 
@@ -924,7 +925,20 @@ Only MUD-mode TCP styles are implemented by this adapter. Its write callback
 notifies drained output and does not interpret return values as producer data.
 A ten-second wrapper deadline bounds closing owners; its cleanup path is tested
 by direct driver entry, without timing a real stalled expiry. Native sources and
-the active overlay are unchanged. Ordinary IMUD ports, mock-router/OOB exchanges,
+the active overlay are unchanged.
+
+The complete proposed IMUD daemon now compiles after ordinary typing, callback,
+class-access, timer and file-metadata adaptations. Twelve integration tests run
+its real router/OOB handlers and IMAIL service against local mock peers. They
+cover startup, nullable user fields while numeric zero remains an integer, mud
+deletion, channel timers, router replacement/shutdown drain, authenticated file
+listing and replies, mail admission/acknowledgements, unauthenticated OOB refusal
+and asynchronous connection failure. A quota-exhaustion test checks listener
+construction cleanup. Failed send admission retains unsent mail.
+Router headers and control bodies are checked before their state updates; this
+is not a complete I3 service security audit. The absent Telnet keepalive call is
+removed from the I3 stream. The active overlay and native sources remain unchanged.
+Full-overlay preload/login startup, actual local-player mail delivery, file put/get,
 other socket consumers and actual-router execution remain unestablished.
 
 #### Lima RST generation
