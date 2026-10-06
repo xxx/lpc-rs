@@ -692,7 +692,7 @@ Use `lower_case(query_name())` for the logout record.
 [last-login records][lima-startup-last-login].
 
 After the verb and race adaptations below, the listener still starts with
-**three failed preloads**: IMUD authentication, RST generation and intermud mail.
+**three failed preloads**: the IMUD daemon, RST generation and intermud mail.
 Those syntax, nil/type, callback and missing-API failures are remaining port
 blockers. Successful login does not establish a clean preload or a complete
 port. Unrelated mudlib hardening remains separate work.
@@ -744,6 +744,29 @@ then selects the saved troll again after starting a fresh driver process.
 The saved account retains the troll body path and race. Both boots preload the
 troll successfully. This smoke does not exercise combat damage or establish
 ordinary-player-only paths; no upstream execution is claimed.
+
+#### Lima IMUD authentication
+
+The [authentication module][lima-imud-auth] was additionally reviewed on
+**5 October 2026** at the listed Lima revision. Translate the expiry filter to
+`(: [string mudname, class auth_data auth] auth.timestamp + AUTH_EXPIRE_TIME > time() :)`.
+Schedule its private cleanup through the bare `auth_cleanup` function value,
+removing the string-name macro and unused callback global. Keep its existing
+single self-rescheduling timer, fifteen-minute cleanup interval, ten-minute
+expiry comparison and one-use key removal policy.
+
+A focused inherited host supplies delivery, canonical-name and OOB-reply hooks.
+Native tests check requests/replies, key consumption and replacement, actual
+cleanup callback dispatch, expiry at the boundary, rescheduling, stopping,
+restarting and transaction rollback. These checks establish the adapted module;
+the full IMUD daemon still fails in `who.c` on `string title = 0`.
+[Who handler][lima-imud-who].
+
+The [socket object][lima-imud-socket] also calls socket creation, connection,
+listening, transfer and write efuns, plus `external_start`; these APIs are absent
+from the native efun registry. A working intermud service needs a broader
+network API decision and further daemon adaptations. Router connectivity and
+upstream execution remain unchecked.
 
 #### Lima event and help timers
 
@@ -9267,6 +9290,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-master]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
 [lima-startup-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/verb_d.c
 [lima-startup-last-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/last_login_d.c
+[lima-imud-auth]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/auth.c
+[lima-imud-who]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/who.c
+[lima-imud-socket]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/socket.c
 [lima-troll-race]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/race/troll.c
 [lima-drop-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/drop.c
 [lima-get-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/get.c
