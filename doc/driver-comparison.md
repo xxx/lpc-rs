@@ -691,11 +691,11 @@ Use `lower_case(query_name())` for the logout record.
 [Body entry][lima-body-switching], [body cleanup][lima-body],
 [last-login records][lima-startup-last-login].
 
-After the verb, race and RST adaptations below, the listener still starts with
-**two failed preloads**: the IMUD daemon and intermud mail.
-Those syntax, nil/type, callback and missing-API failures are remaining port
-blockers. Successful login does not establish a clean preload or a complete
-port. Unrelated mudlib hardening remains separate work.
+After the verb, race, RST and intermud-mail adaptations below, the listener
+still starts with **one failed preload**: the IMUD daemon. Its remaining
+nil/type, callback and missing-API issues are port blockers. Successful login
+does not establish a clean preload or a complete port. Unrelated mudlib
+hardening remains separate work.
 
 #### Lima verb preloads and parser feedback
 
@@ -798,7 +798,7 @@ four-second task budget; HELP_D consumes the pages and saves its index.
 Complete RST formatting compatibility and upstream execution remain unchecked;
 this adaptation adds no native API.
 
-#### Lima intermud mail audit
+#### Lima intermud mail
 
 The [intermud mail daemon][lima-imud-mail] was additionally reviewed on
 **5 October 2026** at the listed Lima revision. Its port needs the bare
@@ -809,10 +809,15 @@ self-rescheduling one-shot. [Function values](lpc/function_type.md),
 [class fields](lpc/classes.md#construction-and-members),
 [null values](lpc/null.md).
 
-A disposable proposal compiles and preloads with empty queues in a real native
-cold boot, leaving only IMUD's existing who-handler failure. That proposal is
-not adopted in the current overlay. Hourly dispatch, restored nonempty queues,
-delivery, acknowledgements and upstream execution remain unchecked.
+A real native cold boot of the subsequently adopted source preloads the daemon
+with empty queues, leaving only IMUD's existing who-handler failure. Focused
+tests dispatch its hourly callback twice and confirm one successor timer,
+unchanged queues and no transport loading. Incoming-recipient checks preserve
+the caller restriction, remove unknown To/CC/BCC names through nil markers,
+exclude foreign-only recipients and leave empty lists without delivery.
+Those checks use a test-only IMUD entry object and the real user registry;
+restored nonempty queues, successful delivery, acknowledgements and upstream
+execution remain unchecked.
 The [IMUD mail module][lima-imud-mail-protocol] uses the transport/OOB machinery
 whose unsupported socket dependencies are described above; empty startup does
 not establish a working intermud service. This port needs no new native API.
