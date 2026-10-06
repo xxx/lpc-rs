@@ -824,11 +824,18 @@ commit-ordered command batches. Destruction and failed initialization retire
 owned records transactionally, and GC traces registered callback captures.
 Explicitly attached native TCP workers now resolve/connect or bind, finish partial
 writes in order, drain graceful closes with a timeout, and interrupt retirement.
-Readiness, full-buffer completion and terminal state publish through the native
-transaction runner; deterministic IO tests and local loopback tests cover this
-layer. Bounded input/accept queues, retryable LPC event dispatch, socket efuns and
-Lima transport remain unimplemented; the driver does not start these workers
-automatically.
+Readiness, raw input, EOF, accepted children, full-buffer completion and terminal
+state publish through the native transaction runner. Transactional FIFO inboxes
+retain immutable event payloads until acknowledgement commits; native leases reread
+registration on each attempt. Input bytes and pending accepts have separate positive
+limits. Pending accepts also reserve VM quota before the physical accept, including
+one unpublished slot while a listener waits for a connection. Accepted-child reads
+and queued writes stay paused until its listener event succeeds; failure or listener
+close discards undelivered children. EOF preserves the write side, and repeated
+output-empty transitions share one pending `drained` wakeup. Deterministic native
+and local loopback tests cover this layer. Retryable LPC callback dispatch, socket
+efuns and Lima transport remain unimplemented; the driver does not start these
+workers automatically.
 
 #### Lima RST generation
 

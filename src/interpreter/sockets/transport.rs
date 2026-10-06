@@ -10,7 +10,7 @@ use std::{
 use bytes::Bytes;
 use lpc_rs_errors::Result;
 use tokio::{
-    io::{AsyncWrite, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::watch,
     task::{JoinHandle, JoinSet},
@@ -18,7 +18,8 @@ use tokio::{
 };
 
 use super::{
-    SocketAccess, SocketCommand, SocketCommands, SocketHandle, SocketState, SocketTarget, error,
+    SocketAcceptPermit, SocketAccess, SocketAdmission, SocketCommand, SocketCommands,
+    SocketEventData, SocketHandle, SocketState, SocketTarget, error,
 };
 use crate::interpreter::{
     stm::{
@@ -34,6 +35,8 @@ pub enum SocketOperation {
     Connect,
     Listen,
     Write,
+    Read,
+    Accept,
     Close,
 }
 
@@ -47,8 +50,8 @@ pub enum SocketCloseReason {
 
 /// Immutable native observations whose state changes have already committed.
 ///
-/// These are transport completions, not retryable LPC callbacks. Input, accepts,
-/// and retryable LPC callback delivery remain unimplemented.
+/// Callback payloads also remain in a transactional inbox until acknowledged;
+/// these observations do not themselves consume a callback event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SocketIoEvent {
     Ready {
@@ -59,6 +62,19 @@ pub enum SocketIoEvent {
     WriteComplete {
         handle: SocketHandle,
         sequence: u64,
+    },
+    Read {
+        handle: SocketHandle,
+        sequence: u64,
+        data: Bytes,
+    },
+    Eof {
+        handle: SocketHandle,
+        sequence: u64,
+    },
+    Accept {
+        handle: SocketHandle,
+        child: SocketHandle,
     },
     Closed {
         handle: SocketHandle,
@@ -75,7 +91,10 @@ impl SocketIoEvent {
         match *self {
             Self::Ready { handle, .. }
             | Self::WriteComplete { handle, .. }
-            | Self::Closed { handle, .. } => handle,
+            | Self::Closed { handle, .. }
+            | Self::Read { handle, .. }
+            | Self::Eof { handle, .. }
+            | Self::Accept { handle, .. } => handle,
         }
     }
 }
@@ -110,20 +129,22 @@ impl SocketTransport {
     ) -> Self {
         let (events_tx, events) = flume::bounded(gs.config.max_sockets);
         let (stop, stopping) = watch::channel(false);
-        let publisher = Publisher {
-            gs: Arc::downgrade(gs),
-            events: events_tx,
-        };
+        let publisher = Publisher::new(gs, events_tx);
+        let (accepted_tx, accepted_rx) = flume::bounded(gs.config.max_sockets);
         let connect_timeout = Duration::from_millis(gs.config.socket_connect_timeout as u64);
         let close_timeout = Duration::from_millis(gs.config.socket_close_timeout as u64);
-        let task = tokio::spawn(manager(
-            commands,
-            stopping,
-            Arc::new(backend),
-            publisher,
-            connect_timeout,
+        let routing = Routing {
+            io: Arc::new(NativeIo {
+                backend: Arc::new(backend),
+                publisher,
+                connect_timeout,
+                accepted: accepted_tx,
+            }),
             close_timeout,
-        ));
+            workers: HashMap::new(),
+            tasks: JoinSet::new(),
+        };
+        let task = tokio::spawn(manager(commands, stopping, routing, accepted_rx));
         Self {
             events,
             stop,
@@ -157,10 +178,14 @@ impl Drop for SocketTransport {
 }
 
 trait Backend: Send + Sync + 'static {
-    type Writer: AsyncWrite + Unpin + Send + 'static;
+    type Writer: AsyncRead + AsyncWrite + Unpin + Send + 'static;
     fn open(
         &self,
         target: SocketTarget,
+    ) -> impl Future<Output = io::Result<Resource<Self::Writer>>> + Send;
+    fn accept(
+        &self,
+        listener: &TcpListener,
     ) -> impl Future<Output = io::Result<Resource<Self::Writer>>> + Send;
 }
 
@@ -199,6 +224,14 @@ impl Backend for TokioBackend {
             }
         }
     }
+    async fn accept(&self, listener: &TcpListener) -> io::Result<Resource<TcpStream>> {
+        let (writer, remote) = listener.accept().await?;
+        Ok(Resource::Stream {
+            local: writer.local_addr()?,
+            remote,
+            writer,
+        })
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -207,75 +240,138 @@ struct Close {
     deadline: Instant,
 }
 
-struct Worker {
+struct Worker<W> {
     writes: flume::Sender<(u64, Bytes)>,
     close: watch::Sender<Option<Close>>,
+    activated: watch::Sender<bool>,
+    resource: Option<tokio::sync::oneshot::Sender<Resource<W>>>,
 }
 
-async fn manager<B: Backend>(
-    commands: flume::Receiver<SocketCommands>,
-    mut stopping: watch::Receiver<bool>,
+struct NativeIo<B: Backend> {
     backend: Arc<B>,
     publisher: Publisher,
     connect_timeout: Duration,
+    accepted: flume::Sender<(SocketHandle, Resource<B::Writer>)>,
+}
+
+struct Routing<B: Backend> {
+    io: Arc<NativeIo<B>>,
     close_timeout: Duration,
-) {
-    let mut workers = HashMap::<SocketHandle, Worker>::new();
-    let mut tasks = JoinSet::new();
-    loop {
-        tokio::select! {
-            biased;
-            _ = stopping.changed() => break,
-            finished = tasks.join_next(), if !tasks.is_empty() => {
-                match finished {
-                    Some(Ok(handle)) => { workers.remove(&handle); }
-                    Some(Err(e)) => { tracing::error!("TCP worker failed: {e}"); break; }
-                    None => {}
+    workers: HashMap<SocketHandle, Worker<B::Writer>>,
+    tasks: JoinSet<SocketHandle>,
+}
+
+impl<B: Backend> Routing<B> {
+    fn batch(&mut self, batch: SocketCommands) {
+        for command in batch {
+            match command {
+                SocketCommand::Open { handle, target } => {
+                    let (writes_tx, writes) = flume::unbounded();
+                    let (close_tx, close) = watch::channel(None);
+                    let (activated, _) = watch::channel(true);
+                    self.workers.insert(
+                        handle,
+                        Worker {
+                            writes: writes_tx,
+                            close: close_tx,
+                            activated,
+                            resource: None,
+                        },
+                    );
+                    let io = self.io.clone();
+                    self.tasks.spawn(async move {
+                        run_worker(handle, target, io, writes, close).await;
+                        handle
+                    });
                 }
-            }
-            batch = commands.recv_async() => {
-                let Ok(batch) = batch else { break; };
-                for command in batch {
-                    match command {
-                        SocketCommand::Open { handle, target } => {
-                            let (writes_tx, writes) = flume::unbounded();
-                            let (close_tx, close) = watch::channel(None);
-                            workers.insert(handle, Worker { writes: writes_tx, close: close_tx });
-                            let backend = backend.clone();
-                            let publisher = publisher.clone();
-                            tasks.spawn(async move {
-                                run_worker(handle, target, backend, publisher, writes, close, connect_timeout).await;
-                                handle
-                            });
-                        }
-                        SocketCommand::Write { handle, sequence, data } => {
-                            if let Some(worker) = workers.get(&handle) { let _ = worker.writes.send((sequence, data)); }
-                        }
-                        SocketCommand::Close { handle, drain } => {
-                            if let Some(worker) = workers.get(&handle) {
-                                worker.close.send_modify(|closing| {
-                                    if closing.is_none() || !drain { *closing = Some(Close { drain, deadline: Instant::now() + close_timeout }); }
+                SocketCommand::OpenAccepted { handle } => {
+                    let (writes_tx, writes) = flume::unbounded();
+                    let (close_tx, close) = watch::channel(None);
+                    let (activated_tx, activated) = watch::channel(false);
+                    let (resource_tx, resource) = tokio::sync::oneshot::channel();
+                    self.workers.insert(
+                        handle,
+                        Worker {
+                            writes: writes_tx,
+                            close: close_tx,
+                            activated: activated_tx,
+                            resource: Some(resource_tx),
+                        },
+                    );
+                    let publisher = self.io.publisher.clone();
+                    self.tasks.spawn(async move {
+                        run_accepted(handle, publisher, writes, close, activated, resource).await;
+                        handle
+                    });
+                }
+                SocketCommand::Write {
+                    handle,
+                    sequence,
+                    data,
+                } => {
+                    if let Some(worker) = self.workers.get(&handle) {
+                        let _ = worker.writes.send((sequence, data));
+                    }
+                }
+                SocketCommand::Close { handle, drain } => {
+                    if let Some(worker) = self.workers.get(&handle) {
+                        worker.close.send_modify(|closing| {
+                            if closing.is_none() || !drain {
+                                *closing = Some(Close {
+                                    drain,
+                                    deadline: Instant::now() + self.close_timeout,
                                 });
                             }
-                        }
+                        });
+                    }
+                }
+                SocketCommand::Activate { handle } => {
+                    if let Some(worker) = self.workers.get(&handle) {
+                        let _ = worker.activated.send(true);
                     }
                 }
             }
         }
     }
-    tasks.abort_all();
-    while tasks.join_next().await.is_some() {}
+}
+
+async fn manager<B: Backend>(
+    commands: flume::Receiver<SocketCommands>,
+    mut stopping: watch::Receiver<bool>,
+    mut routing: Routing<B>,
+    accepted_rx: flume::Receiver<(SocketHandle, Resource<B::Writer>)>,
+) {
+    loop {
+        tokio::select! {
+            _ = stopping.changed() => break,
+            finished = routing.tasks.join_next(), if !routing.tasks.is_empty() => match finished {
+                Some(Ok(handle)) => { routing.workers.remove(&handle); }
+                Some(Err(e)) => { tracing::error!("TCP worker failed: {e}"); break; }
+                None => {}
+            },
+            batch = commands.recv_async() => match batch { Ok(batch) => routing.batch(batch), Err(_) => break },
+            accepted = accepted_rx.recv_async() => if let Ok((handle, resource)) = accepted {
+                // The attach command committed before this resource was sent through a separate channel.
+                for _ in 0..commands.len() { if let Ok(batch) = commands.try_recv() { routing.batch(batch); } }
+                if let Some(worker) = routing.workers.get_mut(&handle)
+                    && let Some(sender) = worker.resource.take() {
+                    let _ = sender.send(resource);
+                }
+            }
+        }
+    }
+    routing.tasks.abort_all();
+    while routing.tasks.join_next().await.is_some() {}
 }
 
 async fn run_worker<B: Backend>(
     handle: SocketHandle,
     target: SocketTarget,
-    backend: Arc<B>,
-    publisher: Publisher,
+    io: Arc<NativeIo<B>>,
     writes: flume::Receiver<(u64, Bytes)>,
     mut close: watch::Receiver<Option<Close>>,
-    connect_timeout: Duration,
 ) {
+    let publisher = &io.publisher;
     let expected = match target {
         SocketTarget::Connect { .. } => SocketState::Connecting,
         SocketTarget::Listen(_) => SocketState::Binding,
@@ -296,7 +392,7 @@ async fn run_worker<B: Backend>(
         tokio::select! {
             biased;
             _ = wait_close(&mut close) => Err(Terminal::local()),
-            result = timeout(connect_timeout, backend.open(target)) => match result {
+            result = timeout(io.connect_timeout, io.backend.open(target)) => match result {
                 Ok(Ok(resource)) => Ok(resource),
                 Ok(Err(e)) => Err(Terminal::failed(operation, e)),
                 Err(_) => Err(Terminal::timed_out(operation)),
@@ -323,12 +419,18 @@ async fn run_worker<B: Backend>(
             let terminal = if ready && publisher.emit(event, &mut close).await {
                 match resource {
                     Resource::Stream { mut writer, .. } => {
-                        stream(handle, &mut writer, &publisher, writes, &mut close).await
+                        stream(handle, &mut writer, publisher, writes, &mut close).await
                     }
                     Resource::Listener { listener, .. } => {
-                        wait_close(&mut close).await;
-                        drop(listener);
-                        Terminal::local()
+                        listen(
+                            handle,
+                            listener,
+                            io.backend.clone(),
+                            publisher,
+                            &mut close,
+                            io.accepted.clone(),
+                        )
+                        .await
                     }
                 }
             } else {
@@ -337,6 +439,17 @@ async fn run_worker<B: Backend>(
             (terminal, Some(local), remote)
         }
     };
+    finish_worker(handle, terminal, local, remote, publisher, &mut close).await;
+}
+
+async fn finish_worker(
+    handle: SocketHandle,
+    terminal: Terminal,
+    local: Option<SocketAddr>,
+    remote: Option<SocketAddr>,
+    publisher: &Publisher,
+    close: &mut watch::Receiver<Option<Close>>,
+) {
     let event = SocketIoEvent::Closed {
         handle,
         reason: terminal.reason,
@@ -346,15 +459,201 @@ async fn run_worker<B: Backend>(
         remote,
     };
     match publisher.publish(Update::Event(event.clone())).await {
-        Ok(true) => {
-            publisher.emit_terminal(event, &mut close).await;
-        }
+        Ok(true) => publisher.emit_terminal(event, close).await,
         Ok(false) => {}
         Err(e) => tracing::error!("TCP terminal publication failed for {}: {e}", handle.get()),
     }
 }
 
-async fn stream<W: AsyncWrite + Unpin>(
+async fn stream<W: AsyncRead + AsyncWrite + Unpin>(
+    handle: SocketHandle,
+    writer: &mut W,
+    publisher: &Publisher,
+    writes: flume::Receiver<(u64, Bytes)>,
+    close: &mut watch::Receiver<Option<Close>>,
+) -> Terminal {
+    let (reader, mut writer) = tokio::io::split(writer);
+    let mut read_close = close.clone();
+    let reading = read_stream(handle, reader, publisher, &mut read_close);
+    let writing = write_stream(handle, &mut writer, publisher, writes, close);
+    tokio::pin!(writing);
+    tokio::select! {
+        biased;
+        terminal = &mut writing => terminal,
+        terminal = reading => match terminal { Some(terminal) => terminal, None => writing.await },
+    }
+}
+
+async fn read_stream<R: AsyncRead + Unpin>(
+    handle: SocketHandle,
+    mut reader: R,
+    publisher: &Publisher,
+    close: &mut watch::Receiver<Option<Close>>,
+) -> Option<Terminal> {
+    let mut sequence = 0u64;
+    let mut buffer = Vec::new();
+    let mut commits = publisher.commits.clone();
+    loop {
+        if let Some(commits) = &mut commits {
+            commits.borrow_and_update();
+        }
+        let capacity = match publisher.run(Update::InputCapacity(handle)).await {
+            Ok(Outcome::Capacity(Some(capacity))) => capacity,
+            Ok(_) => return None,
+            Err(e) => {
+                return Some(Terminal::failed(
+                    SocketOperation::Read,
+                    io::Error::other(e.to_string()),
+                ));
+            }
+        };
+        if capacity == 0 {
+            tokio::select! { biased; _ = wait_close(close) => return None, _ = changed(&mut commits) => {} }
+            continue;
+        }
+        buffer.resize(capacity, 0);
+        let count = tokio::select! {
+            biased;
+            _ = wait_close(close) => return None,
+            count = reader.read(&mut buffer) => match count { Ok(count) => count, Err(e) => return Some(Terminal::failed(SocketOperation::Read, e)) },
+        };
+        let Some(next) = sequence.checked_add(1) else {
+            return Some(Terminal::failed(
+                SocketOperation::Read,
+                io::Error::other("read sequence exhausted"),
+            ));
+        };
+        sequence = next;
+        let event = if count == 0 {
+            SocketIoEvent::Eof { handle, sequence }
+        } else {
+            SocketIoEvent::Read {
+                handle,
+                sequence,
+                data: Bytes::copy_from_slice(&buffer[..count]),
+            }
+        };
+        match publisher.publish(Update::Event(event.clone())).await {
+            Ok(true) => {}
+            Ok(false) => return None,
+            Err(e) => {
+                return Some(Terminal::failed(
+                    SocketOperation::Read,
+                    io::Error::other(e.to_string()),
+                ));
+            }
+        }
+        if !publisher.emit(event, close).await || count == 0 {
+            return None;
+        }
+    }
+}
+
+async fn changed(commits: &mut Option<watch::Receiver<crate::interpreter::stm::Version>>) {
+    match commits {
+        Some(commits) => {
+            let _ = commits.changed().await;
+        }
+        None => std::future::pending().await,
+    }
+}
+
+async fn listen<B: Backend>(
+    handle: SocketHandle,
+    listener: TcpListener,
+    backend: Arc<B>,
+    publisher: &Publisher,
+    close: &mut watch::Receiver<Option<Close>>,
+    accepted: flume::Sender<(SocketHandle, Resource<B::Writer>)>,
+) -> Terminal {
+    let mut commits = publisher.commits.clone();
+    loop {
+        if let Some(commits) = &mut commits {
+            commits.borrow_and_update();
+        }
+        let permit = tokio::select! {
+            biased;
+            _ = wait_close(close) => return Terminal::local(),
+            permit = publisher.run(Update::ReserveAccept(handle)) => match permit {
+                Ok(Outcome::Permit(SocketAdmission::Admitted(permit))) => permit,
+                Ok(Outcome::Permit(SocketAdmission::Full)) => { tokio::select! { biased; _ = wait_close(close) => return Terminal::local(), _ = changed(&mut commits) => {} } continue; },
+                Ok(_) => return Terminal::local(),
+                Err(e) => return Terminal::failed(SocketOperation::Accept, io::Error::other(e.to_string())),
+            }
+        };
+        let resource = tokio::select! {
+            biased;
+            _ = wait_close(close) => return Terminal::local(),
+            resource = backend.accept(&listener) => match resource { Ok(resource) => resource, Err(e) => return Terminal::failed(SocketOperation::Accept, e) },
+        };
+        let (local, remote) = match &resource {
+            Resource::Stream { local, remote, .. } => (*local, *remote),
+            _ => {
+                return Terminal::failed(
+                    SocketOperation::Accept,
+                    io::Error::other("accept returned a listener"),
+                );
+            }
+        };
+        let child = match publisher.run(Update::Accepted(permit, local, remote)).await {
+            Ok(Outcome::Accepted(SocketAdmission::Admitted(child))) => child,
+            Ok(_) => return Terminal::local(),
+            Err(e) => {
+                return Terminal::failed(SocketOperation::Accept, io::Error::other(e.to_string()));
+            }
+        };
+        tokio::select! {
+            biased;
+            _ = wait_close(close) => return Terminal::local(),
+            _ = accepted.send_async((child, resource)) => {}
+        }
+        if !publisher
+            .emit(SocketIoEvent::Accept { handle, child }, close)
+            .await
+        {
+            return Terminal::local();
+        }
+    }
+}
+
+async fn run_accepted<W: AsyncRead + AsyncWrite + Unpin>(
+    handle: SocketHandle,
+    publisher: Publisher,
+    writes: flume::Receiver<(u64, Bytes)>,
+    mut close: watch::Receiver<Option<Close>>,
+    mut activated: watch::Receiver<bool>,
+    resource: tokio::sync::oneshot::Receiver<Resource<W>>,
+) {
+    let resource = tokio::select! { biased; _ = wait_interrupt(&mut close) => None, resource = resource => resource.ok() };
+    let (terminal, local, remote) = match resource {
+        Some(Resource::Stream {
+            mut writer,
+            local,
+            remote,
+        }) => {
+            let ready = loop {
+                if *activated.borrow() {
+                    break true;
+                }
+                tokio::select! {
+                    biased;
+                    _ = wait_interrupt(&mut close) => break false,
+                    result = activated.changed() => if result.is_err() { break false; },
+                }
+            };
+            let terminal = if ready {
+                stream(handle, &mut writer, &publisher, writes, &mut close).await
+            } else {
+                interruption(&close)
+            };
+            (terminal, Some(local), Some(remote))
+        }
+        _ => (interruption(&close), None, None),
+    };
+    finish_worker(handle, terminal, local, remote, &publisher, &mut close).await;
+}
+
+async fn write_stream<W: AsyncWrite + Unpin>(
     handle: SocketHandle,
     writer: &mut W,
     publisher: &Publisher,
@@ -490,6 +789,7 @@ impl Terminal {
 struct Publisher {
     gs: Weak<GlobalState>,
     events: flume::Sender<SocketIoEvent>,
+    commits: Option<watch::Receiver<crate::interpreter::stm::Version>>,
 }
 
 #[derive(Clone)]
@@ -497,22 +797,48 @@ enum Update {
     Opening(SocketHandle, SocketState),
     Present(SocketHandle),
     Event(SocketIoEvent),
+    InputCapacity(SocketHandle),
+    ReserveAccept(SocketHandle),
+    Accepted(SocketAcceptPermit, SocketAddr, SocketAddr),
+}
+
+#[derive(Clone)]
+enum Outcome {
+    Applied(bool),
+    Capacity(Option<usize>),
+    Permit(SocketAdmission<SocketAcceptPermit>),
+    Accepted(SocketAdmission<SocketHandle>),
 }
 
 impl Publisher {
-    async fn publish(&self, update: Update) -> Result<bool> {
+    fn new(gs: &Arc<GlobalState>, events: flume::Sender<SocketIoEvent>) -> Self {
+        Self {
+            gs: Arc::downgrade(gs),
+            events,
+            commits: gs.attempt_runner.commit_watch(),
+        }
+    }
+
+    async fn run(&self, update: Update) -> Result<Outcome> {
         let Some(gs) = self.gs.upgrade() else {
-            return Ok(false);
+            return Ok(Outcome::Applied(false));
         };
         let mut body = Publication {
             gs: gs.clone(),
             update,
             txn: None,
-            applied: false,
+            outcome: Outcome::Applied(false),
         };
         let (result, _) = gs.attempt_runner.run(&mut body).await;
         result.inspect_err(|e| tracing::error!("native TCP publication failed: {e}"))?;
-        Ok(body.applied)
+        Ok(body.outcome)
+    }
+
+    async fn publish(&self, update: Update) -> Result<bool> {
+        match self.run(update).await? {
+            Outcome::Applied(applied) => Ok(applied),
+            _ => Err(error("wrong TCP publication result")),
+        }
     }
 
     async fn emit_terminal(
@@ -550,7 +876,7 @@ struct Publication {
     gs: Arc<GlobalState>,
     update: Update,
     txn: Option<TxnHandle>,
-    applied: bool,
+    outcome: Outcome,
 }
 
 #[async_trait::async_trait]
@@ -565,36 +891,57 @@ impl AttemptBody for Publication {
             sockets: &self.gs.sockets,
             txn: txn.clone(),
         };
-        self.applied = match &self.update {
-            Update::Opening(handle, state) => txn.with(|txn| {
-                self.gs
-                    .sockets
-                    .record(txn, *handle)
-                    .is_ok_and(|(_, record)| record.info.state == *state)
-            }),
-            Update::Present(handle) => {
-                txn.with(|txn| self.gs.sockets.cells(txn, *handle).is_some())
+        self.outcome = match &self.update {
+            Update::InputCapacity(handle) => Outcome::Capacity(access.input_capacity(*handle)?),
+            Update::ReserveAccept(handle) => Outcome::Permit(access.reserve_accept(*handle)?),
+            Update::Accepted(permit, local, remote) => {
+                Outcome::Accepted(access.accepted(*permit, *local, *remote)?)
             }
-            Update::Event(SocketIoEvent::Ready {
-                handle,
-                local,
-                remote,
-            }) => access.ready(*handle, *local, *remote)?,
-            Update::Event(SocketIoEvent::WriteComplete { handle, sequence }) => {
-                access.complete_write(*handle, *sequence)?
-            }
-            Update::Event(event @ SocketIoEvent::Closed { .. }) => {
-                let handle = event.handle();
-                if access
-                    .info(handle)
-                    .is_some_and(|info| info.state != SocketState::Closed)
-                {
-                    access.closed(handle);
-                    true
-                } else {
-                    false
+            update => Outcome::Applied(match update {
+                Update::Opening(handle, state) => txn.with(|txn| {
+                    self.gs
+                        .sockets
+                        .record(txn, *handle)
+                        .is_ok_and(|(_, record)| record.info.state == *state)
+                }),
+                Update::Present(handle) => {
+                    txn.with(|txn| self.gs.sockets.cells(txn, *handle).is_some())
                 }
-            }
+                Update::Event(SocketIoEvent::Ready {
+                    handle,
+                    local,
+                    remote,
+                }) => access.ready(*handle, *local, *remote)?,
+                Update::Event(SocketIoEvent::WriteComplete { handle, sequence }) => {
+                    access.complete_write(*handle, *sequence)?
+                }
+                Update::Event(SocketIoEvent::Read {
+                    handle,
+                    sequence,
+                    data,
+                }) => access.read(*handle, *sequence, data.clone())?,
+                Update::Event(SocketIoEvent::Eof { handle, sequence }) => {
+                    access.eof(*handle, *sequence)?
+                }
+                Update::Event(SocketIoEvent::Closed {
+                    handle,
+                    reason,
+                    operation,
+                    error,
+                    local,
+                    remote,
+                }) => access.terminal(
+                    *handle,
+                    SocketEventData::Closed {
+                        reason: *reason,
+                        operation: *operation,
+                        error: error.clone(),
+                        local: *local,
+                        remote: *remote,
+                    },
+                )?,
+                _ => return Err(error("invalid native TCP update")),
+            }),
         };
         self.txn = Some(txn);
         Ok(Some(live))

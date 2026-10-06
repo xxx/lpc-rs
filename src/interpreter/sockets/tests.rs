@@ -8,11 +8,11 @@ use crate::interpreter::{
     stm::{CommitProtocol, Committer, Effect, WorldRoot},
 };
 
-struct Fixture {
-    sockets: Sockets,
-    committer: Committer,
-    commands: flume::Receiver<SocketCommands>,
-    owner: Arc<Process>,
+pub(super) struct Fixture {
+    pub(super) sockets: Sockets,
+    pub(super) committer: Committer,
+    pub(super) commands: flume::Receiver<SocketCommands>,
+    pub(super) owner: Arc<Process>,
 }
 
 impl Fixture {
@@ -23,6 +23,10 @@ impl Fixture {
             .max_pending_socket_writes(writes)
             .build()
             .unwrap();
+        Self::from_config(config)
+    }
+
+    pub(super) fn from_config(config: Config) -> Self {
         let sockets = Sockets::new(&config);
         let commands = sockets.take_commands().unwrap();
         Self {
@@ -33,24 +37,24 @@ impl Fixture {
         }
     }
 
-    fn begin(&self) -> TxnHandle {
+    pub(super) fn begin(&self) -> TxnHandle {
         TxnHandle::new(Transaction::new(self.committer.snapshot_clone()))
     }
 
-    fn access<'a>(&'a self, txn: &TxnHandle) -> SocketAccess<'a> {
+    pub(super) fn access<'a>(&'a self, txn: &TxnHandle) -> SocketAccess<'a> {
         SocketAccess {
             sockets: &self.sockets,
             txn: txn.clone(),
         }
     }
 
-    fn commit(&mut self, txn: &TxnHandle) {
+    pub(super) fn commit(&mut self, txn: &TxnHandle) {
         self.committer
             .commit(txn.with(Transaction::take_changeset))
             .unwrap();
     }
 
-    fn connect(&mut self) -> SocketHandle {
+    pub(super) fn connect(&mut self) -> SocketHandle {
         let txn = self.begin();
         let handle = self
             .access(&txn)
@@ -63,7 +67,7 @@ impl Fixture {
         handle
     }
 
-    fn open(&mut self, handle: SocketHandle) {
+    pub(super) fn open(&mut self, handle: SocketHandle) {
         let txn = self.begin();
         assert!(
             self.access(&txn)
@@ -73,7 +77,7 @@ impl Fixture {
         self.commit(&txn);
     }
 
-    fn gc(&mut self) {
+    pub(super) fn gc(&mut self) {
         let (tx, _) = flume::unbounded();
         let (reply, rx) = flume::bounded(1);
         self.committer.process(
@@ -92,11 +96,11 @@ impl Fixture {
     }
 }
 
-fn endpoint(port: u16) -> SocketAddr {
+pub(super) fn endpoint(port: u16) -> SocketAddr {
     SocketAddr::from(([127, 0, 0, 1], port))
 }
 
-fn callback(owner: &Arc<Process>) -> Arc<FunctionPtr> {
+pub(super) fn callback(owner: &Arc<Process>) -> Arc<FunctionPtr> {
     Arc::new(
         FunctionPtrBuilder::default()
             .owner(Arc::downgrade(owner))

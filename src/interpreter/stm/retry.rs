@@ -266,6 +266,10 @@ impl AttemptRunner {
         }
     }
 
+    pub(crate) fn commit_watch(&self) -> Option<tokio::sync::watch::Receiver<Version>> {
+        self.commit_watch.clone()
+    }
+
     pub(crate) fn telemetry(&self) -> AttemptTelemetrySnapshot {
         self.telemetry.snapshot()
     }

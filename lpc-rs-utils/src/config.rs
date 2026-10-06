@@ -96,6 +96,14 @@ pub struct Config {
     #[builder(default = "128")]
     pub max_pending_socket_writes: usize,
 
+    /// Undelivered input bytes per native TCP stream; must be positive.
+    #[builder(default = "65536")]
+    pub max_pending_socket_input: usize,
+
+    /// Pending accepted children and an unpublished accept slot per listener; must be positive.
+    #[builder(default = "16")]
+    pub max_pending_socket_accepts: usize,
+
     /// Milliseconds allowed for native TCP DNS resolution and connection; must be positive.
     #[builder(default = "10000")]
     pub socket_connect_timeout: usize,
@@ -199,6 +207,11 @@ impl ConfigBuilder {
         }
         for (name, value) in [
             ("MAX_SOCKETS", config.max_sockets),
+            ("MAX_PENDING_SOCKET_INPUT", config.max_pending_socket_input),
+            (
+                "MAX_PENDING_SOCKET_ACCEPTS",
+                config.max_pending_socket_accepts,
+            ),
             ("SOCKET_CONNECT_TIMEOUT", config.socket_connect_timeout),
             ("SOCKET_CLOSE_TIMEOUT", config.socket_close_timeout),
             (
@@ -257,6 +270,16 @@ impl ConfigBuilder {
 
         Ok(Self {
             max_sockets: socket_setting(&env, "MAX_SOCKETS", self.max_sockets)?,
+            max_pending_socket_input: socket_setting(
+                &env,
+                "MAX_PENDING_SOCKET_INPUT",
+                self.max_pending_socket_input,
+            )?,
+            max_pending_socket_accepts: socket_setting(
+                &env,
+                "MAX_PENDING_SOCKET_ACCEPTS",
+                self.max_pending_socket_accepts,
+            )?,
             socket_connect_timeout: socket_setting(
                 &env,
                 "SOCKET_CONNECT_TIMEOUT",
@@ -514,6 +537,8 @@ mod tests {
             ConfigBuilder::default().max_sockets(0),
             ConfigBuilder::default().max_pending_socket_output(0),
             ConfigBuilder::default().max_pending_socket_writes(0),
+            ConfigBuilder::default().max_pending_socket_input(0),
+            ConfigBuilder::default().max_pending_socket_accepts(0),
         ] {
             assert!(builder.build().is_err());
         }
@@ -549,12 +574,53 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn native_socket_input_and_accept_limits_load_both_names() {
+        let defaults = Config::default();
+        assert_eq!(
+            (
+                defaults.max_pending_socket_input,
+                defaults.max_pending_socket_accepts
+            ),
+            (65536, 16)
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("socket-input.env");
+        fs::write(&path, "MAX_PENDING_SOCKET_INPUT=7\nMAX_PENDING_SOCKET_ACCEPTS=2\nLPC_MAX_PENDING_SOCKET_INPUT=11\n").unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (
+                config.max_pending_socket_input,
+                config.max_pending_socket_accepts
+            ),
+            (11, 2)
+        );
+        for key in ["MAX_PENDING_SOCKET_INPUT", "MAX_PENDING_SOCKET_ACCEPTS"] {
+            fs::write(&path, format!("LPC_{key}=0\n")).unwrap();
+            assert!(
+                ConfigBuilder::default()
+                    .load_env(Some(&path))
+                    .await
+                    .unwrap()
+                    .build()
+                    .is_err()
+            );
+        }
+    }
+
     #[test]
     fn native_socket_settings_parse_both_names_and_prefer_prefix() {
         for key in [
             "MAX_SOCKETS",
             "MAX_PENDING_SOCKET_OUTPUT",
             "MAX_PENDING_SOCKET_WRITES",
+            "MAX_PENDING_SOCKET_INPUT",
+            "MAX_PENDING_SOCKET_ACCEPTS",
         ] {
             let mut env = HashMap::from([(key.to_string(), "10".to_string())]);
             assert_eq!(socket_setting(&env, key, Some(3)).unwrap(), Some(10));

@@ -24,7 +24,11 @@ use crate::interpreter::{
     task_context::TaskContext,
 };
 
+mod events;
 mod transport;
+
+use events::Inbox;
+pub use events::{SocketAcceptPermit, SocketAdmission, SocketEvent, SocketEventData, SocketLease};
 
 pub use transport::{SocketCloseReason, SocketIoEvent, SocketOperation, SocketTransport};
 
@@ -79,6 +83,10 @@ pub enum SocketCommand {
     },
     /// Drain admitted output for explicit close, or discard it for owner retirement.
     Close { handle: SocketHandle, drain: bool },
+    /// Prepare a worker for an already admitted physical accepted stream.
+    OpenAccepted { handle: SocketHandle },
+    /// Release a delivered child from its listener notification gate.
+    Activate { handle: SocketHandle },
 }
 
 /// Commands from one committed transaction, in source order.
@@ -119,12 +127,14 @@ pub struct SocketInfo {
     pub local: Option<SocketAddr>,
     pub remote: Option<SocketAddr>,
     pub output_pending: usize,
+    pub read_eof: bool,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct Record {
     pub info: SocketInfo,
     pub callback: Arc<FunctionPtr>,
+    pub accepted_by: Option<SocketHandle>,
 }
 
 impl PartialEq for Record {
@@ -136,6 +146,8 @@ impl PartialEq for Record {
             && self.info.local == other.info.local
             && self.info.remote == other.info.remote
             && self.info.output_pending == other.info.output_pending
+            && self.info.read_eof == other.info.read_eof
+            && self.accepted_by == other.accepted_by
             && Arc::ptr_eq(&self.callback, &other.callback)
     }
 }
@@ -145,6 +157,7 @@ impl Eq for Record {}
 pub(crate) struct Cells {
     pub record: VarId,
     pub output: VarId,
+    pub inbox: VarId,
 }
 
 pub(crate) type Index = HashMap<SocketHandle, Cells>;
@@ -160,6 +173,7 @@ pub(crate) struct Output {
     bytes: usize,
     sequence: u64,
     pending: Vector<Reservation>,
+    closing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,6 +181,7 @@ pub(crate) enum Value {
     Index(Index),
     Record(Record),
     Output(Output),
+    Inbox(Inbox),
 }
 
 #[derive(Debug)]
@@ -184,6 +199,8 @@ pub struct Sockets {
     max_sockets: usize,
     max_output: usize,
     max_writes: usize,
+    max_input: usize,
+    max_accepts: usize,
 }
 
 impl Sockets {
@@ -196,6 +213,8 @@ impl Sockets {
             max_sockets: config.max_sockets,
             max_output: config.max_pending_socket_output,
             max_writes: config.max_pending_socket_writes,
+            max_input: config.max_pending_socket_input,
+            max_accepts: config.max_pending_socket_accepts,
         }
     }
 
@@ -252,6 +271,7 @@ impl Sockets {
         let Ok((cells, record)) = self.record(txn, handle) else {
             return;
         };
+        self.cancel_accepts(txn, cells);
         let registry = self.registry();
         let mut all = index(txn, registry);
         all.remove(&handle);
@@ -263,6 +283,7 @@ impl Sockets {
             txn.write_socket(cell, Value::Index(owned));
         }
         txn.drop_var(cells.output);
+        txn.drop_var(cells.inbox);
         // Closed workers may still be waiting to publish a terminal notification.
         if close {
             txn.publish_socket(
@@ -356,6 +377,7 @@ impl SocketAccess<'_> {
             let cells = Cells {
                 record: VarId::new(),
                 output: VarId::new(),
+                inbox: VarId::new(),
             };
             let state = match &target {
                 SocketTarget::Connect { .. } => SocketState::Connecting,
@@ -370,8 +392,10 @@ impl SocketAccess<'_> {
                     local: None,
                     remote: None,
                     output_pending: 0,
+                    read_eof: false,
                 },
                 callback,
+                accepted_by: None,
             };
             all.insert(handle, cells);
             txn.write_socket(registry, Value::Index(all));
@@ -380,6 +404,7 @@ impl SocketAccess<'_> {
             owned.insert(handle, cells);
             txn.write_socket(owned_cell, Value::Index(owned));
             txn.write_socket(cells.output, Value::Output(Output::default()));
+            txn.write_socket(cells.inbox, Value::Inbox(Inbox::default()));
             txn.publish_socket(
                 cells.record,
                 Some(Value::Record(record)),
@@ -451,6 +476,10 @@ impl SocketAccess<'_> {
             }
             let sender = self.sockets.sender()?;
             let drain = record.info.state == SocketState::Open;
+            self.sockets.cancel_accepts(txn, cells);
+            let mut output = output(txn, cells.output);
+            output.closing = true;
+            txn.write_socket(cells.output, Value::Output(output));
             record.info.state = SocketState::Closing;
             txn.publish_socket(
                 cells.record,
@@ -468,6 +497,7 @@ impl SocketAccess<'_> {
             let (cells, record) = self.sockets.record(txn, handle).ok()?;
             let mut info = record.info;
             info.output_pending = output(txn, cells.output).bytes;
+            info.read_eof = events::inbox(txn, cells.inbox).eof;
             Some(info)
         })
     }
@@ -511,6 +541,12 @@ impl SocketAccess<'_> {
             };
             record.info.local = Some(local);
             record.info.remote = remote;
+            self.sockets.queue_event_for(
+                txn,
+                cells,
+                handle,
+                SocketEventData::Ready { local, remote },
+            )?;
             txn.write_socket(cells.record, Value::Record(record));
             Ok(true)
         })
@@ -534,6 +570,10 @@ impl SocketAccess<'_> {
             }
             output.bytes -= head.bytes;
             output.pending.pop_front();
+            if output.bytes == 0 && !output.closing {
+                self.sockets
+                    .queue_event_for(txn, cells, handle, SocketEventData::Drained)?;
+            }
             txn.write_socket(cells.output, Value::Output(output));
             Ok(true)
         })
@@ -571,16 +611,18 @@ impl SocketAccess<'_> {
 
     /// Retain terminal metadata and quota until the eventual closed callback finishes.
     pub fn closed(&self, handle: SocketHandle) {
-        self.txn.with(|txn| {
-            if let Ok((cells, mut record)) = self.sockets.record(txn, handle) {
-                record.info.state = SocketState::Closed;
-                let mut output = output(txn, cells.output);
-                output.bytes = 0;
-                output.pending.clear();
-                txn.write_socket(cells.record, Value::Record(record));
-                txn.write_socket(cells.output, Value::Output(output));
+        if let Some(info) = self.info(handle) {
+            let data = SocketEventData::Closed {
+                reason: SocketCloseReason::Local,
+                operation: None,
+                error: None,
+                local: info.local,
+                remote: info.remote,
+            };
+            if let Err(e) = self.terminal(handle, data) {
+                tracing::error!("socket terminal publication failed: {e}");
             }
-        });
+        }
     }
 
     /// Remove a terminal record after dispatch, even if its callback failed.

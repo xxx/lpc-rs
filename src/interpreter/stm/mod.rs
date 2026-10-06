@@ -689,6 +689,10 @@ pub(crate) struct TxnHandle(
 );
 
 impl TxnHandle {
+    pub(crate) fn same_transaction(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     pub(crate) fn null_mode(&self) -> NullMode {
         self.2
     }

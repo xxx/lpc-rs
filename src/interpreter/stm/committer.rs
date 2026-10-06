@@ -474,14 +474,15 @@ impl Committer {
                     work.extend(
                         index
                             .values()
-                            .flat_map(|cells| [cells.record, cells.output])
+                            .flat_map(|cells| [cells.record, cells.output, cells.inbox])
                             .map(MarkWork::Var),
                     );
                 }
                 crate::interpreter::sockets::Value::Record(record) => {
                     work.push(MarkWork::Ref(LpcRef::Function(record.callback.clone())));
                 }
-                crate::interpreter::sockets::Value::Output(_) => {}
+                crate::interpreter::sockets::Value::Output(_)
+                | crate::interpreter::sockets::Value::Inbox(_) => {}
             },
             WorldValue::Connection(maybe_connection) => {
                 if let Some(connection) = maybe_connection
