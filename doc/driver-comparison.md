@@ -798,6 +798,25 @@ four-second task budget; HELP_D consumes the pages and saves its index.
 Complete RST formatting compatibility and upstream execution remain unchecked;
 this adaptation adds no native API.
 
+#### Lima intermud mail audit
+
+The [intermud mail daemon][lima-imud-mail] was additionally reviewed on
+**5 October 2026** at the listed Lima revision. Its port needs the bare
+`check_queue` function in both timer calls, dotted `.sender` reads from cast
+`mail_msg` instances, and nil markers plus `({nil})` removal for invalid string
+recipients. Keep integer IDs/timestamps and the existing hourly
+self-rescheduling one-shot. [Function values](lpc/function_type.md),
+[class fields](lpc/classes.md#construction-and-members),
+[null values](lpc/null.md).
+
+A disposable proposal compiles and preloads with empty queues in a real native
+cold boot, leaving only IMUD's existing who-handler failure. That proposal is
+not adopted in the current overlay. Hourly dispatch, restored nonempty queues,
+delivery, acknowledgements and upstream execution remain unchecked.
+The [IMUD mail module][lima-imud-mail-protocol] uses the transport/OOB machinery
+whose unsupported socket dependencies are described above; empty startup does
+not establish a working intermud service. This port needs no new native API.
+
 #### Lima event and help timers
 
 Arguments after FluffOS's `call_out` delay are callback data. Native
@@ -9321,6 +9340,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-startup-verbs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/verb_d.c
 [lima-startup-last-login]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/last_login_d.c
 [lima-rst-generation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/rst_d.c
+[lima-imud-mail]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/imail_d.c
+[lima-imud-mail-protocol]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/mail.c
 [lima-imud-auth]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/auth.c
 [lima-imud-who]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/who.c
 [lima-imud-socket]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/socket.c
