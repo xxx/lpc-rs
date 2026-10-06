@@ -103,6 +103,9 @@ pub struct GlobalState {
 
     /// Pure compiled patterns shared by regex efuns, outside transactional state.
     pub(crate) regex_cache: super::regex_cache::RegexCache,
+
+    /// Transactional native TCP resources; physical transport is attached separately.
+    pub sockets: crate::interpreter::sockets::Sockets,
 }
 
 impl GlobalState {
@@ -119,6 +122,7 @@ impl GlobalState {
             committer_tx.clone(),
             Some(commit_watch),
         ));
+        let sockets = crate::interpreter::sockets::Sockets::new(&conf);
         Self {
             object_space,
             config: conf,
@@ -132,6 +136,7 @@ impl GlobalState {
             registry: Default::default(),
             updates: Default::default(),
             regex_cache: Default::default(),
+            sockets,
         }
     }
 
@@ -305,6 +310,10 @@ impl GlobalState {
                 roots.push(WorldRoot::Ref(call_out.func_ref.clone()));
             }
         });
+
+        if let Some(cell) = self.sockets.root() {
+            roots.push(WorldRoot::Var(cell));
+        }
 
         gc_pass(&self.committer_tx, roots).await
     }

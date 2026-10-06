@@ -433,6 +433,7 @@ impl Committer {
                             | WorldValue::Mapping(_)
                             | WorldValue::Image(_)
                             | WorldValue::Snoop(_)
+                            | WorldValue::Socket(_)
                     )
             })
             .map(|(var_id, _)| *var_id)
@@ -468,6 +469,20 @@ impl Committer {
             }
             WorldValue::Image(image) => work.push(MarkWork::Image(image.clone())),
             WorldValue::Snoop(_) => {}
+            WorldValue::Socket(value) => match value.as_ref() {
+                crate::interpreter::sockets::Value::Index(index) => {
+                    work.extend(
+                        index
+                            .values()
+                            .flat_map(|cells| [cells.record, cells.output])
+                            .map(MarkWork::Var),
+                    );
+                }
+                crate::interpreter::sockets::Value::Record(record) => {
+                    work.push(MarkWork::Ref(LpcRef::Function(record.callback.clone())));
+                }
+                crate::interpreter::sockets::Value::Output(_) => {}
+            },
             WorldValue::Connection(maybe_connection) => {
                 if let Some(connection) = maybe_connection
                     && let Some(input_to) = connection.input_to()
@@ -616,9 +631,13 @@ impl Committer {
         let new_version = Version::new();
         let origin = changeset.origin.clone();
         let publications = std::mem::take(&mut changeset.system_publications);
+        let socket_publications = std::mem::take(&mut changeset.socket_publications);
         let new_snapshot = self.snapshot.apply(new_version, changeset);
         self.snapshot = new_snapshot;
         for publication in publications {
+            publication.apply();
+        }
+        for publication in socket_publications {
             publication.apply();
         }
 

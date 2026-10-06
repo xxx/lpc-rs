@@ -422,6 +422,40 @@ impl Transaction {
             .write(var_id, WorldValue::Snoop(registration));
     }
 
+    pub(crate) fn write_socket(&mut self, cell: VarId, value: crate::interpreter::sockets::Value) {
+        self.changeset
+            .write(cell, WorldValue::Socket(Arc::new(value)));
+    }
+
+    /// Every command changes a socket cell, preventing the read-only commit path from dropping it.
+    pub(crate) fn publish_socket(
+        &mut self,
+        cell: VarId,
+        value: Option<crate::interpreter::sockets::Value>,
+        sender: &flume::Sender<crate::interpreter::sockets::SocketCommands>,
+        command: crate::interpreter::sockets::SocketCommand,
+    ) {
+        match value {
+            Some(value) => self.write_socket(cell, value),
+            None => self.drop_var(cell),
+        }
+        if let Some(publication) = self
+            .changeset
+            .socket_publications
+            .iter_mut()
+            .find(|publication| publication.sender.same_channel(sender))
+        {
+            publication.commands.push(command);
+        } else {
+            self.changeset
+                .socket_publications
+                .push(crate::interpreter::sockets::Publication {
+                    sender: sender.clone(),
+                    commands: thin_vec::thin_vec![command],
+                });
+        }
+    }
+
     /// Write the connection-binding cell: the `Connection` attached to a
     /// `Process`, or `None` to clear it. The `Connection` is held strongly so
     /// it stays alive between this write and the commit that makes it

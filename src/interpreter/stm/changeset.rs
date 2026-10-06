@@ -77,6 +77,7 @@ pub(crate) struct Changeset {
     pub(crate) origin: Option<Arc<CommitOrigin>>,
     pub(crate) system_publications: Vec<SystemPublication>,
     pub(crate) object_changes: ThinVec<super::snapshot::ObjectChange>,
+    pub(crate) socket_publications: ThinVec<crate::interpreter::sockets::Publication>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +111,7 @@ impl Changeset {
             origin: None,
             system_publications: Vec::new(),
             object_changes: ThinVec::new(),
+            socket_publications: ThinVec::new(),
         }
     }
 

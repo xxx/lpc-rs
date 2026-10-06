@@ -39,6 +39,7 @@ pub(crate) enum WorldValue {
     Rules(RuleList),
     /// A snoop relationship, shared by its two endpoint cells.
     Snoop(Arc<crate::interpreter::snooping::Registration>),
+    Socket(Arc<crate::interpreter::sockets::Value>),
 }
 
 impl WorldValue {
@@ -58,6 +59,7 @@ impl WorldValue {
             | Self::Image(_)
             | Self::Connection(_)
             | Self::Snoop(_)
+            | Self::Socket(_)
             | Self::Rules(_) => {
                 unreachable!("a payload or identity var read through a slot access")
             }

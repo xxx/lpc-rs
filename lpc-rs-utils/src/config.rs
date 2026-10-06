@@ -84,6 +84,18 @@ pub struct Config {
     #[builder(setter(into), default = "65536")]
     pub max_pending_snoop: usize,
 
+    /// Live or pending native TCP resources per VM; must be positive.
+    #[builder(default = "256")]
+    pub max_sockets: usize,
+
+    /// Admitted output bytes per native TCP stream; must be positive.
+    #[builder(default = "65536")]
+    pub max_pending_socket_output: usize,
+
+    /// Admitted nonempty writes per native TCP stream; must be positive.
+    #[builder(default = "128")]
+    pub max_pending_socket_writes: usize,
+
     /// Seconds between garbage-collection passes; `0` disables them.
     #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
     pub gc_interval: u64,
@@ -155,12 +167,42 @@ fn in_game_include_dirs(dirs: &[Ustr], lib_dir: &str) -> Result<Vec<Ustr>> {
         .collect()
 }
 
+fn socket_setting(
+    env: &HashMap<String, String>,
+    key: &str,
+    current: Option<usize>,
+) -> Result<Option<usize>> {
+    crate::tls::setting(env, key)
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|e| lpc_error!("invalid {key}: {e}"))
+        })
+        .transpose()
+        .map(|value| value.or(current))
+}
+
 impl ConfigBuilder {
     /// Validate include paths, listener settings, and TLS private-material placement.
     pub fn build(self) -> Result<Config> {
         let mut config = self.build_config()?;
         if config.max_pending_snoop == 0 {
             return Err(lpc_error!("MAX_PENDING_SNOOP must be positive"));
+        }
+        for (name, value) in [
+            ("MAX_SOCKETS", config.max_sockets),
+            (
+                "MAX_PENDING_SOCKET_OUTPUT",
+                config.max_pending_socket_output,
+            ),
+            (
+                "MAX_PENDING_SOCKET_WRITES",
+                config.max_pending_socket_writes,
+            ),
+        ] {
+            if value == 0 {
+                return Err(lpc_error!("{name} must be positive"));
+            }
         }
         config.system_include_dirs =
             in_game_include_dirs(&config.system_include_dirs, config.lib_dir.as_str())?;
@@ -204,6 +246,17 @@ impl ConfigBuilder {
         let lib_dir_str = lib_dir.map(|d| d.to_string()).unwrap_or_default();
 
         Ok(Self {
+            max_sockets: socket_setting(&env, "MAX_SOCKETS", self.max_sockets)?,
+            max_pending_socket_output: socket_setting(
+                &env,
+                "MAX_PENDING_SOCKET_OUTPUT",
+                self.max_pending_socket_output,
+            )?,
+            max_pending_socket_writes: socket_setting(
+                &env,
+                "MAX_PENDING_SOCKET_WRITES",
+                self.max_pending_socket_writes,
+            )?,
             call_out_preserve_player: Some(boolean_setting(
                 &env,
                 "CALL_OUT_PRESERVE_PLAYER",
@@ -434,6 +487,65 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_socket_limits_reject_zero() {
+        for builder in [
+            ConfigBuilder::default().max_sockets(0),
+            ConfigBuilder::default().max_pending_socket_output(0),
+            ConfigBuilder::default().max_pending_socket_writes(0),
+        ] {
+            assert!(builder.build().is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn native_socket_limits_load_from_explicit_environment() {
+        let defaults = Config::default();
+        assert_eq!(
+            (
+                defaults.max_sockets,
+                defaults.max_pending_socket_output,
+                defaults.max_pending_socket_writes
+            ),
+            (256, 65536, 128)
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sockets.env");
+        fs::write(&path, "LPC_MAX_SOCKETS=3\nLPC_MAX_PENDING_SOCKET_OUTPUT=16\nLPC_MAX_PENDING_SOCKET_WRITES=2\n").unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (
+                config.max_sockets,
+                config.max_pending_socket_output,
+                config.max_pending_socket_writes
+            ),
+            (3, 16, 2)
+        );
+    }
+
+    #[test]
+    fn native_socket_settings_parse_both_names_and_prefer_prefix() {
+        for key in [
+            "MAX_SOCKETS",
+            "MAX_PENDING_SOCKET_OUTPUT",
+            "MAX_PENDING_SOCKET_WRITES",
+        ] {
+            let mut env = HashMap::from([(key.to_string(), "10".to_string())]);
+            assert_eq!(socket_setting(&env, key, Some(3)).unwrap(), Some(10));
+            env.insert(format!("LPC_{key}"), "20".to_string());
+            assert_eq!(socket_setting(&env, key, Some(3)).unwrap(), Some(20));
+            for value in ["bad", "-1", "99999999999999999999999999999999"] {
+                env.insert(format!("LPC_{key}"), value.to_string());
+                assert!(socket_setting(&env, key, None).is_err());
+            }
+        }
+    }
 
     #[tokio::test]
     async fn snoop_budget_is_positive_and_configurable() {

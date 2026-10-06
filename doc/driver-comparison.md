@@ -818,6 +818,13 @@ need ordered publication through the committer before independent task effect
 delivery; physical IO remains outside the committer. This interface is a
 proposal, not implemented driver behavior.
 
+The native bookkeeping foundation now provides transactional socket records,
+owner inventories, count/output limits, whole-buffer write admission and
+commit-ordered command batches. Destruction and failed initialization retire
+owned records transactionally, and GC traces registered callback captures.
+This does not yet provide TCP IO, event dispatch, socket efuns or Lima transport;
+the listener/stream workers and completion callbacks remain to be implemented.
+
 #### Lima RST generation
 
 The [RST daemon][lima-rst-generation] was additionally reviewed on

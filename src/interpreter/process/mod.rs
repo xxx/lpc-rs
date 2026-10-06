@@ -94,6 +94,9 @@ pub struct Process {
     /// Allocated only when this object participates in snooping.
     pub(crate) snoop: OnceLock<Box<crate::interpreter::snooping::Slots>>,
 
+    /// Allocated only when this object's native TCP inventory is accessed.
+    pub(crate) socket_index: OnceLock<VarId>,
+
     /// The cell marking that the initializer has run; a rejected
     /// initialization rolls it back with the globals.
     pub initialized: SVar<LpcRef>,
@@ -137,6 +140,7 @@ impl Default for Process {
             name: ObjectName::File,
             connection: SVar::new(),
             snoop: OnceLock::new(),
+            socket_index: OnceLock::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
@@ -176,6 +180,7 @@ impl Process {
             name,
             connection: SVar::new(),
             snoop: OnceLock::new(),
+            socket_index: OnceLock::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
@@ -560,6 +565,7 @@ impl Process {
                     .into_iter()
                     .flat_map(|s| [s.incoming, s.outgoing]),
             )
+            .chain(self.socket_index.get().copied())
             .collect()
     }
 

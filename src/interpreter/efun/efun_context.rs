@@ -500,6 +500,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         forget_destruct(self.txn(), &process);
         self.txn()
             .with(|t| crate::interpreter::snooping::retire_object(t, &process));
+        self.txn().with(|t| {
+            self.task_context
+                .global_state
+                .sockets
+                .retire_object(t, &process)
+        });
         let connection = self
             .txn()
             .with(|t| t.read_connection(process.connection.id));

@@ -12,6 +12,7 @@ pub mod function_type;
 pub(crate) mod json;
 pub(crate) mod save_format;
 pub mod snooping;
+pub mod sockets;
 
 pub mod lpc_array;
 pub mod lpc_class;

@@ -492,6 +492,8 @@ impl TaskContext {
         ))
         .await
         {
+            self.txn()
+                .with(|t| self.global_state.sockets.retire_object(t, process));
             txn_undo_insert(self.txn(), self.object_space(), process);
             return Err(e);
         }
