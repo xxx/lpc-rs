@@ -5157,6 +5157,47 @@ sender body, offline/NPC targets, history persistence, long pager interaction,
 complete vocabulary delivery, other SOUL consumers, logging, network, login and
 cold startup remain unestablished.
 
+#### Lima lost-message file export repair
+
+The **5 October 2026** local port changes only the shared
+[base mailer][lima-mailer-base]. Its message builder displays the existing
+lost-message warning and returns nil, preventing header/body exports from
+creating files or appending the warning to existing files. The owner's stale
+receipt still gets pruned and saved; other owners retain their receipts.
+Ordinary lost-message reads keep their prompt and numeric cursor, allowing the
+next read without starting a pager for the warning.
+
+Export writes catch native [`write_file`](efun/write_file.md) exceptions and
+report the destination and reason. Missing parents, directory destinations and
+master permission refusals now produce feedback through normal standard/Mh
+input. Healthy exports retain append mode, bytes, selected defaults and unread
+state. Malformed-record handling, body salvage and protected entry keep their
+existing policies. Uncaught outer errors discard writes, receipt pruning, saves
+and success/error feedback. The success message acknowledges staging;
+commit-time I/O failures remain separate.
+
+**Twenty-three fresh tests/observations pass**: twenty-one on the adopted overlay
+and two controls reproducing both defects on the previous help overlay. Fourteen
+core CLI checks pass, previous 7/7 and adopted 7/7. Validation uses real stock
+Users, bodies, connections, MAIL_D sends, native saved classes and owned
+mailboxes; the historical audit runner remains frozen. Four quality gates pass,
+including workspace Clippy with all targets/features and warnings denied.
+Nineteen pinned Lima and eleven
+native source reviews are reused, preserving all 259 predecessor artifact/report
+sets. The initial terminal wrap assertion correction retains its receipts. The
+one-file patch is adopted under `local/`; original Lima, native APIs, master policy and
+overview cells remain unchanged. Reviewed source claims use the pinned
+[standard][lima-mailer-standard], [Mh][lima-mailer-mh],
+[mailbox][lima-entry-mailbox], [master][lima-master],
+[security][lima-security] and [input forwarding][lima-input-forwarding] contracts.
+Execution is local lpc-rs only, with distinct nil, preserved call-out players,
+4,000 ms actions, `USE_USER_MENU` and `.o` saves; upstream-driver execution and a
+fresh public-source fetch remain unchecked.
+
+Audit nonwizard export authorization and mail command exposure next. Remote
+routing, other delivery faults, long paging/ranges, concurrency, disconnect
+recovery, account deletion and startup remain separate.
+
 #### Lima lost-message file export audit
 
 Reviewed **5 October 2026** against pinned [base mailer][lima-mailer-base],
