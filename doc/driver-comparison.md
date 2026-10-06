@@ -762,12 +762,13 @@ restarting and transaction rollback. These checks establish the adapted module;
 the full IMUD daemon still fails in `who.c` on `string title = 0`.
 [Who handler][lima-imud-who].
 
-The [socket object][lima-imud-socket] also calls socket creation, connection,
-listening, transfer and write efuns; these APIs are absent from the native efun
-registry. Its `external_start` branch is optional subprocess support, not an
-IMUD transport operation. A working intermud service needs the network API
-decision below and further daemon adaptations. Router connectivity and upstream
-execution remain unchecked.
+The [socket object][lima-imud-socket] uses FluffOS socket creation, connection,
+listening, transfer and write signatures. The native [TCP interface](tcp-sockets.md)
+now supplies those transport capabilities with different signatures and events;
+the wrapper still needs adaptation. Its `external_start` branch is optional
+subprocess support, not an IMUD transport operation. A working intermud service
+also needs the codec and daemon adaptations below. Router connectivity and
+upstream execution remain unchecked.
 
 #### Lima IMUD networking audit
 
@@ -806,17 +807,18 @@ need explicit contracts before implementation; the existing interactive
 
 Compile-only controls also expose ordinary port changes in channel/user-cache
 handlers, OOB timers and reply markers, and file metadata/callback reduction.
-Later errors remain masked by the file-handler frontier. No production patch,
-clean complete-daemon compile, transport execution or new native API is claimed.
+Later errors remain masked by the file-handler frontier. That audit adopted no
+production patch and established no clean complete-daemon compile or transport
+execution; the native API was implemented subsequently.
 
-The subsequent TCP interface proposal combines connect/listen setup and uses
+The subsequent TCP interface combines connect/listen setup and uses
 one event callback for completion, accepted streams, raw reads, EOF and closure.
 Writes admit a whole bytes buffer or refuse it without taking a prefix; the
 driver handles partial OS writes. Accepted-stream reads pause during their
 listener callback so ownership can be assigned synchronously. Socket commands
 need ordered publication through the committer before independent task effect
-delivery; physical IO remains outside the committer. This interface is a
-proposal, not implemented driver behavior.
+delivery; physical IO remains outside the committer. The implemented contract is
+documented in [TCP sockets](tcp-sockets.md).
 
 The native bookkeeping foundation now provides transactional socket records,
 owner inventories, count/output limits, whole-buffer write admission and
@@ -856,6 +858,40 @@ Acquisition requires the named recipient's active offer call. Offers use efun or
 and native catch semantics: a caught error retains prior acquisition, while an
 uncaught transaction abort discards it. The driver starts TCP before preloads and
 stops it before closing the committer. Lima's wrapper/I3 adaptation remains unimplemented.
+
+#### Lima TCP wrapper and I3 adaptation
+
+A further source review on **6 October 2026**, against the same pinned Lima and
+FluffOS revisions, finds no additional transport efun required for the router/OOB
+paths. Adapt MUD-mode connections/listeners to the native event callback, acquire
+accepted children during the listener callback, and deliver `(wrapper, nil)` once
+before the child's packets. Keep numeric wire zero unchanged; normalize only
+nullable fields before calling typed protocol handlers.
+
+Implement bounded framing and an explicit value codec in the mudlib. Native
+[`restore_value`](efun/restore_value.md) also has different string escape/newline
+semantics and accepts native value forms that do not belong in I3. String and bytes
+concatenation have an 8 KiB result limit; conversions can create larger values.
+Use bounded fragments or preallocated byte arrays, and send larger frames through
+admitted chunks. The native input/output queue budget is not an I3 frame limit.
+The codec's complete runtime cost and useful frame limit still need validation.
+
+Lima's wrapper closes and immediately destroys its owner. Native destruction
+retires queued output, so keep a deliberately closing wrapper alive until its own
+queue and native close finish. Actual destruction and driver shutdown still cancel
+resources. Clear the daemon's logical reference when intentionally replacing a
+router, and guard later callbacks by connection identity. Peer EOF needs explicit
+translation to the I3 close path because the native write side stays open.
+Catch malformed framing inside the event and commit cleanup: an uncaught callback
+error rolls back the cursor while discarding that raw-input event.
+
+The existing master signature compiles, but its wrapper grant must account for
+new inspection operations and ownership recipients. Preserve the wrapper's outgoing
+privilege check. The absent `send_telnet_nop` keepalive and swallowed outgoing-mail
+send failures are existing Lima concerns for integration, not reasons to add native
+Telnet framing or weaken queue bounds. Fresh distinct-nil probes and compile controls
+support these adaptations; no wrapper patch, complete codec, mock-peer exchange or
+actual-router execution is claimed yet.
 
 #### Lima RST generation
 
