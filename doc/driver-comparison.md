@@ -966,8 +966,8 @@ next chunk themselves or return it for the wrapper to enqueue, as Lima's FTP fil
 producer does. Port binary consumers from `buffer` and `read_buffer` to
 [`bytes`](lpc/types.md), [`read_bytes`](efun/read_bytes.md) and explicit
 [`to_text`](efun/to_text.md) conversions. Wrapper support alone does not make the
-HTTP or FTP daemon compatible. The HTTP adaptation is described below; FTP still
-needs source adaptation. Their optional preload entries remain commented. Lima
+HTTP or FTP daemon compatible. Their source adaptations are described below,
+and their optional preload entries remain commented. Lima
 supplies the older [RCP daemon][lima-rcp] as a disabled `.dontuse` file.
 
 The one-file wrapper extension is adopted in the local Lima port. Six functional
@@ -1011,6 +1011,50 @@ four-second task budget. The fixture binds loopback on an ephemeral port and
 sends complete request headers; fragmented headers, the web editor application
 and broader HTTP conformance remain unchecked. Native TCP, the shared wrapper,
 master policy and the frozen predecessor are unchanged.
+
+#### Lima FTP daemon
+
+The [FTP daemon][lima-ftp] and [class/prototype header][lima-ftp-header] were
+reviewed on **6 October 2026** at the pinned Lima revision. Place the header's
+class declarations after the inherit. Use native class fields, typed nil returns,
+bare callbacks and bound timer arguments; logging needs mixed variadic arguments.
+Retain the prototypes and give the file producer a bytes result.
+
+Keep the control stream as text and use binary styles for all data connections.
+Replace buffer IO with [`read_bytes`](efun/read_bytes.md) and
+[`write_bytes`](efun/write_bytes.md) under the existing session privilege. Native
+byte writes require an existing file, so recreate the empty upload file after
+removing an old one. TYPE A uploads retain CR removal through a reversible
+ISO-8859-1 conversion; TYPE I preserves bytes. RETR retains the source's raw
+file bytes and existing lack of TYPE A newline conversion. Build directory rows
+with [`get_dir`](efun/get_dir.md), [`file_size`](efun/file_size.md) and
+[`file_time`](efun/file_time.md), retaining the original listing formats.
+
+Advertise the control connection's numeric local IPv4 address and wait for the
+passive listener's actual bound port. The native setup is asynchronous; retain
+the 40000–40100 range and ten attempts, with up to 1,000 readiness checks per
+attempt at 10 ms intervals. Bind
+the session into the common byte callback. Retire the one-use listener through
+a subsequent call out so its accept event commits before closing. Native listener
+closure discards children whose accept event has not committed, including a
+child acquired inside that callback. See [TCP events](tcp-sockets.md).
+
+The common byte callback replaces the source's separate binary passive lookup,
+which uses a port key although the passive map stores control-socket keys.
+That discrepancy is source-reviewed; FluffOS execution is unchecked. Close
+wrappers through `remove` to drain queued replies and file data. Existing
+password hashing, wizard/admin selection, anonymous settings and the optional
+preload remain unchanged.
+
+The two-file adaptation is adopted in the local port. Six functional tests pass
+for anonymous control commands, passive LIST/NLST, active/passive 32 KiB RETR and
+actual wizard password login with ASCII/binary STOR. The full daemon/header
+compile, workspace Clippy and formatting pass. Tests use lpc-rs, distinct nil,
+preserved call-out players and the four-second task budget; temporary accounts,
+files and loopback/ephemeral listener settings are excluded from adoption. Native
+TCP, the shared wrapper, master policy and frozen predecessor remain unchanged.
+External/NAT deployments, binding failure/retry behavior, idle expiry, command
+pipelining and broader FTP conformance remain unchecked.
 
 #### Lima RST generation
 
@@ -10009,4 +10053,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-http]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/http_d.c
 [lima-http-form]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/formtest.c
 [lima-http-webed]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/cgi/webed.c
+[lima-ftp-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/ftp_d.h
 [lima-rcp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/rcp_d.dontuse
