@@ -1743,6 +1743,58 @@ separate restoration lifecycle and remain the next audit. Foreign saved-data
 conversion, function-valued saved intervals, alternate configurations and a new
 full startup/login run remain unchecked by this batch.
 
+#### Lima inventory transient restoration
+
+Reviewed **7 October 2026** against the pinned [transient][lima-transient],
+[stateful module][lima-stateful-module], [state daemon][lima-state-daemon],
+[save module][lima-save-module], [poison][lima-poison],
+[speed][lima-transient-speed], [shield][lima-transient-shield],
+[spell transient][lima-transient-spell], [acid arrow][lima-transient-acid-arrow]
+and [true strike][lima-transient-true-strike]. Execution uses USE_MASS, distinct
+nil, preserved call-out players and the unchanged 4,000 ms budget, with limb
+health, armour and wielding selected. No additional driver feature is needed.
+
+M_SAVE reconstructs each child with a clone without constructor arguments, then
+loads its registered fields and places it in inventory. The constructor's
+deferred callback registers it with STATE_D after restoration. Entry does not
+tick these effects; registration starts a fresh relative minute interval.
+
+Three characterization checks pass across four fresh-VM restores with two real
+users and human bodies. They reproduce incomplete mudlib save registrations;
+passing these checks does not establish complete transient restoration. Poison
+and speed retain duration, strength and action, while setup restores their
+constant identities. Native scheduler pulses apply their actions, requeue them
+and expire them after a final zero-count update. Poison damages the actual
+human torso; the selected speed setter remains empty. Shield retains duration
+and its constant identity but loses strength/action. Its fixed-five bludgeon
+reduction still works because it ignores strength.
+
+A configured generic transient retains duration but loses type/name,
+cannot-extend state, interval and owner. Stock transients use the default
+one-minute interval and do not set an owner. Acid arrow loses strength/action
+and limb, and spell setup replaces its original caster with the affected body
+during login. True strike also loses spent state: a spent effect can modify a
+new event for the affected player after restoration. Its native cleanup still
+removes it. These resets result from the adapted library's save registrations
+and constructor defaults; upstream runtime behavior was not executed.
+
+Keep durable identity/extendability and shield strength/action in their existing
+save registrations. Preserve the current interval and ephemeral-owner policy
+for this pass. Caster-dependent spells need an explicit restoration policy;
+prefer excluding them from inventory saves through `do_not_restore` until Lima
+can rebind the caster correctly. Merely saving an object reference does not
+recreate it across a fresh VM. [Native save format](save-format.md).
+
+The active library, native code and master policy remain unchanged; this audit
+adopts no patch. Ordinary input saves the body, virtual Connections collect
+messages without sockets, and native timers dispatch registration, state pulses
+and cleanup. Fixture helpers supply observations and controlled event data.
+Standalone compilation passes eighteen of nineteen targets; the isolated
+body-switch module needs its complete user host's methods. Both fixture
+compositions compile. Workspace Clippy with all targets/features and formatting
+pass. Full casting, acid damage delivery, alternate configurations and a new full
+startup/login run remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
