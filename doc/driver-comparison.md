@@ -1379,8 +1379,59 @@ Fixture helpers are excluded from adoption; no replacement rooms or extra stock
 objects are introduced. Native code, master policy and combat dispatch modules
 are unchanged. The stock [lazy limb-cache rebuild][lima-health-limbs] remains:
 first limb selection can reinitialize health after initial monster setup.
-Player wield/unwield, equipped swings, death/generated corpses, NPC actions,
+The [stock weapon command audit below](#lima-stock-player-weapon-commands) covers
+player wield/unwield and equipped swings. Death/generated corpses, NPC actions,
 generic corpse decay and a new full startup/login run remain unchecked.
+
+#### Lima stock player weapon commands
+
+Reviewed **7 October 2026** against the pinned Lima revision, using the same
+USE_MASS, distinct nil, preserved call-out players, 4,000 ms task budget and
+combat selections as the stock combat entry audit above.
+
+The [wieldable module][lima-wieldable] needs three translations. Test ownership
+with `if (wielded_by)` and `if (!wielded_by)` instead of comparing the unset
+object field with numeric zero: otherwise ordinary wield reports an already
+wielded weapon. Use bare `unwield_me` for its move callback. Native
+[`(: unwield_me :)`](lpc/function_type.md) returns a function value without calling
+it, so the untranslated hook moves the dropped sword while retaining its old
+owner and combat slot. The bare callback performs the existing unwield action.
+
+In the bulk [wield][lima-wield-command], [unwield][lima-unwield-command] and
+[remove][lima-remove-command] handlers, replace `typeof(ob) == T_STRING` with
+[`stringp(ob)`](efun/stringp.md). Lima's [type header][lima-driver-type] defines
+T_STRING as a string; native [`typeof`](efun/typeof.md) returns an integer tag.
+The old check misses parser error strings and tries to call them as object paths.
+The predicate retains each handler's existing skip-string policy. These changes
+leave the type header, limb bookkeeping, master policy and native
+implementation unchanged.
+
+Five ordinary-input checks pass through the real master, simul efuns, users,
+human bodies, player shells and stock grotto population. They cover default
+wield/unwield and rewielding, [inventory annotations][lima-inventory-command],
+`in left hand`, `with right hand` and hand flipping, single/bulk remove, bulk
+wield/unwield with a carried nonweapon lantern, and [dropping][lima-drop-verb],
+reacquiring and rewielding the glowing sword. They verify reciprocal weapon/limb
+state, F_WIELDED and messages to an observer. The move hook now clears ownership,
+limbs, flags and slots after ordinary drop.
+
+An equipped `kill troll` and a native player pulse use the carried Sword of Mercy,
+retain mutual targeting and one two-second timer per combatant, and route combat
+messages to the observer. Ordinary travel separates the combatants; both native
+callbacks retire their timers without a new runtime-log entry. Random results
+remain stock. This run observes equipped misses; the sword's damage-clamping
+branches and complete combat outcomes are not execution-validated here.
+
+Sixteen focused standalone compile checks retain fourteen successes and two
+partial-module rejections for unresolved host methods, with unchanged diagnostic
+lists. Concrete weapons and the human body compile. Workspace Clippy with all
+targets/features and formatting pass. Setup/light/observation helpers are excluded
+from adoption, native timers dispatch callbacks, and virtual Connections collect
+output without sockets. Blueprints initialize separately before entry. These
+are focused lpc-rs results and pinned source review, without upstream execution.
+Two-handed player commands, second-weapon loadouts, armour commands, ranged
+weapons, restrictions, death/generated corpses, NPC actions, generic corpse decay
+and a new full startup/login run remain unchecked by this batch.
 
 #### Lima cold startup and login
 
@@ -3059,8 +3110,10 @@ back the native attempt. Preserve this policy when adapting the prefix type.
 
 Checks use real path resolution, cloning and container movement with a recording
 `do_wield` callback. Standalone compilation still needs the receiver's callback;
-actual weapon state, body entry and combat remain unvalidated. Body/adversary/
-human compilation next needs the [stats base adaptation](#lima-stats-base).
+the later [stock combat entry](#lima-stock-combat-entry) and
+[weapon command audit](#lima-stock-player-weapon-commands) cover real weapon state,
+body entry and equipped swings. Complete combat remains unvalidated.
+Body/adversary/human compilation next needs the [stats base adaptation](#lima-stats-base).
 
 #### Lima stats base
 
@@ -10861,6 +10914,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-light-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/light_object.c
 [lima-monster-defaults]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/monster.c
 [lima-kill-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/kill.c
+[lima-unwield-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/unwield.c
+[lima-remove-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/remove.c
+[lima-inventory-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/inventory.c
+[lima-driver-type]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/driver/type.h
 [fl-combat-callother]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L226-L229
 [fl-combat-undefined-stack]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/interpret.cc#L312-L319
 [fl-combat-undefined-value]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/svalue.cc#L11
