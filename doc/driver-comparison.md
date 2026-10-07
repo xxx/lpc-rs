@@ -1102,6 +1102,38 @@ contributed roommaker, unused completion paths and other screen widths/terminal
 modes remain unchecked by this batch. These are lpc-rs execution results and pinned
 Lima source review, without upstream driver execution.
 
+#### Lima quest status display
+
+The [quests command][lima-player-quests], [quest daemon][lima-quest-daemon] and
+[body quest module][lima-body-quests] were reviewed on **6 October 2026** against
+the pinned Lima revision. The command needs a protected four-slot variadic
+dispatch adapter calling its private no-argument handler. Its room-path domain
+index also changes from 1 to 2: native [`explode`](efun/explode.md) preserves the
+empty field before the leading slash, so index 1 selects `domains` rather than
+`std`. Lima retains distinct nil, preserved call-out players and the 4,000 ms
+task budget.
+
+Eight tests pass through ordinary input using real users, human bodies, player
+shells, quest daemon, daemon save/restore and frame rendering. They cover the
+stock Pirate quest's three grouped steps; Not started, Started, On your way and
+Finished statuses; configured display names; a saved name restored after daemon
+reload; multiple quests and the plural footer; an empty domain; simplified
+terminal output; and independent player progress. Repeated displays preserve
+daemon and body state after the body's lazy initialization, and the four-status
+check leaves points and experience unchanged. Every tested input finishes without
+a caught error. Virtual Connections collect output without sockets. Ten focused
+compile checks, workspace Clippy with all targets/features and formatting pass.
+
+Only quests.c changes. The quest daemon, body helpers, master policy and existing
+frame clipping remain unchanged; fixture state setters and observation helpers
+are excluded from adoption. The partial body quest module relies on its complete
+human inheritor for `add_experience` and `save_me`, so the compile checks use that
+inheritor. Status fixtures use valid body progress and daemon table entries;
+actual stock quest earning and the administrator quest editor remain unchecked.
+Full startup, login/reconnect and complete saved-body quest restoration are not
+repeated by this batch. These are lpc-rs execution results and pinned Lima source
+review, without upstream driver execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10545,3 +10577,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-quest-hint-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/hintmenu.c
 [lima-old-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/menu_old.c
 [lima-quest-hint-files]: https://github.com/limalib/lima/tree/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/help/hints
+
+[lima-player-quests]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/quests.c
+[lima-quest-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/quest_d.c
