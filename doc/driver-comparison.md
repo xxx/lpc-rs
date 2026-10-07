@@ -1172,6 +1172,49 @@ and native code are unchanged. Full startup/login is not repeated. These are
 lpc-rs execution results and pinned Lima source review, without upstream driver
 execution.
 
+#### Lima Pirate room populations
+
+The stock [Sandy_Beach][lima-pirate-beach], [Small_Dock][lima-pirate-dock-room]
+and [Navigation_Room][lima-pirate-navigation-room] populations were reviewed on
+**7 October 2026** against the pinned Lima revision. Convert integer mass
+constants to float in the [sand castle][lima-pirate-castle], [dock][lima-pirate-dock],
+[table][lima-pirate-table] and [maps][lima-pirate-maps]. Match the table's inherited
+indirect-get signature and the [rock wall's][lima-pirate-rock-wall] direct
+open/close signatures, forwarding its object arguments. Use bare callbacks for
+its open timer and the [digger's][lima-digger] modal answer. Adapt
+[readable text][lima-readable-text] to fall back to literal text when its
+exploratory file-size lookup throws: the welcome sign's long inline text
+otherwise aborts beach construction. Lima retains USE_MASS, distinct nil,
+preserved call-out players and the 4,000 ms task budget.
+
+The rock wall schedules close, while its inherited API defines do_close. Retain
+that existing target-name issue with `(: this_object()->close() :)`, which looks
+up the name at expiry. Constructing a bound pointer to the missing handler fails
+immediately on lpc-rs. The adapted late-bound timer leaves the passage open;
+changing its target to do_close would repair an existing Lima defect and is
+outside this port patch.
+
+Six tests pass through ordinary input using the complete stock room sources and
+populations, including the table's nested shovel. Checks cover scenery/sign
+reading, taking the shovel, stock sand digging, modal target selection, the
+navigation button, synchronized walls, passage traversal in both directions and
+quest milestones totaling 25 points and 250 XP with Finished displayed. Native
+timer dispatch preserves player context and adds no runtime-log entries.
+Every tested input finishes without a caught error. Twenty-five focused compile
+checks, workspace Clippy with all targets/features and formatting pass.
+These are lpc-rs execution results and pinned Lima source review,
+without upstream driver execution.
+
+Only seven object/module files change; all room sources and populations remain
+unchanged. There are no room replacements or extra fixture stock objects.
+Fixture helpers provide observation, account/body setup, targeted navigation
+and a light-emitting body for the dark caves; they are excluded from adoption.
+Blueprints are initialized separately before population, retaining the fixed
+task budget. Virtual Connections collect output without sockets. Continuous
+travel through intermediate caves, lighting tools, every scenery verb,
+saved-body restart and full startup/login remain unchecked. Native code, master
+policy and quest daemon/body are unchanged.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10625,3 +10668,14 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-pirate-shovel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/shovel.c
 [lima-digging-hole]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/hole.c
 [lima-diggable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_diggable.c
+
+[lima-pirate-beach]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Sandy_Beach.c
+[lima-pirate-dock-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/caves/Small_Dock.c
+[lima-pirate-navigation-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/caves/Navigation_Room.c
+[lima-pirate-castle]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/sand_castle.c
+[lima-pirate-dock]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/dock.c
+[lima-pirate-table]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/navigation_table.c
+[lima-pirate-maps]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/maps.c
+[lima-pirate-rock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/rock_wall.c
+[lima-digger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_digger.c
+[lima-readable-text]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_readable.c
