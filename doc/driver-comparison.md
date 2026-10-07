@@ -966,15 +966,51 @@ next chunk themselves or return it for the wrapper to enqueue, as Lima's FTP fil
 producer does. Port binary consumers from `buffer` and `read_buffer` to
 [`bytes`](lpc/types.md), [`read_bytes`](efun/read_bytes.md) and explicit
 [`to_text`](efun/to_text.md) conversions. Wrapper support alone does not make the
-HTTP or FTP daemon compatible; their optional preloads remain disabled pending
-source adaptation. Lima supplies the older [RCP daemon][lima-rcp] as a disabled
-`.dontuse` file.
+HTTP or FTP daemon compatible. The HTTP adaptation is described below; FTP still
+needs source adaptation. Their optional preload entries remain commented. Lima
+supplies the older [RCP daemon][lima-rcp] as a disabled `.dontuse` file.
 
 The one-file wrapper extension is adopted in the local Lima port. Six functional
 tests cover text/binary connect and accept, split UTF-8 input, raw binary data,
 queued writes, callback-produced file chunks and retained MUD framing. Wrapper
-and full IMUD compilation, workspace Clippy and formatting pass. Native TCP code
-and the optional service implementations are unchanged.
+and full IMUD compilation, workspace Clippy and formatting pass. That wrapper
+change leaves native TCP code and the optional service implementations unchanged.
+
+#### Lima HTTP daemon
+
+The [HTTP daemon][lima-http], [POST example][lima-http-form] and
+[web editor CGI entry][lima-http-webed] were reviewed on **6 October 2026** at the
+pinned Lima revision. Port the binary read callback to native `bytes` and replace
+file `read_buffer` calls with [`read_bytes`](efun/read_bytes.md), handling its
+integer-zero EOF result before sending another chunk. Use native class field
+access, bare callbacks and typed nil returns.
+
+Decode incoming bytes with [`to_text`](efun/to_text.md) using ISO-8859-1 so the
+existing string parser counts one character per wire byte. Form percent decoding
+retains its existing behavior. For CGI responses, apply the existing LF-to-CRLF
+conversion, encode with [`to_bytes`](efun/to_bytes.md) using UTF-8, and calculate
+`Content-Length` from the bytes actually sent. Static files retain their exact
+bytes and file-size content length.
+
+The daemon's POST dispatch calls `main(form, headers)`. Add an optional second
+mapping parameter to the two shipped entry points while retaining their direct
+one-argument use. The web editor entry continues forwarding only the form to its
+application. Its application has not been validated by this source port.
+
+The source adaptation uses the existing native TCP APIs and binary wrapper.
+HTTP remains optional, with its original preload entry commented and its port
+at the configured base plus three. The daemon's existing request parser and CGI
+response conventions are retained, including its body-only POST response.
+
+The three-file HTTP adaptation is adopted in the local port. Seven functional
+tests pass for root/explicit HTML, exact binary image delivery, an exact file
+block, zero/one-argument CGI, UTF-8 CGI content length and two-argument POST form
+dispatch. Five CLI compile checks, workspace Clippy and formatting pass. Runtime
+checks use lpc-rs with distinct nil, preserved call-out players and the unchanged
+four-second task budget. The fixture binds loopback on an ephemeral port and
+sends complete request headers; fragmented headers, the web editor application
+and broader HTTP conformance remain unchecked. Native TCP, the shared wrapper,
+master policy and the frozen predecessor are unchanged.
 
 #### Lima RST generation
 
@@ -9971,4 +10007,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-mail-biff]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/biff.c
 
 [lima-http]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/http_d.c
+[lima-http-form]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/formtest.c
+[lima-http-webed]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/cgi/webed.c
 [lima-rcp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/rcp_d.dontuse
