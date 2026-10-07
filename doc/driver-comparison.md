@@ -810,6 +810,35 @@ from adoption. Full startup, actual listener metadata, login persistence, named
 zones and invalid inputs remain unchecked by this batch; native code and master
 stay unchanged.
 
+#### Lima player time report
+
+The [time command][lima-player-time], reviewed on **6 October 2026**, needs a
+protected dispatch adapter retaining its private handler, an explicit long-format
+argument to the mudlib time_to_string helper, and to_float before multiplying
+integer body timezone hours by a float. Lima's [localtime header][lima-localtime-header]
+expects a GMT offset at index 8; native [localtime](efun/localtime.md) returns a
+nine-integer array with the daylight-saving flag there. The report parses the
+existing [strftime](efun/strftime.md) `%z` result into signed hour/minute seconds
+instead, without changing the shared header or native API.
+
+The real [event daemon][lima-event-daemon] and its daemon-data base need no source
+changes for the game-time report with the existing configuration and no saved
+event registrations. Ten compile checks and five ordinary-input tests pass through
+real Lima user/body/shell/frame objects: unset timezone, positive and negative
+fractional hours, explicit zero and an integer body offset. A fixed nonzero test
+server zone establishes the local/GMT difference against current wall time;
+the tests also check game-time/weekday output, reboot/uptime text, unchanged body
+values and return to the shell. Workspace Clippy and formatting pass. Only time.c
+changes; the wider test viewport, fixture helpers and test server zone are excluded
+from adoption.
+
+Lima's existing player-time formula adds the saved offset to the server local
+clock, although its prose describes GMT. Its fixed frame labels also remain when
+an unset timezone omits the player date row. These source behaviors are preserved.
+Full startup, scheduled event execution, daylight-saving transitions, alternate
+game-time settings, display combinations and login persistence remain unchecked
+by this batch; native code, master and the game-time configuration stay unchanged.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10228,3 +10257,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-frames]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/frames.c
 [lima-player-version]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/version.c
 [lima-player-timezone]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/timezone.c
+[lima-player-time]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/time.c
+[lima-localtime-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/localtime.h
+[lima-event-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/event_d.c
