@@ -915,6 +915,31 @@ unchecked by this batch. The original spell ordering comparator is preserved;
 native code and master policy stay unchanged. These are lpc-rs execution results
 and pinned Lima source review, without upstream driver execution.
 
+#### Lima emote and shout commands
+
+The [emote command][lima-player-emote] and [shout command][lima-player-shout],
+reviewed on **6 October 2026**, need only protected dispatch adapters retaining
+their private handlers. Emote forwards four argument slots; shout forwards its
+text argument. Both retain no_redirection and the existing message helpers.
+English punctuation remains Lima policy in its [grammar module][lima-message-grammar].
+Lima retains distinct nil, preserved call-out players and the 4,000 ms task budget.
+
+Eleven focused compile checks and eight ordinary-input tests pass through real
+Lima users, human bodies and player shells. Three connected users occupy two
+rooms: emotes reach the shared room only, while shouts reach both other users
+across rooms. Each sender receives one self echo, and recipients receive one
+broadcast. Tests cover missing text, replies from other users, apostrophe/comma
+joining, retained punctuation and terminal URLs. Virtual Connections collect
+output without opening sockets. Workspace Clippy with all targets/features and
+formatting pass.
+
+Only emote.c and shout.c change; fixture account setup, accessors and room clones
+are excluded from adoption. Native code, master policy, grammar and message
+helpers stay unchanged. Full startup, wizard-shell pipe/input fallback and
+interactive terminal negotiation remain unchecked by this batch. These are
+lpc-rs execution results and pinned Lima source review, without upstream driver
+execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10342,3 +10367,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-plan]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/plan.c
 [lima-player-exits]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/exits.c
 [lima-player-spells]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/spells.c
+[lima-player-emote]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/emote.c
+[lima-player-shout]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/shout.c
