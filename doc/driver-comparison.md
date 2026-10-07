@@ -1752,47 +1752,58 @@ Reviewed **7 October 2026** against the pinned [transient][lima-transient],
 [spell transient][lima-transient-spell], [acid arrow][lima-transient-acid-arrow]
 and [true strike][lima-transient-true-strike]. Execution uses USE_MASS, distinct
 nil, preserved call-out players and the unchanged 4,000 ms budget, with limb
-health, armour and wielding selected. No additional driver feature is needed.
+health, armour and wielding selected. Three local source adaptations complete
+the tested new-save policy; no driver feature is added.
 
 M_SAVE reconstructs each child with a clone without constructor arguments, then
 loads its registered fields and places it in inventory. The constructor's
 deferred callback registers it with STATE_D after restoration. Entry does not
 tick these effects; registration starts a fresh relative minute interval.
 
-Three characterization checks pass across four fresh-VM restores with two real
-users and human bodies. They reproduce incomplete mudlib save registrations;
-passing these checks does not establish complete transient restoration. Poison
-and speed retain duration, strength and action, while setup restores their
-constant identities. Native scheduler pulses apply their actions, requeue them
-and expire them after a final zero-count update. Poison damages the actual
-human torso; the selected speed setter remains empty. Shield retains duration
-and its constant identity but loses strength/action. Its fixed-five bludgeon
-reduction still works because it ignores strength.
+Register effect_type, effect_name and can_extend alongside effect_duration in
+the generic transient's mudlib_setup. Register strength/action in shield after
+inherited setup. These fields then survive native inventory reconstruction,
+including custom identities and disabled extension. Poison and speed retain
+their existing registrations. Intervals and owners keep their existing
+one-minute/nil restoration defaults. Shield still subtracts a fixed five from
+bludgeon damage regardless of strength, and the selected speed setter remains
+empty. Counter/expiry ordering and scheduler cadence are unchanged.
 
-A configured generic transient retains duration but loses type/name,
-cannot-extend state, interval and owner. Stock transients use the default
-one-minute interval and do not set an owner. Acid arrow loses strength/action
-and limb, and spell setup replaces its original caster with the affected body
-during login. True strike also loses spent state: a spent effect can modify a
-new event for the affected player after restoration. Its native cleanup still
-removes it. These resets result from the adapted library's save registrations
-and constructor defaults; upstream runtime behavior was not executed.
+Return one from `do_not_restore` in the spell transient base. M_SAVE's existing
+child-save filter then omits caster-dependent acid arrow and true strike from
+new inventory reconstruction payloads. Saving leaves their live objects, cached
+caster and spent state unchanged. A fresh VM does not recreate the old caster's
+identity merely by saving an object reference. [Native save format](save-format.md).
+Existing saved spell child records still require migration: M_SAVE does not
+check this hook while loading those records. No old records are rewritten.
 
-Keep durable identity/extendability and shield strength/action in their existing
-save registrations. Preserve the current interval and ephemeral-owner policy
-for this pass. Caster-dependent spells need an explicit restoration policy;
-prefer excluding them from inventory saves through `do_not_restore` until Lima
-can rebind the caster correctly. Merely saving an object reference does not
-recreate it across a fresh VM. [Native save format](save-format.md).
+Four functional checks pass across five fresh-VM restores with two actual
+users and human bodies. Native pulses run restored poison/speed/shield actions,
+requeue them once and expire them after their final zero-count update. Poison
+damages the real torso. A restored nonextendable generic effect moves into
+another body with a matching resident without merging either object. The spell
+check confirms live state survives a save, spells are absent from saved_items,
+and fresh incarnation restores only the ordinary effects without spell callbacks.
+Outer [container data][lima-container] can still contain weak references to live spells; those
+references do not reconstruct their inventory objects.
 
-The active library, native code and master policy remain unchanged; this audit
-adopts no patch. Ordinary input saves the body, virtual Connections collect
-messages without sockets, and native timers dispatch registration, state pulses
-and cleanup. Fixture helpers supply observations and controlled event data.
-Standalone compilation passes eighteen of nineteen targets; the isolated
-body-switch module needs its complete user host's methods. Both fixture
-compositions compile. Workspace Clippy with all targets/features and formatting
-pass. Full casting, acid damage delivery, alternate configurations and a new full
+The preceding audit's exact older native ordinary-effects save also loads
+without rewriting. Poison/speed data survives; absent shield fields keep their
+zero/nil constructor defaults. Missing data cannot be recovered by adding a
+registration. The unmodified source control passes this older-file check and
+fails the three changed behaviors. The first patched run passes three checks;
+its spell assertion incorrectly searches the whole body file. The corrected
+harness checks saved_items and retains its fresh-VM object/callback assertions;
+production source is unchanged between the two patched runs.
+
+Ordinary input saves the body and virtual Connections collect output without
+sockets. Fixture helpers seed accounts, observe fields and supply controlled
+event data; none is adopted. Standalone compilation retains eighteen of nineteen
+successes and the isolated body-switch module's host-method diagnostics. Both
+fixture compositions compile. Workspace Clippy with all targets/features and
+formatting pass. Native code and master policy stay unchanged. These are focused
+lpc-rs execution results and pinned source review, without upstream execution.
+Full casting, acid damage delivery, alternate configurations and a new full
 startup/login run remain unchecked by this batch.
 
 #### Lima cold startup and login
