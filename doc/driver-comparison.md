@@ -670,7 +670,7 @@ compile, as do all **90 verb files**. At that inventory baseline,
 **21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
 player commands stop first at the missing protected dispatch adapter described
 [below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
-syntax. The batches below port ten of these commands; other entries still need
+syntax. The batches below port eleven of these commands; other entries still need
 dispatch, callback and type adaptations while retaining private handlers.
 
 Other sources expose nil returns, integer literals supplied to float setters,
@@ -768,6 +768,25 @@ unchanged task budget. Workspace Clippy and formatting pass. Fixture helpers and
 account setup are excluded from adoption. Alternate configurations, narrow/wrapping
 display modes, crafting operations and full startup remain unchecked by this
 batch; native code and master stay unchanged.
+
+#### Lima rows and display preferences
+
+The [rows command][lima-player-rows], reviewed on **6 October 2026**, needs the
+protected dispatch adapter while retaining its private handler. Bare queries
+keep MORE unset when it is nil; numeric arguments update the actual player-shell
+preference. The already adapted [frames command][lima-player-frames] remains
+unchanged and is checked alongside rows on the current library.
+
+Eight compile checks and seven ordinary-input tests pass with real Lima
+master/simuls, user, human body, player shell, frame modules and pager. Tests cover
+row queries, updates and help; two-line paging of the buffered frame settings
+report, advancement and return to the shell; frame style/theme selection; complete
+theme listing; and simplification without overwriting stored frame preferences.
+The style catalogue uses direct printf output and retains that behavior.
+Workspace Clippy and formatting pass. Only rows.c changes; fixture helpers and
+account setup are excluded from adoption. Full startup, login persistence,
+terminal negotiation and every style/theme/viewport combination remain unchecked
+by this batch; native code and master stay unchanged.
 
 #### Lima cold startup and login
 
@@ -10183,3 +10202,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-skills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/skills.c
 [lima-player-materials]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/materials.c
 [lima-player-money]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/money.c
+[lima-player-rows]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/rows.c
+[lima-player-frames]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/frames.c
