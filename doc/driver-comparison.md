@@ -670,7 +670,7 @@ compile, as do all **90 verb files**. At that inventory baseline,
 **21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
 player commands stop first at the missing protected dispatch adapter described
 [below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
-syntax. The batches below port eleven of these commands; other entries still need
+syntax. The batches below port thirteen of these commands; other entries still need
 dispatch, callback and type adaptations while retaining private handlers.
 
 Other sources expose nil returns, integer literals supplied to float setters,
@@ -787,6 +787,28 @@ Workspace Clippy and formatting pass. Only rows.c changes; fixture helpers and
 account setup are excluded from adoption. Full startup, login persistence,
 terminal negotiation and every style/theme/viewport combination remain unchecked
 by this batch; native code and master stay unchanged.
+
+#### Lima version and timezone commands
+
+The [version command][lima-player-version] and [timezone command][lima-player-timezone],
+reviewed on **6 October 2026**, need protected dispatch adapters retaining
+private handlers. Version uses existing native `__VERSION__` and configured
+`__PORT__` values; Lima defines `__HOST__` itself in its configuration header.
+Timezone must handle a bare query before numeric conversion and use zero as the
+display fallback for an unset body timezone. The underlying value stays nil;
+explicit zero and fractional offsets remain floats. Native conversion rules and
+the body time module stay unchanged. Lima's existing `||` range condition does
+not enforce its advertised bounds and is preserved by this port.
+
+Eight compile checks and seven functional tests pass: six ordinary-input cases
+cover version metadata, unset timezone queries, whole/fractional offsets, zero
+and documented endpoints; an original-handler control reproduces the nil
+conversion failure. Version's fixture uses a configured compiler port without
+opening a listener. Workspace Clippy and formatting pass. Only these two command
+sources change; fixture helpers, control command and account setup are excluded
+from adoption. Full startup, actual listener metadata, login persistence, named
+zones and invalid inputs remain unchecked by this batch; native code and master
+stay unchanged.
 
 #### Lima cold startup and login
 
@@ -10204,3 +10226,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-money]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/money.c
 [lima-player-rows]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/rows.c
 [lima-player-frames]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/frames.c
+[lima-player-version]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/version.c
+[lima-player-timezone]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/timezone.c
