@@ -670,7 +670,7 @@ compile, as do all **90 verb files**. At that inventory baseline,
 **21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
 player commands stop first at the missing protected dispatch adapter described
 [below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
-syntax. The batches below port six of these commands; other entries still need
+syntax. The batches below port eight of these commands; other entries still need
 dispatch, callback and type adaptations while retaining private handlers.
 
 Other sources expose nil returns, integer literals supplied to float setters,
@@ -727,6 +727,28 @@ Fixture helpers, account setup and weight objects are excluded from adoption.
 Wizard target selection, wizard-shell delivery, alternate combat configurations,
 broader party workflows and full driver startup remain unchecked by this batch.
 Native code and master policy remain unchanged.
+
+#### Lima equipment and skills commands
+
+The [equipment command][lima-player-equip] and [skills command][lima-player-skills],
+reviewed on **6 October 2026**, need protected dispatch adapters that retain their
+private handlers. Equip reads `wear_info` fields with native dot syntax and passes
+nil explicitly for `format_list`'s optional separator. Skills clears its optional
+string with nil and converts training points to text within their conditional
+branch before joining strings.
+
+These two source adaptations pass nine compile checks and eight ordinary-input
+tests with real Lima master/simuls, user, human body, player shell, weapon and
+armour implementations. Tests cover empty equipment, weapon class/durability/
+damage/properties, primary and secondary armour, removal, empty skills, class
+values, missing parent entries, category filters, narrow/simplified displays and
+bonuses without changing stored skill points. The equipment fixture follows the
+master's existing recipe-before-daemon preload order within the unchanged task
+budget. Workspace Clippy and formatting pass. Fixture helpers, items and account
+setup are excluded from adoption. Wizard target selection, ranged weapons,
+multi-limb coverage, alternate configurations, crafting operations and full
+driver startup remain unchecked by this batch; native code and master stay
+unchanged.
 
 #### Lima cold startup and login
 
@@ -10138,3 +10160,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-score]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/score.c
 [lima-widgets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_widgets.c
 [lima-party-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/party_d.c
+[lima-player-equip]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/equip.c
+[lima-player-skills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/skills.c
