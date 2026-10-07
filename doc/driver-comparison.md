@@ -1070,6 +1070,38 @@ interaction, stock hint-room runtime and alternate screen widths remain unchecke
 by this batch. These are lpc-rs execution results and pinned Lima source review,
 without upstream driver execution.
 
+#### Lima quest-hint menu
+
+The [hint command][lima-player-hint], [hint menu][lima-quest-hint-menu] and
+[old menu module][lima-old-menu], reviewed on **6 October 2026**, need a protected
+command dispatch adapter, class-field dot syntax, nil when clearing class values,
+parentheses around a negated assignment and adapted callbacks. Use bare names
+for unbound callbacks and `&finish_completion(f, matches)` for bound completion
+arguments. Lima retains distinct nil, preserved call-out players and the 4,000 ms
+task budget. The command reads the [shipped hint files][lima-quest-hint-files]
+directly through its menu; it does not use the quest daemon.
+
+Eight functional tests pass through ordinary input using real users, human bodies,
+player shells, old menus, modal input and the more pager. Tests cover sorted stock
+areas and numbered questions, next/previous hints, complete Princess and General
+Questions sequences with blank lines omitted, exhaustion returning to the area,
+back/main navigation, reopening a question, retiring the menu clone and resuming
+shell input. Separate users keep independent clones, reading positions and output.
+A four-line pager check returns to the menu before further question input.
+Every tested input finishes without a caught error. Virtual Connections collect
+output without sockets. Ten focused compile checks, workspace Clippy with all
+targets/features and formatting pass.
+
+The top menu advertises q while omitting its quit item; its fallback quits only
+on Enter. Preserve that pre-existing source inconsistency: Enter is the tested
+top exit, and q works in area/question menus. Hint content and input/pager policy
+are unchanged. Only hint.c, hintmenu.c and menu_old.c change; fixture setup and
+accessors are excluded from adoption. Native code and master policy are unchanged.
+Full startup, login/reconnect, wizard-shell routing, menu logout cleanup,
+contributed roommaker, unused completion paths and other screen widths/terminal
+modes remain unchecked by this batch. These are lpc-rs execution results and pinned
+Lima source review, without upstream driver execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10508,3 +10540,8 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-player-hints]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/hints.c
 [lima-hint-token]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/item/hint_token.c
+
+[lima-player-hint]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/hint.c
+[lima-quest-hint-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/hintmenu.c
+[lima-old-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/menu_old.c
+[lima-quest-hint-files]: https://github.com/limalib/lima/tree/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/help/hints
