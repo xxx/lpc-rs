@@ -1806,6 +1806,63 @@ lpc-rs execution results and pinned source review, without upstream execution.
 Full casting, acid damage delivery, alternate configurations and a new full
 startup/login run remain unchecked by this batch.
 
+#### Lima food and decay restoration
+
+Reviewed **7 October 2026** against pinned [food][lima-food],
+[edible][lima-edible], [healing][lima-healing], [decay][lima-decay],
+[stateful][lima-stateful-module], [state daemon][lima-state-daemon],
+[save module][lima-save-module], [apple][lima-apple] and
+[hamburger][lima-hamburger]. Execution uses USE_MASS, distinct nil, preserved
+call-out players and the unchanged 4,000 ms budget, with limb health, armour and
+wielding selected. The active library is unchanged; this audit adopts no patch
+or native feature.
+
+Four characterization checks pass across five fresh-VM restores with two actual
+users and human bodies. They reproduce omitted save state rather than establish
+complete food restoration. A partly eaten stock five-bite apple retains its
+remaining count and constructor-supplied original total, description and actions;
+ordinary input finishes it with one action/decrement per bite and final removal.
+An apple changed to nine bites retains eight remaining bites but resets its
+original total to five. Its 160% falls outside food's description cases, returning
+nil.
+
+Three native state pulses leave a hamburger with two decays, stage three, poison
+strength five, zero value and moldy visuals. Restoration keeps the two decays but
+resets stage/begun/poison to zero and visuals to fresh, restoring value nine.
+Deferred registration preserves the count and starts a new ten-minute interval.
+After two more pulses, zero decays retires its queue entry without removing the
+food. Saving/restoring zero schedules it again; the next pulse decrements to
+minus one and requeues. The shared stateful predicate does not reject exhausted
+decay before the update. A composed food fixture also confirms stop_decay's
+queue removal is not persistent; after restoration its last action runs once,
+auto-removes the food and retires the entry.
+
+Use existing save registrations for original_eats/poison_strength in M_EDIBLE,
+decay_begun in M_DECAY and state_cnt/adjs/primary_adj/long in hamburger after both
+inherited setup calls. Gate zero-count decay through is_stateful before an update,
+retaining nonzero and negative behavior. Hamburger uses a string long description;
+explicit consumer registration can preserve its visual state without ticking or
+replaying actions. The [name module][lima-names] retains a nonempty
+primary_adj cache, so adjs alone is insufficient. These are source-reviewed
+recommendations; no repaired tree is executed here. Keep stop_decay as a session
+queue operation and retain constructor intervals, actions, healing and auto-removal
+defaults for this pass.
+
+Ordinary input saves native body files, and fresh entry leaves all five files
+unchanged. Native timers run eighteen body setups, five decay registrations and
+eight state pulses. Helpers seed accounts, insert food and observe the hamburger's
+stage from its own object; none is adopted. Virtual Connections collect output
+without sockets and timer dispatch is accelerated. Standalone compilation passes
+seventeen of twenty targets: abstract edible/decay modules and isolated body-switch
+lack host methods, while complete food/body/user compositions compile. All three
+fixture compositions compile. Workspace Clippy across all targets/features and
+formatting pass. Native code and master policy are unchanged.
+
+These are focused lpc-rs execution results and pinned source review, without
+upstream execution. Offline elapsed time, timer jitter, full poisonous eating,
+other decay consumers, randomized recipes, alternate configurations, foreign
+saved-data conversion and a new full startup/login remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11029,6 +11086,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-twinkie]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/misc/twinkie.c
 [lima-cobbler]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/crafting/mongoose_cobbler.c
 [lima-hamburger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/hamburger.c
+[lima-apple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/apple.c
 [lima-poison]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient/poison.c
 [lima-transient]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient.c
 [lima-transient-speed]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/transient/speed.c
