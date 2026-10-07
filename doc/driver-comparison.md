@@ -670,7 +670,7 @@ compile, as do all **90 verb files**. At that inventory baseline,
 **21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
 player commands stop first at the missing protected dispatch adapter described
 [below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
-syntax. The batches below port eight of these commands; other entries still need
+syntax. The batches below port ten of these commands; other entries still need
 dispatch, callback and type adaptations while retaining private handlers.
 
 Other sources expose nil returns, integer literals supplied to float setters,
@@ -749,6 +749,25 @@ setup are excluded from adoption. Wizard target selection, ranged weapons,
 multi-limb coverage, alternate configurations, crafting operations and full
 driver startup remain unchecked by this batch; native code and master stay
 unchanged.
+
+#### Lima materials and money commands
+
+The [materials command][lima-player-materials] and [money command][lima-player-money],
+reviewed on **6 October 2026**, need protected dispatch adapters that retain
+their private handlers. Materials forwards its raw argument; money calls its
+zero-argument handler. Existing material quantities, currency denominations and
+formatting are preserved, including empty `<>` markers in the no-colour theme.
+
+These two adaptations pass eight compile checks and seven ordinary-input tests
+with real Lima master/simuls, user, human body, player shell and material/currency
+daemons. Tests cover empty and populated pouches, owned-category counts,
+`materials all`, material removal, empty money, fractional denomination reports,
+multiple-currency labels and spending without report-side balance changes.
+Material setup follows the master's existing recipe preload order within the
+unchanged task budget. Workspace Clippy and formatting pass. Fixture helpers and
+account setup are excluded from adoption. Alternate configurations, narrow/wrapping
+display modes, crafting operations and full startup remain unchecked by this
+batch; native code and master stay unchanged.
 
 #### Lima cold startup and login
 
@@ -10162,3 +10181,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-party-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/party_d.c
 [lima-player-equip]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/equip.c
 [lima-player-skills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/skills.c
+[lima-player-materials]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/materials.c
+[lima-player-money]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/money.c
