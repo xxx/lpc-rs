@@ -1433,6 +1433,61 @@ Two-handed player commands, second-weapon loadouts, armour commands, ranged
 weapons, restrictions, death/generated corpses, NPC actions, generic corpse decay
 and a new full startup/login run remain unchecked by this batch.
 
+#### Lima stock death and generated corpses
+
+Reviewed **7 October 2026** against the pinned Lima revision, with USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+The stock combat selections above remain enabled; player equipment dropping at
+death remains disabled.
+
+The [loot daemon][lima-loot-daemon] needs ordinary `if`/`else` for its unparenthesized
+meat/pelt assignment conditional, with nil for the unset string. Its sixteen
+integer loot-count scalings need `count = to_int(count * (level / 16.0))` instead
+of assigning a float product through `*=` to an integer. The reviewed
+[FluffOS compound multiplication][fluffos-loot-integer-scaling] assigns that
+product back to its integer storage, truncating these finite counts toward zero.
+This preservation of count behavior is an inference from pinned source, without
+upstream execution; native integer assignment remains strict.
+
+The [coin object][lima-coins] overrides an inherited zero-argument `get()`, so
+translate its two required parameters into `get(mixed args...)` and extract the
+optional amount/type with nil defaults. Use explicit floats for integer amounts
+passed to `split_coins`, supply the omitted nil argument to the existing
+`format_list` helper, and use bare `long_descr` as its description callback.
+These are two mudlib source adaptations; native APIs, master policy, death order,
+random loot policy and corpse setup remain unchanged.
+
+Five focused checks pass with real users, human bodies, player shells and the
+stock grotto population. A fixture supplies a lethal head hit through the actual
+health/death entry. NPC death emits messages to both players, awards experience,
+moves the dead troll to Heaven, and transfers its sword and coins to a generated
+corpse in the grotto. The weapon move hook releases its owner, wield flag and
+combat slot. Ordinary `look at Bills corpse`, sword taking, coin description and
+coin taking work. The stock corpse registers the case-sensitive adjective
+`Bills`; `lifeless corpse` also names the pre-existing adventurer corpse.
+
+NPC death stops its own combat immediately; the surviving attacker retires its
+timer on its next native pulse. The one-second removal callback destroys the NPC
+while retaining the corpse. Mortal player death applies the stock score penalty,
+increments deaths, moves the ghost to Void and retains the wielded sword under
+the configured equipment policy. The stock soul-stone lookup is undefined in
+this revision, so its existing Void fallback is exercised.
+
+Both corpse registration callbacks run through native timers; the state daemon
+retains one queued job. Three native state ticks decrement decay from three to
+removal and emit the stock messages without a new runtime-log entry. Fixtures
+make jobs due using public queue methods; real minute-long waits are not tested.
+Setup, controlled damage and observations stay fixture-only, and virtual
+Connections collect output without sockets.
+
+Focused standalone compilation improves from twelve to fourteen successes among
+seventeen targets, retaining every prior success. Three partial modules still
+require host methods/variables, with unchanged diagnostic lists. Workspace Clippy
+with all targets/features and formatting pass. These are lpc-rs execution results
+and pinned source review. Wizard reincarnation, party awards, meat/pelt drops,
+chest loot, partial coin taking, alternate equipment policies and a new full
+startup/login run remain unchecked here.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -3248,14 +3303,16 @@ duplicate-death policy.
 
 Checks exercise the adopted targeting and effects modules, controlled loot and
 receiving callbacks, explicit native timer dispatch, and destruction through
-the adopted wrapper. Full corpse production, inventory transfer, decay, actual
-message delivery, body/health death entry and full combat remain unvalidated.
-The [loot daemon][lima-loot-daemon] still fails on assignment syntax in its
-meat/pelt conditional. The [corpse object][lima-corpse-object]'s three-argument
-`mudlib_setup` also conflicted with [decay][lima-decay]'s zero-argument definition;
-the later [Pirate cave port](#lima-pirate-cave-route) adapts that constructor and
-exercises the stock populated corpse and equipment taking. Corpse generation
-from death and decay remain unchecked there.
+the adopted wrapper. At that review, full corpse production, inventory transfer,
+decay, actual message delivery and body/health death entry remained unvalidated,
+and the loot daemon still failed on its meat/pelt assignment conditional.
+The [corpse object][lima-corpse-object]'s three-argument `mudlib_setup` also
+conflicted with [decay][lima-decay]'s zero-argument definition; the later
+[Pirate cave port](#lima-pirate-cave-route) adapts that constructor and exercises
+the stock populated corpse and equipment taking. The subsequent
+[stock death and generated-corpse port](#lima-stock-death-and-generated-corpses)
+adapts the loot daemon and coins, and exercises actual health/death entry,
+corpse generation, inventory transfer, player death, native removal and decay.
 Adversary compilation next needs the [limb health adaptations below](#lima-limb-health).
 
 #### Lima limb health
@@ -10930,3 +10987,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-light-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/light.c
 [lima-verb-vision]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/verb_ob.c
 [fl-pirate-preprocessor]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc
+
+[lima-coins]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/coins.c
+[fluffos-loot-integer-scaling]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/ops/ops.cc#L385-L405
