@@ -864,6 +864,30 @@ from adoption. Full startup, login persistence, introductions-enabled settings,
 interactive colour negotiation and display combinations remain unchecked by this
 batch; native code and master policy stay unchanged.
 
+#### Lima nickname and plan commands
+
+The [nickname command][lima-player-nickname] and [plan command][lima-player-plan],
+reviewed on **6 October 2026**, need protected dispatch adapters retaining their
+private handlers. Nickname forwards its argument; plan calls its zero-argument
+handler. Plan passes nil for absent initial text and a bare private continuation
+to the existing text editor. The current configuration enables EVERYONE_HAS_A_PLAN;
+body naming/plan methods and the already-ported editor/input modules need no
+further changes.
+
+Nine focused compile checks and eight ordinary-input tests pass through real Lima
+user/body/shell/editor objects. Tests cover unset and lowercase nickname queries,
+ID and room-lookup updates on replacement, multiline plan saves including blank
+lines, both completion terminators, repeated edits, empty completion, abort and
+editor help/preview. Accepted plans restore on real human bodies; drafts stay
+uncommitted until completion, abort retains prior text, and editing flags/modal
+handlers clear before ordinary shell input resumes. Workspace Clippy with all
+targets/features and formatting pass.
+
+Only nickname.c and plan.c change; fixture accessors and account setup are excluded
+from adoption. Full startup, login/nickname persistence, full parser verb
+resolution, file/line editor paths and disabled-plan configurations remain
+unchecked by this batch; native code and master policy stay unchanged.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10287,3 +10311,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-event-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/event_d.c
 [lima-player-title]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/title.c
 [lima-player-describe]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/describe.c
+[lima-player-nickname]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/nickname.c
+[lima-player-plan]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/plan.c
