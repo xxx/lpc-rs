@@ -666,12 +666,12 @@ later errors. The counts do not measure port completion or establish upstream
 bugs. Target objects are not initialized during these checks.
 
 The master, simuls, user, body, both shells, IMUD, IMAIL, HTTP, FTP and RST
-compile, as do all **90 verb files**. Many command entry points still need adaptation:
+compile, as do all **90 verb files**. At that inventory baseline,
 **21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
 player commands stop first at the missing protected dispatch adapter described
 [below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
-syntax. Port basic player command entry points next, then their callbacks and
-types, retaining native visibility and the original private handlers.
+syntax. The batch below ports four of these commands; other entries still need
+dispatch, callback and type adaptations while retaining private handlers.
 
 Other sources expose nil returns, integer literals supplied to float setters,
 class/callback syntax, containing-object hooks and override signatures. The
@@ -679,6 +679,32 @@ lexical scan's 16 explicit native references all name existing registry entries;
 that checks spelling rather than API or runtime compatibility. Successful fresh
 startup and the HTTP/FTP tests establish the paths described below, while broad
 command, world and optional-source compatibility remains unfinished.
+
+#### Lima basic player commands and help
+
+The subsequent source batch, reviewed on **6 October 2026**, adds the protected
+[dispatch adapters](#lima-command-dispatch-and-stdio) to `help`, `brief`, `verbose`
+and `save`, preserving their private handlers. Their four sources now compile.
+[Help command][lima-player-help], [brief][lima-player-brief],
+[verbose][lima-player-verbose], [save][lima-player-save].
+
+In the [help viewer][lima-help-viewer], use native callbacks and nil topic arrays,
+search strings for directive colons and split formatter strings into line arrays
+before paging. The [RST formatter][lima-rst-viewer] also needs nil for absent
+header strings and released code arrays. In [HELP_D][lima-help-timers], remove
+empty pathname segments before selecting directory names and use explicit
+integer zero for absent restriction rows, retaining the existing comparison
+expression and configured levels.
+
+The seven-file adaptation passes nine compile checks and six ordinary-input
+functional tests with real Lima master/simuls, user, human body and player shell.
+Tests cover shared brief/verbose flags, saved flag restoration in new bodies,
+plain/RST/Markdown help, multiple topic selection, missing topics and returning
+to the shell. Workspace Clippy and formatting pass. Fixture access methods,
+account setup, help index and topic files are excluded from adoption. Native code,
+master policy and optional service settings remain unchanged. Full authentication,
+help-index rebuilding, broader help applications and driver startup are not
+repeated; the source inventory above remains its earlier snapshot.
 
 #### Lima cold startup and login
 
@@ -10080,3 +10106,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-http-webed]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/cgi/webed.c
 [lima-ftp-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/ftp_d.h
 [lima-rcp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/rcp_d.dontuse
+[lima-player-help]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/help.c
+[lima-player-brief]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/brief.c
+[lima-player-verbose]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/verbose.c
+[lima-player-save]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/save.c
+[lima-help-viewer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/helpsys.c
+[lima-rst-viewer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_rstview.c
