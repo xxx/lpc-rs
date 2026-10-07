@@ -1881,62 +1881,55 @@ Reviewed **7 October 2026** against pinned [lantern][lima-lantern],
 [object light][lima-object-light] and [save module][lima-save-module].
 Execution uses USE_MASS, distinct nil, preserved call-out players and the
 unchanged 4,000 ms budget, with limb health, armour and wielding selected.
-The local adaptation changes only the body module; no driver feature is added.
+The local adaptations rebuild body inventory light and honor the light-specific
+infinite-fuel sentinel using existing mudlib operations.
 
 The preceding food port preserves num_decays and decay_begun. Inventory saves
 do not register the lantern's lit flag, private source-lit field, light
-contribution, extra-short hook or switch state. A rebuilt lantern therefore
-retains fuel and begun state but returns unlit, without a light hook and with
-its switch off. Deferred registration starts a fresh minute interval; the first
-due update retires the unlit entry without consuming fuel. Ordinary relighting
-registers the item again and consumes its remaining fuel normally.
+contribution, extra-short hook or switch state. Rebuilt lanterns retain fuel
+and begun state but return unlit/off without a light hook. Deferred registration
+starts a fresh minute interval; the first due update retires an unlit entry
+without consuming fuel. Ordinary relighting registers it again.
 
-The body also uses native save_object, which saves its non-nosave our_light and
-contained_light globals. Saving with one lit lantern writes both as one, while
-the rebuilt child emits zero light. Adapt body entry to rebuild inventory light
-before recursive reconstruction and again after inventory restoration, equipment
-setup and effect reinstatement. Separate the body's own light from its visible
-cached inventory contribution, sum the current inventory's query_light values,
-synchronize contained_light_added with visibility, and apply the recomputed
-total through set_light. This removes stale inventory light while preserving
-the body's own light and the reconstructed items' current state. Native saved
-formats, save registrations and lantern lit/switch policy remain unchanged.
+Native body saves also include our_light and contained_light. Adapt body entry
+to rebuild inventory light before recursive reconstruction and after restored
+items, equipment and effects are initialized. Separate intrinsic light from the
+visible cached inventory contribution, sum current inventory light, synchronize
+visibility bookkeeping and apply the total through set_light. A lit-lantern save
+now restores with zero lantern/body light and one ambient room unit; relighting
+produces one body unit and two room units, and extinguishing or final burnout
+returns them to zero/one. Switched saves restore off and flip normally. A body's
+four intrinsic units survive restoration and visibility refresh. An exact older
+native lit-save file also loses stale body light while retaining fuel and begun
+state. Saved formats, registrations and the unlit/off restoration policy remain
+unchanged; entry does not rewrite files or infer missing history.
 
-A normal lit save now restores with zero lantern/body light and the room's one
-ambient unit. Relighting produces one body unit and two room units; extinguishing
-or final burnout returns them to zero/one. Switched-on saves also restore off,
-then flip on/off without stale light. A body with four intrinsic light units
-saves at five with a lit lantern, restores at four with an unlit lantern, returns
-to five on relighting and to four on extinguishing. Refreshing visibility while
-lit leaves its totals unchanged. An exact older native audit file containing
-both cached fields at one loads unchanged, now with zero inventory/body light,
-retaining fuel two and begun state; it relights, consumes fuel and extinguishes
-normally. Missing saved history is not inferred and files are not rewritten.
+The header's INF_FUEL, currently minus one, denotes unlimited lighting. Override
+light_object's state_update to return one for that exact sentinel and delegate
+all other counts to m_decay::state_update. Lit infinite sources remain queued
+without fuel use, begun-state mutation, flicker/burnout actions or auto-removal.
+Ordinary extinguishing removes their light, hook and queue entry; relighting
+registers them again. New and exact older native sentinel saves restore unlit,
+retain minus-one fuel and resume unlimited lighting after an ordinary light
+command. Zero fuel still refuses lighting and retires silently; finite fuel
+still emits its last burnout message and auto-removes. Minus two retains its
+existing decay message and auto-removal. Generic M_DECAY remains unchanged.
+Ordinary lighting's independent switch field and the missing lighting_extra_short
+target remain unchanged.
 
-Zero fuel restores unchanged, refuses ordinary lighting with the burned-out
-message and retires silently without decrement or removal. The header advertises
-INF_FUEL, currently minus one, as unlimited fuel. That count survives restoration
-and lights successfully, but the next decay update still decrements it and
-auto-removes the lantern. This retained light-specific policy mismatch remains
-separate from generic negative decay behavior. Finite fuel retains the existing
-final burnout message and auto-removal policy. Ordinary lighting's independent
-switch field and the missing lighting_extra_short target remain unchanged.
-
-Six functional checks pass across six new native saves and one exact older file,
-all restored in fresh VMs with actual users, human bodies, player shells and
-ordinary light/extinguish/flip/save input. Entry leaves saved files unchanged.
-The unmodified control fails the corrected lit-save assertion with cached body
-light one instead of zero, using identical tests and fixtures; only that control
-case is rerun, and the preceding audit's characterization evidence stays frozen.
-Twenty-four body setups, five deferred registrations and eleven state pulses
-run through native timer dispatch without new runtime-log errors. Standard
-cases never override body lighting; only the intrinsic-light fixture adds four
-units. Virtual Connections collect output without sockets. Native code and
-master policy remain unchanged; fixture helpers are excluded from adoption.
-Standalone compilation retains all preceding outcomes: nineteen of twenty-five
-targets pass, and six isolated modules still require host methods. Complete
-hosts and commands compile, as do all three fixture compositions. Workspace
-Clippy across all targets/features and formatting pass.
+Eight functional checks pass across six new native saves and two exact older
+files, all restored in fresh VMs with actual users, human bodies, player shells
+and ordinary light/extinguish/flip/save input. Repeated infinite-fuel ticks are
+silent and preserve light, hooks, fuel and queue membership before and after
+restoration. The targeted unmodified control fails on its first infinite-fuel
+tick by emitting the decay message; identical tests and fixtures omit only the
+sentinel guard. Previous body-cache control and audit evidence remain frozen.
+Native timer dispatch adds no runtime-log errors; Virtual Connections collect
+output without sockets. Focused compilation retains nineteen of twenty-five
+successes and the same six isolated host-method diagnostics; complete hosts,
+commands and all three fixture compositions compile. Workspace Clippy across
+all targets/features and formatting pass. Native code, master policy and fixture
+adoption remain unchanged.
 
 These are focused lpc-rs execution results and pinned source review, without
 upstream execution. Torch gameplay, other visibility modes, nested container
