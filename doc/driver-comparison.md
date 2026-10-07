@@ -670,7 +670,7 @@ compile, as do all **90 verb files**. At that inventory baseline,
 **21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
 player commands stop first at the missing protected dispatch adapter described
 [below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
-syntax. The batch below ports four of these commands; other entries still need
+syntax. The batches below port six of these commands; other entries still need
 dispatch, callback and type adaptations while retaining private handlers.
 
 Other sources expose nil returns, integer literals supplied to float setters,
@@ -705,6 +705,28 @@ account setup, help index and topic files are excluded from adoption. Native cod
 master policy and optional service settings remain unchanged. Full authentication,
 help-index rebuilding, broader help applications and driver startup are not
 repeated; the source inventory above remains its earlier snapshot.
+
+#### Lima player status commands
+
+The [HP command][lima-player-hp] and [score command][lima-player-score], reviewed
+on **6 October 2026**, also need protected dispatch adapters while retaining
+their private handlers. Score accepts parsed arrays or adapts the player shell's
+raw text with Lima's existing option parser, including `score -t theme`. Use nil
+for omitted argument slots and explicit numeric conversions for capacity
+thresholds and the integer karma marker.
+
+The [carrying-weight slider][lima-widgets] needs float values and float mapping
+keys to match score's fractional capacity data. Two missing-name string returns
+in [PARTY_D][lima-party-daemon], loaded by score, need nil. These four source
+adaptations pass six compile checks and six ordinary-input functional tests with
+the real Lima master/simuls, user, human body and player shell. Tests cover limb
+ordering and changed health/intoxication, default score, experience, money,
+karma, guild buffs, real party membership, report themes and fractional carrying
+weight with widgets enabled and disabled. Workspace Clippy and formatting pass.
+Fixture helpers, account setup and weight objects are excluded from adoption.
+Wizard target selection, wizard-shell delivery, alternate combat configurations,
+broader party workflows and full driver startup remain unchecked by this batch.
+Native code and master policy remain unchanged.
 
 #### Lima cold startup and login
 
@@ -10112,3 +10134,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-save]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/save.c
 [lima-help-viewer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/helpsys.c
 [lima-rst-viewer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_rstview.c
+[lima-player-hp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/hp.c
+[lima-player-score]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/score.c
+[lima-widgets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_widgets.c
+[lima-party-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/party_d.c
