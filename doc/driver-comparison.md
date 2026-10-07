@@ -655,6 +655,31 @@ separate native tests for each. Distinct nil does not emulate FluffOS
 `undefinedp` metadata; mapping membership and omitted arguments still need
 the adaptations described below.
 
+#### Lima source coverage
+
+A fresh compile inventory on **6 October 2026** checks every **1,180 `.c` file**
+in the local overlay after FTP adoption: **534 compile and 646 fail**, with no
+compiler crashes or timeouts. These are standalone-source counts, including
+partial modules, optional and contributed code. A failed partial module can
+compile inside its containing object; a first failing inherit can also hide
+later errors. The counts do not measure port completion or establish upstream
+bugs. Target objects are not initialized during these checks.
+
+The master, simuls, user, body, both shells, IMUD, IMAIL, HTTP, FTP and RST
+compile, as do all **90 verb files**. Many command entry points still need adaptation:
+**21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
+player commands stop first at the missing protected dispatch adapter described
+[below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
+syntax. Port basic player command entry points next, then their callbacks and
+types, retaining native visibility and the original private handlers.
+
+Other sources expose nil returns, integer literals supplied to float setters,
+class/callback syntax, containing-object hooks and override signatures. The
+lexical scan's 16 explicit native references all name existing registry entries;
+that checks spelling rather than API or runtime compatibility. Successful fresh
+startup and the HTTP/FTP tests establish the paths described below, while broad
+command, world and optional-source compatibility remains unfinished.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -691,11 +716,11 @@ Use `lower_case(query_name())` for the logout record.
 [Body entry][lima-body-switching], [body cleanup][lima-body],
 [last-login records][lima-startup-last-login].
 
-After the verb, race, RST and intermud-mail adaptations below, the listener
-still starts with **one failed preload**: the IMUD daemon. Its remaining
-nil/type, callback and missing-API issues are port blockers. Successful login
-does not establish a clean preload or a complete port. Unrelated mudlib
-hardening remains separate work.
+The subsequent IMUD adoption passes a fresh full boot with **151 preloads and
+zero failures**, plus real account/character creation, gameplay and restored
+login. Restart reproduces the existing RST cleanup permission failure, so a
+clean full restart remains unestablished. See [IMUD adoption](#lima-tcp-wrapper-and-i3-adaptation).
+The source inventory above records remaining compatibility work beyond startup.
 
 #### Lima verb preloads and parser feedback
 
