@@ -1215,6 +1215,67 @@ travel through intermediate caves, lighting tools, every scenery verb,
 saved-body restart and full startup/login remain unchecked. Native code, master
 policy and quest daemon/body are unchanged.
 
+#### Lima Pirate cave route
+
+Reviewed **7 October 2026** against the pinned Lima revision, using USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+The stock [grotto][lima-pirate-grotto], [crawl][lima-pirate-crawl] and
+[inner cavern][lima-pirate-inner-cave] compile unchanged. Their populations need
+eleven object/module adaptations, including the [adventurer's corpse][lima-dead-adventurer]
+and its equipment, and the [troll][lima-stock-troll] with its sword.
+
+Collect optional [corpse constructor][lima-corpse-object] arguments with
+`mixed args...` and nil defaults; retain inherited setup calls and match the
+three-argument indirect-get handler. Clear the adventurer's proper name with nil.
+Convert mass, weight and value arguments explicitly to float in the corpse,
+[lantern][lima-lantern], [fullplate][lima-fullplate], [backpack][lima-backpack] and
+[stock sword][lima-stock-sword]. Backpack needs `to_string()` for its grouping
+states: native string casts do not convert integers. Alias the lantern's object
+inherit and accept the light source's optional object argument while preserving
+its existing discarded argument. Use bare callbacks for burnout and
+[exit-blocking hooks][lima-blockexits], retaining the block handler's intended
+private visibility. Dispatch the [advancement module's][lima-advancement-simple]
+inheritor-supplied save and command methods through this_object.
+
+Use dot access for class fields in the [Sword of Mercy][lima-pac-sword] and the
+header's BLOW_STYLE/BLOW_TYPES names. The stock BLOWS_* names are undefined.
+The reviewed [FluffOS preprocessor][fl-pirate-preprocessor] substitutes zero for
+unexpanded identifiers in #if, so the stock comparison selects the typed-damage
+branch as 0 == 0. The actual configured BLOW_STYLE is BLOW_TYPES; using those
+defined names selects the same branch here. This is pinned source review,
+without upstream execution or alternate combat-mode validation.
+
+The [lightable module][lima-lightable] references lighting_extra_short, which
+has no definition in the predecessor library. Preserve that target with a
+deferred self-call closure. Its direct light/extinguish handlers also need the
+object argument. The [light verb][lima-light-verb] defines need_to_see(), but its
+inherited [default checks][lima-verb-vision] read the NEED_TO_SEE flag instead;
+the verb never clears that flag. Lighting in complete darkness is refused.
+Both source issues remain retained; a player can light the lantern before
+entering the dark crawl.
+
+Six functional checks pass through ordinary input, covering continuous travel
+from Sandy_Beach through Outside_Cave, Grotto, Low_Crawl and Inside_Cave to
+Small_Dock, and the return route. They use
+complete stock populations, observe the corpse's four items and the troll's
+wielded sword, read descriptions and take equipment through the get verb.
+Quest travel uses ordinary input after initial placement, including the paired
+passage and table shovel, and earns 25 points and 250 XP with Finished displayed.
+The lantern check uses stock light and extinguish verbs with fixture body light
+disabled, retaining room lighting and verb policy.
+
+Fixture helpers provide account/body setup, initial placement, lighting and
+observation; they are excluded from adoption. There are no room replacements or
+extra fixture stock objects. Recipe/object blueprints and the crafting daemon
+initialize separately before room entry: cold nested recipe compilation exceeds
+the fixed input-task budget. Virtual Connections capture output without sockets.
+Twenty-one focused compile checks, workspace Clippy with all targets/features
+and formatting pass. These are lpc-rs execution results and pinned source review,
+without upstream driver execution. Native code, master policy and quest
+daemon/body source are unchanged. NPC delayed setup, fuel consumption/burnout,
+decay, combat-generated corpses, cold entry
+without blueprint initialization and full startup/login remain unchecked.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -3032,7 +3093,10 @@ the adopted wrapper. Full corpse production, inventory transfer, decay, actual
 message delivery, body/health death entry and full combat remain unvalidated.
 The [loot daemon][lima-loot-daemon] still fails on assignment syntax in its
 meat/pelt conditional. The [corpse object][lima-corpse-object]'s three-argument
-`mudlib_setup` also conflicts with [decay][lima-decay]'s zero-argument definition.
+`mudlib_setup` also conflicted with [decay][lima-decay]'s zero-argument definition;
+the later [Pirate cave port](#lima-pirate-cave-route) adapts that constructor and
+exercises the stock populated corpse and equipment taking. Corpse generation
+from death and decay remain unchecked there.
 Adversary compilation next needs the [limb health adaptations below](#lima-limb-health).
 
 #### Lima limb health
@@ -10679,3 +10743,19 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-pirate-rock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/rock_wall.c
 [lima-digger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_digger.c
 [lima-readable-text]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_readable.c
+
+[lima-pirate-grotto]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/caves/Grotto.c
+[lima-pirate-crawl]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/caves/Low_Crawl.c
+[lima-pirate-inner-cave]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/caves/Inside_Cave.c
+[lima-dead-adventurer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/dead_adventurer.c
+[lima-stock-troll]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/troll.c
+[lima-lantern]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/lantern.c
+[lima-fullplate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/armour/fullplate.c
+[lima-backpack]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/backpack.c
+[lima-stock-sword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/sword.c
+[lima-blockexits]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_blockexits.c
+[lima-pac-sword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/pac_sword.c
+[lima-lightable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_lightable.c
+[lima-light-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/light.c
+[lima-verb-vision]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/verb_ob.c
+[fl-pirate-preprocessor]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc
