@@ -1006,6 +1006,36 @@ and interactive terminal negotiation remain unchecked by this batch. These are
 lpc-rs execution results and pinned Lima source/configuration review, without
 upstream driver execution.
 
+#### Lima palette command
+
+The [palette command][lima-player-palette], reviewed on **6 October 2026**, needs
+a protected dispatch adapter calling its private one-argument handler and nil
+for do_print's absent string argument. The original traversal, padded numeric
+formatting, output layout and public player_menu_entry remain unchanged.
+Lima retains distinct nil, preserved call-out players and the 4,000 ms task budget.
+
+Seven functional tests pass: six use ordinary input through real users, bodies
+and player shells, and one calls the existing public menu entry under real user
+context. Tests verify all 256 displayed values exactly once in the original
+22-row grid, each matching Xterm foreground escape, ANSI fallbacks, VT100 resets
+and stripped numeric colour tokens, simplified output, and choosing a displayed
+value with colours. Repeating the display preserves the chosen setting. The
+palette includes 000; the colours setter keeps its existing acceptance rule.
+Every tested ordinary input finishes without a caught error, and output remains
+local to the initiating user. Virtual Connections collect messages without sockets.
+
+The public entry test uses the empty string passed by the
+[administrator frame tool][lima-palette-frames]; that call site is source-reviewed,
+and complete administrator-menu interaction remains unchecked. Twelve focused
+compile checks, workspace Clippy with all targets/features and formatting pass.
+
+Only palette.c changes; fixture setup, input observation and the public-entry
+accessor are excluded from adoption. Native code, master policy and colour
+helpers are unchanged. Full startup, login/reconnect, wizard-shell routing,
+alternate screen widths and interactive terminal negotiation remain unchecked.
+These are lpc-rs execution results and pinned Lima source review, without
+upstream driver execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10439,3 +10469,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-say-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/say.c
 [lima-player-colours]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/colours.c
 [lima-ansi-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/ansi.o
+[lima-player-palette]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/palette.c
+[lima-palette-frames]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/admtool/secure/frames.c#L32-L35
