@@ -1697,6 +1697,52 @@ that omitted limb names cannot recover the original hand assignment; foreign
 saved-string conversion, effect restoration, alternate combat configurations
 and a new full startup/login run remain outside this batch.
 
+#### Lima saved player effect queues
+
+Reviewed **7 October 2026** against the pinned [effects module][lima-effects],
+[effect class][lima-effect-class], [body][lima-body-mail-composition],
+[save module][lima-save-module], [base disease][lima-effect-disease] and
+[stock cold][lima-effect-cold]. Execution uses USE_MASS, distinct nil, preserved
+call-out players and the unchanged 4,000 ms budget, with HEALTH_LIMBS,
+ARMOUR_LIMBS and WIELD_LIMBS selected. The existing queue and equipment
+adaptations compose without an additional source adapter or driver feature.
+
+The body save stores the effects class array alongside its registered inventory
+data. The scheduler's timer ID, scheduled-head reference and callback guards are
+nosave. Fresh incarnation restores equipment and container relationships before
+calling `reinstate_effects`; room placement follows initialization. Available
+effect hooks run once, then the first queued entry is processed immediately.
+The new timer captures the newly attached player. Reinstatement preserves
+relative scheduling rather than replaying missed wall-clock time, and another
+call while the queue has an active timer leaves it unchanged.
+
+Five functional checks pass, including six saves/restores across separate VMs
+using actual users, human bodies, shells, equipment and the stock cold. Saved
+positive counters tick once during entry and expire after their remaining ticks;
+zero ends during entry without a tick or timer, and negative counters remain
+indefinite. Multiple class records retain independent payloads and periods while
+sharing one owned timer. Nested nil and numeric zero, and deterministic array
+periods survive successive native saves. A fixture effect observes the restored
+equipment, new player, body caller and call_other origin before room placement;
+start is not repeated. Ten native effect callbacks exercise ticks, expiry and
+timer replacement; eleven separate body-setup callbacks leave the effect timer
+unchanged. Callbacks are dispatched early, so this does not measure timer jitter.
+
+Ordinary input runs the actual save command. Fresh entry leaves each saved body
+file byte-for-byte unchanged. Fixture helpers seed accounts and observe state;
+none is adopted. The cold uses zero contagiousness, leaving the separately
+documented disease-spread payload issue outside this audit. Virtual Connections
+collect messages without sockets. Standalone compilation passes sixteen of
+seventeen targets; the isolated body-switch module requires methods from its
+complete user host, which compiles. Workspace Clippy with all targets/features
+and formatting pass.
+
+These are focused lpc-rs execution results and pinned source review, without
+upstream execution. Inventory-based [transient objects][lima-transient] use a
+separate restoration lifecycle and remain the next audit. Foreign saved-data
+conversion, function-valued saved intervals, alternate configurations and a new
+full startup/login run remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10797,6 +10843,7 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-effect-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/effect.c
 [lima-effect-disease]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/effect/base_disease.c
+[lima-effect-cold]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/effect/cold.c
 [lima-effect-combat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/main.c
 [lima-event-info-types]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/event_info/types.c
 [lima-event-info-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/event_info/simple.c
