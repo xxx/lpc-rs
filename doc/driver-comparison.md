@@ -1539,6 +1539,62 @@ Two-handed and second-weapon loadouts, armour damage absorption, full equipment
 restoration, alternate body/armour configurations and a new full startup/login
 run remain unchecked by this batch.
 
+#### Lima two-handed and second-weapon loadouts
+
+Reviewed **7 October 2026** against the pinned Lima revision, with USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+The existing limb health, armour and wielding selections remain enabled.
+
+The [greataxe][lima-stock-greataxe] and [longsword][lima-stock-longsword] need
+`30.0` and `15.0` at their float value setter. The bulk
+[dualwield handler][lima-dualwield-command] needs [`stringp(ob)`](efun/stringp.md)
+instead of `typeof(ob) == T_STRING`, as the preceding wield/wear handlers do.
+Repeating `dualwield all` otherwise tries to load the already-wielded rejection
+text as an object filename. These are the only three source changes in this
+focused loadout port.
+
+Five ordinary-input checks pass with real users, human bodies, player shells and
+stock weapons. The greataxe occupies both arm slots with one owner and F_WIELDED;
+its weapon class is fifteen, and equipment lists it once. The longsword changes
+between one and two hands through `dualwield longsword`, `wield longsword in left
+hand`, and `wield longsword in/with both hands`; its weapon class changes between
+eight and ten. Inventory annotations, item limb names and the body's slot map
+agree. Single unwield and `unwield all` release both slots.
+
+A longsword in the left hand and [club][lima-stock-club] in the right hand keep
+separate ownership/limb records and one equipment row each. A third default wield
+is refused; explicitly replacing the left-hand weapon releases the longsword
+while retaining the club. A required two-handed greataxe cannot take the occupied
+other hand, whether the request chooses a limb or leaves it unspecified. A
+refused both-hands longsword request also leaves the club unchanged. Lima's
+parser selects "There is no longsword with both hands here." for that refusal;
+the port retains its rule selection and message.
+
+Bulk dualwield with a carried lantern skips nonweapon and already-wielded
+rejections. Dropping the two-handed longsword releases both map entries and its
+owner/flags; taking and wielding it again restores both slots. Fixture placement
+supplies actual greataxe, longsword and club clones in the existing grotto.
+Placement, account/body/light and observation helpers are excluded from adoption.
+Stock delayed setup runs through native callbacks, and virtual Connections
+collect messages without sockets. Native code, master policy, skill restrictions
+and weapon-class bonuses remain unchanged.
+
+Source review also finds two existing defects in the advertised explicit
+`dualwield` forms. Its `in` handler forwards "both arms" as a selected limb
+instead of requesting both slots, and the [wieldable check][lima-wieldable] for
+`dualwield ... with ...` calls itself recursively. Both are present in the pinned
+original sources; this port records them without claiming execution of those
+forms or repairing them. The checked `wield ... in/with both hands` forms provide
+two-handed use.
+
+Focused standalone compilation improves from twelve to fourteen successes among
+sixteen targets, retaining every earlier success and both partial-module
+host-method diagnostic lists. Workspace Clippy with all targets/features and
+formatting pass. These are lpc-rs execution results and pinned
+source review, without upstream execution. Armour damage absorption, complete
+equipment restoration, alternate body/wield/armour configurations, ranged
+weapons and a new full startup/login run remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11046,3 +11102,6 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-wear-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wear.c
 [lima-armour-scarf]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/armour/scarf.c
+[lima-stock-greataxe]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/greataxe.c
+[lima-stock-longsword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/longsword.c
+[lima-stock-club]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/club.c
