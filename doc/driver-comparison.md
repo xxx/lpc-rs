@@ -970,6 +970,42 @@ stack teardown, alternate introductions/history settings and interactive termina
 negotiation remain unchecked by this batch. These are lpc-rs execution results
 and pinned Lima source review, without upstream driver execution.
 
+#### Lima player colour settings
+
+The [colours command][lima-player-colours], reviewed on **6 October 2026**, needs
+its protected dispatch adapter, a typed native closure and a bare lower_case
+callback. Pass nil for the absent listing name, compare missing label entries
+with nil and skip integer conversion for unset settings. Recognized labels map
+to empty strings in the daemon's plain translations; an unset recognized label
+still displays '(not set)'. Lima retains distinct nil, preserved call-out players
+and the 4,000 ms task budget.
+
+The existing [user colour storage][lima-user-messages],
+[colour module][lima-message-colours] and [ANSI][lima-ansi]/[Xterm][lima-xterm]
+daemons handle storage, save/restore and rendering unchanged. The shipped
+[saved ANSI configuration][lima-ansi-data] overrides constructor fallbacks:
+TELL defaults to bold,white and SAY is configured. Removal restores configured
+defaults; unconfigured labels are reported as unsupported and can be removed.
+Single-name queries retain their original case sensitivity, and setters retain
+the whitelist of named colour values and three-character palette rule. VT100 keeps
+legacy named ANSI colours while removing numeric palette colours, matching the
+existing source behaviour.
+
+Twelve focused compile checks and eleven ordinary-input tests pass through real
+Lima users, bodies and player shells. Tests cover defaults/help, unset labels,
+named/numeric settings, account save/restore, removal, unsupported labels,
+rejected ordinary values, per-user colours in bidirectional tells and
+Plain/VT100/ANSI/Xterm rendering. Every tested input completes without a caught
+callback error. Virtual Connections collect output without sockets. Workspace
+Clippy with all targets/features and formatting pass.
+
+Only colours.c changes; account setup, input observation and restore accessors
+are excluded from adoption. Native code and master policy are unchanged. Full
+startup, login/reconnect, wizard-shell routing, changed administrator restrictions
+and interactive terminal negotiation remain unchecked by this batch. These are
+lpc-rs execution results and pinned Lima source/configuration review, without
+upstream driver execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10401,3 +10437,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-shout]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/shout.c
 [lima-player-converse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/converse.c
 [lima-say-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/say.c
+[lima-player-colours]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/colours.c
+[lima-ansi-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/ansi.o
