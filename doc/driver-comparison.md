@@ -1646,6 +1646,57 @@ source review, without upstream execution. Full combat balance, complete
 equipment restoration, alternate configurations, ranged weapons and a new full
 startup/login run remain unchecked by this batch.
 
+#### Lima player equipment restoration
+
+Reviewed **7 October 2026** against the pinned Lima revision, using USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+HEALTH_LIMBS, ARMOUR_LIMBS and WIELD_LIMBS remain selected. Three local source
+adaptations complete the tested native-save path; no driver feature is added.
+
+The [body's initialization][lima-body-mail-composition] must select
+`#if WIELD_STYLE == WIELD_SINGLE`, rather than `#ifdef WIELD_SINGLE`.
+The [configuration][lima-body-combat] defines every style constant, so the
+original condition takes the single-style branch even when limb wielding is
+selected. The limb branch must also pass the item's saved two-handed state to
+`wield`, alongside its first saved limb.
+
+Register `wielding_limbs` with `persist_flags` in the
+[weapon's mudlib_setup][lima-weapon-object]. In the tested composition,
+[durability's internal_setup][lima-durability] supplies durability registration;
+the same-named [wieldable initializer][lima-wieldable] does not register the limb
+names. Native-generated weapon saves otherwise omit them. In
+[limb wielding][lima-wield-limbs], take the existing dual-to-single transition
+only when the item has a live wielder. Restored limb names can indicate two
+hands while the nosave owner is still nil; that state needs initial attachment,
+rather than another unwield/re-wield transition. The guard retains the existing
+transition for weapons with a live owner.
+
+Five functional checks pass, including five save/restores across separate VMs.
+Ordinary player input saves and equips real items; actual body construction,
+incarnation, shell startup and inventory reconstruction load the native files.
+Separate left/right weapons, optional and required two-handed weapons preserve
+owners, limb slots and durability. Worn [fullplate][lima-fullplate] restores its
+primary and additional coverage, and equipment lists each item once. A lantern
+inside the [backpack][lima-backpack] retains its parent, relation and capacity;
+ordinary retrieval updates those relationships. Restored armour prevents drop
+until removed, and the restored weapon's move hook clears both slots on drop.
+Unequipped items remain unequipped through successive restarts without duplicates.
+
+Fixtures provide account seeding, stock gear placement, damage through the
+existing durability method and state observers; none is adopted. Re-equipping
+after drop is checked in an empty stock room to avoid selecting fresh grotto
+loot. Native timers run delayed body setup, and virtual Connections collect
+output without sockets. Standalone compilation passes eighteen of twenty
+targets; the wieldable module requires its host's assign_flag/hook_state methods,
+and durability requires add_save.
+Workspace Clippy with all targets/features and formatting pass.
+
+These are focused lpc-rs execution results and pinned source review, without
+upstream execution. The files are newly generated native saves. Existing saves
+that omitted limb names cannot recover the original hand assignment; foreign
+saved-string conversion, effect restoration, alternate combat configurations
+and a new full startup/login run remain outside this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
