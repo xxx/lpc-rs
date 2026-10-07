@@ -1488,6 +1488,57 @@ and pinned source review. Wizard reincarnation, party awards, meat/pelt drops,
 chest loot, partial coin taking, alternate equipment policies and a new full
 startup/login run remain unchecked here.
 
+#### Lima stock player armour commands
+
+Reviewed **7 October 2026** against the pinned Lima revision, with USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+The existing limb health, armour and wielding selections remain enabled.
+
+In the bulk [wear handler][lima-wear-command], use [`stringp(ob)`](efun/stringp.md)
+instead of `typeof(ob) == T_STRING`. Lima's type header defines T_STRING as text,
+while native typeof returns an integer tag. The untranslated second `wear all`
+tries to load an already-worn rejection message as an object filename. The
+predicate retains the handler's existing skip-string policy.
+
+The [hook filter][lima-object-hooks] must retain constant values before inspecting
+function owners: `!functionp($1) || objectp(function_info($1)["owner"])`.
+Armour's existing prevent-drop hook is the string "You'll have to take it off
+first."; native function_info accepts only functions. The original Lima
+functionp bit test also keeps nonfunction hooks, so this corrects the earlier
+owner-inspection translation. Evaluation, callback-owner pruning, hook order and
+removal policy remain unchanged. The [scarf][lima-armour-scarf] also needs `1.0`
+at its float value setter; that item is compile-checked here, without claiming
+player execution of it.
+
+Five ordinary-input checks pass with real users, human bodies, player shells,
+the stock grotto and its existing [fullplate][lima-fullplate]. Single wear/remove,
+`put on`/`take off`, inventory annotations and messages to an observer agree with
+F_WORN and the body's records. Fullplate occupies the torso and covers both arms
+and legs once; removal clears all five records. Bulk wear/remove with the carried
+glowing sword and lantern skips nonwearables and already-worn rejection text.
+Repeated single wear/remove also keeps flags and coverage consistent.
+
+Ordinary dropping of worn armour returns the existing take-it-off message and
+leaves it carried and worn. Removal permits drop; taking and wearing it again
+restores the same coverage. The [equipment command][lima-player-equip] reports
+empty equipment, the actual glowing sword and fullplate, one armour row with
+"Full body", and the expected empty-armour/empty-equipment states after removal
+and unwielding. Use `remove adamantine fullplate` when checking an already-removed
+item; the bare one-word noun can select the verb's earlier bulletin-board rule.
+No parser, wearable, limb-record or equipment-command change is needed.
+
+Focused standalone compilation improves from fifteen to sixteen successes among
+eighteen targets, retaining every earlier success and both partial-module
+host-method diagnostic lists. Workspace Clippy with all targets/features and
+formatting pass. Setup/light/observation helpers, including the fixture user's
+visible wear_info definition, are excluded from adoption. Native callbacks run
+stock delayed setup; virtual Connections collect output without sockets. Native
+code, master policy and the configured armour behavior remain unchanged. These
+are focused lpc-rs results and pinned source review, without upstream execution.
+Two-handed and second-weapon loadouts, armour damage absorption, full equipment
+restoration, alternate body/armour configurations and a new full startup/login
+run remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -2665,11 +2716,13 @@ Pass `pluralize` and `resync_visibility` as bare callbacks. A native closure who
 body is just a function name returns that function value; it does not invoke it.
 Pluralization stays in Lima's language module. Replace hook folding through
 `implode` with [`reduce`](efun/reduce.md) and initialize sum accumulators to zero.
-Use [`function_info`](efun/function_info.md)'s owner field with
-[`objectp`](efun/objectp.md) to discard callbacks whose owners were destroyed;
-native [`functionp`](efun/functionp.md) is a predicate, not an owner-status
-bitmask. Retain callback registration order, argument forwarding and each hook
-mode's empty default.
+Retain nonfunction hook values with [`functionp`](efun/functionp.md) before
+using [`function_info`](efun/function_info.md)'s owner field and
+[`objectp`](efun/objectp.md) to discard callbacks whose owners were destroyed.
+Native functionp is a predicate, not an owner-status bitmask. The later
+[stock armour audit](#lima-stock-player-armour-commands) exercises the constant
+prevent-drop message. Retain callback registration order, argument forwarding
+and each hook mode's empty default.
 
 The [verb-support module][lima-object-verbs] must compile in ordinary objects
 without container methods. After checking `is_container()`, call the public
@@ -10990,3 +11043,6 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-coins]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/coins.c
 [fluffos-loot-integer-scaling]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/ops/ops.cc#L385-L405
+
+[lima-wear-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wear.c
+[lima-armour-scarf]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/armour/scarf.c
