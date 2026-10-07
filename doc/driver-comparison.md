@@ -1134,6 +1134,44 @@ Full startup, login/reconnect and complete saved-body quest restoration are not
 repeated by this batch. These are lpc-rs execution results and pinned Lima source
 review, without upstream driver execution.
 
+#### Lima Pirate quest earning
+
+The [ocean][lima-pirate-ocean], [dock wall][lima-pirate-dock-wall],
+[treasure sand][lima-pirate-sand], [shovel][lima-pirate-shovel],
+[hole][lima-digging-hole] and [diggable module][lima-diggable], reviewed on
+**6 October 2026** against the pinned Lima revision, need six file adaptations.
+Use bare function names for the ocean's departure award, the digging menu's
+answer and the wall's timers. Match the wall's inherited direct open/close object
+arguments, parenthesize both assignments in digging's logical OR, and convert
+integer size constants to float for the three mass setters. Lima retains
+USE_MASS, distinct nil, preserved call-out players and the 4,000 ms task budget.
+The container already places spawned clones before calling on_clone, so the
+ocean's environment hook needs no lifecycle change.
+
+Six functional tests pass through ordinary input using real users, human bodies,
+player shells, parser verbs, modal input, departure hooks, quest daemon and body
+progress. Ocean departure earns 10 points, the river-triggered wall earns 5 and
+the eighth sand dig earns 10: the completed quest totals 25 points and 250 XP,
+and the quests command displays Finished. Checks also cover independent players,
+repeat ocean departure and a ninth dig retaining points, progressive hole
+descriptions, automatic single-tool selection and modal selection from room or
+inventory. Native dispatch runs the wall's open/close timers with the preserved
+player and no new runtime log entries. Every tested input finishes without a
+caught error. Virtual Connections collect output without sockets. Seventeen
+focused compile checks pass, including the three stock room sources. Workspace
+Clippy with all targets/features and formatting pass.
+
+Runtime uses minimal beach, dock and navigation fixtures with the actual earning
+objects and container spawning; the stock Outside_Cave destination is unchanged.
+Those rooms and observation/navigation helpers are excluded from adoption. This
+does not establish complete stock room populations, paired passage traversal,
+navigation-button interaction or saved-body restart after each milestone. The
+existing shared digging counter, chest announcement without a cloned chest and
+body update persistence timing are retained. Quest daemon, body policy, master
+and native code are unchanged. Full startup/login is not repeated. These are
+lpc-rs execution results and pinned Lima source review, without upstream driver
+execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10580,3 +10618,10 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-player-quests]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/quests.c
 [lima-quest-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/quest_d.c
+
+[lima-pirate-ocean]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/ocean.c
+[lima-pirate-dock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/dock_wall.c
+[lima-pirate-sand]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/sand_with_treasure.c
+[lima-pirate-shovel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/shovel.c
+[lima-digging-hole]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/hole.c
+[lima-diggable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_diggable.c
