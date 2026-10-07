@@ -1871,6 +1871,69 @@ other consumers' saved state, randomized recipes, alternate configurations,
 foreign saved-data conversion and a new full startup/login remain unchecked by
 this batch.
 
+#### Lima light-source fuel and restoration
+
+Reviewed **7 October 2026** against pinned [lantern][lima-lantern],
+[light object][lima-light-object], [lightable][lima-lightable],
+[light source][lima-light-source], [switchable][lima-switchable],
+[fuel definitions][lima-light-fuel], [decay][lima-decay],
+[body][lima-body], [container][lima-container],
+[object light][lima-object-light] and [save module][lima-save-module].
+Execution uses USE_MASS, distinct nil, preserved call-out players and the
+unchanged 4,000 ms budget, with limb health, armour and wielding selected.
+This audit adopts no source patch or native feature.
+
+The preceding food port preserves num_decays and decay_begun. Inventory saves
+do not register the lantern's lit flag, private source-lit field, light
+contribution, extra-short hook or switch state. A rebuilt lantern therefore
+retains fuel and begun state but returns unlit, without a light hook and with
+its switch off. Deferred registration starts a fresh minute interval; the first
+due update retires the unlit entry without consuming fuel. Ordinary relighting
+registers the item again and consumes its remaining fuel normally.
+
+The body also uses native save_object, which saves its non-nosave our_light and
+contained_light globals. Saving with one lit lantern writes both as one.
+Restoration keeps those cached values even though the reconstructed child emits
+zero light, so the body still lights the room. Relighting raises both body
+counters to two; extinguishing or final burnout removes only the new unit and
+leaves the stale one. A switched-on save reproduces the same mismatch. An
+extinguished save has zero cached body light and restores without it. Rebuild
+cached body light from current inventory during restoration while retaining
+unlit/off lantern reconstruction and saved fuel. Saving the lit flag alone
+would not reconstruct source state, hooks or environment contributions.
+
+Zero fuel restores unchanged, refuses ordinary lighting with the burned-out
+message and retires silently without decrement or removal. The header advertises
+INF_FUEL, currently minus one, as unlimited fuel. That count survives restoration
+and lights successfully, but the next decay update decrements it and auto-removes
+the lantern. This is a retained mudlib policy mismatch; handle the light-specific
+sentinel separately from generic negative decay behavior. Finite fuel retains
+the existing final burnout message and auto-removal policy. Ordinary lighting
+does not set the separate switch field even before saving; that live behavior
+and the missing lighting_extra_short target remain unchanged.
+
+Four characterization checks pass across five new native saves and five fresh-VM
+restores with actual users, human bodies, player shells and ordinary
+light/extinguish/flip/save input. Passing checks reproduce these mismatches; they
+do not establish repaired light restoration. Entry leaves saved files unchanged.
+Eighteen body setups, four deferred registrations and nine state pulses run
+through native timer dispatch without new runtime-log errors. Fixtures observe
+fields and shorten fuel/move tested queue entries forward; they never override
+body lighting. The stock room supplies ambient light, and virtual Connections
+collect output without sockets. Standalone compilation passes nineteen of
+twenty-five targets; six isolated light/decay/body-switch modules require host
+methods, while complete hosts and commands compile. All eleven shared
+predecessor outcomes and the preceding decay/body-switch diagnostics remain;
+all three fixture compositions compile. Workspace Clippy across all
+targets/features and formatting pass. Native code, master policy and the active
+source overlay remain unchanged.
+
+These are focused lpc-rs execution results and pinned source review, without
+upstream execution. Torch gameplay, nested container lighting, other light
+levels, prevented-light hooks, mixed switch/light sequences, offline time,
+scheduler jitter, alternate configurations, foreign saves and a new full
+startup/login remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11383,3 +11446,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-stock-greataxe]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/greataxe.c
 [lima-stock-longsword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/longsword.c
 [lima-stock-club]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/club.c
+[lima-light-source]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_light_source.c
+[lima-switchable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_switchable.c
+[lima-object-light]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/light.c
