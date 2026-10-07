@@ -1881,7 +1881,7 @@ Reviewed **7 October 2026** against pinned [lantern][lima-lantern],
 [object light][lima-object-light] and [save module][lima-save-module].
 Execution uses USE_MASS, distinct nil, preserved call-out players and the
 unchanged 4,000 ms budget, with limb health, armour and wielding selected.
-This audit adopts no source patch or native feature.
+The local adaptation changes only the body module; no driver feature is added.
 
 The preceding food port preserves num_decays and decay_begun. Inventory saves
 do not register the lantern's lit flag, private source-lit field, light
@@ -1892,47 +1892,58 @@ due update retires the unlit entry without consuming fuel. Ordinary relighting
 registers the item again and consumes its remaining fuel normally.
 
 The body also uses native save_object, which saves its non-nosave our_light and
-contained_light globals. Saving with one lit lantern writes both as one.
-Restoration keeps those cached values even though the reconstructed child emits
-zero light, so the body still lights the room. Relighting raises both body
-counters to two; extinguishing or final burnout removes only the new unit and
-leaves the stale one. A switched-on save reproduces the same mismatch. An
-extinguished save has zero cached body light and restores without it. Rebuild
-cached body light from current inventory during restoration while retaining
-unlit/off lantern reconstruction and saved fuel. Saving the lit flag alone
-would not reconstruct source state, hooks or environment contributions.
+contained_light globals. Saving with one lit lantern writes both as one, while
+the rebuilt child emits zero light. Adapt body entry to rebuild inventory light
+before recursive reconstruction and again after inventory restoration, equipment
+setup and effect reinstatement. Separate the body's own light from its visible
+cached inventory contribution, sum the current inventory's query_light values,
+synchronize contained_light_added with visibility, and apply the recomputed
+total through set_light. This removes stale inventory light while preserving
+the body's own light and the reconstructed items' current state. Native saved
+formats, save registrations and lantern lit/switch policy remain unchanged.
+
+A normal lit save now restores with zero lantern/body light and the room's one
+ambient unit. Relighting produces one body unit and two room units; extinguishing
+or final burnout returns them to zero/one. Switched-on saves also restore off,
+then flip on/off without stale light. A body with four intrinsic light units
+saves at five with a lit lantern, restores at four with an unlit lantern, returns
+to five on relighting and to four on extinguishing. Refreshing visibility while
+lit leaves its totals unchanged. An exact older native audit file containing
+both cached fields at one loads unchanged, now with zero inventory/body light,
+retaining fuel two and begun state; it relights, consumes fuel and extinguishes
+normally. Missing saved history is not inferred and files are not rewritten.
 
 Zero fuel restores unchanged, refuses ordinary lighting with the burned-out
 message and retires silently without decrement or removal. The header advertises
 INF_FUEL, currently minus one, as unlimited fuel. That count survives restoration
-and lights successfully, but the next decay update decrements it and auto-removes
-the lantern. This is a retained mudlib policy mismatch; handle the light-specific
-sentinel separately from generic negative decay behavior. Finite fuel retains
-the existing final burnout message and auto-removal policy. Ordinary lighting
-does not set the separate switch field even before saving; that live behavior
-and the missing lighting_extra_short target remain unchanged.
+and lights successfully, but the next decay update still decrements it and
+auto-removes the lantern. This retained light-specific policy mismatch remains
+separate from generic negative decay behavior. Finite fuel retains the existing
+final burnout message and auto-removal policy. Ordinary lighting's independent
+switch field and the missing lighting_extra_short target remain unchanged.
 
-Four characterization checks pass across five new native saves and five fresh-VM
-restores with actual users, human bodies, player shells and ordinary
-light/extinguish/flip/save input. Passing checks reproduce these mismatches; they
-do not establish repaired light restoration. Entry leaves saved files unchanged.
-Eighteen body setups, four deferred registrations and nine state pulses run
-through native timer dispatch without new runtime-log errors. Fixtures observe
-fields and shorten fuel/move tested queue entries forward; they never override
-body lighting. The stock room supplies ambient light, and virtual Connections
-collect output without sockets. Standalone compilation passes nineteen of
-twenty-five targets; six isolated light/decay/body-switch modules require host
-methods, while complete hosts and commands compile. All eleven shared
-predecessor outcomes and the preceding decay/body-switch diagnostics remain;
-all three fixture compositions compile. Workspace Clippy across all
-targets/features and formatting pass. Native code, master policy and the active
-source overlay remain unchanged.
+Six functional checks pass across six new native saves and one exact older file,
+all restored in fresh VMs with actual users, human bodies, player shells and
+ordinary light/extinguish/flip/save input. Entry leaves saved files unchanged.
+The unmodified control fails the corrected lit-save assertion with cached body
+light one instead of zero, using identical tests and fixtures; only that control
+case is rerun, and the preceding audit's characterization evidence stays frozen.
+Twenty-four body setups, five deferred registrations and eleven state pulses
+run through native timer dispatch without new runtime-log errors. Standard
+cases never override body lighting; only the intrinsic-light fixture adds four
+units. Virtual Connections collect output without sockets. Native code and
+master policy remain unchanged; fixture helpers are excluded from adoption.
+Standalone compilation retains all preceding outcomes: nineteen of twenty-five
+targets pass, and six isolated modules still require host methods. Complete
+hosts and commands compile, as do all three fixture compositions. Workspace
+Clippy across all targets/features and formatting pass.
 
 These are focused lpc-rs execution results and pinned source review, without
-upstream execution. Torch gameplay, nested container lighting, other light
-levels, prevented-light hooks, mixed switch/light sequences, offline time,
-scheduler jitter, alternate configurations, foreign saves and a new full
-startup/login remain unchecked by this batch.
+upstream execution. Torch gameplay, other visibility modes, nested container
+lighting, custom restoration/prevented-light hooks, mixed switch/light sequences,
+other lantern light levels, offline time, scheduler jitter, alternate
+configurations, foreign saves and a new full startup/login remain unchecked by
+this batch.
 
 #### Lima cold startup and login
 
