@@ -1811,57 +1811,65 @@ startup/login run remain unchecked by this batch.
 Reviewed **7 October 2026** against pinned [food][lima-food],
 [edible][lima-edible], [healing][lima-healing], [decay][lima-decay],
 [stateful][lima-stateful-module], [state daemon][lima-state-daemon],
-[save module][lima-save-module], [apple][lima-apple] and
-[hamburger][lima-hamburger]. Execution uses USE_MASS, distinct nil, preserved
-call-out players and the unchanged 4,000 ms budget, with limb health, armour and
-wielding selected. The active library is unchanged; this audit adopts no patch
-or native feature.
+[save module][lima-save-module], [apple][lima-apple],
+[hamburger][lima-hamburger] and [names][lima-names]. Execution uses USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms budget,
+with limb health, armour and wielding selected. Three local source adaptations
+complete the tested save policy; no driver feature is added.
 
-Four characterization checks pass across five fresh-VM restores with two actual
-users and human bodies. They reproduce omitted save state rather than establish
-complete food restoration. A partly eaten stock five-bite apple retains its
-remaining count and constructor-supplied original total, description and actions;
-ordinary input finishes it with one action/decrement per bite and final removal.
-An apple changed to nine bites retains eight remaining bites but resets its
-original total to five. Its 160% falls outside food's description cases, returning
-nil.
+Register original_eats/poison_strength alongside num_eats in M_EDIBLE, and
+register decay_begun alongside num_decays in M_DECAY. After both inherited setup
+calls, register state_cnt/adjs/primary_adj/long in hamburger. The added fields
+preserve bite totals, poison, begun state, stage and visual state through native
+inventory reconstruction. Hamburger's long is a string; generic function-valued
+descriptions are not newly registered. The name module retains a nonempty
+primary_adj cache, so saving adjs alone would leave the constructor's short name.
+No decay updates or actions are replayed to restore appearance. Hamburger's
+switch fallthrough and poison five on its third update remain unchanged.
 
-Three native state pulses leave a hamburger with two decays, stage three, poison
-strength five, zero value and moldy visuals. Restoration keeps the two decays but
-resets stage/begun/poison to zero and visuals to fresh, restoring value nine.
-Deferred registration preserves the count and starts a new ten-minute interval.
-After two more pulses, zero decays retires its queue entry without removing the
-food. Saving/restoring zero schedules it again; the next pulse decrements to
-minus one and requeues. The shared stateful predicate does not reject exhausted
-decay before the update. A composed food fixture also confirms stop_decay's
-queue removal is not persistent; after restoration its last action runs once,
-auto-removes the food and retires the entry.
+Override M_DECAY's is_stateful to reject only a zero count. The constructor still
+adds a deferred queue entry, but STATE_D retires it before state_update, without
+another action, decrement, stage change or requeue. Nonzero counts retain their
+behavior; negative counts with auto-removal disabled still decrement and requeue.
+stop_decay remains a session queue removal: restoration registers a saved positive
+count again. Intervals, actions, healing and auto-removal settings still come from
+constructor setup. Native timer APIs and scheduler cadence are unchanged.
 
-Use existing save registrations for original_eats/poison_strength in M_EDIBLE,
-decay_begun in M_DECAY and state_cnt/adjs/primary_adj/long in hamburger after both
-inherited setup calls. Gate zero-count decay through is_stateful before an update,
-retaining nonzero and negative behavior. Hamburger uses a string long description;
-explicit consumer registration can preserve its visual state without ticking or
-replaying actions. The [name module][lima-names] retains a nonempty
-primary_adj cache, so adjs alone is insufficient. These are source-reviewed
-recommendations; no repaired tree is executed here. Keep stop_decay as a session
-queue operation and retain constructor intervals, actions, healing and auto-removal
-defaults for this pass.
+Six functional checks pass across seven fresh-VM restores with two actual users
+and human bodies. A partly eaten stock apple retains its data and finishes through
+ordinary eat input, with one action/decrement per bite and final removal. An apple
+changed to nine bites retains eight remaining bites and a correct percentage
+description. An aged hamburger retains its two decays, stage three, poison five,
+zero value, moldy visuals and short name; two further native pulses reach zero.
+Another restart preserves the exhausted state, and its first pulse retires the
+entry without output or mutation. A composed food fixture retains begun state
+after stop_decay, resumes its positive count, then runs its final action once,
+auto-removes and retires. Separate zero/negative checks cover the predicate's
+boundary without changing negative-count policy.
 
-Ordinary input saves native body files, and fresh entry leaves all five files
-unchanged. Native timers run eighteen body setups, five decay registrations and
-eight state pulses. Helpers seed accounts, insert food and observe the hamburger's
-stage from its own object; none is adopted. Virtual Connections collect output
-without sockets and timer dispatch is accelerated. Standalone compilation passes
-seventeen of twenty targets: abstract edible/decay modules and isolated body-switch
-lack host methods, while complete food/body/user compositions compile. All three
-fixture compositions compile. Workspace Clippy across all targets/features and
-formatting pass. Native code and master policy are unchanged.
+Two exact older native named saves from the preceding audit also load without
+rewriting: a partly eaten apple and an aged hamburger. Their saved counters
+survive, while fields they omitted keep constructor defaults. Missing historical
+age/poison/visual state is not inferred. The unmodified source control passes this
+older-file check and fails five positive checks with the same tests and fixtures.
+The preceding audit's characterization checks and evidence remain frozen.
+
+Ordinary input saves five new native body files, and fresh entry leaves files
+unchanged. Native timers run twenty-four body setups, seven decay registrations
+and twelve state pulses. Helpers seed accounts, insert foods, expose stage within
+hamburger and set boundary counts; none is adopted. Virtual Connections collect
+output without sockets and timer dispatch is accelerated. Standalone compilation
+passes nineteen of twenty-two targets, retaining all seventeen prior successes
+and the abstract edible/decay and isolated body-switch host diagnostics. Complete
+corpse compositions also compile, as do all three fixture compositions. Workspace
+Clippy across all targets/features and formatting pass. Native code and master
+policy are unchanged.
 
 These are focused lpc-rs execution results and pinned source review, without
 upstream execution. Offline elapsed time, timer jitter, full poisonous eating,
-other decay consumers, randomized recipes, alternate configurations, foreign
-saved-data conversion and a new full startup/login remain unchecked by this batch.
+other consumers' saved state, randomized recipes, alternate configurations,
+foreign saved-data conversion and a new full startup/login remain unchecked by
+this batch.
 
 #### Lima cold startup and login
 
