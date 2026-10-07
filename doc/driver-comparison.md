@@ -1036,6 +1036,40 @@ alternate screen widths and interactive terminal negotiation remain unchecked.
 These are lpc-rs execution results and pinned Lima source review, without
 upstream driver execution.
 
+#### Lima player hint notifications
+
+The [hints command][lima-player-hints] and [hint token][lima-hint-token], reviewed
+on **6 October 2026**, need a protected command dispatch adapter, a false-value
+check for the unset shell flag, bare callbacks and a stored integer timer handle.
+Use query_call_out to check that handle and schedule the bound
+`&show_hints(hints)` callback. Lima retains distinct nil, preserved call-out players
+and the 4,000 ms task budget. The existing public player_menu_entry is preserved.
+
+Ten functional tests pass: nine use ordinary input through real users, human
+bodies and player shells, and one calls the public entry under user context.
+The fixture loads the real go/drop/look verbs and uses a room inheriting the real
+indoor room plus carried-item hint providers. Tests cover initial state,
+enabling/token creation, disabling through drop, pruning the destroyed token's
+movement hook, item hints and absent optional hints, queries with the body's
+level, notification delivery and independent users. Repeated scans share one pending
+timer and rearm after it fires. Queued callbacks run through native VM dispatch,
+reach only the scheduling user and produce no new runtime log entries. Virtual
+Connections collect output without sockets; the full VM event loop is not run.
+
+Preserve the source's status followed by usage and its discarded array punctuation
+map result. The command fetches its token before automatic enabling and does not
+refetch it, so the disabled item-request path retains a pre-existing Lima issue;
+that path is source-reviewed without a repair or runtime claim. Twelve focused
+compile checks include the stock Monster_Room and Wizroom hint providers;
+workspace Clippy with all targets/features and formatting pass.
+
+Only hints.c and hint_token.c change; fixture providers and accessors are excluded
+from adoption. Native code, master policy and shared movement/grammar helpers
+are unchanged. Full startup, login/reconnect, wizard-shell routing, complete menu
+interaction, stock hint-room runtime and alternate screen widths remain unchecked
+by this batch. These are lpc-rs execution results and pinned Lima source review,
+without upstream driver execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10471,3 +10505,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-ansi-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/daemons/ansi.o
 [lima-player-palette]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/palette.c
 [lima-palette-frames]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/admtool/secure/frames.c#L32-L35
+
+[lima-player-hints]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/hints.c
+[lima-hint-token]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/item/hint_token.c
