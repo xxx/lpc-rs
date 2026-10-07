@@ -888,6 +888,33 @@ from adoption. Full startup, login/nickname persistence, full parser verb
 resolution, file/line editor paths and disabled-plan configurations remain
 unchecked by this batch; native code and master policy stay unchanged.
 
+#### Lima exits and spells commands
+
+The [exits command][lima-player-exits] and [spells command][lima-player-spells],
+reviewed on **6 October 2026**, need protected dispatch adapters retaining their
+private handlers. Exits supplies nil as the explicit format_list separator.
+Spells uses nil for absent frame headers/footers, bare callbacks for unbound
+functions, and a value-free return in its void handler. The existing room, frame,
+spell and skill modules need no further changes. Lima retains distinct nil,
+preserved call-out players and the 4,000 ms task budget.
+
+Nineteen focused compile checks and nine ordinary-input tests pass through real
+Lima user/body/shell objects. Exits reports empty, single, multiple and hidden
+directions. Spells discovers all eight stock entries through the real daemon,
+filters cantrips and level-one spells, displays actual descriptions and channeling
+metadata, reports no matches, and reads body skill ranks without changing them.
+The fixture uses a 200-column viewport and ordinary rows 99 input for complete
+reports. The standalone exit module needs call_hooks from its containing room;
+the complete Void room compiles. Workspace Clippy with all targets/features and
+formatting pass.
+
+Only exits.c and spells.c change; fixture room/skill setup and accessors are
+excluded from adoption. Spell casting, scheduled channeling, alternate
+skill/complex-exit configurations, narrow-screen layout and full startup remain
+unchecked by this batch. The original spell ordering comparator is preserved;
+native code and master policy stay unchanged. These are lpc-rs execution results
+and pinned Lima source review, without upstream driver execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10313,3 +10340,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-describe]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/describe.c
 [lima-player-nickname]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/nickname.c
 [lima-player-plan]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/plan.c
+[lima-player-exits]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/exits.c
+[lima-player-spells]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/spells.c
