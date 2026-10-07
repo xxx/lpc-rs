@@ -839,6 +839,31 @@ Full startup, scheduled event execution, daylight-saving transitions, alternate
 game-time settings, display combinations and login persistence remain unchecked
 by this batch; native code, master and the game-time configuration stay unchanged.
 
+#### Lima title and description commands
+
+The [title command][lima-player-title] and [description command][lima-player-describe],
+reviewed on **6 October 2026**, need protected dispatch adapters retaining their
+private handlers. Describe uses a bare callback to its private receive_line
+handler with no bound arguments. Native APIs, the body title/naming modules and
+the modal input module need no changes. Lima retains title name expansion,
+automatic name insertion and its 65-visible-character check before name expansion;
+stored colour markup remains intact.
+
+Nine focused compile checks and eight ordinary-input tests pass through real
+Lima user/body/shell objects. Tests cover default and custom title queries, explicit
+and automatic name expansion, visible-length acceptance/rejection, repeated inline
+description updates, multiline entry including blank lines, dot completion,
+empty completion, abort and automatic completion after six lines. Accepted
+descriptions are verified on real human bodies restoring the saved file; editor
+completion and abort return to ordinary shell input. The standalone title module
+requires query_name from its containing body; the complete human body compiles.
+Workspace Clippy with all targets/features and formatting pass.
+
+Only title.c and describe.c change; fixture accessors and account setup are excluded
+from adoption. Full startup, login persistence, introductions-enabled settings,
+interactive colour negotiation and display combinations remain unchecked by this
+batch; native code and master policy stay unchanged.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10260,3 +10285,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-time]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/time.c
 [lima-localtime-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/localtime.h
 [lima-event-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/event_d.c
+[lima-player-title]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/title.c
+[lima-player-describe]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/describe.c
