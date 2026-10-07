@@ -1327,9 +1327,60 @@ test_flag, assign_flag, hook_state and clear_flag. Its concrete lantern host
 compiles and executes all selected timer paths. Workspace Clippy with all
 targets/features and formatting pass. These are lpc-rs execution results and
 pinned source review, without upstream driver execution. The active source
-overlay, native code and master policy are unchanged. Infinite fuel, NPC action
-timers, combat/death, generic corpse decay, cold nested entry and a new full
-startup/login run remain unchecked.
+overlay, native code and master policy are unchanged. The
+[stock combat entry audit below](#lima-stock-combat-entry) covers ordinary
+combat entry and pulses. Infinite fuel, NPC action timers, death, generic corpse
+decay, cold nested entry and a new full startup/login run remain unchecked.
+
+#### Lima stock combat entry
+
+Reviewed **7 October 2026** against the pinned Lima revision, using USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+Combat selects PULSE_HEART_BEAT, BLOW_TYPES, HEALTH_LIMBS, ARMOUR_LIMBS,
+WIELD_LIMBS and FORMULA_SKILLS, with skills enabled and limb shields disabled.
+
+The [skill formula][lima-skill-formula] calls target->query_dex(), which has no
+definition in the reviewed library. Stock troll retaliation reaches nil
+arithmetic when that result is multiplied. Use `target->query_dex() || 0` to
+make its existing numeric default explicit. The pinned
+[FluffOS call_other implementation][fl-combat-callother] pushes an undefined
+value for a missing function, through [push_undefined()][fl-combat-undefined-stack]
+and a [numeric-zero constant][fl-combat-undefined-value]. From that source,
+the existing dexterity contribution is inferred to be zero. The adapter
+preserves that contribution and the original method name. The FluffOS comparison
+reviews PACKAGE_CORE's _call_other path, without an upstream build or execution.
+
+Five functional checks pass through the real [kill verb][lima-kill-verb],
+master, simul efuns, users, human bodies, player shells and stock grotto
+population. They cover `kill troll`, its `attack` alias, bare `kill` before
+combat and while awaiting a pulse, and `kill troll with glowing sword` after
+taking the corpse's sword. The compound command retains the verb's existing
+unused weapon argument: it starts combat without implicitly wielding the item.
+The adjective selects the carried glowing sword unambiguously while the troll's
+dull sword is also visible in the parser scope.
+
+The immediate swing starts reciprocal targeting and routes messages to an
+observer. Actual native [combat pulses][lima-combat-pulse] dispatch troll
+retaliation and a player swing, preserve one two-second timer per combatant and
+produce no new runtime-log entry. After ordinary travel to the next room,
+the two callbacks clear their unreachable targets and retire both timers.
+Every input completes without a caught error. Random hit, damage and message
+outcomes remain stock; this is focused lpc-rs execution, not complete combat
+coverage or wall-clock timing validation.
+
+Twenty focused standalone compile checks retain twelve successes and eight
+partial-module rejections for unresolved host methods. Concrete verbs, troll,
+human body and weapons compile; the one-line formula adaptation adds no compile
+rejection. Workspace Clippy with all targets/features and formatting pass.
+Fixtures provide account/body setup, initial placement, light and observations,
+initialize stock delayed setup through native timers, and use virtual Connections
+without sockets. Object/recipe blueprints initialize separately before entry.
+Fixture helpers are excluded from adoption; no replacement rooms or extra stock
+objects are introduced. Native code, master policy and combat dispatch modules
+are unchanged. The stock [lazy limb-cache rebuild][lima-health-limbs] remains:
+first limb selection can reinitialize health after initial monster setup.
+Player wield/unwield, equipped swings, death/generated corpses, NPC actions,
+generic corpse decay and a new full startup/login run remain unchecked.
 
 #### Lima cold startup and login
 
@@ -3337,8 +3388,9 @@ Checks load the pulse through the real master compilation gate, dispatch actual
 native callbacks and cover repeat retention, start/stop, transaction rollback,
 error reporting, destruction, actor context and real Lima message routing to a
 controlled actor. They also compose the real target module and an extracted
-attack method. Wall-clock scheduling, full body/NPC
-entry and complete combat remain unvalidated.
+attack method. The later [stock combat entry audit](#lima-stock-combat-entry)
+exercises real human-body/NPC entry and native pulses. Wall-clock scheduling and
+complete combat remain unvalidated.
 
 #### Lima combat blows
 
@@ -10808,6 +10860,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-light-fuel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/light.h
 [lima-light-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/light_object.c
 [lima-monster-defaults]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/monster.c
+[lima-kill-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/kill.c
+[fl-combat-callother]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L226-L229
+[fl-combat-undefined-stack]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/interpret.cc#L312-L319
+[fl-combat-undefined-value]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/svalue.cc#L11
 [lima-fullplate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/armour/fullplate.c
 [lima-backpack]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/backpack.c
 [lima-stock-sword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/sword.c
