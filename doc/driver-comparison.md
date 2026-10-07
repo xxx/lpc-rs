@@ -1595,6 +1595,57 @@ source review, without upstream execution. Armour damage absorption, complete
 equipment restoration, alternate body/wield/armour configurations, ranged
 weapons and a new full startup/login run remain unchecked by this batch.
 
+#### Lima player armour damage absorption
+
+Reviewed **7 October 2026** against the pinned Lima revision, using USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+HEALTH_LIMBS, ARMOUR_LIMBS, WIELD_LIMBS, BLOW_TYPES and FORMULA_SKILLS remain
+selected, with limb shields disabled. This audit needs no additional source
+adapter or native feature; it checks the earlier [damage-sink](#lima-damage-sink),
+[durability](#lima-durability) and limb-coverage adaptations with real players
+and stock items.
+
+Five functional checks pass, delivering sixteen controlled events through the
+real typed producer, source, target modifiers, armour sink, result, message and
+health handlers, plus one native troll retaliation callback. Wearing, removing
+and rewearing the [fullplate][lima-fullplate] through ordinary player input
+controls whether torso damage is absorbed. Each additional arm/leg receives
+exactly one fullplate reduction; the uncovered head receives the full hit.
+Item flags, health damage, cleared queues and wear agree.
+
+The fullplate's existing slashing and bludgeon resistances each subtract ten
+plus its actual armour class. Armour class alone does not reduce unmatched
+piercing damage. Mixed and duplicate types stack, and damage is clamped to zero;
+the armour and weapon each lose the absorbed amount of durability, capped by
+incoming damage. Weaponless events default to bludgeon and call neither item's
+durability hook. Misses with an unspecified limb or a covered torso preserve
+health and wear. These checks retain the [sink's existing policies][lima-combat-damage-sink].
+
+Ordinary `kill troll` starts a real fight. The native repeating retaliation
+callback uses the stock [troll][lima-stock-troll], dull sword, random formulas and
+target selection against the fullplate-wearing player. The captured callback
+lands a fully absorbed hit; its test checks wear and health invariants without
+requiring a particular random hit/miss result.
+
+Fixtures supply selected event limbs/amounts and one real sword clone, initialize
+restored bodies and temporarily set their healing rate to zero for exact health
+measurements. They preserve the gameplay handlers and room definitions, and are
+excluded from production. Limb sizes are nosave in the [health module][lima-health-limbs];
+the first random-limb lookup after restoration rebuilds the health map through
+update_body_style. Run that existing initialization before taking damage
+measurements. This audit records the lazy initialization behavior without
+repairing it. Native callbacks also run delayed setup, and virtual Connections
+collect messages without sockets.
+
+Sixteen of twenty-two selected standalone files compile. The six partial modules
+fail only on missing host methods or variables; complete human, troll, armour,
+weapon and concrete items compile. Workspace Clippy with all targets/features
+and formatting pass. Production library sources, native code and
+master policy remain unchanged. These are focused lpc-rs results and pinned
+source review, without upstream execution. Full combat balance, complete
+equipment restoration, alternate configurations, ranged weapons and a new full
+startup/login run remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
