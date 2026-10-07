@@ -922,11 +922,10 @@ aborted sends, asynchronous bind failure and foreign-caller restrictions.
 The creator controls wrapper mutation; codec methods are protected, native event
 pointers private, and endpoint accessors return copies. The original outgoing
 privilege check remains; listening retains its existing creation permission.
-Only MUD-mode TCP styles are implemented by this adapter. Its write callback
-notifies drained output and does not interpret return values as producer data.
-A ten-second wrapper deadline bounds closing owners; its cleanup path is tested
-by direct driver entry, without timing a real stalled expiry. Native sources and
-the active overlay are unchanged.
+The initial adapter implements MUD-mode TCP styles, with write callbacks that
+notify drained output. A ten-second wrapper deadline bounds closing owners; its
+cleanup path is tested by direct driver entry, without timing a real stalled expiry.
+The native implementation is unchanged by this mudlib adaptation.
 
 The complete proposed IMUD daemon now compiles after ordinary typing, callback,
 class-access, timer and file-metadata adaptations. Twelve integration tests run
@@ -950,6 +949,32 @@ stale-output cleanup permission failure, so a clean full restart is not establis
 No RST repair or native change accompanies this adoption. Temporary loopback
 configuration and runtime files are not adopted. Actual local-player mail delivery,
 file put/get, other socket consumers and actual-router execution remain unestablished.
+
+#### Lima text and binary TCP styles
+
+The [socket wrapper][lima-imud-socket], [HTTP daemon][lima-http] and
+[FTP daemon][lima-ftp] were reviewed on **6 October 2026** at the pinned Lima
+revision. Extend the local wrapper with text and binary connect/listen styles
+using the existing native TCP efuns. Accepted children inherit the listener's
+format and deliver `(wrapper, nil)` before data. Text streams encode and decode
+UTF-8, retaining partial characters across reads; binary streams deliver native
+`bytes` and accept bytes or UTF-8 strings for output. Both use raw stream data
+without I3 framing. Empty stream writes do nothing.
+
+Retain the wrapper's output queue and close drain. Write callbacks may send the
+next chunk themselves or return it for the wrapper to enqueue, as Lima's FTP file
+producer does. Port binary consumers from `buffer` and `read_buffer` to
+[`bytes`](lpc/types.md), [`read_bytes`](efun/read_bytes.md) and explicit
+[`to_text`](efun/to_text.md) conversions. Wrapper support alone does not make the
+HTTP or FTP daemon compatible; their optional preloads remain disabled pending
+source adaptation. Lima supplies the older [RCP daemon][lima-rcp] as a disabled
+`.dontuse` file.
+
+The one-file wrapper extension is adopted in the local Lima port. Six functional
+tests cover text/binary connect and accept, split UTF-8 input, raw binary data,
+queued writes, callback-produced file chunks and retained MUD framing. Wrapper
+and full IMUD compilation, workspace Clippy and formatting pass. Native TCP code
+and the optional service implementations are unchanged.
 
 #### Lima RST generation
 
@@ -9944,3 +9969,6 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-mail-message-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/mailmsg.c
 [lima-mail-biff]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/biff.c
+
+[lima-http]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/http_d.c
+[lima-rcp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/rcp_d.dontuse
