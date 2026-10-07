@@ -1272,9 +1272,64 @@ the fixed input-task budget. Virtual Connections capture output without sockets.
 Twenty-one focused compile checks, workspace Clippy with all targets/features
 and formatting pass. These are lpc-rs execution results and pinned source review,
 without upstream driver execution. Native code, master policy and quest
-daemon/body source are unchanged. NPC delayed setup, fuel consumption/burnout,
-decay, combat-generated corpses, cold entry
-without blueprint initialization and full startup/login remain unchecked.
+daemon/body source are unchanged. The [timer audit below](#lima-stock-lantern-and-monster-timers)
+covers fuel consumption/burnout and delayed monster setup. Generic corpse decay,
+combat-generated corpses, cold entry without blueprint initialization and full
+startup/login remain outside these cave checks.
+
+#### Lima stock lantern and monster timers
+
+Reviewed **7 October 2026** against the pinned Lima revision, using USE_MASS,
+distinct nil, preserved call-out players and the unchanged 4,000 ms task budget.
+The existing Pirate cave overlay supports the selected stock timers without
+further native or mudlib adaptations.
+
+The [stateful module][lima-stateful] registers objects through a zero-delay
+call-out. The adapted [state daemon][lima-state-daemon] polls due work through
+a repeating native call-out every two seconds; object intervals remain minutes.
+The stock [lantern][lima-lantern] starts with 3,600 fuel units and a
+[one-minute fuel interval][lima-light-fuel]. Each due update of a lit lantern
+consumes one unit and re-queues it. An unlit lantern's registration is dropped
+when due, without consuming fuel. Extinguishing removes its queued work;
+relighting registers it again. Retain these units: 3,600 is a count of fuel
+updates, rather than a duration in seconds.
+
+The final positive fuel unit invokes [burnout][lima-light-object], clears light
+and emits the death message. The [decay module][lima-decay] then removes the
+exhausted lantern under its existing auto-remove policy. The stock
+[adventurer corpse][lima-dead-adventurer] instead overrides state_update() to
+return zero: its registration retires without decay or loss of its equipment.
+This does not establish the generic corpse's decay/death path.
+
+[Adversary construction][lima-adversary] schedules setup_monster() at zero
+delay. Its [monster defaults][lima-monster-defaults] initialize stats and all
+registered skills, update health and heal damageable limbs. The stock
+[troll][lima-stock-troll] retains its 30-point health cap and wielded sword;
+at its initial level one, its registered skills receive ten points each. The
+same callback skips player bodies and preserves their stats and skills.
+
+Seven functional checks pass using the real master, simul efuns, users, human
+bodies, player shells, stock grotto population, parser verbs and native timer
+dispatch. Checks observe registration, two fuel updates and re-queuing,
+extinguish/relight, two-unit burnout restoring crawl darkness, the corpse's
+no-decay override, troll defaults and the player-body guard. Every ordinary
+input completes without a caught error, and callbacks add no runtime-log entry
+or state-update failure. The two-second repeating call-out remains scheduled.
+Fixtures move individual jobs forward with the existing add_to_queue_secs()
+API and shorten burnout fuel with set_fuel(); real-time minute waits are not
+measured. Account/body setup, initial placement, body lighting and observations
+are fixture helpers, excluded from the active library. No replacement rooms or
+extra stock objects are introduced.
+
+Fifteen of sixteen focused standalone compile checks pass. The remaining
+std/light_object.c rejection is a partial module's unresolved host methods:
+test_flag, assign_flag, hook_state and clear_flag. Its concrete lantern host
+compiles and executes all selected timer paths. Workspace Clippy with all
+targets/features and formatting pass. These are lpc-rs execution results and
+pinned source review, without upstream driver execution. The active source
+overlay, native code and master policy are unchanged. Infinite fuel, NPC action
+timers, combat/death, generic corpse decay, cold nested entry and a new full
+startup/login run remain unchecked.
 
 #### Lima cold startup and login
 
@@ -10750,6 +10805,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-dead-adventurer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/dead_adventurer.c
 [lima-stock-troll]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/troll.c
 [lima-lantern]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/lantern.c
+[lima-light-fuel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/light.h
+[lima-light-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/light_object.c
+[lima-monster-defaults]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/monster.c
 [lima-fullplate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/armour/fullplate.c
 [lima-backpack]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/backpack.c
 [lima-stock-sword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/weapon/sword.c
