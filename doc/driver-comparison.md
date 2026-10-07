@@ -940,6 +940,36 @@ interactive terminal negotiation remain unchecked by this batch. These are
 lpc-rs execution results and pinned Lima source review, without upstream driver
 execution.
 
+#### Lima conversation command
+
+The [converse command][lima-player-converse], reviewed on **6 October 2026**, needs
+a protected dispatch adapter calling its private zero-argument handler and a bare
+callback to its private speech continuation. It retains one command clone per
+conversation, the existing modal input stack and forwarding into the
+[say verb][lima-say-verb]. Lima keeps distinct nil, preserved call-out players and
+the 4,000 ms task budget.
+
+CMD resend must omit absent output: say sends speech directly and has no output
+buffer, so its missing get_output method returns nil on lpc-rs. Append output only
+when it is not nil; buffered command consumers retain their output. The resend
+checks remain unchanged. [CMD base][lima-command-base], [verb base][lima-verb-base].
+
+Twelve focused compile checks and nine ordinary-input tests pass through real
+Lima user/body/shell objects. Tests cover entry and clone ownership, successive
+room-local speech, both quit terminators destroying the clone, ! shell escapes,
+independent users, re-entry, simplified presentation and buffered reply output.
+The fixture records existing input catches' results and requires no caught errors;
+virtual Connections collect messages without sockets. Simplified mode retains
+its existing newline after the prompt. Workspace Clippy with all targets/features
+and formatting pass.
+
+Only converse.c and obj/secure/cmd.c change; fixture setup, accessors and error
+recording are excluded from adoption. Native code, master policy, say and input
+modules remain unchanged. Full startup, wizard-shell routing, disconnect/input
+stack teardown, alternate introductions/history settings and interactive terminal
+negotiation remain unchecked by this batch. These are lpc-rs execution results
+and pinned Lima source review, without upstream driver execution.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10369,3 +10399,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-spells]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/spells.c
 [lima-player-emote]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/emote.c
 [lima-player-shout]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/shout.c
+[lima-player-converse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/converse.c
+[lima-say-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/say.c
