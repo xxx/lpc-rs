@@ -2290,6 +2290,48 @@ and startup remain frozen; intermud traffic, moderation, soul messages,
 redirection and save restoration are not retested. This is the thirtieth
 additional passing player entry after the retained standalone survey.
 
+#### Lima player party-entry audit
+
+Reviewed **7 October 2026** against pinned [party command][lima-player-party],
+[party menu][lima-party-menu], [daemon][lima-party-daemon] and
+[class][lima-party-class]. Exact local Git contents support source review;
+upstream execution is not claimed. Lima retains distinct nil, preserved call-out
+players and the 4,000 ms budget. Earlier library adaptations remain the baseline.
+
+The command needs the established protected dispatch_main adapter. The menu has
+three compile blockers: scalar regexp, an integer invitation declaration that
+returns a party name, and zero passed to a string parameter. The diagnostic
+proposal uses [regmatch](efun/regmatch.md) for the anchored name test, declares
+is_invited as string with nil for absence, and passes nil to accept_invite,
+guarding its [to_int](efun/to_int.md) conversion. The daemon and class already
+compile and remain unchanged; the daemon's mapping query_party declaration is
+inconsistent with its stored class values but does not block this checked entry.
+
+Compilation alone leaves modal callbacks inert. Thirty named/bound FluffOS
+literals need the established [function-value adaptation](lpc/function_type.md):
+bare names without bound arguments and &name(args) with bound arguments.
+The type-only runtime proposal passes the no-invite case but fails decline,
+existing-menu quit and advancement to the name prompt. Changing only those
+callback literals makes all four unchanged tests pass across fifteen ordinary
+inputs. Actual expression closures remain unchanged.
+
+The tests use the real user, human body, player shell, dispatcher, modal input,
+menu framework and party daemon. They retain entry/decline with clone removal,
+blank and invalid names, trimming and a valid anchored name, confirmation retry,
+creation cancellation, no-invite acceptance, and opening/quitting a fixture-seeded
+existing party without changing membership. Subsequent chan inputs verify shell
+handoff; no checked input catches an error. Fixture helpers observe input state
+and seed one party through the production registration method.
+
+The final command/menu proposal compiles; workspace all-target/all-feature Clippy
+and formatting pass. The initial Rust build fixes only ambiguous expected-value
+types; its failure and the type-only runtime failures remain recorded locally.
+The two-file proposal is not adopted. The active 1,547-file library, native code,
+master, daemon, class and prior matrices remain unchanged. Password entry, actual
+invites, creation, party administration, XP, persistence restoration and full
+startup are not established here. Recommended next: adopt the tested command and
+menu adaptations, then audit the party-creation flow separately.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11825,3 +11867,6 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-player-chanlist]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/chanlist.c
 [lima-player-chan]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/chan.c
+[lima-player-party]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/party.c
+[lima-party-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/party_menu.c
+[lima-party-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/party.c
