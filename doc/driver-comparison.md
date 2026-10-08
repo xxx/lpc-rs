@@ -1948,8 +1948,9 @@ Reviewed **7 October 2026** against pinned [light object][lima-light-object],
 [inventory command][lima-inventory-command], [inventory list][lima-inventory-list]
 and [look verb][lima-look-verb]. Execution retains USE_MASS, distinct nil,
 preserved call-out players, selected limb health/armour/wielding and the
-4,000 ms budget. The local port changes only std/light_object.c; native code,
-master policy and fixture adoption remain unchanged.
+4,000 ms budget. The local adaptations correct fuel queues in std/light_object.c
+and switch refusals in std/lantern.c; native code, master policy and fixture
+adoption remain unchanged.
 
 Inventory uses F_LIGHTED and lighted_attributes to display one
 `(providing adequate light)` marker. Extinguishing removes it; repeated attempts
@@ -1972,38 +1973,46 @@ Generic decay, finite fuel, INF_FUEL and saved-state policy remain unchanged.
 The premature queue changes occur in pinned Lima source as well; this is a
 mudlib correction using existing driver APIs.
 
-Lantern turn_on/turn_off still ignore set_is_on's result and continue into light/
-extinguish. Refusing prevent_turn_on lights with switch off; refusing
-prevent_turn_off extinguishes with switch on. Refusing prevent_light after
-switch-on leaves an unlit, switched-on item with no fuel entry; refusing
-prevent_extinguish after switch-off leaves a lit, switched-off item with its
-fuel entry intact. Successful module notifications can fire before the other
-module refuses. Ordinary light and extinguish leave the independent switch field
-unchanged. Handle switch refusals separately, distinguishing an already-set
-switch from a refused change because set_is_on returns zero for both.
-Ignored switch results also occur in pinned Lima source; coupling switch and
-flame state is not part of this queue fix.
+Lantern turn_on/turn_off now honor refused switch transitions before entering
+light/extinguish. A zero result uses M_SWITCHABLE's existing fallback message;
+a string result is written unchanged. Neither emits a success action nor invokes
+flame hooks, and the existing fuel entry/deadline is preserved. Query the switch
+first: set_is_on returns zero for both an already-set state and a refused change.
+An already-on switch can still relight an extinguished flame, and an already-off
+switch can extinguish a flame lit through ordinary light, without running switch
+hooks. Only std/lantern.c changes; generic M_SWITCHABLE is unchanged.
 
-Thirteen functional checks pass using actual users, human bodies, player shells
-and ordinary inventory/look/light/extinguish/flip/save input. Both refusal forms,
-notification state and preserved deadlines are checked alongside finite,
-zero/infinite/other-negative fuel and eight fresh-VM restorations of six new
-native saves and two exact older files. The identical unpatched control fails
-with a queued entry after refused lighting. Eighty-four native callbacks run
-without new runtime-log errors, and Virtual Connections collect output without
-sockets. Only the intrinsic-light test adds body light; ordinary cases use the
-stock implementation. Compilation passes twenty-two of thirty-one targets with
-all previous outcomes and isolated host diagnostics unchanged. Complete hosts,
-inventory/look/attribute-daemon and all three fixture compositions compile;
-isolated object modules need containing-object methods, including mudlib
-pluralize. Workspace Clippy across all targets/features and formatting pass.
-These are focused lpc-rs execution results and pinned source review, without
-upstream execution.
+The mechanical switch and flame remain independent. Ordinary light/extinguish
+do not change the switch. Refusing prevent_light after successful switch-on
+retains an unlit, switched-on item without a fuel entry; refusing
+prevent_extinguish after successful switch-off retains a lit, switched-off item
+with its deadline intact and fuel updates continuing. The completed switch
+notification is retained when a later flame hook refuses; no rollback or coupling
+policy is added. Ignored switch results occur in pinned Lima source as well;
+this is a mudlib correction using existing driver APIs.
+
+Seven focused checks pass using actual users, human bodies, player shells and
+ordinary light/extinguish/flip/save input. Four retained light/queue/restoration
+checks and three switch regressions cover both refusal forms in both directions,
+actor messages, observer silence, notification order, preserved deadlines,
+already-set switches with rejecting hooks, and later flame refusals. One new
+native switched-lantern save restores in a fresh VM with fuel retained, switch
+and flame off, rebuilt body light and normal subsequent flip. The identical
+unpatched control fails with the normal lighting message after blocked switch-on.
+Forty native callbacks run without new runtime-log errors, and Virtual
+Connections collect output without sockets; body lighting is not overridden.
+The preceding thirteen-test fuel/queue checks and eight fresh-VM restorations
+remain historical evidence and are not repeated for this lantern-only patch.
+Compilation stays twenty-two of thirty-one with identical isolated host
+outcomes/diagnostics; complete hosts and all three fixture compositions compile.
+Workspace Clippy across all targets/features and formatting pass. These are
+focused lpc-rs execution results and pinned source review, without upstream
+execution. Native code, master policy and fixture adoption are unchanged.
 
 Torch gameplay, source-filter lighting, complete darkness, reentrant/multiple
-hooks, other light levels, custom restoration hooks, nested containers,
-wall-clock timing, alternate configurations, foreign saves and a new full
-startup/login remain unchecked by this batch.
+hooks, overridden setters, other light levels, custom restoration hooks, nested
+containers, wall-clock timing, alternate configurations, foreign saves and a new
+full startup/login remain unchecked by this batch.
 
 #### Lima cold startup and login
 
