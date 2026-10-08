@@ -1914,8 +1914,8 @@ retain minus-one fuel and resume unlimited lighting after an ordinary light
 command. Zero fuel still refuses lighting and retires silently; finite fuel
 still emits its last burnout message and auto-removes. Minus two retains its
 existing decay message and auto-removal. Generic M_DECAY remains unchanged.
-Ordinary lighting's independent switch field and the missing lighting_extra_short
-target remain unchanged.
+Live switch/light state and the legacy description hook are reviewed in the
+[following audit](#lima-light-source-descriptions-and-hooks).
 
 Eight functional checks pass across six new native saves and two exact older
 files, all restored in fresh VMs with actual users, human bodies, player shells
@@ -1937,6 +1937,64 @@ lighting, custom restoration/prevented-light hooks, mixed switch/light sequences
 other lantern light levels, offline time, scheduler jitter, alternate
 configurations, foreign saves and a new full startup/login remain unchecked by
 this batch.
+
+#### Lima light-source descriptions and hooks
+
+Reviewed **7 October 2026** against pinned [light object][lima-light-object],
+[lightable][lima-lightable], [light source][lima-light-source],
+[lantern][lima-lantern], [switchable][lima-switchable],
+[hooks][lima-object-hooks], [attributes][lima-object-attributes],
+[attribute daemon][lima-attributes-daemon], [names][lima-names],
+[inventory command][lima-inventory-command], [inventory list][lima-inventory-list]
+and [look verb][lima-look-verb]. Execution retains USE_MASS, distinct nil,
+preserved call-out players, selected limb health/armour/wielding and the
+4,000 ms budget. This audit changes no library source or native implementation.
+
+Inventory uses F_LIGHTED and lighted_attributes to display one
+`(providing adequate light)` marker. Extinguishing removes it; repeated attempts
+produce the existing already-lit/not-lit messages without duplicate hooks.
+The stock long description is unchanged by lighting. The separate legacy
+extra_short callback names the undefined lighting_extra_short method; its
+adapted deferred self-call returns nil when explicitly observed. The library
+contains no stock consumer of this hook, so ordinary inventory is unaffected.
+The original named callback and adapted dynamic binding are distinguished;
+upstream callback execution remains unchecked.
+
+Zero and string prevention results both refuse ordinary lighting/extinguishing
+without the corresponding success notification. However, light_object changes
+queue membership before inherited prevention runs: refused lighting schedules
+an unlit entry, retired without fuel use on the next poll; refused extinguishing
+removes the entry while the lantern stays lit, halting fuel updates. Fix queue
+membership at actual lit-state transitions, keeping generic decay, finite fuel,
+INF_FUEL and saved-state policy. Retain the unused description hook for now.
+
+Lantern turn_on/turn_off ignore set_is_on's result and continue into light/
+extinguish. Refusing prevent_turn_on still lights with switch off; refusing
+prevent_turn_off still extinguishes with switch on. Refusing prevent_light after
+switch-on leaves an unlit, switched-on item; refusing prevent_extinguish after
+switch-off leaves a lit, switched-off item without fuel updates. Successful
+module notifications can fire before the other module refuses. Ordinary light
+and extinguish also leave the independent switch field unchanged. Handle switch
+refusals as a separate mudlib follow-up; synchronization policy is not changed by
+this audit. Queue ordering and ignored switch results also occur in the pinned
+Lima source. Existing driver APIs suffice; these are source-policy findings and
+lpc-rs execution results without upstream execution.
+
+Four characterization checks pass using actual users, human bodies, player
+shells and ordinary inventory/look/light/extinguish/flip input. They assert the
+retained inconsistencies, rather than a repaired policy. Twenty-four native
+callbacks run without new runtime-log errors, and Virtual Connections collect
+output without sockets. Body lighting is never overridden; no observation helper
+is adopted. Compilation passes twenty-two of thirty-one targets: all previous
+outcomes and host diagnostics remain, inventory/look/attribute-daemon pass, and
+three additional isolated object modules need containing-object methods,
+including mudlib pluralize. Complete hosts and all three fixture compositions
+compile. Workspace Clippy across all targets/features and formatting pass.
+
+Torch gameplay, source-filter lighting, complete darkness, reentrant/multiple
+hooks, other light levels, custom restoration hooks, nested containers,
+wall-clock timing, alternate configurations, foreign saves and a new full
+startup/login remain unchecked by this batch.
 
 #### Lima cold startup and login
 
@@ -11453,3 +11511,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-light-source]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_light_source.c
 [lima-switchable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_switchable.c
 [lima-object-light]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/light.c
+[lima-object-attributes]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/attributes.c
+[lima-attributes-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/attributes_d.c
+[lima-inventory-list]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/objcalls.c
+[lima-look-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/look.c
