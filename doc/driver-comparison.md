@@ -3033,6 +3033,51 @@ and logs remain outside the working source. Full inventory and startup were not
 repeated. Next: audit su; experimental random2 remains deferred and suicide
 remains disabled upstream.
 
+#### Lima su command audit
+
+Reviewed **8 October 2026** against pinned [su command][lima-player-su],
+[user switching][lima-user-switch], [character registry][lima-user-daemon],
+[account character data][lima-user-bodies], [player shell][lima-pshell],
+[wizard shell][lima-wizard-shell] and [command rules][lima-player-command-rules].
+The proposed adaptation changes one command file: append protected variadic
+dispatch_main calling the existing private main(arg), and replace both absent
+race assignments with nil. The baseline fails at missing dispatch_main;
+the dispatch-only control exposes two integer-to-string assignment errors.
+The complete proposal compiles. The dedicated Lima checkout remains unchanged.
+
+Five scenarios verify eighteen input actions through the real player and wizard
+shells. Regular refresh preserves account, selected character, race, registered
+filename, room, shell and privilege while replacing the body. Wizard race changes
+update the saved body filename. The other-account path uses the real password
+modal: a wrong password records and saves a failure, and the correct password
+switches account/body/selection. Normal refusals and subsequent shell input are
+checked. The unadapted-command control receives the shell's unknown-word result.
+Four proposal scenarios passed unchanged; only the control's initial expectation
+was corrected and rerun. Exact harness comparison verifies those passing cases
+and their shared implementation remain unchanged.
+
+The audit also reproduces an existing account/character lookup limitation.
+switch_user takes its old ID from query_selected_body() and looks for an account
+save under the supplied target name; do_su restores that account path. It does
+not resolve registered characters through USER_D or select an owned alternate.
+An owned alternate and another account's registered character both receive
+No such user. Refreshing a character whose name differs from the account succeeds
+in the fixture despite the missing legacy account-save path; this does not prove
+correct account reload. Keep that source issue separate from the command port.
+
+Connections are in-memory, and fixture helpers seed account/body state. Actual
+user, body, command, registry, modal and persistence code executes; the fixture
+IMUD daemon has no transport. Evidence is source review and lpc-rs execution,
+with no upstream execution or new full-startup run. Distinct nil, preserved
+call-out players and the 4,000 ms task limit remain in effect.
+
+Fresh compilation of the proposal passes **65/67 player commands** and
+**12/12 supporting targets**, with su the only additional success and no
+regressions or timeouts. Active source remains at the preceding 64/67 checkpoint.
+Workspace all-target/all-feature locked Clippy and formatting pass. Next:
+adopt the one-file dispatch/nil adaptation while retaining the documented
+lookup limitation; random2 remains deferred and suicide disabled upstream.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12397,6 +12442,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-text-editor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/edit_ob.c
 [lima-more-helpers]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/more.c
 [lima-user-switch]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/sw_user.c
+[lima-player-su]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/su.c
 [lima-ed-session]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/ed_session.c
 [lima-ed-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/ed.c
 [lima-ed-codesay]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/codesay.c
