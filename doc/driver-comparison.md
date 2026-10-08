@@ -2457,6 +2457,40 @@ values. Historical survey stays 534/1,180 with thirty-one adopted additional
 player entries. Full matrices, startup, party data, XP and save restoration
 remain later work. Next: audit party data and XP.
 
+#### Lima party-data and XP audit
+
+Reviewed **7 October 2026** against pinned [party menu][lima-party-menu],
+[daemon][lima-party-daemon], [class][lima-party-class],
+[simple advancement][lima-advancement-simple], [body health][lima-health-limbs],
+[object][lima-object], [description][lima-description] and
+[combat configuration][lima-combat-config]. Exact pinned Git contents support
+source review; local port execution does not establish upstream execution.
+Lima retains distinct nil, preserved call-out players and 4,000 ms tasks.
+
+Four tests pass across twenty ordinary inputs and fifteen direct party awards,
+requiring no further mudlib or native changes. The full daemon and real human
+bodies run. Roster display distinguishes an offline founder from two online
+members, retaining lead/member roles, counts and kill totals. Active parties
+display with both set and absent themes; empty history reports no kills.
+
+Level-1 and level-3 members share a level-3 award as 32 and 48 XP. An eligible
+nonmember receives none, and the member's 20% guild buff does not modify the
+party award. A subsequent award with only the level-3 member eligible gives
+them 64 XP and leaves the other member unchanged. Both slayers receive their
+kill credits and victim descriptions enter history. An empty eligibility list
+awards no XP or member kill credit, while retaining the daemon's existing total
+kill/history update. Twelve subsequent awards produce 384 XP and twelve member
+kills; history keeps the last ten entries in order. Menu history/roster totals
+and both players' shell dispatch pass without caught input errors.
+
+The fixture caller inherits the real object description and forwards to the
+full daemon; it supplies a controlled label, roster and victim level. Advancement,
+roster lookup, debug delivery and saving are real mudlib paths. This extends the
+earlier extracted-party-host checks, without executing combat death or proving
+save restoration. Workspace all-target/all-feature Clippy and formatting pass.
+Active and native sources and frozen predecessors retain their hashes.
+Next: audit party save and restore.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
