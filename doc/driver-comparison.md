@@ -2948,6 +2948,42 @@ overlay retains 1,547 files, **62/67 player commands** and forty-one adopted
 additions. Next: adopt the one-file dispatch/path-index adaptation, then audit
 mudlist, retaining separate Lima source issues.
 
+#### Lima missions display port
+
+Reviewed **8 October 2026** against the same pinned
+[missions command][lima-player-missions], [mission daemon][lima-mission-daemon],
+[mission_info class][lima-mission-info], [daemon-data module][lima-daemon-data],
+[frame module][lima-frame] and [player shell][lima-pshell]. Adopt only the audited
+one-file command patch: protected variadic CMD dispatch calling private main(),
+and absolute room-path split index 2 instead of 1. This restores area selection
+with native explode's leading empty field, as in the preceding quests port.
+Mission daemon, class, daemon-data/frame modules and native APIs are unchanged.
+The preceding audit's prefix selection, empty-variant error, heading truncation
+and footer clipping remain separate Lima issues.
+
+Ten cases pass again across twenty-two ordinary inputs, including the expected
+caught empty-variant error. The adopted harness injects no proposal sources;
+every audited assertion and helper remains. Empty areas, registration without
+live giver clones, variants, levels, giver locations, nil fallback, shared and
+multiple missions, area movement and retained edge cases are covered. One
+explicit daemon save/destruction/reload restores registered classes and yields
+identical live data/output. Display copies leave registered class fields
+unchanged; every case subsequently uses the shell. In-memory connections
+capture output without sockets. Givers, controllers and rooms are fixtures;
+mission gameplay and completion remain untested. Workspace all-target/all-feature
+locked Clippy and formatting pass. Evidence is lpc-rs execution, with no upstream
+execution.
+
+Fresh compilation is **63/67 player commands**, with missions the only new
+success, no regressions and no timeouts. **9/9 complete supporting targets
+compile**: simuls, user, secure daemon, player shell, command daemon, mission
+daemon, mission_info class, daemon-data module and frame module. The active
+overlay retains 1,547 files and accounts for forty-two adopted player additions
+since the historical 534/1,180 survey. That full survey and startup were not
+repeated. Four player commands remain: mudlist, random2, su and suicide;
+random2 remains deferred and suicide disabled upstream. Next: audit mudlist
+and its local intermud-list display.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
