@@ -2257,6 +2257,38 @@ channel daemons remain unchanged. Workspace all-target/all-feature Clippy and
 formatting pass. Prior compilation/save/startup matrices stay frozen; the
 command adds the twenty-ninth passing player entry after the retained survey.
 
+#### Lima player channel-command audit
+
+Reviewed **7 October 2026** against pinned [chan][lima-player-chan],
+[channel command handling][lima-entry-channel], [user channels][lima-channel-user]
+and [player-shell channel aliases][lima-pshell]. This is source review with local
+port execution, not upstream execution. Lima retains distinct nil, preserved
+call-out players and the 4,000 ms budget.
+
+The unchanged command fails compilation at the missing dispatch_main adapter.
+Adding only the established protected variadic adapter compiles; private main,
+create/no_redirection, its callback map, sscanf argument split and channel-type
+selection remain unchanged. No native feature or channel-policy change is needed.
+
+Three runtime tests pass with twenty-two ordinary inputs through the real user,
+human body, player shell and command dispatcher. They retain initial and empty
+channel listings, readable names and wizard-only internal-name listings, channel
+creation, status, repeated subscription, unsubscription, existing wizard-channel
+and missing-channel replies, and rejection of messages while unsubscribed.
+Explicit chan messages and shell channel aliases reach the interactive user;
+/list and /who retain listener names, and /last and /history retain both messages
+in order. All inputs complete without a caught error. Fixture helpers observe
+subscriptions, empty the initial list and select the existing role test data;
+message delivery, listener registration and history use the production modules.
+The initial run omitted login's channel initialization in the fixture; invoking
+that production method fixes the setup without changing command assertions.
+
+Workspace all-target/all-feature Clippy and formatting pass. The adapter remains
+a local diagnostic proposal; the active 1,547-file library, native code, master,
+channel modules and prior matrices remain unchanged. Intermud traffic, moderated
+or soul messages, redirection, full startup and save restoration are not retested.
+Recommended next: adopt the tested one-file adapter.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11791,3 +11823,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-body-cmd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/cmd.c
 
 [lima-player-chanlist]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/chanlist.c
+[lima-player-chan]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/chan.c
