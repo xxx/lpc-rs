@@ -2875,6 +2875,34 @@ files, its preceding **61/67 player-command** result and forty adopted additions
 Next: adopt only the groups adapter and keep the existing command bugs as
 separate Lima notes.
 
+#### Lima personal-groups port
+
+Reviewed **8 October 2026** against the same pinned [groups command][lima-player-groups],
+[group daemon][lima-group-daemon], [property storage][lima-properties],
+[body][lima-body] and [frame module][lima-frame]. Adopt only the audited protected
+variadic CMD adapter calling private main(arg). The original handler statements
+are unchanged. The three command bugs described in the preceding audit remain
+separate Lima issues; no bug fix or native API change accompanies this adapter.
+The group daemon, body/property/frame modules and build options remain unchanged.
+
+Nine cases pass again against the adopted overlay with twenty-four ordinary
+inputs, including the expected caught frame error. The harness injects no
+proposal sources; every audited assertion and LPC helper is retained. Listing,
+duplicate cleanup, deletion, missing groups/bad flags, two-player isolation,
+three explicit body save/restores and personal-group expansion are checked.
+Every case subsequently runs a shell command. In-memory connections capture
+output without sockets. Workspace all-target/all-feature Clippy and formatting
+pass; evidence is lpc-rs execution, with no upstream execution.
+
+Fresh compilation is **62/67 player commands**, with groups the only new success,
+no regressions and no timeouts. **9/9 complete supporting targets compile**:
+simuls, user, secure daemon, player shell, command daemon, group daemon, frame
+module, property storage and body. The active overlay retains 1,547 files and
+accounts for forty-one adopted player additions since the historical 534/1,180
+survey. That survey, full startup and actual mail delivery were not repeated;
+save checks use explicit checkpoints. Next: audit missions and its area-specific
+mission display.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
