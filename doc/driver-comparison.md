@@ -3081,6 +3081,48 @@ refresh the broader compile inventory; random2 remains deferred and suicide
 disabled upstream. The documented account/character lookup limitation remains
 separate from compatibility work.
 
+#### Lima complete compile inventory refresh
+
+Reviewed **8 October 2026** against the dedicated **lpc-rs-port** checkout at
+**082d64b8**, based on pinned Lima **eefaff66adcae9b01e16059574c925b0d63e70a1**,
+with lpc-rs at **600d4f6e**. All **1,180 .c files** are checked directly from that
+checkout using its unchanged distinct-nil configuration, preserved call-out
+players, existing build options and 4,000 ms task limit. **631 compile and 549
+fail**: **97 new successes and no regressions** against the identical target set
+of the preceding 534/1,180 survey. There are no timeouts, crashes or abnormal exits.
+
+| Command family | Compile | Fail | First failure is dispatch_main |
+|---|---:|---:|---:|
+| Player | 65 | 2 | 2 |
+| Wizard | 14 | 67 | 67 |
+| Guild | 0 | 4 | 4 |
+| Transitional | 2 | 47 | 44 |
+| Transitional admin | 0 | 9 | 9 |
+
+All **90 verb files** and the complete master, simuls, user, body, both shells,
+IMUD, IMAIL, HTTP, FTP and RST compile. Standalone-source counts include partial,
+optional and contributed code. **220 failing checks** report their first location
+outside the target, and earlier failures can hide subsequent diagnostics. These
+counts are not a completion percentage or evidence of missing native APIs.
+The **135 checks** blocked first at dispatch_main include base/partial sources;
+the established adapter preserves private handlers and the
+[CMD base][lima-command-base]. Other common leads remain typed nil/float arguments,
+containing-object hooks, old callback syntax and the school area's include tokens.
+
+The sweep uses compile-only targets with normal simul initialization, at most
+two CLI processes, two Tokio workers per process and the preceding resource
+limits, without Cargo overlap. Source, configuration and compiler bytes are
+unchanged. No native feature or mudlib source is adopted by this inventory.
+Evidence is local source review and lpc-rs compilation; startup, gameplay,
+upstream execution and service flows were not repeated. Their retained evidence,
+including the existing RST restart cleanup failure, keeps its earlier scope.
+
+Next: audit directory navigation through the [wizard shell][lima-wizard-shell],
+starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
+ordinary shell state, defaults, directory resolution, flags and pipeline behavior
+before adoption. Experimental random2 remains deferred and suicide disabled
+upstream; existing Lima source issues stay separate from compatibility work.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
