@@ -2834,6 +2834,47 @@ populated mailboxes, long idle/linkdead output, malformed names and actual menu
 interaction remain unchecked. Next: audit the groups player command's personal
 mail groups.
 
+#### Lima personal-groups audit
+
+Reviewed **8 October 2026** against pinned [groups command][lima-player-groups],
+[group daemon][lima-group-daemon], [property storage][lima-properties],
+[body saving/restoration][lima-body] and [frames][lima-frame]. Evidence uses local
+pinned Git blobs and lpc-rs execution; upstream execution was not performed.
+Lima retains distinct nil, preserved call-out players and 4,000 ms tasks.
+
+Only the protected CMD dispatch adapter is needed for the checked port paths.
+It calls the private main(arg); preceding mappingp/filter/m_delete/map and
+anonymous-function adaptations are retained. The unadapted command fails
+compilation, while the adapter control and five complete dependencies compile.
+No production change is adopted; native APIs, group daemon, body properties and
+frame module retain their preceding bytes.
+
+Nine audit cases pass across twenty-four ordinary inputs, including one expected
+caught frame error. System/personal listing, new-list duplicate cleanup, whole
+and selected-member deletion, last-member cleanup, missing groups/bad flags and
+two-player isolation are covered. Three explicit body saves and new-body restores
+retain group state; GROUP_D expands the saved personal group. Whole-group deletion
+mutates the shared property mapping without another set_perm. System groups stay
+unchanged. In-memory connections capture output without sockets; every case
+subsequently runs a shell command. Clippy and formatting pass across the workspace.
+
+Controls retain three existing pinned-command bugs. The add callback omits its
+existing-members argument and reverses member_array operands; repeated addition
+replaces the old list rather than extending it. An add without names prints usage
+but creates an empty group. Removing only unknown members renders a frame without
+header content, raising the frame's own caught error; its earlier message stays
+buffered, so only the prompt is displayed. These are Lima source issues, not
+driver feature requests. No command bug is repaired by this audit.
+
+Two initial Rust compile failures were corrected before LPC ran. The first LPC
+run passes eight cases; the ninth's message expectation is corrected to the
+observed prompt-only output while retaining error/state/shell checks. The first
+eight cases retain every original assertion. Full command compilation, startup
+and mail delivery were not repeated. The active finger overlay retains 1,547
+files, its preceding **61/67 player-command** result and forty adopted additions.
+Next: adopt only the groups adapter and keep the existing command bugs as
+separate Lima notes.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12388,3 +12429,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-trans-finger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/finger.c
 [lima-finger-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/finger_d.c
 [lima-finger-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/finger.c
+[lima-player-groups]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/groups.c
+[lima-properties]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/properties.c
