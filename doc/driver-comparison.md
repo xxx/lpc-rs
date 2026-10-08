@@ -2220,6 +2220,45 @@ library changes only std/body/cmd.c. Native code and preceding
 compilation/save/startup evidence remain unchanged; full matrices and startup
 were not rerun. Frozen audit inputs and failures remain recorded locally.
 
+#### Lima player channel-list audit
+
+Reviewed **7 October 2026** against pinned [chanlist][lima-player-chanlist],
+[channel state][lima-channel-daemon] and the intermud cached-list method.
+The FluffOS callback [implode reference][fl-entry-implode] and
+[fold implementation][fl-entry-fold] are source comparisons, not upstream
+execution; this is a core efun without a PACKAGE_CONTRIB requirement.
+Lima keeps distinct nil, preserved call-out players and the 4,000 ms budget.
+
+The unchanged command first fails compilation at its missing dispatch adapter.
+Adding that adapter exposes absent save_variable and a function argument to
+native [implode](efun/implode.md), which requires a string delimiter. The
+existing closure syntax compiles. A one-file proposal preserves private main
+behind the established protected variadic adapter, uses
+[save_value](efun/save_value.md) for noninteger channel-type diagnostics, and
+replaces the callback fold with a foreach append over the same sorted keys.
+This retains the original empty-string accumulator, row formatter and key
+subtraction. The complete proposal compiles without a native change.
+
+Two accepted runtime characterizations cover six ordinary player inputs through
+Lima's real user, human body, player shell and command dispatcher. Fixture-seeded
+roles retain local, wizard, restricted and admin categories; an empty local list
+and an absent intermud daemon retain their reports. Cached intermud rows retain
+sorted order, owner display, all three integer type labels, native serialized
+noninteger diagnostics, blank-name suppression and the original key exclusion.
+An empty intermud cache keeps its heading, and reporting leaves the cache intact.
+The actual cached-list method runs with daemon network startup disabled in the
+fixture. Live router traffic, startup and subscription behavior are not retested.
+
+The intermud case passes in the initial run; the local rerun corrects only a
+header-spacing expectation to match Lima's existing formatter. All LPC inputs
+and the accepted intermud test remain identical. No checked input has a caught
+error. Workspace all-target/all-feature Clippy and formatting pass. The active
+1,547-file library, native sources, master policy and prior matrices remain
+unchanged. The proposal is diagnostic only and has not been adopted.
+
+Recommended next: adopt the tested one-file command patch. Role policy, channel
+daemons, formatter bounds and other original behavior stay unchanged.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11752,3 +11791,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-body-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
 
 [lima-body-cmd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/cmd.c
+
+[lima-player-chanlist]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/chanlist.c
