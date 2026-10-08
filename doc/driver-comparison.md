@@ -2257,37 +2257,38 @@ channel daemons remain unchanged. Workspace all-target/all-feature Clippy and
 formatting pass. Prior compilation/save/startup matrices stay frozen; the
 command adds the twenty-ninth passing player entry after the retained survey.
 
-#### Lima player channel-command audit
+#### Lima player channel-command port
 
 Reviewed **7 October 2026** against pinned [chan][lima-player-chan],
-[channel command handling][lima-entry-channel], [user channels][lima-channel-user]
-and [player-shell channel aliases][lima-pshell]. This is source review with local
-port execution, not upstream execution. Lima retains distinct nil, preserved
-call-out players and the 4,000 ms budget.
+[channel handling][lima-entry-channel], [user channels][lima-channel-user] and
+[player-shell aliases][lima-pshell]. Pinned source comparisons carry forward from
+the audit; local port execution is not upstream execution. Lima retains distinct
+nil, preserved call-out players and the 4,000 ms budget.
 
-The unchanged command fails compilation at the missing dispatch_main adapter.
-Adding only the established protected variadic adapter compiles; private main,
-create/no_redirection, its callback map, sscanf argument split and channel-type
-selection remain unchanged. No native feature or channel-policy change is needed.
+The original command fails compilation at the missing dispatch_main adapter.
+The adopted command adds only the established protected variadic adapter calling
+private main. Command setup and no_redirection, callback map, sscanf splitting,
+channel-type selection and existing channel policy remain unchanged.
+No native API change is required.
 
-Three runtime tests pass with twenty-two ordinary inputs through the real user,
-human body, player shell and command dispatcher. They retain initial and empty
-channel listings, readable names and wizard-only internal-name listings, channel
-creation, status, repeated subscription, unsubscription, existing wizard-channel
-and missing-channel replies, and rejection of messages while unsubscribed.
-Explicit chan messages and shell channel aliases reach the interactive user;
-/list and /who retain listener names, and /last and /history retain both messages
-in order. All inputs complete without a caught error. Fixture helpers observe
-subscriptions, empty the initial list and select the existing role test data;
-message delivery, listener registration and history use the production modules.
-The initial run omitted login's channel initialization in the fixture; invoking
-that production method fixes the setup without changing command assertions.
+The production command compiles from the adopted overlay. Three runtime tests
+pass together with twenty-two ordinary inputs through the real user, human body,
+player shell and guarded command dispatcher. They read the adopted command
+directly, with every audit assertion and LPC fixture unchanged. Coverage retains
+initial/empty/readable/internal-name listings, local creation, status, repeated
+subscription without duplicates, unsubscription and existing replies. Explicit
+and alias messages reach the interactive user; /list and /who retain listener
+names, and /last and /history retain both messages in order. No checked input has
+a caught error. Login's production channel initialization and the production
+channel modules run; role, subscription and caught-error helpers stay in fixtures.
 
-Workspace all-target/all-feature Clippy and formatting pass. The adapter remains
-a local diagnostic proposal; the active 1,547-file library, native code, master,
-channel modules and prior matrices remain unchanged. Intermud traffic, moderated
-or soul messages, redirection, full startup and save restoration are not retested.
-Recommended next: adopt the tested one-file adapter.
+The adopted file and patch are byte-identical to the audited proposal. Only
+cmds/player/chan.c changes in the 1,547-file library; helpers are excluded.
+Native code, master, role policy and channel modules retain their hashes.
+Workspace all-target/all-feature Clippy and formatting pass. Prior full matrices
+and startup remain frozen; intermud traffic, moderation, soul messages,
+redirection and save restoration are not retested. This is the thirtieth
+additional passing player entry after the retained standalone survey.
 
 #### Lima cold startup and login
 
