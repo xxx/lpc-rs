@@ -2022,24 +2022,26 @@ Reviewed **7 October 2026** against pinned [torch][lima-torch],
 [light source][lima-light-source], [light verb][lima-light-verb] and
 [vision checks][lima-verb-vision]. The selected profile retains USE_MASS,
 distinct nil, preserved call-out players, limb health/armour/wielding and the
-4,000 ms budget. This audit adopts no source patch or native feature.
+4,000 ms budget. The local port changes only flame and magic-torch source.
 
 Convert the flame's set_mass(SMALL) and magic torch's set_value(15000) explicitly
 to float. Unmodified compilation rejects these integer arguments, and magic
-flame inherits the mass failure. Fixture-only casts permit behavioral checks;
-the magic-flame predicate also has an observational counter with its return
-unchanged. These variants are excluded from the active library.
+flame inherits the mass failure. The adopted casts resolve all three failures.
+A fixture-only counter observes the magic-flame predicate without changing its
+return; it is excluded from the active library.
 
 Plain torch defaults to 600 fuel units at the existing one-minute interval.
 Ordinary lighting contributes one unit to body/room light and one inventory
 marker. Due updates consume one unit; extinguishing preserves fuel and stops
 scheduling, relighting resumes it, and final burnout removes the torch and
-restores light. After the fixture value cast, magic torch also starts with 600
-units and follows finite decay despite its unlimited-fuel comment. Its
-unconditional check_fuel bypasses the lighting guard, without configuring
-infinite decay. Set INF_FUEL and retain the ordinary fuel guard in a follow-up.
-The finite checks select three/two units through existing setters after
-observing the defaults; they do not wait through 600 minutes.
+restores light. Stock magic torch also starts with 600 units despite its
+unlimited-fuel comment: its unconditional check_fuel bypasses the lighting guard
+without configuring infinite decay. Include light.h, set INF_FUEL in setup and
+remove that override to inherit the normal guard. The adapted magic torch keeps
+the sentinel, light and queue through due updates, extinguishes normally and
+relights with a valid source. Finite overrides still burn out and remove; zero
+fuel refuses lighting. The finite checks select three/two units through existing
+setters; they do not wait through 600 minutes.
 
 String source filters accept a matching lit torch and reject an unlit torch or
 wrong source ID. The stock function filter rejects ordinary flame and accepts
@@ -2065,15 +2067,16 @@ method returning zero. The blue flame is lit but emits zero light. Restoring
 room ambient light permits lighting; a carried lit torch then supplies visibility
 until extinguished, after which relighting is refused. No vision policy changes.
 
-Five characterization checks pass through actual users, human bodies, player
-shells, stock torch/lantern and fixture-cast magic objects with ordinary input.
-Twenty-seven native callbacks add no runtime-log errors. Only room ambient light
-is changed for darkness; body light is not overridden. Unmodified compilation
-is twenty-five of thirty-seven, retaining all preceding outcomes/host diagnostics
-plus the three float-argument failures; seven final fixture compositions compile.
-Workspace Clippy across all targets/features and formatting pass. Native code,
-master policy and fixture adoption are unchanged. These are focused lpc-rs
-execution and pinned source review without upstream execution.
+Seven checks pass through actual users, human bodies, player shells and ordinary
+input: five retained characterizations plus infinite-fuel/relighting and zero-fuel
+regressions. Controls retaining only the casts fail at the 600-unit default and
+at successful zero-fuel lighting. Forty native callbacks add no runtime-log
+errors. Only room ambient light is changed for darkness; body light is not
+overridden. Compilation improves from twenty-five to twenty-eight of thirty-seven,
+retaining the nine isolated host-method diagnostics; seven fixture compositions
+compile. Workspace Clippy across all targets/features and formatting pass.
+Native code, master policy and fixture adoption are unchanged. These are focused
+lpc-rs execution and pinned source review without upstream execution.
 
 Torch combat/wielding, web burning, callback side effects/reentrancy, custom
 source handlers, nested containers, saved torch restoration, wall-clock timing,
