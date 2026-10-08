@@ -2422,6 +2422,43 @@ stays 534/1,180 with thirty-one adopted additional player entries. Full matrices
 startup, save restoration, other party administration and XP remain later work.
 Next: audit party administration.
 
+#### Lima party-administration audit
+
+Reviewed **7 October 2026** against pinned [party command][lima-player-party],
+[party menu][lima-party-menu], [menu framework][lima-menu],
+[daemon][lima-party-daemon], [class][lima-party-class] and [frames][lima-frame].
+Exact pinned Git contents support source review; local port execution does not
+establish upstream execution. Lima uses distinct nil, preserved call-out players
+and 4,000 ms tasks.
+
+The five-test baseline passes password changes, but kick, leadership transfer
+and theme selection fail on to_int(nil) when the menu invokes their actions
+without arguments. Each action needs guards before to_int and lower_case so its
+existing selection prompt can run. Leader departure also leaves the remaining
+member at rank 2: remove_member deletes the rank before using it to renumber
+members. The diagnostic daemon repair saves that rank before deletion.
+
+With the two-file proposal, five tests pass across fifty-six ordinary inputs.
+Kicking rejects the leader, supports cancellation and invalid-choice retry,
+removes the guest, notifies them and cleans up their open menu. Leadership
+transfer changes both ranks, notifies the new leader, and updates both open
+menus. Short or mismatched password answers retain the old password; confirmed
+answers replace it. Theme selection, cancellation and invalid-choice retry work.
+Leader departure promotes the remaining member to rank 1; the final member's
+departure deletes the party. Subsequent chan commands confirm shell handoff.
+
+The advertised theme choice 0 reopens selection and retains the existing theme.
+This is a recorded Lima behavior gap; the proposal preserves it. The daemon's
+existing theme fallback also remains, using the driver's value-returning ||.
+
+Real users, bodies, shells, modal input, menus and daemon run. Fixtures seed
+parties/membership through register_party and add_member and observe state.
+Both proposed files compile; Clippy and formatting pass on identical Rust
+fixtures. The proposal is not adopted. Active library, native sources and
+frozen predecessor hashes retain their values. Full matrices, startup, party
+data, XP and save restoration remain later work.
+Next: adopt the tested guards and rank repair, then audit party data and XP.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
