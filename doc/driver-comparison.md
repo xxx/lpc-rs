@@ -2526,43 +2526,45 @@ restart. No checked input catches an error. Workspace all-target/all-feature
 Clippy and formatting pass. Active/native sources and frozen predecessors retain
 their hashes. Next: audit combat death's party/solo XP and karma dispatch.
 
-#### Lima party-death dispatch audit
+#### Lima party-death dispatch port
 
 Reviewed **7 October 2026** against pinned [limb health][lima-health-limbs],
 [advancement][lima-advancement-simple], [party daemon][lima-party-daemon],
 [adversary][lima-adversary] and [loot daemon][lima-loot-daemon]. Lima retains
 distinct nil, preserved call-out players, selected limb health/simple advancement,
-USE_KARMA and 4,000 ms tasks. Source review is distinct from local port execution;
-upstream execution remains unchecked.
+USE_KARMA and 4,000 ms tasks. Pinned source review and the unchanged runtime
+control carry forward from the audit; upstream execution remains unchecked.
 
-The pinned Lima death path gathers eligible bodies after die has moved the NPC
-to Heaven. The active port retains this ordering after renaming filter_array
-to filter. A runtime control reproduces the result: two nearby party members
-receive only a solo award to the slayer, with no party kills or history update.
+Capture the nearby body roster before die moves the victim to Heaven. The
+pinned Lima source gathers it afterward, causing an NPC party kill to dispatch
+solo rewards instead. The adopted health module moves exactly that calculation
+before die and matches the tested proposal byte for byte. Award formulas,
+the existing body-count threshold and slain_by timing remain unchanged.
 
-The tested one-file proposal moves the roster calculation before die, retaining
-the existing dispatch gate and award formulas. Five tests pass across five real
-lethal hits and fourteen ordinary inputs. With the proposal, level-1 and level-3
-members receive 32 and 48 XP, both receive karma +11 from a +2 impact at zero
-karma, and a nearby nonmember receives neither. The slayer receives kill credit,
-the total increments and the victim's actual description enters history.
-The existing 20% solo XP buff still gives 153 XP when alone or ungrouped;
-a distant party member receives no rewards, and negative karma dispatch works.
+Five tests pass: four cases run directly from the adopted overlay, and one
+unchanged control reproduces the previous ordering on the frozen predecessor.
+All audit assertions and LPC fixtures remain. They cover five lethal hits and
+fourteen ordinary inputs, nine inputs from the adopted cases. Actual party
+dispatch gives level-1 and level-3 members 32 and 48 XP, karma +11 each from a
++2 impact at zero karma, slayer kill credit, the updated total and the victim's
+description in history. Nonmembers and distant members receive no rewards.
+Solo dispatch keeps the 20% buff for 153 XP and handles negative karma.
 
-The existing party-dispatch gate counts all nearby bodies. A party slayer with
-only a nonmember nearby therefore still enters the party path, receives 128 XP
-without the solo buff, and alone receives party kill/karma credit. This rule is
-retained. Real corpse creation leaves the corpse in the death room and the NPC
-in Heaven; the fixture's slain_by observer receives the real slayer afterward.
-Menu totals/history and shell handoff pass without caught input errors.
+The existing gate counts all nearby bodies, including nonmembers: a party
+slayer with only a nonmember nearby receives party-path 128 XP without the solo
+buff and alone receives kill/karma credit. Real corpse creation leaves the
+corpse in the death room and the NPC in Heaven; the observer's slain_by hook
+still receives the real slayer afterward. Menus and shell handoff pass without
+caught input errors. The full health, death, loot, advancement, party and
+persistence paths run with real users/bodies and a controlled adversary fixture.
 
-The fixture inherits the complete adversary and supplies level, description and
-karma impact; a bridge on the real human body applies lethal head damage.
-The real health, death, loot, advancement, party and persistence modules run.
-Clippy and formatting pass. The proposal is not adopted; active/native sources
-and frozen predecessors retain their hashes. Complete attack-loop execution,
-player deaths and turret attribution are outside these checks.
-Next: adopt the tested roster relocation and rerun from the new overlay.
+Only std/adversary/health/limbs.c changes in the 1,547-file library. Fixtures and
+proposal injection are absent from production. The complete adversary and human
+compositions compile; workspace all-target/all-feature Clippy and formatting
+pass. Native sources and frozen predecessors retain their hashes. Player deaths,
+turret attribution and complete attack-loop execution remain outside these
+checks. The retained survey stays 534/1,180 with thirty-one adopted player
+additions. Next: refresh focused player-command coverage on the current overlay.
 
 #### Lima cold startup and login
 
