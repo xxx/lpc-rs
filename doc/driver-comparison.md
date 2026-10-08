@@ -2131,6 +2131,57 @@ Generic master aliases, other light levels, ghost gameplay, custom visibility/
 source handlers, other actors' inventories, wall-clock scheduling, saved torch
 restoration and a new full startup remain unchecked by this port.
 
+#### Lima parser rejection diagnostics
+
+Reviewed **7 October 2026** against the pinned [light verb][lima-light-verb],
+[lightable handlers][lima-lightable], [master error messages][lima-master] and
+FluffOS [error selection][fl-parser-selection], with PACKAGE_PARSER enabled in
+the reviewed upstream configuration. The selected Lima target keeps distinct
+nil, preserved call-out players and the unchanged 4,000 ms budget. This audit
+adopts no library, native parser or master-policy change.
+
+Light registers OBJ before OBJ with OBJ. For an unlit plain-torch source or a
+wrong magic-flame source, the first rule treats the compound remainder as one
+missing object. The compound rule resolves both nouns and obtains a specific
+permission refusal. Current native reporting offers the first rule's diagnostic
+to Lima's master, which returns a string, hiding that later refusal. This
+matches the documented [reporting contract](apply/master/parser_error_message.md).
+Within one rule, native retains the failure with the most resolved object slots;
+that progress is discarded before cross-rule reporting.
+
+Three focused Lima characterizations pass through ordinary player input, with
+24 native callbacks. Twelve native selection tests pass; workspace Clippy
+across all targets/features and formatting pass. Fixture-only experiments put
+the compound rule first or let the master decline kind 7. Both expose the
+source refusals; the latter also loses real missing-object messages and exposes
+the [body command wrapper][lima-body-cmd]'s unhandled native -3 result. Its
+default branch passes that integer to write, causing a caught error in the
+[message formatter][lima-user-messages]. Two caught errors are explicitly
+characterized under that experimental policy. The wrapper needs a separate port
+follow-up; the active master policy is unchanged. Rule reordering can change
+action precedence where both grammars could succeed.
+The native selection tests cover deferred diagnostics, first-success execution,
+silent fallthrough, snapshots, exceptions and callback context. The adopted
+library, canonical references, ulib examples and preceding compilation/save
+matrices remain unchanged; upstream runtime execution and a new full startup
+are not included.
+
+Recommended follow-up: retain each failed rule's existing progress, offer
+failures in descending progress after all rules fail, and preserve the original
+phrase/registration order for ties. Keep successful action selection, handler
+effects, per-failure query context, silent fallthrough and silent status
+combination. Source refusals after resolving both nouns would outrank a broad
+missing-object failure; an absent second noun would also outrank it. Zero-
+progress ties would retain earlier messages. This ranking is proposed and has
+not been executed.
+
+FluffOS uses fewer accumulated errors and then greater rule weight, with a low
+weight for missing-object errors; its weights also select successful rules.
+Native should extend its existing failure-progress criterion while keeping
+first-success execution. Implementing it requires native regressions plus
+updates to parser efun, handler and master apply references, affected ulib
+explanations and the reviewed apply digest. Timing costs remain unmeasured.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -10800,7 +10851,7 @@ not every historical MudOS release. Consult its [source][fl-parser-source] and
 | Ordinal selection | Indirect ordinals are narrowed before the relation loop; direct ordinal handling occurs in that loop. Exact cross-driver outcomes are unverified. [Relations][fl-parser-relations]. | For pair rules, both slots pin ordinals to live noun matches satisfying their individual access requirements before permissions, without substituting another compatible object. Other rule shapes retain ordinals after initial filtering. |
 | Partial plural refusal | Relation processing retains errors alongside matches. [Relations][fl-parser-relations]. | A pair's late refusal can remove one plural member without rejecting the accepted members. Actions receive raw plain refusal strings for the selected partner; soft reasons are omitted. No master error hook runs after an eventual successful rule. |
 | Successful rule selection | Uses rule weights to select a successful match. [Selection][fl-parser-selection]. | Tries the longest matching verb phrase first, then shorter phrases if needed. Within each phrase, the first successful rule in registration order wins, even if a later rule is more specific. Earlier failures do not block later successes. |
-| Error selection | Weighs rule matches and error counts. [Selection][fl-parser-selection]. | Within a rule, retains the parse that resolved the most object slots, taking the earliest tie. If every phrase fails, offers diagnostics in longest-phrase/registration order with each failure's own verb query context until the master returns a string; if none does, combines silent codes by severity (`-3`, then `-2`, then `-1`). Error text can therefore differ. |
+| Error selection | Prefers fewer accumulated errors, then greater rule weight; missing-object errors receive a low weight. [Selection][fl-parser-selection]. | Within a rule, retains the parse that resolved the most object slots, taking the earliest tie. If every phrase fails, offers diagnostics in longest-phrase/registration order with each failure's own verb query context until the master returns a string; if none does, combines silent codes by severity (`-3`, then `-2`, then `-1`). Error text can therefore differ; see the [Lima lighting audit](#lima-parser-rejection-diagnostics). |
 | Verb matching | Tries progressively longer input prefixes after ASCII case folding and punctuation processing; rule weights determine selection, not a longest-verb guarantee. Registered names remain verbatim. [Search][fl-parser-verb-search], [registration][fl-parser-verb-register]. | Supports whole-word multiword verbs and synonyms. Normalizes Unicode whitespace in verb keys while preserving case and punctuation. Rejects empty keys. Match-dependent callbacks report the canonical full phrase through `query_verb()` and its raw span through `query_verb(1)`. Older lpc-rs callbacks assuming one-word parser verbs need review; actor/native/add_action behavior is unchanged. |
 | Synonyms | The implementation accepts `parse_add_synonym(new, old, rule)` despite its reference showing two arguments. | Also supports the optional rule filter. Native synonyms copy current owner registrations, normalize verb-key whitespace, and keep exact rule-text filters. Review chaining and removal semantics in [`parse_add_synonym`](efun/parse_add_synonym.md) and [`parse_remove`](efun/parse_remove.md). |
 | Caller-restricted parsing | Implemented `parse_my_rules(actor, line, flag=0)` uses only the caller's rules for the supplied actor. Zero flag returns the generic action arguments without action lookup; nonzero executes and returns 1. Both caller and actor require `parse_init`; nested parsing is rejected. [Entry point][fl-parser-owned], [owner filter][fl-parser-owner-filter]. | [`parse_my_rules`](efun/parse_my_rules.md) supplies both modes, using native selection, permission and failure policies above. Actor must be command-enabled; only rule registration requires `parse_init`. An optional fourth argument selects the callback command giver independently, while rules still belong to the object executing the efun; keep wrappers in that object or its inheritance tree. A missing action in execution mode leaves that parse unhandled. Nested parses are allowed up to the shared command depth of 16. Review initialization, failure handling and reentry assumptions. |
@@ -11661,3 +11712,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-object-visibility]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/visible.c
 
 [lima-body-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
+
+[lima-body-cmd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/cmd.c
