@@ -2611,6 +2611,47 @@ The inventory checks use at most two CLI processes and preserve the active
 library/native hashes. This unit changes notes only; full startup and the native
 test suite were not repeated.
 
+#### Lima reporting-command port
+
+Reviewed **8 October 2026** against pinned [bug][lima-player-bug],
+[typo][lima-player-typo], [idea][lima-player-idea],
+[feedback][lima-player-feedback], [question][lima-player-question],
+[reporter][lima-reporter-daemon] and [text editor][lima-text-editor]. Lima retains
+distinct nil, preserved call-out players, USE_MASS, selected limb health/simple
+advancement and 4,000 ms tasks. Source review uses the pinned local Git evidence
+from the inventory; execution is on lpc-rs, without upstream execution.
+
+Add the established protected CMD adapter to each of the five private handlers.
+The adapter forwards the original report text through the existing no_redirection
+contract. One-line reports then post to their configured news groups. The
+adapter-only runtime control exposes another port difference: the reporter's
+`(: done_ed, type, subject :)` editor continuation returns a function instead of
+invoking it, so completion and abort never reach the reporter. Bind that callback
+as `&done_ed(type, subject)`.
+
+Six cases pass with unchanged assertions after that callback fix, covering forty
+ordinary inputs and twelve news posts. All five one-line destinations, subject,
+poster/userid and message text are checked through the real news API. Literal
+`>` and `|` remain report text and create no redirected file. Multiline reports
+retain blank lines and complete with both editor terminators; an empty completed
+draft posts, while explicit abort posts nothing. Editing flags and modal depth
+return to their preceding values. The three shipped player-menu reporting
+entries return to the menu, then to ordinary shell input.
+
+The six-file patch contains five adapters and one bound callback. News, editor,
+menu and native implementations remain unchanged; fixture helpers stay outside
+production. Real master/simuls, user, human body, shell, reporter, news daemon and
+editor run with an attached in-process connection. No checked input catches an
+error. Workspace all-target/all-feature Clippy and formatting pass. Fixture setup
+corrections and the adapter-only failure remain recorded locally.
+
+Fresh compilation is **57/67 player commands** and **8/8 shared dependencies**,
+with no compile regressions and no timeouts. This accounts for thirty-six adopted
+player additions since the historical full survey; the full-library 534/1,180
+count remains historical. Saved-report restoration, alternate logging
+configuration, disconnect during editing and full startup were not checked here.
+Next: port the inactive command's modal input and return to active status.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
