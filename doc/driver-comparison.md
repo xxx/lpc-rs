@@ -2903,6 +2903,51 @@ survey. That survey, full startup and actual mail delivery were not repeated;
 save checks use explicit checkpoints. Next: audit missions and its area-specific
 mission display.
 
+#### Lima missions display audit
+
+Reviewed **8 October 2026** against pinned [missions command][lima-player-missions],
+[mission daemon][lima-mission-daemon], [mission_info class][lima-mission-info],
+[daemon-data module][lima-daemon-data], [frame module][lima-frame] and
+[player shell][lima-pshell]. The checked port needs a one-file command adaptation:
+append the protected variadic CMD dispatcher calling private main(), and change
+its absolute room-path split index from 1 to 2. Native [explode](efun/explode.md)
+preserves the leading empty field; the original index selects domains instead
+of std and hides live missions. This matches the preceding quests adaptation.
+The adapter-only control compiles but fails nine of ten runtime cases. No
+proposal is adopted; mission daemon, class, frame and native APIs are unchanged.
+
+Ten cases pass with the proposal across twenty-two ordinary inputs, including
+one expected caught error. Empty areas, registrations without live giver clones,
+variant rows, level ranges, giver locations, nil-to-Main fallback, duplicate
+mission names across givers, multiple missions and movement between domains
+are checked. Live class copies leave registered class fields unchanged. One
+explicit daemon save/destruction/reload restores mission registrations and
+reproduces identical live data and display. Every case subsequently uses the
+shell. In-memory connections capture output without sockets; givers, controller
+files and rooms are fixtures. Mission gameplay and completion remain untested.
+
+Controls retain source-defined edge cases separately from port requirements.
+The daemon's domain-prefix comparison includes stdextra when selecting std.
+A truthy empty variants array bypasses Main fallback; if every live giver has
+no variants, max receives an empty array and raises its documented error,
+which input dispatch catches with prompt-only output. Heading widths omit the
+heading lengths, dropping mission/variant headings in empty areas and truncating
+Variant to Varian for Easy/Hard. Existing footer clipping also remains. The
+proposal repairs only dispatch and the path-index mismatch.
+
+The unadapted command fails at four missing-dispatch calls. Adapter-only and
+proposed compilation each pass the command and five complete dependencies,
+for thirteen checks without timeouts. Workspace all-target/all-feature locked
+Clippy and formatting pass. Two initial fixture setup mistakes are corrected
+before command inputs; after the adapter control exposes the path mismatch,
+the first proposal run passes nine cases. Its remaining heading expectation
+is corrected to the observed source-defined truncation; all other assertions
+remain. Evidence is source review and lpc-rs execution, with no upstream execution.
+Full player compilation and startup were not repeated. The active groups
+overlay retains 1,547 files, **62/67 player commands** and forty-one adopted
+additions. Next: adopt the one-file dispatch/path-index adaptation, then audit
+mudlist, retaining separate Lima source issues.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12459,3 +12504,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-finger-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/finger.c
 [lima-player-groups]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/groups.c
 [lima-properties]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/properties.c
+[lima-player-missions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/missions.c
+[lima-mission-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/mission_d.c
+[lima-mission-info]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/mission_info.c
