@@ -2763,6 +2763,47 @@ thirty-nine adopted player additions since the historical 534/1,180 survey;
 full startup and saved-account login were not repeated. Next: audit finger's
 local information display and command resend.
 
+#### Lima local finger audit
+
+Reviewed **8 October 2026** against pinned [player finger][lima-player-finger],
+[transient finger][lima-trans-finger], [finger daemon][lima-finger-daemon],
+[class schema][lima-finger-class], [USER_D][lima-user-daemon] and
+[command forwarding][lima-command-stdio]. Evidence uses local pinned Git blobs
+and lpc-rs execution; upstream execution was not performed. Lima keeps distinct
+nil, preserved call-out players and 4,000 ms tasks.
+
+The tested three-file proposal adds protected CMD adapters calling private
+main(arg) in both commands. The transient command uses nil for an absent matches
+array and supplies format_list(chars, nil) for the existing default separator.
+The daemon binds the actual guarded query with
+`&call_other(USER_D, "query_variable", character, fields)`, uses nil for absent
+class/string values, and replaces functional implode with reduce. Preserve the
+requested character when querying character fields; resolve the owning account
+for account metadata, status, visibility and mail. This matches the ported
+USER_D contract when character and account names differ. Unknown canonical
+characters return nil before the query. Schema, privacy conditions, integer
+defaults, resend guard, native APIs and local formatting remain unchanged.
+
+Six cases pass across thirteen ordinary inputs and one direct public menu-entry
+call: a two-player local list, missing character, populated self profile, absent
+optional fields, a character/account name mismatch and offline saved data. All
+inputs return without caught errors and resume shell commands. Both shell resend
+and the public menu function display the populated profile. In-memory connections
+capture output without sockets. The menu interaction itself was not exercised.
+
+All three baseline targets fail compilation. The initial proposal passes five
+of six targets; supplying the format_list separator yields six passes. The first
+runtime attempt fails during setup because the user helper lacks commands.h.
+Adding that include and exercising the existing peer-input helper resolves setup
+and unused-helper warnings; all original assertions and proposal bytes remain.
+Workspace all-target/all-feature Clippy and formatting pass. Remote IMUD/web,
+populated mailboxes, long idle/linkdead output and malformed names are unchecked.
+
+The proposal is **not adopted**. The active passwd overlay retains 1,547 files;
+its preceding **60/67 player-command** result and thirty-nine adopted additions
+remain current. The historical 534/1,180 survey, full command matrix and startup
+were not repeated. Next: adopt the tested three-file local finger port.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12313,3 +12354,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-wizcall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/wizcall.c
 [lima-wizcall-tell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/tell.c
 [lima-player-passwd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/passwd.c
+[lima-player-finger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/finger.c
+[lima-trans-finger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/finger.c
+[lima-finger-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/finger_d.c
+[lima-finger-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/finger.c
