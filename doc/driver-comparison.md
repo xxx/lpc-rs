@@ -2799,10 +2799,40 @@ and unused-helper warnings; all original assertions and proposal bytes remain.
 Workspace all-target/all-feature Clippy and formatting pass. Remote IMUD/web,
 populated mailboxes, long idle/linkdead output and malformed names are unchecked.
 
-The proposal is **not adopted**. The active passwd overlay retains 1,547 files;
-its preceding **60/67 player-command** result and thirty-nine adopted additions
-remain current. The historical 534/1,180 survey, full command matrix and startup
-were not repeated. Next: adopt the tested three-file local finger port.
+At audit completion the proposal was unadopted. The active passwd overlay
+retained 1,547 files, its preceding **60/67 player-command** result and
+thirty-nine adopted additions. The historical 534/1,180 survey, full command
+matrix and startup were not repeated. The adoption follows below.
+
+#### Lima local finger port
+
+Reviewed **8 October 2026** against the same pinned [player command][lima-player-finger],
+[transient command][lima-trans-finger], [daemon][lima-finger-daemon],
+[schema][lima-finger-class] and [USER_D][lima-user-daemon]. Adopt the exact
+three-file proposal described in the preceding audit. Two protected CMD
+adapters, typed nil, reduce, an explicit format_list separator and a bound
+guarded query support local finger. Character fields retain the requested name
+while account metadata uses the owner. Class schema, privacy conditions,
+integer defaults, resend guard, user-data methods and native APIs stay unchanged.
+
+Six runtime cases pass again against the adopted overlay, with thirteen ordinary
+inputs and one direct public menu-entry call. The harness injects no proposal
+sources; every audited assertion and LPC helper is retained. A two-player list,
+missing character, populated self profile, absent optional fields, different
+character/account names and offline saved data work. Checked inputs return
+without caught errors and resume shell commands. In-memory connections capture
+output without sockets. Workspace all-target/all-feature Clippy and formatting
+pass; evidence is lpc-rs execution, with no upstream execution.
+
+Fresh compilation is **61/67 player commands**, with finger the only new success,
+no regressions and no timeouts. **9/9 complete supporting targets compile**:
+simuls, user, secure daemon, player shell, command daemon, transient finger,
+finger daemon, finger class and user daemon. The active overlay retains 1,547
+files and now accounts for forty adopted player additions since the historical
+534/1,180 survey. Full startup and that survey were not repeated. Remote IMUD/web,
+populated mailboxes, long idle/linkdead output, malformed names and actual menu
+interaction remain unchecked. Next: audit the groups player command's personal
+mail groups.
 
 #### Lima cold startup and login
 
