@@ -2327,9 +2327,37 @@ standalone survey; full matrices and startup remain frozen.
 
 The daemon's mapping query_party declaration still disagrees with its class
 values; selected existing-member entry works without changing it. All thirty
-callback replacements compile, but only the listed entry paths were exercised.
-Password entry, actual invites, interactive creation, administration, XP and
-persistence restoration remain later work. Next: audit interactive party creation.
+callback replacements compile, but only the listed entry paths were exercised
+here. The following audit covers interactive creation and its password prompts.
+Existing-party joins, invitations, other administration, XP and persistence
+restoration remain later work.
+
+#### Lima interactive party-creation audit
+
+Reviewed **7 October 2026** using the adopted [party command][lima-player-party],
+[menu][lima-party-menu], [daemon][lima-party-daemon] and [class][lima-party-class].
+Pinned source review carries forward from the entry audit. Local port execution
+does not establish upstream execution. Lima retains distinct nil, preserved
+call-out players and the 4,000 ms budget.
+
+Four new runtime tests pass across thirty-eight ordinary inputs from the active
+overlay. Matching passwords register the party, retain the creator as its only
+member and owner, and open the real administration menu. Registration waits for
+confirmation. An empty password followed by a mismatched confirmation can retry
+successfully; the final password matches the daemon's stored verifier and the
+superseded password does not. Three empty passwords or three confirmation
+mismatches remove the menu clone, restore the shell and leave no party or
+membership. Quit preserves a successfully created party. Subsequent chan
+commands reach normal dispatch, and no checked input catches an error.
+
+The real command, modal input, menu framework and party daemon handle creation;
+fixtures append three observation methods to the existing user helper. No party
+is seeded for these tests, and no production source or native behavior changes.
+Production compilation carries forward for the byte-identical adopted files.
+Workspace all-target/all-feature Clippy and formatting pass. This audit requires
+no further adaptation. Full matrices, save restoration and startup remain frozen;
+existing-party joins, invitations, other administration and XP are later work.
+Next: audit joining an existing party by name and password.
 
 #### Lima cold startup and login
 
