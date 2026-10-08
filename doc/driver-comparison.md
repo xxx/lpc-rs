@@ -3033,28 +3033,29 @@ and logs remain outside the working source. Full inventory and startup were not
 repeated. Next: audit su; experimental random2 remains deferred and suicide
 remains disabled upstream.
 
-#### Lima su command audit
+#### Lima su command port
 
 Reviewed **8 October 2026** against pinned [su command][lima-player-su],
 [user switching][lima-user-switch], [character registry][lima-user-daemon],
 [account character data][lima-user-bodies], [player shell][lima-pshell],
 [wizard shell][lima-wizard-shell] and [command rules][lima-player-command-rules].
-The proposed adaptation changes one command file: append protected variadic
+The adopted adaptation changes one command file: append protected variadic
 dispatch_main calling the existing private main(arg), and replace both absent
 race assignments with nil. The baseline fails at missing dispatch_main;
 the dispatch-only control exposes two integer-to-string assignment errors.
-The complete proposal compiles. The dedicated Lima checkout remains unchanged.
+The complete adaptation compiles and is adopted in the dedicated Lima checkout.
+Native APIs and the switching backend retain their preceding implementations.
 
-Five scenarios verify eighteen input actions through the real player and wizard
+Five scenarios pass across eighteen input actions through the real player and wizard
 shells. Regular refresh preserves account, selected character, race, registered
 filename, room, shell and privilege while replacing the body. Wizard race changes
 update the saved body filename. The other-account path uses the real password
 modal: a wrong password records and saves a failure, and the correct password
 switches account/body/selection. Normal refusals and subsequent shell input are
 checked. The unadapted-command control receives the shell's unknown-word result.
-Four proposal scenarios passed unchanged; only the control's initial expectation
-was corrected and rerun. Exact harness comparison verifies those passing cases
-and their shared implementation remain unchanged.
+The working paths load the adopted command directly from the checkout; only the
+negative control substitutes the frozen unadapted command. All audit assertions
+and fixture helpers are retained.
 
 The audit also reproduces an existing account/character lookup limitation.
 switch_user takes its old ID from query_selected_body() and looks for an account
@@ -3071,12 +3072,14 @@ IMUD daemon has no transport. Evidence is source review and lpc-rs execution,
 with no upstream execution or new full-startup run. Distinct nil, preserved
 call-out players and the 4,000 ms task limit remain in effect.
 
-Fresh compilation of the proposal passes **65/67 player commands** and
+Fresh compilation of the adopted library passes **65/67 player commands** and
 **12/12 supporting targets**, with su the only additional success and no
-regressions or timeouts. Active source remains at the preceding 64/67 checkpoint.
-Workspace all-target/all-feature locked Clippy and formatting pass. Next:
-adopt the one-file dispatch/nil adaptation while retaining the documented
-lookup limitation; random2 remains deferred and suicide disabled upstream.
+regressions or timeouts. This accounts for forty-four adopted player additions.
+Workspace all-target/all-feature locked Clippy and formatting pass. The active
+library retains 1,547 files, with only su changed by this adoption. Next:
+refresh the broader compile inventory; random2 remains deferred and suicide
+disabled upstream. The documented account/character lookup limitation remains
+separate from compatibility work.
 
 #### Lima cold startup and login
 
