@@ -2014,6 +2014,71 @@ hooks, overridden setters, other light levels, custom restoration hooks, nested
 containers, wall-clock timing, alternate configurations, foreign saves and a new
 full startup/login remain unchecked by this batch.
 
+#### Lima torches and lighting sources
+
+Reviewed **7 October 2026** against pinned [torch][lima-torch],
+[flame][lima-flame], [magic torch][lima-magic-torch],
+[magic flame][lima-magic-flame], [lightable][lima-lightable],
+[light source][lima-light-source], [light verb][lima-light-verb] and
+[vision checks][lima-verb-vision]. The selected profile retains USE_MASS,
+distinct nil, preserved call-out players, limb health/armour/wielding and the
+4,000 ms budget. This audit adopts no source patch or native feature.
+
+Convert the flame's set_mass(SMALL) and magic torch's set_value(15000) explicitly
+to float. Unmodified compilation rejects these integer arguments, and magic
+flame inherits the mass failure. Fixture-only casts permit behavioral checks;
+the magic-flame predicate also has an observational counter with its return
+unchanged. These variants are excluded from the active library.
+
+Plain torch defaults to 600 fuel units at the existing one-minute interval.
+Ordinary lighting contributes one unit to body/room light and one inventory
+marker. Due updates consume one unit; extinguishing preserves fuel and stops
+scheduling, relighting resumes it, and final burnout removes the torch and
+restores light. After the fixture value cast, magic torch also starts with 600
+units and follows finite decay despite its unlimited-fuel comment. Its
+unconditional check_fuel bypasses the lighting guard, without configuring
+infinite decay. Set INF_FUEL and retain the ordinary fuel guard in a follow-up.
+The finite checks select three/two units through existing setters after
+observing the defaults; they do not wait through 600 minutes.
+
+String source filters accept a matching lit torch and reject an unlit torch or
+wrong source ID. The stock function filter rejects ordinary flame and accepts
+the room's attached blue flame, with normal with-source actions and light/queue
+updates. Validation uses parser direct/indirect permission handlers;
+light_object still discards the optional source argument, and the source module
+does not inspect it. These success paths use existing driver APIs. One accepted
+blue-flame command invokes its predicate four times; filters must tolerate
+repeated validation.
+
+Rejected two-object commands currently report "There is no X with Y here",
+hiding specific unlit/wrong-flame messages. Direct observation confirms the
+permission handlers return the intended one/zero/string results, while ordinary
+refusals preserve target state, fuel and scheduling. Native command trials
+report the first available rejection message, and light registers OBJ before
+OBJ with OBJ. The initial two message-assertion failures remain recorded; final
+characterization checks assert both actual command output and handler results.
+Review this native diagnostic selection separately; refusals remain effective.
+
+Both light commands refuse complete darkness because inherited checks use the
+NEED_TO_SEE flag, which the light verb does not clear despite its need_to_see
+method returning zero. The blue flame is lit but emits zero light. Restoring
+room ambient light permits lighting; a carried lit torch then supplies visibility
+until extinguished, after which relighting is refused. No vision policy changes.
+
+Five characterization checks pass through actual users, human bodies, player
+shells, stock torch/lantern and fixture-cast magic objects with ordinary input.
+Twenty-seven native callbacks add no runtime-log errors. Only room ambient light
+is changed for darkness; body light is not overridden. Unmodified compilation
+is twenty-five of thirty-seven, retaining all preceding outcomes/host diagnostics
+plus the three float-argument failures; seven final fixture compositions compile.
+Workspace Clippy across all targets/features and formatting pass. Native code,
+master policy and fixture adoption are unchanged. These are focused lpc-rs
+execution and pinned source review without upstream execution.
+
+Torch combat/wielding, web burning, callback side effects/reentrancy, custom
+source handlers, nested containers, saved torch restoration, wall-clock timing,
+alternate profiles and new full startup/login remain unchecked by this batch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11533,3 +11598,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-attributes-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/attributes_d.c
 [lima-inventory-list]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/objcalls.c
 [lima-look-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/look.c
+
+[lima-torch]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/torch.c
+[lima-flame]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/flame.c
+[lima-magic-torch]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/magic_torch.c
+[lima-magic-flame]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/magic_flame.c
