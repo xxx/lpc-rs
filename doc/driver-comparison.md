@@ -1948,7 +1948,8 @@ Reviewed **7 October 2026** against pinned [light object][lima-light-object],
 [inventory command][lima-inventory-command], [inventory list][lima-inventory-list]
 and [look verb][lima-look-verb]. Execution retains USE_MASS, distinct nil,
 preserved call-out players, selected limb health/armour/wielding and the
-4,000 ms budget. This audit changes no library source or native implementation.
+4,000 ms budget. The local port changes only std/light_object.c; native code,
+master policy and fixture adoption remain unchanged.
 
 Inventory uses F_LIGHTED and lighted_attributes to display one
 `(providing adequate light)` marker. Extinguishing removes it; repeated attempts
@@ -1958,38 +1959,46 @@ extra_short callback names the undefined lighting_extra_short method; its
 adapted deferred self-call returns nil when explicitly observed. The library
 contains no stock consumer of this hook, so ordinary inventory is unaffected.
 The original named callback and adapted dynamic binding are distinguished;
-upstream callback execution remains unchecked.
+upstream callback execution remains unchecked. Retain the unused hook for now.
 
-Zero and string prevention results both refuse ordinary lighting/extinguishing
-without the corresponding success notification. However, light_object changes
-queue membership before inherited prevention runs: refused lighting schedules
-an unlit entry, retired without fuel use on the next poll; refused extinguishing
-removes the entry while the lantern stays lit, halting fuel updates. Fix queue
-membership at actual lit-state transitions, keeping generic decay, finite fuel,
-INF_FUEL and saved-state policy. Retain the unused description hook for now.
+Update fuel-queue membership in light_object::set_lit after synchronizing
+M_LIGHTABLE and M_LIGHT_SOURCE, and remove speculative queue changes from
+light/extinguish. Both zero and string prevention results now refuse commands
+without altering scheduling: refused lighting leaves the queue untouched;
+refused extinguishing preserves the exact existing deadline and fuel continues
+to burn on the next due poll. Successful light/extinguish notifications observe
+matching lit-state and queue membership; direct burn_out also clears the entry.
+Generic decay, finite fuel, INF_FUEL and saved-state policy remain unchanged.
+The premature queue changes occur in pinned Lima source as well; this is a
+mudlib correction using existing driver APIs.
 
-Lantern turn_on/turn_off ignore set_is_on's result and continue into light/
-extinguish. Refusing prevent_turn_on still lights with switch off; refusing
-prevent_turn_off still extinguishes with switch on. Refusing prevent_light after
-switch-on leaves an unlit, switched-on item; refusing prevent_extinguish after
-switch-off leaves a lit, switched-off item without fuel updates. Successful
-module notifications can fire before the other module refuses. Ordinary light
-and extinguish also leave the independent switch field unchanged. Handle switch
-refusals as a separate mudlib follow-up; synchronization policy is not changed by
-this audit. Queue ordering and ignored switch results also occur in the pinned
-Lima source. Existing driver APIs suffice; these are source-policy findings and
-lpc-rs execution results without upstream execution.
+Lantern turn_on/turn_off still ignore set_is_on's result and continue into light/
+extinguish. Refusing prevent_turn_on lights with switch off; refusing
+prevent_turn_off extinguishes with switch on. Refusing prevent_light after
+switch-on leaves an unlit, switched-on item with no fuel entry; refusing
+prevent_extinguish after switch-off leaves a lit, switched-off item with its
+fuel entry intact. Successful module notifications can fire before the other
+module refuses. Ordinary light and extinguish leave the independent switch field
+unchanged. Handle switch refusals separately, distinguishing an already-set
+switch from a refused change because set_is_on returns zero for both.
+Ignored switch results also occur in pinned Lima source; coupling switch and
+flame state is not part of this queue fix.
 
-Four characterization checks pass using actual users, human bodies, player
-shells and ordinary inventory/look/light/extinguish/flip input. They assert the
-retained inconsistencies, rather than a repaired policy. Twenty-four native
-callbacks run without new runtime-log errors, and Virtual Connections collect
-output without sockets. Body lighting is never overridden; no observation helper
-is adopted. Compilation passes twenty-two of thirty-one targets: all previous
-outcomes and host diagnostics remain, inventory/look/attribute-daemon pass, and
-three additional isolated object modules need containing-object methods,
-including mudlib pluralize. Complete hosts and all three fixture compositions
-compile. Workspace Clippy across all targets/features and formatting pass.
+Thirteen functional checks pass using actual users, human bodies, player shells
+and ordinary inventory/look/light/extinguish/flip/save input. Both refusal forms,
+notification state and preserved deadlines are checked alongside finite,
+zero/infinite/other-negative fuel and eight fresh-VM restorations of six new
+native saves and two exact older files. The identical unpatched control fails
+with a queued entry after refused lighting. Eighty-four native callbacks run
+without new runtime-log errors, and Virtual Connections collect output without
+sockets. Only the intrinsic-light test adds body light; ordinary cases use the
+stock implementation. Compilation passes twenty-two of thirty-one targets with
+all previous outcomes and isolated host diagnostics unchanged. Complete hosts,
+inventory/look/attribute-daemon and all three fixture compositions compile;
+isolated object modules need containing-object methods, including mudlib
+pluralize. Workspace Clippy across all targets/features and formatting pass.
+These are focused lpc-rs execution results and pinned source review, without
+upstream execution.
 
 Torch gameplay, source-filter lighting, complete darkness, reentrant/multiple
 hooks, other light levels, custom restoration hooks, nested containers,
