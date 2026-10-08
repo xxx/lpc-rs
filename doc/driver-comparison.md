@@ -2652,6 +2652,45 @@ count remains historical. Saved-report restoration, alternate logging
 configuration, disconnect during editing and full startup were not checked here.
 Next: port the inactive command's modal input and return to active status.
 
+#### Lima inactive-command port
+
+Reviewed **8 October 2026** against pinned [inactive][lima-player-inactive],
+[modal forwarding][lima-input-forwarding], [input dispatch][lima-inputsys],
+[body naming][lima-actions-naming] and [room messages][lima-messages]. Lima keeps
+distinct nil, preserved call-out players, selected limb health/simple advancement,
+USE_MASS and 4,000 ms tasks. Pinned local Git blobs supply the source evidence;
+execution is on lpc-rs, without upstream execution.
+
+Add the protected CMD adapter and bind the return callback as
+`&become_active(time())`. An adapter-only control reproduces the old closure
+behavior: the input handler pops on Return but the callback merely returns a
+function, leaving F_INACTIVE set and the body labelled inactive. The bound
+callback captures the starting time, reports the elapsed duration, announces the
+return and clears the flag. Modal dispatch itself remains unchanged.
+
+Four tests pass: three use the adopted command and one retains that control.
+Eighteen ordinary inputs include fifteen adopted-case inputs and three control
+inputs. Empty input clears inactive status and its displayed marker, restores
+modal depth and returns to shell dispatch. A real 1.2-second wait establishes
+captured elapsed time. An ordinary nonblank line is consumed by the return
+callback; repeating the command preserves the unrelated brief flag. Two real
+players use the same command object with independently pending callbacks,
+correct nearby announcements and each player's own flag/stack restoration.
+No checked input catches an error.
+
+Only cmds/player/inactive.c changes: one adapter and one bound callback. Fixtures
+remain outside production; native, input-system and elapsed-formatting code stay
+unchanged. Workspace all-target/all-feature Clippy and formatting pass. Fresh
+player compilation is **58/67**, with no regressions or timeouts. Five of seven
+supporting targets compile, including complete user and human compositions.
+Isolated inputsys and body-naming modules require sibling functions supplied by
+those hosts; both retain byte-identical standalone diagnostics on the predecessor.
+
+This accounts for thirty-seven adopted player additions since the historical
+534/1,180 full-library survey, which remains historical. Long idle-duration
+formatting, disconnect while inactive and shell escapes during inactivity were
+not checked here. Next: port wizcall's usage and wizard-notification paths.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12198,3 +12237,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-question]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/question.c
 [lima-player-typo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/typo.c
 [lima-reporter-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/reporter_d.c
+[lima-player-inactive]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/inactive.c
