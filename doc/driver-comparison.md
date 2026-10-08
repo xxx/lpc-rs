@@ -2358,40 +2358,39 @@ no further adaptation. Full matrices, save restoration and startup remain frozen
 invitations, other administration and XP are later work. The following audit
 covers joining an existing party by name and password.
 
-#### Lima existing-party password-join audit
+#### Lima existing-party password-join port
 
-Reviewed **7 October 2026** using the adopted [party command][lima-player-party],
+Reviewed **7 October 2026** against pinned [party command][lima-player-party],
 [menu][lima-party-menu], [daemon][lima-party-daemon] and [class][lima-party-class].
-Exact pinned source evidence carries forward from the entry audit; local port
-execution does not establish upstream execution. Lima retains distinct nil,
-preserved call-out players and the 4,000 ms budget.
+Pinned source evidence carries forward from the audit; local port execution
+does not establish upstream execution. Lima retains distinct nil, preserved
+call-out players and the 4,000 ms budget.
 
-Three new tests follow the real name/password prompts with an existing party
-registered to another owner. Initial execution passes successful joining and
-blank/wrong-password retries, but fails the attempt-limit check. After three
-wrong responses, the next callback prints its rejection and destroys the menu,
-then still processes a correct response and prints success. The pinned Lima
-function also lacks a return after that destruction; this is a source
-control-flow repair, not a missing native feature. A one-line diagnostic proposal
-adds that return, preserving the original timing of the limit check and retry
-prompt. Native destruction semantics and party policy remain unchanged.
+The adopted menu returns immediately after destroying itself at the password
+retry limit. The pinned source lacks this return, allowing its rejected callback
+to continue into add_member. The source repair preserves the original check at
+callback entry, including the prompt after the third wrong answer. It is
+byte-identical to the tested one-line proposal; native destruction semantics
+and existing party policy remain unchanged.
 
-The proposal compiles. All three unchanged tests pass across twenty-three
-ordinary inputs. They verify trimming, membership in the existing party,
-preserved founder ownership, two members after success, and successful retry
-after blank and wrong passwords. Success returns to the shell; a later party
-command opens the regular member menu, and quit restores the shell. At the
-limit, the corrected callback leaves membership absent and the founder alone,
-removes its clone and restores shell input. Subsequent chan commands reach
-normal dispatch, and no checked input catches an error.
+Production menu compilation and three runtime tests pass across twenty-three
+ordinary inputs directly from the adopted overlay. Every audit assertion and
+LPC fixture is unchanged. A trimmed existing name accepts the correct password,
+adds the player as the second member and retains founder ownership. Blank/wrong
+responses can retry successfully. Joining restores shell input; another party
+command opens the regular member menu, and quit restores the shell. After three
+wrong responses, the fourth callback rejects a correct answer, leaves membership
+absent and the founder alone, removes its clone and restores shell input.
+Subsequent chan commands reach normal dispatch; no checked input catches an error.
 
-The real command, modal input, menu and daemon run. A fixture helper seeds only
-the existing party through register_party; queries observe membership and owner.
-Workspace all-target/all-feature Clippy and formatting pass. The failed run is
-retained, with every assertion and LPC fixture unchanged for the proposal run.
-The proposal is not adopted: the active 1,547 files, native sources, master,
-daemon and class retain their hashes. Full matrices, save restoration and startup
-remain frozen. Next: adopt the tested return, then audit party invitations.
+The real user, human body, command dispatcher, modal input, menu and party daemon
+run. Fixture helpers seed only an existing party through register_party and
+observe state; they remain excluded from production. Only obj/mudlib/party_menu.c
+changes in the 1,547-file library. Native files, master, daemon, class and frozen
+predecessor evidence retain their hashes. Workspace all-target/all-feature Clippy
+and formatting pass. The retained survey stays 534/1,180 with thirty-one adopted
+additional player entries. Full matrices, save restoration and startup remain
+frozen. Next: audit party invitations, then other administration and XP.
 
 #### Lima cold startup and login
 
