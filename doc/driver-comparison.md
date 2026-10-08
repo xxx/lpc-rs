@@ -2082,6 +2082,55 @@ Torch combat/wielding, web burning, callback side effects/reentrancy, custom
 source handlers, nested containers, saved torch restoration, wall-clock timing,
 alternate profiles and new full startup/login remain unchecked by this batch.
 
+#### Lima lighting in complete darkness
+
+Reviewed **7 October 2026** against pinned [light verb][lima-light-verb],
+[verb checks][lima-verb-vision], [verb flags][lima-verb-flags],
+[object names][lima-names], [visibility][lima-object-visibility],
+[container][lima-container] and [body condition][lima-body-condition]. The selected
+profile retains distinct nil, preserved call-out players, USE_MASS, limb
+health/armour/wielding and the 4,000 ms budget. This audit adopts no source change.
+
+The light verb's need_to_see method returns zero, but inherited default_checks
+uses NEED_TO_SEE in its flags. The unmodified verb refuses both light forms in
+complete darkness for carried and room targets. A fixture-only change includes
+verbs.h and clears NEED_TO_SEE in create, retaining the method to isolate the
+flag's effect. Flags change from seven to six; other command flags are unchanged.
+
+With that flag cleared, ordinary input lights a carried torch or a room torch
+from zero ambient light. Finite fuel, extinguishing, relighting and burnout
+continue to update body/room light and scheduling. A lit blue flame emits zero
+light but can supply the magic torch's function filter in darkness, with target
+and source exchanged between room and inventory. The source requirement and
+wrong-flame refusal remain effective; infinite fuel survives due updates.
+
+Scope matching uses the existing object ID lists and container visibility/
+access hooks, without checking room light level. Closed opaque backpacks keep
+their target/source contents out of the walk; opening them permits the same
+named commands. INVIS empties parser ID lists, so the tested named invisible
+target/source commands still fail in darkness; the unmodified verb also refuses
+them in an illuminated room. Restoring visibility permits lighting. Look still
+refuses darkness, and sleeping still refuses both light forms. The alive flag
+remains set; its ghost check was source-reviewed without executing a ghost case.
+
+Six checks pass: one unmodified-verb characterization and five flag experiments,
+through actual users, human bodies, player shells and ordinary input in one
+driver configuration. Thirty-four native callbacks add no runtime-log errors;
+seven fixture compositions compile. Workspace Clippy across all targets/features
+and formatting pass. The initial build was stopped after reviewing INVIS ID
+masking and correcting two unexecuted assertions; its inputs and temporary-entry
+cleanup are recorded. Active library, native code, master policy and fixture
+adoption are unchanged. These are lpc-rs execution and source review without
+upstream runtime execution; the preceding compilation/restoration matrices stay
+frozen.
+
+Recommended port: include verbs.h, clear only NEED_TO_SEE in light's create and
+remove its unused need_to_see method. Preserve the existing scope and object
+permissions. Native cross-rule rejection-message selection remains a separate
+follow-up. Generic master aliases, other light levels, ghost gameplay, custom
+visibility/source handlers, other actors' inventories, wall-clock scheduling,
+saved torch restoration and a new full startup remain unchecked by this audit.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -11606,3 +11655,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-flame]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/flame.c
 [lima-magic-torch]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/magic_torch.c
 [lima-magic-flame]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/magic_flame.c
+
+[lima-verb-flags]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/verbs.h
+
+[lima-object-visibility]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/visible.c
+
+[lima-body-condition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/condition.c
