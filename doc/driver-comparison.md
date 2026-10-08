@@ -366,7 +366,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Text file writes | [`write_file`](efun/write_file.md) stages append (0/default) or whole-file replacement (1), with pending reads and commit-time delivery. | **Not checked**. | **Not checked**. | Core `write_file` uses bit 1 for overwrite and bit 2 for compression. [Implementation][fluffos-file-write-flags]. | **Not checked**. |
 | File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`rm`](efun/rm.md) checks its task's pending entry changes without reading contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
 | Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
-| Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md) and [structured parser registration inspection](efun/query_parser_registry.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
+| Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), [deferred failure diagnostics](apply/master/parser_error_message.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md) and [structured parser registration inspection](efun/query_parser_registry.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
 | Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer or [NPC action queues](#lima-action-queues) with one-shot timers. Lima [spell casting](#lima-spell-casting), [companion following](#lima-dancing-lights) and [fluid evaporation](#lima-conjure-ale-and-fluids) adapters also use native function callbacks. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
@@ -2136,51 +2136,50 @@ restoration and a new full startup remain unchecked by this port.
 Reviewed **7 October 2026** against the pinned [light verb][lima-light-verb],
 [lightable handlers][lima-lightable], [master error messages][lima-master] and
 FluffOS [error selection][fl-parser-selection], with PACKAGE_PARSER enabled in
-the reviewed upstream configuration. The selected Lima target keeps distinct
-nil, preserved call-out players and the unchanged 4,000 ms budget. This audit
-adopts no library, native parser or master-policy change.
+the reviewed upstream configuration. Lima keeps distinct nil, preserved call-out
+players and the unchanged 4,000 ms budget.
 
-Light registers OBJ before OBJ with OBJ. For an unlit plain-torch source or a
-wrong magic-flame source, the first rule treats the compound remainder as one
-missing object. The compound rule resolves both nouns and obtains a specific
-permission refusal. Current native reporting offers the first rule's diagnostic
-to Lima's master, which returns a string, hiding that later refusal. This
-matches the documented [reporting contract](apply/master/parser_error_message.md).
-Within one rule, native retains the failure with the most resolved object slots;
-that progress is discarded before cross-rule reporting.
+Native retains each failed rule's resolved-object-slot progress and, only after
+all eligible rules fail, offers diagnostics with the most progress first.
+Ties preserve the original longest-phrase/registration trial order. The first
+successful action or restricted argument result still ends selection immediately.
+Permission handlers are not rerun for reporting. Each diagnostic retains its
+noun references, reason and failed phrase's query context; a non-string master
+result continues through the ranked failures. Silent status combination remains
+-3 over -2 over -1. See the [reporting contract](apply/master/parser_error_message.md).
 
-Three focused Lima characterizations pass through ordinary player input, with
-24 native callbacks. Twelve native selection tests pass; workspace Clippy
-across all targets/features and formatting pass. Fixture-only experiments put
-the compound rule first or let the master decline kind 7. Both expose the
-source refusals; the latter also loses real missing-object messages and exposes
-the [body command wrapper][lima-body-cmd]'s unhandled native -3 result. Its
-default branch passes that integer to write, causing a caught error in the
-[message formatter][lima-user-messages]. Two caught errors are explicitly
-characterized under that experimental policy. The wrapper needs a separate port
-follow-up; the active master policy is unchanged. Rule reordering can change
-action precedence where both grammars could succeed.
-The native selection tests cover deferred diagnostics, first-success execution,
-silent fallthrough, snapshots, exceptions and callback context. The adopted
-library, canonical references, ulib examples and preceding compilation/save
-matrices remain unchanged; upstream runtime execution and a new full startup
-are not included.
+Light registers OBJ before OBJ with OBJ. Former reporting asked Lima's master
+about the broad rule's missing whole phrase first, hiding the compound rule's
+specific source refusal. The compound rule now outranks that failure: its
+permission refusal follows two resolved nouns, while a missing second noun
+has progress one and the broad missing-object failure has progress zero.
+Zero-progress ties still keep earlier messages; a can-handler refusal also has
+zero progress.
 
-Recommended follow-up: retain each failed rule's existing progress, offer
-failures in descending progress after all rules fail, and preserve the original
-phrase/registration order for ties. Keep successful action selection, handler
-effects, per-failure query context, silent fallthrough and silent status
-combination. Source refusals after resolving both nouns would outrank a broad
-missing-object failure; an absent second noun would also outrank it. Zero-
-progress ties would retain earlier messages. This ranking is proposed and has
-not been executed.
+One focused Lima check passes four ordinary player inputs with eight native
+callbacks: an unlit plain-torch source, a wrong magic-flame source, a missing
+second noun and successful blue-flame lighting. Refusals leave fuel, lighting
+and queued state unchanged; successful lighting skips error reports. Original
+rule order and the master reporting policy are retained. Six new native
+regressions cover all parser entry points, ties, silent fallthrough/status and
+nested phrase/player/caller context; all 18 selection tests pass. Workspace
+tests, dedicated ulib checks, warning-free Clippy across all targets/features,
+formatting and warning-free workspace documentation pass. Parser references,
+ulib explanations and the reviewed apply digest are aligned.
 
-FluffOS uses fewer accumulated errors and then greater rule weight, with a low
-weight for missing-object errors; its weights also select successful rules.
-Native should extend its existing failure-progress criterion while keeping
-first-success execution. Implementing it requires native regressions plus
-updates to parser efun, handler and master apply references, affected ulib
-explanations and the reviewed apply digest. Timing costs remain unmeasured.
+The earlier audit's unadopted silent-master experiment exposed the
+[body command wrapper][lima-body-cmd]'s unhandled native -3 result: it passes
+that integer to write, causing a caught error in the
+[message formatter][lima-user-messages]. This remains a separate Lima port
+follow-up; the active master policy is unchanged.
+
+FluffOS prefers fewer accumulated errors and then greater rule weight, with a
+low weight for missing-object errors; its weights also select successful rules.
+Native extends its existing failure-progress criterion while keeping first-
+success execution. These upstream claims are source review, not cross-driver
+execution. Ranking costs remain unmeasured; sorting occurs only after total
+failure. The 1,547-file library, preceding compilation/save matrices and latest
+full startup are unchanged.
 
 #### Lima cold startup and login
 
@@ -10851,7 +10850,7 @@ not every historical MudOS release. Consult its [source][fl-parser-source] and
 | Ordinal selection | Indirect ordinals are narrowed before the relation loop; direct ordinal handling occurs in that loop. Exact cross-driver outcomes are unverified. [Relations][fl-parser-relations]. | For pair rules, both slots pin ordinals to live noun matches satisfying their individual access requirements before permissions, without substituting another compatible object. Other rule shapes retain ordinals after initial filtering. |
 | Partial plural refusal | Relation processing retains errors alongside matches. [Relations][fl-parser-relations]. | A pair's late refusal can remove one plural member without rejecting the accepted members. Actions receive raw plain refusal strings for the selected partner; soft reasons are omitted. No master error hook runs after an eventual successful rule. |
 | Successful rule selection | Uses rule weights to select a successful match. [Selection][fl-parser-selection]. | Tries the longest matching verb phrase first, then shorter phrases if needed. Within each phrase, the first successful rule in registration order wins, even if a later rule is more specific. Earlier failures do not block later successes. |
-| Error selection | Prefers fewer accumulated errors, then greater rule weight; missing-object errors receive a low weight. [Selection][fl-parser-selection]. | Within a rule, retains the parse that resolved the most object slots, taking the earliest tie. If every phrase fails, offers diagnostics in longest-phrase/registration order with each failure's own verb query context until the master returns a string; if none does, combines silent codes by severity (`-3`, then `-2`, then `-1`). Error text can therefore differ; see the [Lima lighting audit](#lima-parser-rejection-diagnostics). |
+| Error selection | Prefers fewer accumulated errors, then greater rule weight; missing-object errors receive a low weight. [Selection][fl-parser-selection]. | Within a rule, retains the parse that resolved the most object slots, taking the earliest tie. If every phrase fails, offers diagnostics with the most resolved object slots first, preserving longest-phrase/registration trial order for ties and each failure's own verb query context until the master returns a string; if none does, combines silent codes by severity (`-3`, then `-2`, then `-1`). Error text can therefore differ; see the [Lima diagnostic port](#lima-parser-rejection-diagnostics). |
 | Verb matching | Tries progressively longer input prefixes after ASCII case folding and punctuation processing; rule weights determine selection, not a longest-verb guarantee. Registered names remain verbatim. [Search][fl-parser-verb-search], [registration][fl-parser-verb-register]. | Supports whole-word multiword verbs and synonyms. Normalizes Unicode whitespace in verb keys while preserving case and punctuation. Rejects empty keys. Match-dependent callbacks report the canonical full phrase through `query_verb()` and its raw span through `query_verb(1)`. Older lpc-rs callbacks assuming one-word parser verbs need review; actor/native/add_action behavior is unchanged. |
 | Synonyms | The implementation accepts `parse_add_synonym(new, old, rule)` despite its reference showing two arguments. | Also supports the optional rule filter. Native synonyms copy current owner registrations, normalize verb-key whitespace, and keep exact rule-text filters. Review chaining and removal semantics in [`parse_add_synonym`](efun/parse_add_synonym.md) and [`parse_remove`](efun/parse_remove.md). |
 | Caller-restricted parsing | Implemented `parse_my_rules(actor, line, flag=0)` uses only the caller's rules for the supplied actor. Zero flag returns the generic action arguments without action lookup; nonzero executes and returns 1. Both caller and actor require `parse_init`; nested parsing is rejected. [Entry point][fl-parser-owned], [owner filter][fl-parser-owner-filter]. | [`parse_my_rules`](efun/parse_my_rules.md) supplies both modes, using native selection, permission and failure policies above. Actor must be command-enabled; only rule registration requires `parse_init`. An optional fourth argument selects the callback command giver independently, while rules still belong to the object executing the efun; keep wrappers in that object or its inheritance tree. A missing action in execution mode leaves that parse unhandled. Nested parses are allowed up to the shared command depth of 16. Review initialization, failure handling and reentry assumptions. |

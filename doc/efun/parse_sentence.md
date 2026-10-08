@@ -37,8 +37,9 @@ wins even if a later rule is more specific. For example, a refusal from `"STR"`
 does not block a later `"at OBJ"` rule for `look at sword`.
 
 Only when every rule fails does the driver call `parser_error_message`,
-offering each reportable failure in phrase and registration order until the hook
-returns a string. A successful search never calls that hook. If the hook
+offering retained failures with the most resolved object slots first until the
+hook returns a string. Equal progress preserves phrase and registration trial
+order. A successful search never calls that hook. If the hook
 supplies no message, results combine by severity: `-3` beats `-2` beats `-1`.
 A later silent refusal cannot downgrade an earlier unresolved object.
 

@@ -345,12 +345,13 @@ async fn sentence_trial(
     report_rejections(ctx, actor, rejections).await
 }
 
-/// Return the first message in trial order, else combine silent failure codes.
+/// Report furthest failures first, preserving trial order for ties, else combine silent codes.
 async fn report_rejections(
     ctx: &TaskContext,
     actor: &Arc<Process>,
-    rejections: Vec<PendingRejection<'_>>,
+    mut rejections: Vec<PendingRejection<'_>>,
 ) -> Result<Sentence> {
+    rejections.sort_by_key(|pending| std::cmp::Reverse(pending.rejection.progress));
     let mut codes = Vec::with_capacity(rejections.len());
     for pending in rejections {
         let _verb = VerbFrame::enter(ctx, pending.verb.as_str(), pending.typed);

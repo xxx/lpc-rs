@@ -134,7 +134,7 @@ async fn the_first_success_wins_even_when_a_later_rule_is_more_specific() {
 }
 
 #[tokio::test]
-async fn the_first_message_wins_only_after_every_rule_has_failed() {
+async fn equally_advanced_failures_keep_trial_order_after_every_rule_has_failed() {
     check(
         r##"
             int reports;
@@ -489,4 +489,291 @@ async fn long_repeated_separators_retry_refused_splits_in_order() {
         vec![1.into(), 1.into(), 2.into(), 1.into(), s("")],
     )
     .await;
+}
+
+#[tokio::test]
+async fn source_refusals_outrank_broad_failures_for_every_entry_point() {
+    check(
+        r#"
+            int reports;
+            string parser_error_message(int kind, object ob, mixed arg, int flag) {
+                reports++;
+                if (kind != 6 || ob != find_object("/source") || arg != "unlit source" || flag)
+                    throw("wrong diagnostic");
+                return arg;
+            }
+            int count() { return reports; }
+        "#,
+        &[
+            (
+                "/item.c",
+                r#"string *parse_command_id_list() { return ({ "lamp" }); }
+                void move(object dest) { move_object(dest); }
+                int direct_verb_rule() { return 1; }"#,
+            ),
+            (
+                "/source.c",
+                r#"
+                int checks;
+                string *parse_command_id_list() { return ({ "torch" }); }
+                void move(object dest) { move_object(dest); }
+                string indirect_verb_rule() { checks++; return "unlit source"; }
+                int count() { return checks; }
+            "#,
+            ),
+            (
+                "/verb.c",
+                r#"
+                void create() {
+                    parse_init();
+                    parse_add_rule("light", "OBJ");
+                    parse_add_rule("light", "STR");
+                    parse_add_rule("light", "OBJ with OBJ");
+                }
+                string can_light_str(string text) { return "early can refusal"; }
+                mixed owned(object actor, int execute) {
+                    return parse_my_rules(actor, "light lamp with torch", execute);
+                }
+            "#,
+            ),
+        ],
+        r#"
+            "/item"->move(this_object()); "/source"->move(this_object());
+            mixed parsed = parse_sentence("light lamp with torch");
+            int dispatched = command("light lamp with torch");
+            mixed args = "/verb"->owned(this_object(), 0);
+            mixed executed = "/verb"->owned(this_object(), 1);
+            return ({ parsed, dispatched, args, executed, heard,
+                "/source"->count(), "/secure/master"->count() });
+        "#,
+        vec![
+            s("unlit source"),
+            1.into(),
+            s("unlit source"),
+            s("unlit source"),
+            s("unlit source"),
+            4.into(),
+            4.into(),
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn a_missing_second_noun_outranks_the_missing_whole_phrase() {
+    check(
+        r#"
+            string parser_error_message(int kind, object ob, mixed arg, int flag) {
+                if (kind != 7 || ob || arg != "torch" || flag) throw("wrong missing noun");
+                return arg;
+            }
+        "#,
+        &[
+            (
+                "/item.c",
+                r#"string *parse_command_id_list() { return ({ "lamp" }); }
+                void move(object dest) { move_object(dest); }"#,
+            ),
+            (
+                "/verb.c",
+                r#"
+                void create() {
+                    parse_init();
+                    parse_add_rule("light", "OBJ");
+                    parse_add_rule("light", "OBJ with OBJ");
+                }
+            "#,
+            ),
+        ],
+        r#"
+            "/item"->move(this_object());
+            mixed parsed = parse_sentence("light lamp with torch");
+            int dispatched = command("light lamp with torch");
+            return ({ parsed, dispatched, heard });
+        "#,
+        vec![s("torch"), 1.into(), s("torch")],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn equally_resolved_pairs_keep_registration_order() {
+    let nouns = r#"string *parse_command_id_list() { return ({ "lamp", "torch" }); }
+                void move(object dest) { move_object(dest); }"#;
+    check(
+        r#"
+            string parser_error_message(int kind, object ob, mixed arg, int flag) {
+                if (kind != 6 || ob != find_object("/first") || arg != "first")
+                    throw("wrong tied failure");
+                if ("/first"->count() != 1 || "/second"->count() != 1)
+                    throw("permissions rerun or still pending");
+                return arg;
+            }
+        "#,
+        &[
+            ("/item.c", nouns),
+            (
+                "/first.c",
+                r#"
+                int checks;
+                void create() { parse_init(); parse_add_rule("light", "OBJ with OBJ"); }
+                string direct_verb_rule() { checks++; return "first"; }
+                int count() { return checks; }
+            "#,
+            ),
+            (
+                "/second.c",
+                r#"
+                int checks;
+                void create() { parse_init(); parse_add_rule("light", "OBJ with OBJ"); }
+                string direct_verb_rule() { checks++; return "second"; }
+                int count() { return checks; }
+            "#,
+            ),
+        ],
+        r#"
+            "/item"->move(this_object());
+            return ({ parse_sentence("light lamp with torch") });
+        "#,
+        vec![s("first")],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn silent_ranked_reports_yield_to_less_advanced_failures() {
+    check(
+        r#"
+            string reports = "";
+            mixed parser_error_message(int kind, object ob, mixed arg, int flag) {
+                reports += "" + kind;
+                if (kind == 6) return nil;
+                return "missing:" + arg;
+            }
+            string seen() { return reports; }
+        "#,
+        &[
+            (
+                "/item.c",
+                r#"string *parse_command_id_list() { return ({ "lamp", "torch" }); }
+                void move(object dest) { move_object(dest); }"#,
+            ),
+            (
+                "/verb.c",
+                r#"
+                int checks;
+                void create() {
+                    parse_init(); parse_add_rule("light", "OBJ");
+                    parse_add_rule("light", "OBJ with OBJ");
+                }
+                string direct_verb_rule() { checks++; return "refused"; }
+                int count() { return checks; }
+            "#,
+            ),
+        ],
+        r#"
+            "/item"->move(this_object());
+            mixed parsed = parse_sentence("light lamp with torch");
+            int dispatched = command("light lamp with torch");
+            return ({ parsed, dispatched, heard, "/secure/master"->seen(), "/verb"->count() });
+        "#,
+        vec![
+            s("missing:lamp with torch"),
+            1.into(),
+            s("missing:lamp with torch"),
+            s("6767"),
+            2.into(),
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn silent_pair_refusals_skip_reporting_and_preserve_unresolved_status() {
+    check(
+        r#"
+            int reports;
+            mixed parser_error_message(int kind, object ob, mixed arg, int flag) {
+                if (kind != 7) throw("reported silent pair refusal");
+                reports++; return nil;
+            }
+            string command_not_found() { return "fallback"; }
+            int count() { return reports; }
+        "#,
+        &[
+            (
+                "/item.c",
+                r#"string *parse_command_id_list() { return ({ "lamp", "torch" }); }
+                void move(object dest) { move_object(dest); }"#,
+            ),
+            (
+                "/verb.c",
+                r#"
+                void create() {
+                    parse_init(); parse_add_rule("light", "OBJ");
+                    parse_add_rule("light", "OBJ with OBJ");
+                }
+                int direct_verb_rule() { return 0; }
+            "#,
+            ),
+        ],
+        r#"
+            "/item"->move(this_object());
+            mixed parsed = parse_sentence("light lamp with torch");
+            int dispatched = command("light lamp with torch");
+            return ({ parsed, dispatched, heard, "/secure/master"->count() });
+        "#,
+        vec![(-3).into(), 0.into(), s("fallback"), 2.into()],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn ranked_reports_restore_each_phrase_context_across_nested_parsing() {
+    check(
+        r#"
+            string seen = "";
+            mixed parser_error_message(int kind, object ob, mixed arg, int flag) {
+                if (this_player() != find_object("/giver") || previous_object() != find_object("/main")
+                    || origin() != "driver" || query_command() != "ignite  lamp with torch")
+                    throw("wrong callback context");
+                string verb = query_verb(), typed = query_verb(1);
+                if (parse_sentence("ping", 0, nil, nil, previous_object(), this_player()) != 1
+                    || query_verb() != verb || query_verb(1) != typed
+                    || query_command() != "ignite  lamp with torch") throw("lost outer context");
+                seen += typed + ":" + arg + ";";
+                if (verb == "ignite") return nil;
+                if (verb != "ignite lamp" || typed != "ignite  lamp") throw("wrong phrase");
+                return arg;
+            }
+            string reports() { return seen; }
+        "#,
+        &[
+            ("/giver.c", ""),
+            ("/item.c", r#"string *parse_command_id_list() { return ({ "lamp", "torch" }); }
+                void move(object dest) { move_object(dest); }"#),
+            ("/verb.c", r#"
+                int pings;
+                void create() {
+                    parse_init(); parse_add_rule("light lamp", "STR");
+                    parse_add_synonym("ignite lamp", "light lamp");
+                    parse_add_rule("light", "OBJ with OBJ");
+                    parse_add_synonym("ignite", "light");
+                    parse_add_rule("ping", "");
+                }
+                mixed can_verb_rule(string verb, string rule, mixed args...) { return rule == "STR" ? "long" : 1; }
+                string direct_verb_rule() { return "pair"; }
+                void do_ping() { pings++; }
+                int count() { return pings; }
+            "#),
+        ],
+        r#"
+            "/item"->move(this_object());
+            mixed parsed = parse_sentence("ignite  lamp with torch", 0, nil, nil,
+                this_object(), find_object("/giver"));
+            return ({ parsed, "/secure/master"->reports(), "/verb"->count(),
+                this_player() == this_object(), !query_verb(), !query_command() });
+        "#,
+        vec![s("long"), s("ignite:pair;ignite  lamp:long;"), 2.into(), 1.into(), 1.into(), 1.into()],
+    ).await;
 }

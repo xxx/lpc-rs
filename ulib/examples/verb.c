@@ -16,7 +16,8 @@
  * Longer matching verb phrases run first, with registration order within each phrase.
  * Refusals leave later rules and shorter phrases eligible; the first do wins
  * when executing, or the first accepted parse when returning arguments.
- * Error reporting waits until all phrases fail, and refusals do not undo effects.
+ * After all phrases fail, diagnostics prefer more resolved object slots and ties keep trial order.
+ * Refusals do not undo effects.
  * Parser efun callbacks retain the invoking LPC frames behind the actor's caller entry.
  * Parser callbacks use the selected command giver as this_player(), defaulting to the actor.
  * "hand over" below uses give's methods; query_verb() reports "hand over".

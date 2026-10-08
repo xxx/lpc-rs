@@ -65,9 +65,10 @@ Both modes use the same failure results as `parse_sentence`:
 | a string | the master's `parser_error_message` result |
 
 Only after every eligible rule fails does the driver offer retained diagnostics
-to [`parser_error_message`](../apply/master/parser_error_message.md), stopping at
-the first string. If none supplies text, `-3` takes precedence over `-2`, then
-`-1`. The efun never delivers an error message itself.
+to [`parser_error_message`](../apply/master/parser_error_message.md) with the most
+resolved object slots first, preserving phrase and registration trial order for
+ties, and stopping at the first string. If none supplies text, `-3` takes
+precedence over `-2`, then `-1`. The efun never delivers an error message itself.
 
 ### Scope, context and effects
 

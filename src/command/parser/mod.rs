@@ -54,6 +54,7 @@ pub(crate) enum RejectionCode {
 /// A failed rule's diagnostic, retained until every rule has failed.
 pub(crate) struct Rejection {
     pub(crate) code: RejectionCode,
+    pub(crate) progress: usize,
     args: Option<[LpcRef; 4]>,
 }
 
@@ -80,6 +81,7 @@ impl Rejection {
         });
         Self {
             code: failure.silent,
+            progress: failure.progress,
             args,
         }
     }

@@ -107,7 +107,7 @@ invoking that efun as its immediate caller.
 | `parse_command_numeral(string word)` | Positive count, negative ordinal, or `0` for unrecognised; absence recognises nothing. | `one`, `two`, `first`, `second`. |
 | `parse_command_pluralize(string *singulars)` | Corresponding plural at each array index, for an object whose plural hook supplies no array. Missing means no derived plurals. | Append `s`; deliberately incomplete English. |
 | `parse_command_users()` | Extra living candidates for `LIV`/`LVS` slots, beyond local scope. Missing adds none. | Named guests from `users()`. |
-| `parser_error_message(int kind, object ob, mixed arg, int flag)` | Called only after all matching parser phrases fail, longest phrase first and registration order within each, until it returns a string. Its query context identifies the failed phrase. Return failure text, or `0`/`nil` to try the next retained failure. Omission supplies no message; dispatch then uses its ordinary unhandled-command fallback. `kind` selects the failure and the meaning of `arg`; `ob` is populated only for a handler refusal. | Preserve refusal text, otherwise a generic message. |
+| `parser_error_message(int kind, object ob, mixed arg, int flag)` | Called only after all matching parser phrases fail, with the most resolved object slots first until it returns a string; ties keep longest phrase first and registration order within each. Its query context identifies the failed phrase. Return failure text, or `0`/`nil` to try the next retained failure. Omission supplies no message; dispatch then uses its ordinary unhandled-command fallback. `kind` selects the failure and the meaning of `arg`; `ob` is populated only for a handler refusal. | Preserve refusal text, otherwise a generic message. |
 
 Valid parser failure kinds are `2` non-living, `3` inaccessible, `4` ambiguous
 (`arg` is the candidate array), `5` ordinal out of range (`arg` is the count),
@@ -248,7 +248,8 @@ also invoke the parser explicitly. Longest matching verb phrases run first,
 with registration order within each phrase. If a phrase's rules fail, shorter
 matching phrases remain eligible. The first rule to reach `do_` wins, even if
 an earlier rule supplied a refusal string. `parser_error_message()` runs only
-when every phrase fails, reporting failures in the same trial order. Refusing a
+when every phrase fails, reporting failures with the most resolved object slots
+first and preserving trial order for ties. Refusing a
 rule does not undo its handler effects, and runtime exceptions propagate immediately.
 
 `parse_my_rules(actor, line)` uses only the calling object's registrations and

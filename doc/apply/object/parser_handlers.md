@@ -202,7 +202,9 @@ The longest matching verb phrase is tried first, with registration order within
 each phrase. Rejecting a rule leaves later rules and shorter phrases eligible.
 The first rule to reach `do_` wins, and no earlier failure is sent to
 `parser_error_message`. Only after every phrase fails are retained diagnostics
-offered to that hook, in the same trial order, until it returns a string. Permission handlers and
+offered to that hook with the most resolved object slots first, preserving
+trial order for ties, until it returns a string. A `can_` refusal has zero
+progress; pair permissions begin after both nouns resolve. Permission handlers and
 `do_` run in the current transaction: a refusal does not undo earlier writes
 or output. A runtime exception stops selection and propagates to the caller.
 

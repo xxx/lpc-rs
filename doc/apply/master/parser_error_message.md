@@ -10,10 +10,13 @@ Applied in the master only after every eligible rule for every matching parser
 verb phrase has failed. `parse_my_rules` considers only its caller's rules.
 A successful rule prevents this apply from being called for any
 earlier failures. After total failure, the driver offers one retained
-failure per rule, longest matched phrase first and registration order within
-each phrase, skipping failures with no diagnostic.
-Within a rule, the retained failure comes from the parse that resolved the
-most object slots, taking the earliest tie.
+failure per rule, starting with the most resolved object slots and skipping
+failures with no diagnostic. Equal progress preserves trial order: longest matched phrase
+first, then registration order within each phrase. Within a rule, the retained
+failure comes from the parse with the most progress, taking the earliest tie.
+A `can_` refusal has zero progress. For pair checking, both noun phrases count
+as resolved before permissions; a refusal there has progress two, while a
+missing second noun has progress one.
 
 The first string result ends reporting: `parse_sentence` or `parse_my_rules`
 returns it, or ordinary command dispatch delivers it to the actor. Any non-string
