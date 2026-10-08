@@ -2725,6 +2725,44 @@ regressions or timeouts. This accounts for thirty-eight adopted player additions
 since the historical 534/1,180 full-library survey; full startup was not repeated.
 Next: port passwd's modal flow and callback binding while retaining its policy.
 
+#### Lima passwd-command port
+
+Reviewed **8 October 2026** against pinned [passwd][lima-player-passwd],
+[user password methods][lima-login], [account saving][lima-entry-user],
+[modal forwarding][lima-input-forwarding] and [input dispatch][lima-inputsys].
+Evidence uses local pinned Git blobs and lpc-rs execution; upstream execution
+was not performed. Lima retains distinct nil, preserved call-out players,
+selected limb health/simple advancement, USE_MASS and 4,000 ms tasks.
+
+Add the protected CMD adapter for the private zero-argument main. Supply bare
+`confirm_current_password` and `get_new_password` callbacks, and bind the proposed
+value with `&confirm_new_password(s)`. The unchanged adapter-only control prompts
+once, then pops without entering the next prompt because its closure returns a
+function. Only cmds/player/passwd.c changes. Minimum length, current-password
+checking, confirmation matching, guest-name condition, hashing, saving, login,
+modal dispatch and native APIs remain unchanged.
+
+Seven tests pass: six use the adopted command and one retains that control.
+Thirty-two ordinary inputs include twenty-nine adopted-case inputs. Successful
+confirmation at the five-character minimum updates live and saved account data;
+the old password stops matching. Incorrect current input, a short new value and
+mismatched confirmation preserve the old password and return to shell. The
+existing guest-name condition declines guest1 without adding a prompt. Two
+players confirm different values independently on the shared command, yielding
+three saved password changes in total. Password callbacks request no-echo input,
+then restore ordinary input; all cases resume shell commands without caught
+input errors. Network echo negotiation and disconnects were not checked here.
+
+The guest fixture selects the preloaded Void as its starting room after the
+initial stock-room cold compilation exceeded the unchanged task limit. This
+affects only that temporary fixture; production configuration, LPC helpers and
+all assertions remain unchanged. Workspace all-target/all-feature Clippy and
+formatting pass. Fresh compilation is **60/67 player commands** and **5/5 complete
+supporting targets**, with no regressions or timeouts. This accounts for
+thirty-nine adopted player additions since the historical 534/1,180 survey;
+full startup and saved-account login were not repeated. Next: audit finger's
+local information display and command resend.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12274,3 +12312,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-inactive]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/inactive.c
 [lima-player-wizcall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/wizcall.c
 [lima-wizcall-tell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/tell.c
+[lima-player-passwd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/passwd.c
