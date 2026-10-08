@@ -2491,6 +2491,41 @@ save restoration. Workspace all-target/all-feature Clippy and formatting pass.
 Active and native sources and frozen predecessors retain their hashes.
 Next: audit party save and restore.
 
+#### Lima party-save and restore audit
+
+Reviewed **7 October 2026** against pinned [party daemon][lima-party-daemon],
+[class][lima-party-class], [menu][lima-party-menu] and
+[daemon-data module][lima-daemon-data]. Exact pinned source review is distinct
+from local port execution; upstream execution and cross-driver save import
+remain unchecked. Lima retains distinct nil, preserved call-out players and
+4,000 ms tasks.
+
+Three tests pass with five restorations in fresh VMs and thirteen ordinary
+inputs, requiring no further mudlib or native patch. With PARTIES_SAVE enabled,
+the daemon writes /data/daemons/party.o through its inherited save_me and restores
+through its own create calling inherited restore_me. Its routing flag and access
+module's nosave globals are absent from the native file. Each fresh runtime
+restores without rewriting that file.
+
+A new party preserves its nil history/title/description/theme separately from
+numeric zero defaults. Populated class records retain passwords, member ranks,
+member and total kills, ten-entry ordered history, selected theme, active-member
+limit and a title containing quotes, a backslash, Unicode and a newline. A
+second party remains unchanged. Restored passwords work and replaced passwords
+fail. Menus show an offline saved leader, then both members online after the
+second user enters. Further rank/password/history changes save and survive a
+second restoration. Deleted parties remain absent; an empty saved registry
+restores empty and accepts a new party.
+
+The real master, simuls, persistence/access modules, daemon, users, bodies,
+shells and menus run. Fixture helpers invoke public party mutations and observe
+class fields; the earlier standard-object caller supplies controlled awards.
+Fresh fixture bodies are prepared on each boot, so these checks establish party
+registry restoration rather than body XP persistence or a complete driver
+restart. No checked input catches an error. Workspace all-target/all-feature
+Clippy and formatting pass. Active/native sources and frozen predecessors retain
+their hashes. Next: audit combat death's party/solo XP and karma dispatch.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
