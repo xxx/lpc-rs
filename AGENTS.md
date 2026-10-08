@@ -155,7 +155,13 @@ the comparison instead of duplicating migration advice in individual references.
   application, and `&name()` when explaining that syntax itself.
 - **No phase/step tokens** ("D1", "C5", "step 2", "candidate") in filenames, code,
   comments, or commit messages. Handoff/plan docs under `local/` may carry them;
-  `local/` is gitignored by design and holds personal notes, handoffs, and scratch.
+  `local/` is gitignored by design and holds personal notes and handoffs.
+  Put disposable scripts and diagnostic artifacts in `/tmp/`, and Cargo build
+  output in the workspace's shared `target/`.
+- **Mudlib ports use dedicated Git checkouts.** Keep source changes there and
+  record the active checkout, branch and configuration in the port handoff.
+  Use `/tmp/` for disposable test harnesses and logs; keep compatibility notes
+  under `local/` rather than creating another source copy for each change.
 - **Comments carry one fact the reader cannot get from the code, in one sentence.**
   Exceptions: hazard comments (name the wrong edit), external facts, and public API
   docs. Multi-sentence argument comments get cut to the fact.

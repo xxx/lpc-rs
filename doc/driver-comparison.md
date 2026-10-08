@@ -2984,6 +2984,55 @@ repeated. Four player commands remain: mudlist, random2, su and suicide;
 random2 remains deferred and suicide disabled upstream. Next: audit mudlist
 and its local intermud-list display.
 
+#### Lima mudlist display port
+
+Reviewed **8 October 2026** against pinned [mudlist command][lima-player-mudlist],
+[command rules][lima-player-command-rules], [IMUD cache module][lima-imud-cache],
+[player shell][lima-pshell], [wizard shell][lima-wizard-shell],
+[glob translator][lima-glob-module], [regex helper][lima-regex-module],
+[frame module][lima-frame] and [widgets][lima-widgets]. The port adapts
+one command file: protected CMD dispatch calling main(arg, flags), functional
+implode replaced by [reduce](efun/reduce.md), scalar regexp replaced by a
+sizeof([regexp](efun/regexp.md)) check on a one-element array, five absent
+colour callbacks changed to nil, and menu-entry array/mapping arguments changed
+to nil. The explicit integer-zero fold initializer remains. The adaptation is
+adopted in the dedicated Lima port checkout; native APIs, shells, command
+rules, cache and frame modules are unchanged.
+
+Thirteen cases pass against the adopted source across twenty-nine ordinary
+inputs, plus one direct public menu entry. Empty/up-only/all-status displays, case-insensitive glob prefixes,
+missing names, regular/wizard columns, literal-name sorting, Unicode arrows,
+repeated listing and cache isolation are checked. Every case compares cached
+rows before/after display and a subsequent shell command. The real player and
+wizard shells execute; in-memory connections capture output. A fixture daemon
+host inherits the unchanged IMUD cache module and feeds normal local rows through
+its receive method. The full daemon compiles but is not started; live intermud
+and router startup are outside this display audit. Evidence is source review
+and lpc-rs execution, with no upstream execution.
+
+Controls retain a source-defined shell limitation: the player shell passes raw
+strings, and mudlist explicitly discards every string argument and its flags.
+Thus -a and patterns are ignored there. The wizard shell supplies parsed
+array/mapping arguments through Cmd_rules, so those features work. Matching
+remains an anchored glob prefix rather than the documented substring search;
+a leading caret is escaped by the default translator. Counts precede down-mud
+filtering, leaving an empty table labelled one match for a down-only name.
+Sorting remains case-sensitive. The shipped rule only permits -a, so the
+address-search branch compiles but is not executed; the wizard shell rejects
+-s. These shell/documentation/counting issues remain separate Lima notes.
+
+Fresh compilation passes **64/67 player commands** and **12/12 complete
+supporting targets**, with mudlist the only new player-command success, no
+regression and no timeout. This accounts for forty-three adopted additions.
+Workspace all-target/all-feature locked Clippy and formatting pass. Cargo uses
+two jobs and serial tests; CLI checks use at most two processes without overlap.
+
+The dedicated Git checkout preserves all 1,547 files from the preceding adapted
+source tree, with only mudlist changed by this adoption. Temporary test harnesses
+and logs remain outside the working source. Full inventory and startup were not
+repeated. Next: audit su; experimental random2 remains deferred and suicide
+remains disabled upstream.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12543,3 +12592,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-missions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/missions.c
 [lima-mission-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/mission_d.c
 [lima-mission-info]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/mission_info.c
+[lima-player-mudlist]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mudlist.c
+[lima-player-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/Cmd_rules
+[lima-imud-cache]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/mudlist.c
+[lima-wizard-shell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/wish.c
+[lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
+[lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
