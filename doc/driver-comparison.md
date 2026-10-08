@@ -2290,47 +2290,46 @@ and startup remain frozen; intermud traffic, moderation, soul messages,
 redirection and save restoration are not retested. This is the thirtieth
 additional passing player entry after the retained standalone survey.
 
-#### Lima player party-entry audit
+#### Lima player party-entry port
 
 Reviewed **7 October 2026** against pinned [party command][lima-player-party],
 [party menu][lima-party-menu], [daemon][lima-party-daemon] and
-[class][lima-party-class]. Exact local Git contents support source review;
-upstream execution is not claimed. Lima retains distinct nil, preserved call-out
-players and the 4,000 ms budget. Earlier library adaptations remain the baseline.
+[class][lima-party-class]. Exact pinned Git contents and source comparisons
+carry forward from the audit; local port execution is not upstream execution.
+Lima retains distinct nil, preserved call-out players and the 4,000 ms budget.
 
-The command needs the established protected dispatch_main adapter. The menu has
-three compile blockers: scalar regexp, an integer invitation declaration that
-returns a party name, and zero passed to a string parameter. The diagnostic
-proposal uses [regmatch](efun/regmatch.md) for the anchored name test, declares
-is_invited as string with nil for absence, and passes nil to accept_invite,
-guarding its [to_int](efun/to_int.md) conversion. The daemon and class already
-compile and remain unchanged; the daemon's mapping query_party declaration is
-inconsistent with its stored class values but does not block this checked entry.
+The adopted command adds the established protected variadic dispatch_main
+adapter delegating to main. The menu uses [regmatch](efun/regmatch.md) for its
+anchored scalar name check, declares is_invited as string with nil for absence,
+and passes nil to accept_invite while guarding [to_int](efun/to_int.md) against
+that absent argument. Thirty named/bound callback literals use the existing
+[function-value syntax](lpc/function_type.md): bare names without bound arguments
+and &name(args) with them. Actual expression closures, integer counters and menu
+policy remain unchanged. No native API change is required.
 
-Compilation alone leaves modal callbacks inert. Thirty named/bound FluffOS
-literals need the established [function-value adaptation](lpc/function_type.md):
-bare names without bound arguments and &name(args) with bound arguments.
-The type-only runtime proposal passes the no-invite case but fails decline,
-existing-menu quit and advancement to the name prompt. Changing only those
-callback literals makes all four unchanged tests pass across fifteen ordinary
-inputs. Actual expression closures remain unchanged.
+Both production files compile from the adopted overlay. Four runtime tests pass
+together across fifteen ordinary inputs through the real user, human body,
+player shell, guarded dispatcher, modal input, menu framework and party daemon.
+They read the adopted files directly, with every audit assertion and LPC fixture
+unchanged. Entry/decline removes the menu clone and restores the shell; blank and
+invalid names are rejected, a valid name is trimmed, confirmation retries, and
+creation cancellation makes no party. No-invite acceptance retains nil membership
+and shell input. An existing party seeded through register_party opens its real
+menu, and quit restores the shell without changing membership. Subsequent chan
+commands confirm normal dispatch; no checked input catches an error.
 
-The tests use the real user, human body, player shell, dispatcher, modal input,
-menu framework and party daemon. They retain entry/decline with clone removal,
-blank and invalid names, trimming and a valid anchored name, confirmation retry,
-creation cancellation, no-invite acceptance, and opening/quitting a fixture-seeded
-existing party without changing membership. Subsequent chan inputs verify shell
-handoff; no checked input catches an error. Fixture helpers observe input state
-and seed one party through the production registration method.
+Only cmds/player/party.c and obj/mudlib/party_menu.c change in the 1,547-file
+library, byte-identical to the audited proposal and patch. Fixture helpers stay
+excluded. Native code, master, daemon, class and predecessor evidence retain
+their hashes. Workspace all-target/all-feature Clippy and formatting pass.
+This is the thirty-first additional passing player entry after the retained
+standalone survey; full matrices and startup remain frozen.
 
-The final command/menu proposal compiles; workspace all-target/all-feature Clippy
-and formatting pass. The initial Rust build fixes only ambiguous expected-value
-types; its failure and the type-only runtime failures remain recorded locally.
-The two-file proposal is not adopted. The active 1,547-file library, native code,
-master, daemon, class and prior matrices remain unchanged. Password entry, actual
-invites, creation, party administration, XP, persistence restoration and full
-startup are not established here. Recommended next: adopt the tested command and
-menu adaptations, then audit the party-creation flow separately.
+The daemon's mapping query_party declaration still disagrees with its class
+values; selected existing-member entry works without changing it. All thirty
+callback replacements compile, but only the listed entry paths were exercised.
+Password entry, actual invites, interactive creation, administration, XP and
+persistence restoration remain later work. Next: audit interactive party creation.
 
 #### Lima cold startup and login
 
