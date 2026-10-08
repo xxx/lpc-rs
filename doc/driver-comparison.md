@@ -2170,8 +2170,8 @@ ulib explanations and the reviewed apply digest are aligned.
 The earlier audit's unadopted silent-master experiment exposed the
 [body command wrapper][lima-body-cmd]'s unhandled native -3 result: it passes
 that integer to write, causing a caught error in the
-[message formatter][lima-user-messages]. This remains a separate Lima port
-follow-up; the active master policy is unchanged.
+[message formatter][lima-user-messages]. See the [wrapper audit](#lima-command-wrapper-parser-statuses); the active
+master policy is unchanged.
 
 FluffOS prefers fewer accumulated errors and then greater rule weight, with a
 low weight for missing-object errors; its weights also select successful rules.
@@ -2180,6 +2180,51 @@ success execution. These upstream claims are source review, not cross-driver
 execution. Ranking costs remain unmeasured; sorting occurs only after total
 failure. The 1,547-file library, preceding compilation/save matrices and latest
 full startup are unchanged.
+
+#### Lima command-wrapper parser statuses
+
+Reviewed **7 October 2026** against the pinned [body command wrapper][lima-body-cmd],
+[master messages][lima-master], [user formatter][lima-user-messages] and
+FluffOS [parser implementation][fl-parser-source], with PACKAGE_PARSER enabled
+in the reviewed upstream configuration. These upstream comparisons are source
+review, not cross-driver execution. Lima keeps distinct nil, preserved call-out
+players and the unchanged 4,000 ms budget.
+
+The wrapper handles native 0, 1, -1, -2 and message strings, but omits -3.
+Native [parse_sentence](efun/parse_sentence.md) uses -3 for an unresolved object
+when the master supplies no message. The reviewed FluffOS built-in fallback is
+`-found_level`, whose states are 0, 1 and 2; it also forwards a supplied master's
+result. Native's additional unresolved-object status therefore needs a Lima
+port adaptation. The selected master returns strings for the checked failure
+kinds, so its normal messages avoid this path.
+
+Active-master controls and a fixture-only silent-master characterization pass:
+12 ordinary player inputs, two direct debug calls, one forced command and four
+scheduled native callbacks. Known verbs with mismatched grammar use nonsense
+text, refusals use the existing permission text, successful actions execute,
+unknown verbs retain shell/exit fallback, and master messages remain strings.
+A normal debug call returns the message without delivering it. Under the silent
+policy, primary -3 reaches the unexpected-result branch and passes the integer
+to write; explode in the user formatter returns nil, and map raises a caught
+error. Two ordinary-input cases, one debug call and one forced command explicitly
+expect that error. Later input works and the forced-command path restores its
+player. A secondary -3 from the exit attempt after primary 0 instead falls
+through to the shell normally, without formatting the integer.
+
+The initial fixture duplicated an entry helper outside its private function's
+module and failed before input. After removing it, the silent case passed; the
+control case needed its catch-success expectation corrected from nil to numeric
+0. The filtered control rerun passes with byte-identical LPC fixtures and silent
+case source. Workspace Clippy across all targets/features and formatting pass.
+Native sources, the 1,547-file active library, master policy and preceding
+compilation/save/startup evidence are unchanged. The preceding native selection
+and workspace test results remain applicable to the unchanged driver.
+
+Recommended adaptation: add -3 beside -1 in the body wrapper's existing
+nonsense-message fallback, returning handled. This uses Lima's configured
+messages and leaves native statuses, master policy, successful actions, other
+fallbacks, debug behavior and the formatter contract alone. The one-line proposal
+is retained locally; it is not adopted or executed by this audit.
 
 #### Lima cold startup and login
 
