@@ -2390,47 +2390,37 @@ changes in the 1,547-file library. Native files, master, daemon, class and froze
 predecessor evidence retain their hashes. Workspace all-target/all-feature Clippy
 and formatting pass. The retained survey stays 534/1,180 with thirty-one adopted
 additional player entries. Full matrices, save restoration and startup remain
-frozen. The following audit covers invitations; other administration and XP
+frozen. The following port covers invitations; other administration and XP
 remain later work.
 
-#### Lima party-invitation audit
+#### Lima party-invitation port
 
 Reviewed **7 October 2026** against pinned [party command][lima-player-party],
 [party menu][lima-party-menu], [menu framework][lima-menu],
-[daemon][lima-party-daemon] and [class][lima-party-class]. Exact pinned Git
-contents support source review; local port execution does not establish upstream
-execution. Lima retains distinct nil, preserved call-out players and 4,000 ms tasks.
+[daemon][lima-party-daemon] and [class][lima-party-class]. Pinned source review
+and the failed baseline carry forward from the invitation audit; local execution
+does not establish upstream execution. Lima uses distinct nil, preserved call-out
+players and the 4,000 ms task budget.
 
-The real menu calls its invite action without an argument. invite_member applies
-lower_case to that absent value before reaching its missing-argument branch;
-all four initial tests catch lower_case(nil) at the invite action. A one-line
-diagnostic guard checks the value before conversion, letting the existing
-Invite whom? prompt run. Empty-name and q cancellation, menu policy, callback
-syntax and native string checking retain their existing definitions.
+The adopted invite action checks its absent argument before lower_case, allowing
+the existing Invite whom? prompt to run. This one-line guard matches the audited
+proposal byte for byte and retains the existing cancellation and menu policy.
 
-Four tests pass across thirty-seven ordinary inputs with two or three players
-in one runtime. A sent invite reaches its guest, acceptance adds the guest and
-consumes the invite, and the owner receives its join notification. Quitting the
-inviter's menu expires the invite; subsequent acceptance reports none and keeps
-membership absent. Two invitations list in party-name order, selection joins
-the chosen party and clears both invitations, and both owners receive the
-appropriate notification. Canceling or choosing an invalid index retains both
-invitations and leaves membership absent; closing both inviter menus clears them.
-Subsequent chan commands confirm shell handoff, with no caught input error.
+Four runtime tests pass across thirty-seven ordinary inputs directly from the
+adopted overlay, with every audit assertion and LPC fixture retained. Two or three
+real users, bodies and shells share one runtime and exercise modal input, menus
+and the party daemon. Tests cover delivery, acceptance and owner notification;
+expiry on inviter-menu quit; multiple-invite name ordering, selection and both
+owner notifications; cancellation and invalid selection. Pending-invite and
+membership checks pass, and subsequent chan commands confirm shell handoff.
+No checked input catches an error.
 
-The tests use real users, human bodies, player shells, guarded dispatchers,
-modal input, menus and party daemon. Fixtures seed parties through register_party
-and append one observation of pending invites; all invitations use menu input.
-The only test correction normalizes whitespace in a message expectation to
-accept the production terminal's line wrapping. The initial nil failures and
-the intermediate wrapping failure remain frozen; LPC fixtures and the proposed
-source are identical between the intermediate and accepted runs.
-
-The one-file proposal compiles; workspace all-target/all-feature Clippy and
-formatting pass. It is not adopted. Active library, native sources, master,
-daemon, class and predecessor hashes remain unchanged. Full matrices, startup,
-save restoration, other party administration and XP remain later work.
-Next: adopt the tested guard, then audit party administration.
+Production menu compilation, workspace all-target/all-feature Clippy and
+formatting pass. Only obj/mudlib/party_menu.c changes in the 1,547-file library;
+native sources and frozen predecessors retain their hashes. The retained survey
+stays 534/1,180 with thirty-one adopted additional player entries. Full matrices,
+startup, save restoration, other party administration and XP remain later work.
+Next: audit party administration.
 
 #### Lima cold startup and login
 
