@@ -2566,6 +2566,51 @@ turret attribution and complete attack-loop execution remain outside these
 checks. The retained survey stays 534/1,180 with thirty-one adopted player
 additions. Next: refresh focused player-command coverage on the current overlay.
 
+#### Lima player-command coverage refresh
+
+Reviewed **7 October 2026** against the pinned
+[player command directory][lima-player-command-directory] and
+[CMD base][lima-command-base]. The current 1,547-file overlay retains distinct
+nil, preserved call-out players, USE_MASS, selected limb health/simple advancement
+and 4,000 ms tasks. Source review uses the local pinned Git blobs; execution is
+on lpc-rs, without upstream execution.
+
+**52 of 67 player commands compile** on the current overlay. The earlier full
+survey compiled 21 of these 67; all thirty-one subsequent player-command
+additions still compile, with no compile regressions in this directory. Their
+command bytes match twenty frozen migration receipts. Those runtime results
+remain historical evidence; this refresh does not repeat their scenarios or
+establish every command's current runtime behavior. The full-library 534/1,180
+count remains historical, rather than a new full survey.
+
+All fifteen current failures first report missing `dispatch_main` in the adapted
+CMD base. Temporary adapter-only controls compile twelve; three expose further
+port differences. These controls are retained as diagnostics and are not adopted.
+
+| Remaining commands | Adapter-only compilation |
+|---|---|
+| `bug`, `feedback`, `idea`, `question`, `typo` | All five compile; submission/editor interaction remains unchecked |
+| `finger`, `groups`, `inactive`, `missions`, `passwd`, `suicide`, `wizcall` | All seven compile; downstream behavior remains unchecked, and Lima disables suicide |
+| `su` | Two integer-zero assignments to a string require distinct-nil adaptation |
+| `mudlist` | Functional `implode`, scalar `regexp`, absent frame callbacks and menu-entry arguments need native API/type adaptations |
+| `random2` | Four strict type errors remain after the adapter; retain the earlier experimental-generator deferral |
+
+Next, port the five reporting commands together:
+[bug][lima-player-bug], [feedback][lima-player-feedback],
+[idea][lima-player-idea], [question][lima-player-question] and
+[typo][lima-player-typo]. Their sources are identical to the pinned originals.
+The shared [reporter][lima-reporter-daemon], [text editor][lima-text-editor], news
+daemon, modal/access modules, player menu, command dispatcher and shell all
+compile: eight dependency checks pass. The selected
+[configuration][lima-ui-config] posts reports to news groups. Add the established
+protected adapters, then exercise ordinary shell input, one-line posting,
+multiline editor completion/abort and return to shell. Compilation alone does
+not establish those interactions.
+
+The inventory checks use at most two CLI processes and preserve the active
+library/native hashes. This unit changes notes only; full startup and the native
+test suite were not repeated.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12104,3 +12149,11 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-party]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/party.c
 [lima-party-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/party_menu.c
 [lima-party-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/classes/party.c
+
+[lima-player-command-directory]: https://github.com/limalib/lima/tree/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player
+[lima-player-bug]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/bug.c
+[lima-player-feedback]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/feedback.c
+[lima-player-idea]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/idea.c
+[lima-player-question]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/question.c
+[lima-player-typo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/typo.c
+[lima-reporter-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/reporter_d.c
