@@ -2691,6 +2691,40 @@ This accounts for thirty-seven adopted player additions since the historical
 formatting, disconnect while inactive and shell escapes during inactivity were
 not checked here. Next: port wizcall's usage and wizard-notification paths.
 
+#### Lima wizcall-command port
+
+Reviewed **8 October 2026** against pinned [wizcall][lima-player-wizcall],
+[wizard selection][lima-speaker-context], [wizard membership][lima-security],
+[simul tell][lima-wizcall-tell] and [user messages][lima-user-messages]. Source
+evidence uses local pinned Git blobs; execution is on lpc-rs. Lima retains
+distinct nil, preserved call-out players, selected limb health/simple advancement,
+USE_MASS and 4,000 ms tasks.
+
+Add the protected CMD dispatch adapter calling the private string handler.
+Only cmds/player/wizcall.c changes; its existing handler, wizard selection,
+private-message delivery and no-redirection policy remain unchanged. The prior
+overlay already uses `filter(users(), wizardp)` for the upstream filter_array
+call. No native API changes are required.
+
+Four tests pass across twelve ordinary inputs, including seven wizcall inputs,
+four successful messages and seven wizard deliveries. Missing and whitespace-only
+arguments prompt without delivery. When no wizard is online, the command gives
+the existing no-listener response. An ordinary sender notifies each wizard once
+and receives one acknowledgment; changing fixture wizard membership changes the next
+recipient list. Literal `>` text survives as message text. Two wizard senders
+each receive one broadcast without an extra acknowledgment, use the correct
+body name and exclude ordinary bystanders. Subsequent shell input succeeds,
+and no checked input catches an error.
+
+Real users, bodies, player shells, simuls and command discovery run. Fixture
+wizard roles are assigned after player-shell entry; complete wizard-shell login
+and parsing remain unchecked here. Helpers remain outside production. Workspace
+all-target/all-feature Clippy and formatting pass. Fresh compilation is
+**59/67 player commands** and **5/5 complete supporting targets**, with no
+regressions or timeouts. This accounts for thirty-eight adopted player additions
+since the historical 534/1,180 full-library survey; full startup was not repeated.
+Next: port passwd's modal flow and callback binding while retaining its policy.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12238,3 +12272,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-typo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/typo.c
 [lima-reporter-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/reporter_d.c
 [lima-player-inactive]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/inactive.c
+[lima-player-wizcall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/wizcall.c
+[lima-wizcall-tell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/tell.c
