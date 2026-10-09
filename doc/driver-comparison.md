@@ -3123,6 +3123,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard file-operation audit
+
+Reviewed **8 October 2026** against pinned [cp][lima-copy-command],
+[mv][lima-move-command] and [command rules][lima-trans-command-rules]. The
+unadopted two-file proposal adds protected dispatch_main adapters calling
+private main(arg, flags). The existing file algorithms and flag values remain;
+dispatch-only controls verify both absent and empty-string force flags work
+in the helpers' truth tests. No native API or flag conversion is needed.
+
+All **ten scenarios pass across 61 inputs** through committed InputTo callbacks
+with the user as command giver. Assertions check line mode, echo-enabled
+registration, rearming and shell/body/directory state. Cases cover baseline
+discovery, flag controls, relative/absolute paths, Unicode/blank/empty/large/NUL
+text, source retention/removal, overwrite refusal/force, directory/glob/multiple
+sources, argument refusals, same-file behavior, option termination, ignored
+stdin and outgoing status pipelines/redirection. Destination contents and source
+existence are checked on disk after each committed operation.
+
+The existing commands read/write text; mv then unlinks rather than using a
+filesystem rename. Invalid UTF-8 raises the two expected caught read_file errors,
+leaving sources intact and destinations absent. Missing-parent destinations
+are rejected during argument expansion. The -r option is parsed but recursion
+is absent; directories fail file expansion. With -f, cp accepts its own path
+while mv refuses it. These behaviors are recorded separately and left unchanged;
+upstream execution/equivalence is unchecked.
+
+All **12 complete focused targets compile across 16 checks**, including two
+baseline refusals and two dispatch controls. Workspace locked all-target/
+all-feature Clippy and workspace/harness formatting pass. All 1,547 library
+files, README, configuration, CLI and native implementation are unchanged.
+Distinct nil, preserved call-out players and 4,000 ms tasks remain. Existing
+9/49 transitional and broader inventory/startup evidence retains its preceding
+scope; no new full boot, service or connection-loop run is claimed.
+
+Next: adopt the two cp/mv dispatch adapters.
+
 #### Lima wizard more port
 
 Adopted **8 October 2026** in the dedicated Lima checkout using the audited
@@ -12933,6 +12969,8 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-news-user-state]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c
 [lima-news-number-sets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_set.c
+[lima-copy-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cp.c
+[lima-move-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/mv.c
 [lima-more-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/more.c
 [lima-pager]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/more_ob.c
 [lima-text-editor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/edit_ob.c
