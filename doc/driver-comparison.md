@@ -3123,6 +3123,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard command-path port
+
+Adopted **9 October 2026** in dedicated Lima after committing the
+[command-path audit](#lima-wizard-command-path-audit) as native **3cad13a8**.
+The exact audited three-file patch adds protected CMD dispatch, replaces
+callback-based implode with native [reduce](efun/reduce.md), and preserves
+integer zero for empty printpath. The callbacks, seeded formatting, directory
+rules, shell lookup and persistence remain. Only addpath.c, rmpath.c,
+printpath.c and README are pending in dedicated Lima; native has comparison
+notes pending.
+
+All **ten audited scenarios pass across 55 registered inputs** against the
+adopted source. Every assertion, command, datum and LPC helper is retained.
+Eight working cases load the dedicated commands directly, while baseline and
+empty-fold controls retain their frozen sources. Every output, error, cached/
+saved-path and shell/body/directory/input-stack observation matches the audit,
+including both expected errors and recovery. Lookup order, real shell reload,
+path expansion, exact reports, pipes and redirection pass. Existing required
+arguments, empty-rmpath formatting and ignored arguments/stdin remain separately
+recorded in the audit.
+
+Fresh checks compile **23/49 transitional commands** and all **29 supporting
+targets** across **66 distinct checks**, adding only addpath, rmpath and printpath
+without regressions. Locked workspace all-target/all-feature Clippy and formatting
+pass. Temporary test entries are removed. The other 1,544 library files,
+configuration, native implementation, CLI and original Lima remain unchanged.
+Distinct nil, preserved players and 4,000 ms tasks remain; preceding broader
+evidence retains its scope. Disposables stay in /tmp and handoff notes under local.
+
+Next: commit the command-path port and notes, then audit trans/cmds/xargs.c.
+
 #### Lima wizard command-path audit
 
 Reviewed **9 October 2026** against pinned [addpath][lima-addpath-command],
@@ -3193,6 +3224,9 @@ test entries are removed; disposables stay in /tmp and handoff notes under local
 
 Next: commit this audit, then adopt and verify the three-command dispatch/reduce
 adaptation with printpath's explicit empty result.
+
+Follow-up: this audit is committed as native **3cad13a8**; its exact proposal is
+[adopted and verified](#lima-wizard-command-path-port) in dedicated Lima.
 
 #### Lima wizard du port
 
