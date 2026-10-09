@@ -3123,6 +3123,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard listing audit
+
+Reviewed **8 October 2026** against pinned [ls][lima-ls-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[stdio][lima-command-stdio], [wizard shell][lima-wizard-shell],
+[globbing][lima-glob-module], [path simuls][lima-simul-path],
+[colour module][lima-message-colours] and [mode command][lima-player-mode].
+The proposal changes only trans/cmds/ls.c: protected variadic dispatch_main
+calling private main(arg, flags), nil for external_ls's absent string result,
+and !!terminal_mode() for formatter selection. Baseline compilation fails at
+missing dispatch; dispatch alone exposes the typed return error. Both the
+typed-nil and complete proposals compile.
+
+All **eight cases pass together across 29 shell inputs and two external calls**.
+The typed-only control reproduces directory/loaded markers despite -p after
+actual mode plain unsets the mode variable: nil differs from integer zero.
+The truth test restores suppression and preserves the ANSI path. Other checks
+cover current/relative/absolute directories, hidden entries, combined flags,
+byte size/date/type/loaded markers, globs, grouped paths, ordinary refusals,
+pipeline lines and output redirection. Listing leaves shell/body state unchanged
+and never loads the cold source fixture. external_ls returns text or typed nil.
+
+The real user, shell, CMD/stdio, rule/path/glob/colour and filesystem code runs.
+An instrumented fixture consumer records pipe input; cat/grep are not exercised.
+Connections are in-memory, with a no-transport fixture IMUD daemon. Evidence is
+source review and lpc-rs execution, without a new full boot, service flow,
+connection-loop or upstream run. Existing KB arithmetic, truthiness of a stored
+plain string, metadata records and native APIs remain unchanged. Distinct nil,
+preserved call-out players and 4,000 ms tasks remain.
+
+All **nine focused complete targets compile**; workspace locked all-target/
+all-feature Clippy and formatting pass. The dedicated checkout is clean,
+and no proposal is adopted; active **15/81 wizard**, **3/49 transitional** and
+**65/67 player** counts retain their preceding scope. The complete inventory is
+not repeated. Next: adopt ls, then audit cat's file and pipeline-input routes.
+
 #### Lima wizard directory navigation port
 
 Adopted **8 October 2026** in the dedicated Lima checkout. Append protected
@@ -12765,4 +12801,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
+[lima-ls-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/ls.c
+[lima-player-mode]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mode.c
 [lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
