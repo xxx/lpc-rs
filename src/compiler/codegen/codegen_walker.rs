@@ -693,14 +693,45 @@ impl CodegenWalker {
         }
     }
 
-    /// Emit the instruction(s) to take the range of an array or string
+    fn bound_may_mutate(expr: &ExpressionNode) -> bool {
+        match expr {
+            ExpressionNode::Int(_) | ExpressionNode::Var(_) => false,
+            ExpressionNode::UnaryOp(node) => {
+                matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
+                    || Self::bound_may_mutate(&node.expr)
+            }
+            ExpressionNode::BinaryOp(node) => {
+                Self::bound_may_mutate(&node.l) || Self::bound_may_mutate(&node.r)
+            }
+            ExpressionNode::Cast(node) => Self::bound_may_mutate(&node.expr),
+            _ => true,
+        }
+    }
+
+    /// Emit the instruction(s) to take the range of an array, string or bytes
     /// # Arguments
     /// `reference` - The [`Register`] holding the reference to the ref we're
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
     async fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
+        let start_may_mutate = node.l.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
+        let end_may_mutate = node.r.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
+        let reference = if (start_may_mutate || end_may_mutate)
+            && !matches!(reference, RegisterVariant::Constant(_))
+        {
+            self.current_result = reference;
+            self.save_result(node.span)
+        } else {
+            reference
+        };
         let (first_index, start_from_end) = if let Some(expr) = &mut *node.l {
-            self.emit_index_bound(expr).await?
+            let (value, from_end) = self.emit_index_bound(expr).await?;
+            let value = if end_may_mutate && !matches!(value, RegisterVariant::Constant(_)) {
+                self.save_result(expr.span())
+            } else {
+                value
+            };
+            (value, from_end)
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
             // 0.

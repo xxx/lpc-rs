@@ -4171,6 +4171,168 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn string_read_preserves_start_before_end_increment() {
+            let code = r#"
+                string selected;
+                int after;
+                void create() {
+                    int i = 5;
+                    string text = "alpha\\/beta";
+                    selected = text[i..++i];
+                    after = i;
+                }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    ("selected", BareVal::String("\\/".into())),
+                    ("after", BareVal::Int(6)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn array_read_preserves_start_before_end_assignment() {
+            let code = r#"
+                int *selected;
+                void create() {
+                    int start = 1;
+                    int *values = ({10, 20, 30, 40});
+                    selected = values[start..(start = 2) + 0];
+                }
+            "#;
+            check_committed_globals(
+                code,
+                &[(
+                    "selected",
+                    BareVal::Array(vec![BareVal::Int(20), BareVal::Int(30)]),
+                )],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn bytes_read_preserves_start_before_end_increment() {
+            let code = r#"
+                bytes selected;
+                void create() {
+                    int start = 1;
+                    bytes values = to_bytes("abcd", "utf8");
+                    selected = values[start..++start];
+                }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::Bytes(b"bc".to_vec()))]).await;
+        }
+
+        #[tokio::test]
+        async fn end_call_cannot_rebind_the_evaluated_collection_or_start() {
+            let code = r#"
+                string text = "abcd";
+                int start = 1;
+                int calls;
+                string selected;
+                int end() { calls++; text = "XYZ"; start = 2; return 2; }
+                void create() { selected = text[start..end()]; }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    ("selected", BareVal::String("bc".into())),
+                    ("text", BareVal::String("XYZ".into())),
+                    ("start", BareVal::Int(2)),
+                    ("calls", BareVal::Int(1)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn start_call_cannot_rebind_the_collection_with_an_omitted_end() {
+            let code = r#"
+                string text = "abcd";
+                string selected;
+                int start() { text = "XYZ"; return 1; }
+                void create() { selected = text[start()..]; }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::String("bcd".into()))]).await;
+        }
+
+        #[tokio::test]
+        async fn closure_end_preserves_a_captured_start_and_unicode_positions() {
+            let code = r#"
+                string selected;
+                int after;
+                void create() {
+                    int start = 1;
+                    string text = "aé😀z";
+                    function end = (: ++start :);
+                    selected = text[start..end()];
+                    after = start;
+                }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    ("selected", BareVal::String("é😀".into())),
+                    ("after", BareVal::Int(2)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn reverse_read_preserves_start_distance_before_end_decrement() {
+            let code = r#"
+                string selected;
+                void create() {
+                    int distance = 3;
+                    string text = "aé😀z";
+                    selected = text[<distance..<--distance];
+                }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::String("é😀".into()))]).await;
+        }
+
+        #[tokio::test]
+        async fn collection_snapshot_retains_shared_array_content_changes() {
+            let code = r#"
+                int *values = ({10, 20, 30});
+                int *alias = values;
+                int *selected;
+                int start() { alias[1] = 99; values = ({7, 8, 9}); return 1; }
+                void create() { selected = values[start()..2]; }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "selected",
+                        BareVal::Array(vec![BareVal::Int(99), BareVal::Int(30)]),
+                    ),
+                    (
+                        "values",
+                        BareVal::Array(vec![BareVal::Int(7), BareVal::Int(8), BareVal::Int(9)]),
+                    ),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn side_effects_inside_a_casted_bound_preserve_start() {
+            let code = r#"
+                string selected;
+                void create() {
+                    int start = 1;
+                    string text = "abcd";
+                    selected = text[start..(int)(start = 2)];
+                }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::String("bc".into()))]).await;
+        }
+
+        #[tokio::test]
         async fn stores_the_value() {
             let code = indoc! { r##"
                     mixed a = ({ 1, 2, 3 })[1..];

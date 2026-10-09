@@ -80,6 +80,23 @@ Slices preserve the collection type. Array slices create a new array containing
 the selected references. An empty receiver produces an empty slice, but invalid
 bound types in reverse slices still raise errors.
 
+### Slice evaluation
+
+A slice read evaluates the collection, start and end once, in that order.
+Later bounds can change the variables that supplied earlier operands without
+changing the values already selected for the slice:
+
+```c
+string text = "aé😀z";
+int start = 1;
+string selected = text[start..++start]; // "é😀"; start is now 2
+```
+
+Reassigning the collection variable during a bound does not change which value
+is sliced. Array contents remain shared and are read after both bounds finish;
+the saved collection reference is not a deep copy. Bounds, clipping and Unicode
+positions keep the rules described here.
+
 ### Slice boundaries and clipping
 
 Unlike individual element access, a slice can extend beyond the collection.
