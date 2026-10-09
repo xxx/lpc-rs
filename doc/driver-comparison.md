@@ -3123,6 +3123,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard listing port
+
+Adopted **8 October 2026** in the dedicated Lima checkout. The one-file
+[ls][lima-ls-command] patch matches the audited proposal: protected variadic
+dispatch_main calling private main(arg, flags), nil for external_ls's absent
+string result, and !!terminal_mode() for formatter selection. Private handlers,
+listing algorithms, metadata records, command/stdio guards, rules and native APIs
+retain their preceding implementations.
+
+All **eight audited cases pass together across 29 shell inputs and two external
+calls**, preserving their assertions, fixture data and helpers. Working paths
+load adopted source directly; only the two controls substitute frozen versions.
+Real shell/CMD/rule/path/glob/colour/filesystem execution verifies flags, metadata,
+loaded markers, globbing, refusals, ANSI/plain output, pipeline lines and output
+redirection, preserving shell/body state. The capture consumer remains fixture
+code; connections are in-memory, with a no-transport fixture IMUD daemon.
+
+Fresh focused compilation verifies **4/49 transitional commands** and **9/9
+complete targets** across 57 distinct checks. Only ls is added, with no
+regressions, timeouts or abnormal exits. Workspace locked all-target/all-feature
+Clippy and formatting pass. Prior wizard/player/verb and full-inventory
+results retain their earlier scope. Distinct nil, preserved call-out players and
+4,000 ms tasks remain. Existing KB arithmetic and stored plain-mode behavior
+described below are preserved. No new full boot, service flow, connection-loop
+or upstream execution is claimed.
+
+Next: audit trans/cmds/cat.c through its ordinary file and pipeline-input routes.
+
 #### Lima wizard listing audit
 
 Reviewed **8 October 2026** against pinned [ls][lima-ls-command],
