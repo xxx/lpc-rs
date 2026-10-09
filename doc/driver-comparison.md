@@ -3123,6 +3123,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard directory-command audit
+
+Reviewed **8 October 2026** against pinned [mkdir][lima-mkdir-command],
+[rmdir][lima-rmdir-command], [rm][lima-remove-command] and
+[command rules][lima-trans-command-rules]. The unadopted three-file proposal adds
+protected dispatch_main adapters, corrects mkdir's grouped argument vector to
+mixed * and catches mkdir/rmdir refusals per entry so existing failure messages
+and later arguments remain reachable. Native compilation rejects the original
+mkdir declaration because it makes arg[0] a string with integer foreach elements.
+The rm algorithm and filesystem rules remain unchanged.
+
+All **12 audit checks pass across 42 inputs**, including **two explicit
+known-failure assertions** for a native rmdir defect. Child-then-parent removal
+checks the parent's old on-disk children, so the child disappears at commit but
+the parent remains; a later command removes it. Duplicate rmdir arguments report
+two successes because the first staged removal is ignored by the second check.
+Unlike rm, rmdir bypasses the task's pending entry view. These are native defects,
+not Lima source bugs; passing diagnostic assertions do not establish complete
+support. Fix target existence and directory emptiness against pending effects
+before adopting the mudlib proposal.
+
+Other cases verify original discovery; uncaught-refusal controls; relative,
+absolute, quoted, Unicode, plural and globbed paths; ordinary refusal/continuation
+and duplicate mkdir/rm handling; empty/text/NUL/binary file removal; argument
+refusals; ignored stdin; and status pipes/redirection. Committed InputTo callbacks
+check line mode, echo-enabled registration, rearming and shell/body/directory
+restoration. Filesystem existence/content assertions confirm committed results.
+The two expected caught control errors are existing mkdir and nonempty rmdir.
+Creating a missing parent and its child together remains blocked by argument
+expansion before the command; this is separate from the native rmdir defect.
+
+All **12 complete focused targets compile across 21 checks**, retaining baseline,
+dispatch and grouped-argument controls. Workspace locked all-target/all-feature
+Clippy and workspace/harness formatting pass. All 1,547 library files, README,
+configuration, CLI and native implementation are unchanged. Distinct nil,
+preserved call-out players and 4,000 ms tasks remain; existing 11/49 transitional
+and broader inventory/startup evidence keeps its preceding scope. No new full
+boot, service, connection-loop or upstream execution is claimed.
+
+Next: fix native rmdir pending-entry visibility, replace both known-failure
+assertions with successful behavior checks, then recheck and adopt the proposal.
+
 #### Lima wizard file-operation port
 
 Adopted **8 October 2026** in the dedicated Lima checkout using the audited
@@ -13001,6 +13043,9 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-news-user-state]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c
 [lima-news-number-sets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_set.c
+[lima-mkdir-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/mkdir.c
+[lima-rmdir-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/rmdir.c
+[lima-remove-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/rm.c
 [lima-copy-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cp.c
 [lima-move-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/mv.c
 [lima-more-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/more.c
