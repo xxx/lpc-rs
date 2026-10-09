@@ -3123,6 +3123,56 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard update port
+
+Adopted **9 October 2026** after committing the [update
+audit](#lima-wizard-update-audit) as native **6fbf05f3**. Update.c and README
+are committed as dedicated **b41ce738** on lpc-rs-port; the checkout is clean. The
+command uses protected dispatch, a typed closure, a bare void return, explicit
+nil-load checks and a private file/load-time helper. No native API changed.
+
+Inherited programs are compiled as part of the child; inheritance alone does not
+create parent objects. The command therefore reloads only loaded parent
+prototypes: `-r` visits direct parents, and `-R` visits all ancestors in
+compilation order, including loaded ancestors behind unloaded parents. `-z`
+keeps recursive load-time propagation for loaded direct parents and checks the
+remaining inherited source timestamps through
+[deep_inherit_list](efun/deep_inherit_list.md). It never instantiates unloaded
+fragments such as names.c. Missing inherited source timestamps raise an error
+instead of being treated as unchanged. A loaded parent's same-second update can
+still leave its child unchanged, as recorded in the audit; the adaptation
+retains that source behavior.
+
+All **34 cases pass across 68 registered inputs**: 32 in the full run and the
+two corrected fixture cases in a focused rerun; all other cases and command
+sources are unchanged. Twenty-nine cases use the adopted checkout source
+unchanged; one appends a fixture clock, one records the first caught error, and
+three controls retain original, unchecked and audited sources. The two
+standard-library prototype reload cases seed Lima's existing mudlib role so that
+the fixture wizard has the required write authority. Ordinary and recursive room
+reloads return the connected player, and timestamp skips also return the player
+to the retained room. A changed transitive names.c fragment is compiled into the
+new room without loading that fragment as an object. Direct/recursive parent
+identities, transitive timestamp changes, old clones, reset globals, remove
+arguments, batches, errors, current-file defaults and redirects pass. Missing
+source and invalid fragments retain the existing early cleanup and error
+suppression: evacuated players remain in Void after failure. Resident
+master/simul objects are refused before cleanup; master has its existing queued
+command.
+
+Fresh compilation reaches **32/49 transitional commands** and all **53 complete
+supports** across **82 distinct checks**. Only update.c is newly successful,
+with no regressions or timeouts. Locked workspace all-target/all-feature Clippy
+and workspace/fixture formatting pass. The other 1,546 library files,
+configuration, native implementation, CLI and original Lima are unchanged;
+temporary test entries are removed. Fixtures use the actual user, body, shell,
+input, command and room code with an in-memory connection and stubbed IMUD
+transport. Distinct nil, preserved players and 4,000 ms tasks remain. Earlier
+inventories retain their scope; upstream-driver execution, broad upgrades and
+complex virtual objects are not established here.
+
+Next: audit renew.c against this reload foundation; loadall can follow.
+
 #### Lima wizard update audit
 
 Reviewed **9 October 2026** against pinned [update][lima-update-command],
@@ -3130,7 +3180,8 @@ Reviewed **9 October 2026** against pinned [update][lima-update-command],
 [command parsing][lima-command-daemon], [destruction wrapper][lima-overrides]
 and [master][lima-master]. The backup/restore port is committed as dedicated
 **6cc443fb**, with native notes as **b4c47429**. Dedicated Lima is clean on
-lpc-rs-port; update.c matches pinned upstream. No proposal is adopted.
+lpc-rs-port at this audit; update.c matched pinned upstream. The audit's
+base proposal was not adopted until the inherited-module adaptation in the subsequent port.
 
 The command needs protected dispatch forwarding arguments and flags, native
 `(: [object ob] { ... } :)` closure syntax, and a bare return in its void main.
@@ -3209,9 +3260,10 @@ tests, CLI checks at most two processes without overlap, disposables in /tmp and
 notes in local. Earlier inventory scope remains; broad system upgrades, complex
 virtual objects and cleanup-error recovery are not established by these fixtures.
 
-Next: commit this audit, then adapt inherited-module handling and verify
-ordinary room -z updates before adopting the command. Retain destructive reload
-semantics and the documented timestamp edge.
+This audit is committed as native **6fbf05f3**. The subsequent
+[update port](#lima-wizard-update-port) adapts inherited-module handling and verifies
+ordinary room -z updates while retaining destructive reload semantics and the
+loaded-parent timestamp edge.
 
 #### Lima wizard backup and restore port
 
