@@ -3123,6 +3123,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard replace audit
+
+Reviewed **8 October 2026** against pinned [replace][lima-ed-replace] after
+committing locate as dedicated **1bd45731** and its notes as native **4dcdd74e**.
+The unchanged command cannot be discovered because CMD requires dispatch_main.
+A dispatch-only control reaches unresolved ed_start/ed_cmd calls. Adding the
+existing M_ED compiles without new driver APIs. The disposable one-file proposal
+also catches thrown per-file failures, closes a retained editor session and
+reports the refusal before processing later files. It avoids a contradictory
+no-match message when a diagnostic has already been routed. No patch is adopted.
+
+All **12 scenarios pass across 52 registered inputs**. The editor-only control
+hits a concatenation overflow while constructing the duplicated match report,
+before writing the replacement, then leaves its owner-local editor session
+active. Its next invocation refuses to start. These are the two expected caught
+input errors. The proposal reports the refusal, preserves the file, closes the
+session and accepts later files/invocations. Editor byte, line-count and
+line-width startup refusals also preserve files and permit continuation.
+
+Exact-content checks retain all occurrences, numbering/quiet/no-match behavior,
+relative/absolute/glob/space paths, duplicate file arguments, anchors and glob
+translation, capture/& replacement and Unicode. Blank and unterminated files
+retain editor normalization; empty files retain their range diagnostic. Command
+rules refuse missing/directory arguments before entry. Pipes, overwrite/append
+redirection, ignored stdin and pager entry/return pass. Actual InputTo callbacks
+check line mode, echo, rearming and shell/body/directory restoration.
+
+Existing Lima source behaviors remain separately recorded: only the last file's
+report survives, matching lines are duplicated around the header, a final
+nonmatching file can claim no matches after earlier files changed, and some
+substitution refusals still claim Done. Raw slash/invalid regex diagnostics,
+unescaped replacement slash/unsupported escape, expansion and command-length
+refusals are reproduced with file bytes checked. Substitution and write return
+values are ignored by the original source; write-refusal handling is source
+review here. The proposal retains those behaviors. This is a command port,
+with the existing editor limits and staged-write semantics.
+
+All **17 complete focused targets compile across 20 checks**: baseline and
+dispatch-only controls fail at their expected sites, editor control and proposal
+supports compile. Locked workspace all-target/all-feature Clippy and formatting
+pass after removing an unused runtime fixture variant; assertions, inputs,
+helpers and proposal are unchanged. Temporary native test entries are removed.
+Dedicated Lima's 1,547 library files, README, configuration,
+native implementation, CLI and original Lima remain unchanged. Distinct nil,
+preserved players and 4,000 ms tasks remain; earlier 16/49 transitional and
+broader inventories retain their scope. Disposable fixtures and logs stay in
+/tmp; local holds the handoff. No full inventory, boot, service, connection-loop
+or upstream execution is claimed.
+
+Next: commit this audit, then adopt and verify the one-file replace adaptation.
+
 #### Lima wizard locate port
 
 Adopted **8 October 2026** in the dedicated Lima checkout after committing the
