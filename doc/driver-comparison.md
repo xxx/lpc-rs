@@ -3123,6 +3123,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard to port
+
+Adopted **9 October 2026** after committing the [to audit](#lima-wizard-to-audit)
+as native **151fab5d**. Its exact one-file patch adds the ordinary protected
+dispatcher forwarding arg to private main and replaces the comma closure with
+`&done_editing(arg)`. To.c and README are committed as dedicated **3929049b**
+on lpc-rs-port; the dedicated checkout is clean.
+The existing editor, force_me, command lookup and routing code remain unchanged.
+No native API change is needed.
+
+All **fourteen audited scenarios pass across 53 registered inputs** against
+adopted source. Twelve working cases use 46 inputs and load the dedicated
+command directly; baseline and dispatch-only controls retain their frozen
+versions for seven inputs. Every assertion, input, datum and helper is retained,
+and all 53 observations match the audit exactly. Missing command arguments,
+dot/double-star completion, interior blank lines, Unicode, quoted spacing,
+bound prefixes and player/body/room/directory context pass. Empty completion
+still executes the child with no argument; abort discards the draft and reports
+the bound command. Help and preview do not execute it.
+
+Unknown and throwing children leave a usable shell without an editor clone,
+stray modal handler or owned editing flag. Chained completion retains the new
+editor's handler, flag and independent binding. Repeated use retains each prefix.
+Actual input-stack teardown discards the draft without invoking the continuation.
+Incoming parent stdin remains ignored, and delayed child stdout bypasses the
+outer redirect's empty file. The mixed `0` initializer remains valid for the
+editor's empty buffer in distinct nil mode. No expectation changed during adoption.
+
+Fresh compilation reaches **29/49 transitional commands** and all **50 complete
+supporting targets** across **81 distinct checks**. Only to is newly successful;
+no preceding success regresses and no timeout occurs. Supports retain previous
+targets and add complete to and text-editor compilation. Locked workspace
+all-target/all-feature Clippy and workspace/fixture formatting pass. The other
+1,546 library files, configuration, native implementation, CLI and original
+Lima remain unchanged; temporary native test entries are removed.
+
+The fixture retains one in-memory connection with actual master, simuls, user,
+human body, wizard shell, commands, text editor, input and file code; only IMUD
+transport is stubbed. Every input checks line mode, echo and rearming. Distinct
+nil, preserved players and 4,000 ms tasks remain. Cargo uses two jobs and serial
+tests; CLI checks use at most two processes without overlap. Artifacts stay in
+/tmp and handoff notes under local. Earlier inventories retain their scope.
+
+Next: commit the to port and notes, then audit trans/cmds/bk.c and
+trans/cmds/rst.c, the paired file backup and restoration commands.
+
 #### Lima wizard to audit
 
 Reviewed **9 October 2026** against pinned [to][lima-to-command],
@@ -3131,9 +3177,10 @@ Reviewed **9 October 2026** against pinned [to][lima-to-command],
 [command parsing][lima-command-daemon], [wizard shell][lima-wizard-shell],
 [input stack][lima-inputsys] and [modal forwarding][lima-input-forwarding].
 Force and README are committed as dedicated **8ef65e50**, with native port
-notes as **b0a85b5e**. Dedicated Lima is clean on lpc-rs-port. To retains the
-earlier replacement of new with clone_object; its remaining source matches
-pinned upstream. This command edits arguments and then executes the chosen command.
+notes as **b0a85b5e**. Dedicated Lima was clean on lpc-rs-port during this
+audit. To retains the earlier replacement of new with clone_object; its
+remaining source matches pinned upstream. This command edits arguments and
+then executes the chosen command.
 
 The unadapted command is undiscoverable because CMD cannot resolve dispatch_main.
 A dispatch-only control compiles and opens the editor, but its legacy
@@ -3180,7 +3227,8 @@ Artifacts stay in /tmp and notes under local. Prior 28/49 transitional and
 broader inventories retain their scope. Source review and lpc-rs execution
 are distinct; no upstream driver execution is claimed.
 
-Next: commit this audit, then adopt and verify the exact to dispatcher and
+This audit is committed as native **151fab5d**. The subsequent
+[to port](#lima-wizard-to-port) adopts and verifies its exact dispatcher and
 bound continuation, retaining the editor lifecycle and child routing.
 
 #### Lima wizard force port
