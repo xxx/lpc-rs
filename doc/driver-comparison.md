@@ -3123,6 +3123,40 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard do port
+
+Adopted **9 October 2026** after committing the [do audit](#lima-wizard-do-audit)
+as native **cab7c286**. Its exact one-file patch adds protected CMD dispatch
+and separates the syntax write from its bare return. Only do.c and README are
+pending in dedicated Lima on lpc-rs-port, based on **3415e694**; native has
+comparison notes pending. No native API, rule, shell or callback changes are needed.
+
+All **thirteen audited scenarios pass across 31 registered inputs** against
+adopted source. The twelve working cases use 29 inputs and load the dedicated
+command directly; the baseline uses its frozen unadapted command. Every
+assertion, input, datum and LPC helper is retained. All output, error, player,
+directory and modal observations match the audit exactly. Ordered and nested
+commands, syntax, spacing/Unicode, failures and recovery, output routes and
+modal exit pass. Literal quoted-semicolon splitting, separate child stdout,
+ignored stdin and continuation after modal entry retain their audited behavior.
+
+Fresh compilation reaches **25/49 transitional commands** and all **34 complete
+supporting targets** across **69 distinct checks**. Only do is newly successful;
+no preceding success regresses and no timeout occurs. Locked workspace
+all-target/all-feature Clippy and workspace/fixture formatting pass. The other
+1,546 library files, configuration, native implementation, CLI and original Lima
+remain unchanged. Temporary native test entries are removed.
+
+The fixture retains real master, simuls, user, body, shell, command, modal and
+file code with an in-memory connection; only IMUD transport is stubbed.
+Every input checks line mode, echo and rearming. Distinct nil, preserved
+players and 4,000 ms tasks remain configured. Cargo uses two jobs and serial
+tests; CLI checks use at most two processes without overlap. Artifacts stay
+in /tmp and handoff notes under local. Earlier broader inventories retain their scope.
+
+Next: commit the do port and notes, then audit trans/cmds/times.c and its
+repeat-count parsing, privilege handling and forced command execution.
+
 #### Lima wizard do audit
 
 Reviewed **9 October 2026** against pinned [do][lima-do-command],
@@ -3130,7 +3164,7 @@ Reviewed **9 October 2026** against pinned [do][lima-do-command],
 [stdio][lima-command-stdio], [command parsing][lima-command-daemon],
 [wizard shell][lima-wizard-shell] and [user input stack][lima-inputsys].
 Xargs and README are committed as dedicated **3415e694**, with port notes
-as native **a8094c89**. Dedicated Lima remains clean. Do's earlier adaptation
+as native **a8094c89**. Dedicated Lima was clean during this audit. Do's earlier adaptation
 only replaced map_array with native map; the splitter and callback remain.
 
 The disposable one-file proposal appends protected variadic dispatch_main
@@ -3176,7 +3210,8 @@ Cargo uses two jobs and serial tests; CLI checks use at most two processes
 without overlap. Disposables stay in /tmp and notes under local. Preceding
 24/49 transitional and broader inventories retain their scope.
 
-Next: commit this audit, then adopt and verify the do dispatcher and bare return.
+This audit is committed as native **cab7c286**. The subsequent
+[do port](#lima-wizard-do-port) adopts and verifies its exact dispatcher and bare return.
 
 #### Lima wizard xargs port
 
