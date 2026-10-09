@@ -3123,6 +3123,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard grep audit
+
+Reviewed **8 October 2026** against pinned [grep][lima-ed-grep],
+[command rules][lima-trans-command-rules], [glob translator][lima-glob-module]
+and [regex helpers][lima-regex-module]. The active command lacks protected
+dispatch_main; adding its adapter and inheriting the already ported M_ED makes
+file searches compile. No native editor API is needed.
+
+The stdin output callback must invoke out; bare out supplies that function value.
+Consume native [`regexp`](efun/regexp.md)'s mixed index/string pairs in that
+order for numbered results. Normalize [`explode`](efun/explode.md)'s terminal
+delimiter field without removing real blank lines, and keep absent stdin nil.
+The disposable one-file proposal also catches editor startup refusals per file
+and continues. Its editor limits remain 8,192 UTF-8 bytes, 1,000 lines and 2,048
+bytes per line, below grep's existing 1,000,000-byte outer guard.
+
+The audit exposes a **native slice-read compiler defect** in the translator's
+pat[i..++i]: evaluating the upper bound changes the lower bound's retained
+variable register. An escaped pair loses its backslash, so a slash-containing
+file pattern terminates M_ED's search too early. Both an isolated expression and
+actual-module execution reproduce this; slice assignment already snapshots its
+start operand. Fix slice-read operand preservation before adopting grep, then
+require successful slash matching instead of the diagnostic failure assertion.
+
+Nine audit cases pass, comprising eight shell scenarios across 57 inputs and
+the independent range diagnostic. They cover file selection/flags, stdin and
+its precedence, Unicode/blank/empty/unterminated text, limits and continuation,
+raw pipelines/redirection, refusals and reuse. Four expected caught errors
+include the dispatch-only controls, inverse-directory read and invalid stdin
+regex. The slash failure is explicitly asserted as an unresolved defect.
+Inverse file mode retains its source branch without directory expansion, and
+patterns retain the existing glob translation. Upstream equivalence is unchecked.
+
+All 13 complete focused targets compile across 15 checks, including the baseline
+and dispatch/editor controls. Workspace locked all-target/all-feature Clippy and
+formatting pass. The final fixture simplifies a singleton file-copy loop;
+verification preserves every tested assertion, helper and datum.
+
+The proposal remains unadopted; library source, README, configuration and native
+implementation are unchanged. Distinct nil, preserved call-out players and
+4,000 ms tasks remain. Prior command/inventory evidence retains its earlier
+scope. Connections, account helpers and pipe capture are fixtures; no new full
+boot, service, connection-loop, interactive pager or upstream run is claimed.
+
+Next: fix native slice-read operand snapshots, then recheck the grep proposal.
+
 #### Lima wizard head and tail port
 
 Adopted **8 October 2026** in the dedicated Lima checkout. The two-file
