@@ -3123,6 +3123,36 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard more port
+
+Adopted **8 October 2026** in the dedicated Lima checkout using the audited
+adaptation of the pinned [more command][lima-more-command]. It now uses a native
+typed closure, protected dispatch_main and nil for both absent function continuations;
+numeric default-height arguments remain zero. The [pager][lima-pager],
+[simul helpers][lima-more-helpers] and command rules are unchanged.
+
+All **nine audited scenarios pass across 56 inputs** against adopted source.
+Only the discovery control replaces the command with its frozen original.
+Committed InputTo callbacks execute with the user as command giver; assertions
+retain line mode, echo-enabled registration, rearming, pager ownership/count,
+quit/EOF cleanup and shell/body/directory state. The same two expected errors
+verify invalid-search recovery and overlong-line initialization cleanup.
+
+Fresh checks compile **9/49 transitional commands** and all **12 supporting
+targets** across **58 distinct checks**. Only more is added, with no regressions.
+Workspace locked all-target/all-feature Clippy and workspace/harness formatting
+pass. Prior wizard/player/verb/full-inventory and startup evidence retains its
+preceding scope; fixture execution does not establish an actual connection-loop
+or upstream parity test.
+
+Existing direct pager output bypasses outgoing pipes/redirection. File mode
+retains its 999-line cap, and display spacing, string-stdin terminal split fields,
+-c filename handling and directory refusals retain their audited behavior.
+All other 1,546 library files, configuration, CLI and original Lima are unchanged.
+Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+
+Next: audit cp and mv through their ordinary wizard-shell file-operation routes.
+
 #### Lima wizard more audit
 
 Reviewed **8 October 2026** against pinned [more][lima-more-command],
