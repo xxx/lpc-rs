@@ -3123,6 +3123,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard head and tail audit
+
+Reviewed **8 October 2026** against pinned [head][lima-head-command],
+[tail][lima-tail-command], [rules][lima-trans-command-rules],
+[CMD][lima-command-base], [stdio][lima-command-stdio],
+[more helpers][lima-more-helpers] and [user message handling][lima-user-messages].
+The proposal appends only protected variadic dispatch_main calling each existing
+private main(arg, flags, input). Preserve absent stdin as nil; replacing it with
+empty text would select the stdin branch instead of file arguments.
+The earlier UTF-8 tail helper and text-stdin adaptation remain unchanged.
+
+Both baselines fail compilation at missing dispatch and remain undiscoverable
+through the real shell. The complete proposal passes **eight cases across 57
+shell inputs**: paths, grouped files/globs, default and attached/separate counts,
+zero/negative counts, Unicode/blank/unterminated/empty text, actual cat input,
+file stdin and its precedence, absent input and ordinary refusals. Head's raw
+pipeline and overwrite/append results are checked exactly. Real secure-user/
+shell/CMD/stdio/pipeline/getopt/simul/file execution preserves shell/body state;
+the pipe consumer remains fixture code. Connections are in-memory, with a
+no-transport fixture IMUD daemon. Output remains below the pager page size;
+interactive pager navigation is not exercised.
+
+Tail retains its direct more output: selected text is displayed at the terminal,
+while a downstream pipe receives empty text. Output overwrite truncates the
+target to empty; append preserves its contents. Its original file branch already
+used this path, and the previously adopted stdin adaptation follows it. These
+existing routing limitations remain separate from the dispatch-only proposal.
+Head retains snippet concatenation without separators and its original slice
+expression; negative-count results describe native execution, with upstream
+equivalence unchecked. Lima's user-message formatting supplies the recorded
+blank terminal lines. No native feature or formatting change is introduced.
+
+All **ten focused complete targets compile**, with the two baseline failures
+recorded separately. Workspace locked all-target/all-feature Clippy and
+formatting pass. The two-file proposal is unadopted; the dedicated checkout
+remains clean. Active **15/81 wizard**, **5/49 transitional**, **65/67 player**,
+verb and full-inventory evidence retains its preceding scope. Distinct nil,
+preserved call-out players and 4,000 ms tasks remain. No full boot, service flow,
+connection-loop or upstream execution was repeated.
+
+Next: adopt head/tail dispatch adapters, then audit grep's file and pipeline routes.
+
 #### Lima wizard file output port
 
 Adopted **8 October 2026** in the dedicated Lima checkout. The one-file
@@ -12903,6 +12945,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
 [lima-ls-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/ls.c
 [lima-cat-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cat.c
+[lima-head-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/head.c
+[lima-tail-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/tail.c
 [fl-cat-read-lines]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc#L325-L451
 [lima-player-mode]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mode.c
 [lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
