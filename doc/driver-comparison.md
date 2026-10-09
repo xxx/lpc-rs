@@ -3123,6 +3123,61 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard do audit
+
+Reviewed **9 October 2026** against pinned [do][lima-do-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[stdio][lima-command-stdio], [command parsing][lima-command-daemon],
+[wizard shell][lima-wizard-shell] and [user input stack][lima-inputsys].
+Xargs and README are committed as dedicated **3415e694**, with port notes
+as native **a8094c89**. Dedicated Lima remains clean. Do's earlier adaptation
+only replaced map_array with native map; the splitter and callback remain.
+
+The disposable one-file proposal appends protected variadic dispatch_main
+calling the existing main(arg). It also separates `return write(...)` into
+write followed by a bare return: the dispatch-only control exposes rejection
+of the void expression as a return value. Missing arguments retain the exact
+syntax report. Do has no Cmd_rules entry, so the shell supplies the raw
+reconstructed argument string. No native API change is proposed or adopted.
+
+All **thirteen scenarios pass across 31 registered inputs**. Twelve proposal
+cases use 29 inputs; the undiscoverable baseline has two. Commands run in
+order with the current user/body/directory context, including nested do.
+Empty segments have no effect; internal spacing, Unicode and flag-like text
+are retained. Unknown child commands do not stop later commands. A thrown
+child error stops the sequence, retains the preceding record and restores player
+context; subsequent input succeeds. Opening xargs does not stop the sequence:
+later commands still reach the bottom shell, and subsequent real input goes
+to the modal until normal exit destroys its clone.
+
+Existing command structure remains: explode splits every semicolon, including
+one inside quoted text. The adapted shell rejects the resulting first
+unfinished quote, reports the unknown second fragment and executes the later
+valid command. Child output keeps its own stdout; outer redirection and
+piping receive do's empty buffer while child output reaches the terminal.
+Incoming stdin is ignored. These retained behaviors are port notes, without
+claiming identical upstream diagnostics or an upstream execution test.
+
+All **19 complete focused targets compile across 21 final checks**, including
+the two expected baseline/dispatch-only failures. Locked workspace
+all-target/all-feature Clippy and formatting pass. The first runtime pass had
+one incorrect fixture expectation for the quoted fragment; the correction
+asserts its syntax refusal and the actual later record. The proposal, helpers,
+data and every other assertion remain unchanged, and all thirty earlier input
+observations match the final run. Earlier logs are retained.
+
+The fixture executes actual master, simuls, user, body, shell, command, modal
+and file code with an in-memory connection; only IMUD transport is stubbed.
+Recorder, capture, error and state helpers are test-only. Every input checks
+line mode, echo and rearming. All 1,547 library files, README, configuration,
+native implementation, CLI and original Lima remain unchanged; temporary test
+entries are removed. Distinct nil, preserved players and 4,000 ms tasks remain.
+Cargo uses two jobs and serial tests; CLI checks use at most two processes
+without overlap. Disposables stay in /tmp and notes under local. Preceding
+24/49 transitional and broader inventories retain their scope.
+
+Next: commit this audit, then adopt and verify the do dispatcher and bare return.
+
 #### Lima wizard xargs port
 
 Adopted **9 October 2026** after committing the
@@ -3130,9 +3185,10 @@ Adopted **9 October 2026** after committing the
 one-file patch adds protected CMD dispatch, binds both interactive callbacks
 with `&handle_piping(arg[0])`, supplies this_object() to file_name, uses nil
 for the absent return callback and removes the extra argument dropped by the
-inherited input wrapper. Only xargs.c and README are pending in dedicated Lima;
-native has comparison notes pending. Native APIs and the input wrapper retain
-their preceding implementations.
+inherited input wrapper. Xargs.c and README are committed as dedicated
+**3415e694**, with comparison notes as native **a8094c89**. The dedicated
+checkout is clean; native APIs and the input wrapper retain their preceding
+implementations.
 
 All **twelve audited scenarios pass across forty registered inputs** against
 adopted source. Every assertion, input, datum and LPC helper is retained.
@@ -3155,8 +3211,8 @@ checks line mode, echo and rearming. Cargo uses two jobs and serial tests; CLI
 checks use at most two processes without overlap. Disposables stay in /tmp,
 and handoff notes under local.
 
-Next: commit the xargs port and notes, then audit trans/cmds/do.c and its
-ordinary sequence of forced shell commands.
+The subsequent [do audit](#lima-wizard-do-audit) leaves its disposable
+proposal unadopted and records the remaining command adaptations.
 
 #### Lima wizard xargs audit
 
@@ -14041,6 +14097,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-path-fold]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/array.cc#L397-L435
 [lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
 [lima-xargs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/xargs.c
+[lima-do-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/do.c
 [lima-xargs-spacing]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L641-L655
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
