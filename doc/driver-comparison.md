@@ -3123,6 +3123,35 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard directory navigation port
+
+Adopted **8 October 2026** in the dedicated Lima checkout. Append protected
+variadic dispatch_main calling the existing private main() in
+[pwd][lima-wizard-pwd] and private main(arg) in [cd][lima-trans-cd]. Both commands
+match the audited proposal exactly; private/nomask handlers, command guards,
+directory logic, shell, rules, path/storage code and native APIs are unchanged.
+
+All **seven audited cases pass together across 28 input actions**, preserving
+the assertions and helpers. Working paths load the adopted checkout source;
+only the negative control substitutes the frozen original commands. Real
+[wizard-shell][lima-wizard-shell] execution verifies reporting, path resolution,
+home fallback, tilde/history, refusals, .c filename handling and saved directory
+history/current file after actual shell removal/recreation. The source-derived
+root-origin cd - edge described below remains unchanged and separate from the
+compatibility patch.
+
+Fresh focused compilation verifies **15/81 wizard**, **3/49 transitional**
+commands and **9/9 complete targets** across 137 distinct checks. Only pwd/cd
+are new successes relative to the full inventory, with no regressions, timeouts
+or abnormal exits. Workspace locked all-target/all-feature Clippy and formatting
+pass. The previous **631/1,180** complete survey was not repeated.
+Distinct nil, preserved call-out players and unchanged 4,000 ms tasks remain.
+Evidence uses in-memory connections and a no-transport fixture IMUD daemon,
+without new full boot, service, connection-loop or upstream execution.
+
+Next: audit trans/cmds/ls.c through its ordinary wizard-shell routes, including
+flags, globbing and pipeline behavior.
+
 #### Lima wizard directory navigation audit
 
 Reviewed **8 October 2026** against pinned [pwd][lima-wizard-pwd],
