@@ -3123,6 +3123,38 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard file-operation port
+
+Adopted **8 October 2026** in the dedicated Lima checkout using the audited
+[cp][lima-copy-command] and [mv][lima-move-command] dispatch adapters. Both call
+the existing private main(arg, flags); helpers, flag values, rules and file
+read/write/remove sequences are unchanged. No native API change is needed.
+
+All **ten audited scenarios pass across 61 inputs** against adopted source.
+Working fixtures load the dedicated command files directly; only original
+lookup and dispatch controls replace them with frozen sources. Every audited
+assertion and helper is retained. Committed InputTo callbacks check line mode,
+echo-enabled registration, rearming and shell/body/directory restoration.
+Exact destination bytes and source existence verify successful copy/move,
+empty/Unicode/NUL/large text, force/overwrite, paths/globs/multiple files,
+refusals, same-file handling, ignored stdin and status pipes/redirection.
+The same two expected invalid-UTF-8 errors preserve source bytes and shell input.
+
+Fresh checks compile **11/49 transitional commands** and all **12 supporting
+targets** across **57 distinct checks**. Only cp and mv are added, with no
+regressions. Workspace locked all-target/all-feature Clippy and workspace/
+harness formatting pass. Other command/inventory and startup evidence retains
+its preceding scope; no new full boot, service, connection-loop or upstream
+execution is claimed.
+
+The existing commands use text I/O; mv writes then removes rather than renaming.
+The unused -r option, same-file behavior, invalid-UTF-8 refusal and missing-parent
+argument rejection remain documented in the audit. All other 1,545 library files,
+configuration, CLI and original Lima are unchanged. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain.
+
+Next: audit mkdir, rmdir and rm through their ordinary wizard-shell routes.
+
 #### Lima wizard file-operation audit
 
 Reviewed **8 October 2026** against pinned [cp][lima-copy-command],
