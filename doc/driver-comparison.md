@@ -3123,6 +3123,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard replace port
+
+Adopted **9 October 2026** in dedicated Lima after committing the
+[replace audit](#lima-wizard-replace-audit) as native **3d5c6fa8**. The one-file
+[replace][lima-ed-replace] patch matches the audited proposal: protected dispatch,
+existing M_ED inheritance, per-file thrown-error diagnostics and cleanup of a
+retained editor session. Later files and invocations can proceed after startup
+or output refusals. A routed diagnostic suppresses the contradictory no-match
+message. No native API, editor implementation or command-rule changes.
+
+All **12 audited scenarios pass against adopted source across 52 registered
+inputs**, retaining every assertion, command, fixture datum and LPC helper.
+Working cases load the dedicated command without proposal substitution. Every
+output, caught error and shell/body/directory/input-stack observation matches
+the audit, including its two expected errors in the unguarded editor control.
+Exact writes retain all occurrences, patterns/captures, Unicode, file expansion,
+duplicate paths, numbering/quiet/no-match behavior and text normalization.
+Thrown output/startup refusals preserve files, close the editor and allow later
+edits. Pipes, overwrite/append redirection, ignored stdin and pager entry/return
+pass through actual InputTo callbacks with line mode, echo and rearming checks.
+
+Existing last-file-only and duplicated reports, ignored substitution/write
+return values and the editor limits remain separately recorded in the audit.
+The patch retains those behaviors and staged-write semantics; it introduces
+neither a durable save acknowledgement nor a limit bypass.
+
+Fresh checks compile **17/49 transitional commands** and all **17 complete
+supporting targets** across **60 distinct checks**, adding only replace without
+regressions, timeouts or abnormal exits. Locked workspace all-target/all-feature
+Clippy and formatting pass.
+All other 1,546 library files, configuration, native implementation, CLI and
+original Lima remain unchanged. Distinct nil, preserved players and 4,000 ms
+tasks remain. Broader inventories and startup/service evidence retain their
+preceding scope; temporary native test entries are removed after all gates.
+Disposable fixtures/logs stay in /tmp, with the handoff under local.
+
+Next: commit the replace port, then audit trans/cmds/cut.c.
+
 #### Lima wizard replace audit
 
 Reviewed **8 October 2026** against pinned [replace][lima-ed-replace] after
