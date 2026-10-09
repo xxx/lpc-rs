@@ -3123,6 +3123,47 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard du audit
+
+Reviewed **9 October 2026** against pinned [du][lima-du-command], after
+committing diff as dedicated **70327cf9** and its port notes as native
+**90baeb93**. The existing `du [dir]` rule supplies one resolved directory,
+or an omitted argument that main replaces with the shell's pwd. The command
+lacks CMD dispatch. The disposable one-file proposal appends protected
+dispatch calling main(arg); its forward declarations and private handler
+remain. No native API or command-rule change is needed, and no proposal is
+adopted.
+
+All **nine scenarios pass across 32 registered inputs**, with four direct
+disk_usage calls checking raw recursive totals, root display, missing-path
+diagnostics and cutoff behavior. The baseline is undiscoverable. The proposal
+checks directory totals and order, empty directories, KB boundaries, hidden/
+Unicode/binary fixture files, default/relative/absolute/quoted paths and
+single-match expansion. Existing rules reject files, missing paths, multiple
+matches and extra arguments. Buffered output reaches pipes and overwrite/
+append redirection; incoming text is ignored. Actual pager entry/quit and
+InputTo line mode, echo, rearming and shell/body/directory state pass. An
+expected output-limit refusal leaves fixture files intact and permits the next
+command without sending a partial report to the downstream capture command.
+
+Existing source behavior remains separate: this sums logical file byte sizes,
+without allocated-block or directory-size accounting, and emits each directory
+after its children. Display uses **1 + total / 1024**, so empty directories show
+1 and exact KB multiples show an extra unit. MAX_RECURSE counts every node call:
+directories at depth 10 print, but their files and deeper nodes are skipped
+silently. Root's display label is empty. The proposal retains these behaviors.
+
+All **13 complete focused targets compile across 14 checks**: baseline fails
+in the four required dispatch calls, while the proposal and supports compile.
+Locked workspace all-target/all-feature Clippy and formatting pass. All 1,547
+library files, README, configuration, native implementation, CLI and original
+Lima remain unchanged. Distinct nil, preserved players and 4,000 ms tasks remain;
+preceding 19/49 transitional and broader evidence retain their scope. Temporary
+test entries are removed; disposables stay in /tmp and notes under local.
+No upstream-driver execution is claimed.
+
+Next: commit this audit, then adopt and verify the one-file du dispatcher.
+
 #### Lima wizard diff port
 
 Adopted **9 October 2026** in dedicated Lima after committing the
@@ -3151,7 +3192,9 @@ native implementation, CLI and original Lima remain unchanged. Distinct nil,
 preserved players and 4,000 ms tasks remain; preceding broader evidence retains
 its scope. Disposables stay in /tmp and handoff notes under local.
 
-Next: commit diff and its port notes, then audit trans/cmds/du.c.
+Follow-up: diff and README are committed as dedicated **70327cf9**, with port
+notes as native **90baeb93**. The [du audit](#lima-wizard-du-audit) establishes
+the next adaptation.
 
 #### Lima wizard diff audit
 
@@ -13755,6 +13798,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-trans-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/Cmd_rules
 [lima-cut-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cut.c
 [lima-diff-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/diff.c
+[lima-du-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/du.c
 [lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
