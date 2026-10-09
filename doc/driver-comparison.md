@@ -3123,6 +3123,40 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard find port
+
+Adopted **8 October 2026** in the dedicated Lima checkout after the find audit
+was committed as **44a76384**. The one-file [find][lima-ed-find] patch matches
+the audited proposal: protected dispatch calling main(arg, flags), existing
+M_ED inheritance and per-file editor startup refusals followed by continuation.
+No native API, editor module, command rule or pattern algorithm changes.
+
+All **nine audited scenarios pass against adopted source across 47 registered
+inputs**, retaining every assertion, command, fixture datum and LPC helper.
+Working cases load the dedicated command without replacement; only baseline
+and dispatch/editor controls substitute frozen source. All recorded outputs,
+errors and state match the audit. Paths/globs, flags/numbering, regex/case,
+Unicode/blank/unterminated text, startup/output limits, continuation, ignored
+stdin, pipes/redirection, refusals and reuse pass. Actual InputTo callbacks
+check line mode, echo, rearming and shell/body/directory restoration. The sole
+expected caught error remains the dispatch/editor startup-limit control.
+
+Fresh checks compile **15/49 transitional commands** and all **15 complete
+supporting targets** across **60 distinct checks**, adding only find with no
+regressions, timeouts or abnormal exits. Workspace locked all-target/all-feature
+Clippy is warning-free; workspace/harness formatting pass. The other 1,546
+library files, configuration, native implementation, CLI and original Lima
+remain unchanged; temporary integration entries are removed.
+
+The existing raw/case pattern split, file-only rule, ignored stdin and slash/
+empty-file diagnostics described in the audit remain. M_ED retains its startup
+and output limits; full-size file-search compatibility is not established.
+Distinct nil, preserved call-out players and 4,000 ms tasks remain. Broader
+inventory/startup evidence keeps its preceding scope; these in-memory fixtures
+do not establish new full-boot, service, connection-loop or upstream behavior.
+
+Next: commit the find port, then audit trans/cmds/locate.c.
+
 #### Lima wizard find audit
 
 Reviewed **8 October 2026** against pinned [find][lima-ed-find],
