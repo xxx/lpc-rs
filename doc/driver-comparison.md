@@ -3123,6 +3123,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard diff audit
+
+Reviewed **9 October 2026** against pinned [diff][lima-diff-command], after
+committing cut as dedicated **8c9d3fe3** and its notes as native **2dae5cc4**.
+The command retains the native filter callback migration from dedicated
+**14b0af35**. It lacks CMD dispatch, and its direct read-policy call uses the
+old signature. The disposable one-file proposal adds protected dispatch,
+passes the native [valid_read](apply/master/valid_read.md) arguments and tests
+that both difference arrays are empty. Native array identity remains unchanged;
+the [earlier empty-array review](#lima-damage-daemon) explains the size check.
+No proposal is adopted.
+
+All **11 scenarios pass across 40 registered shell inputs**. The dispatch-only
+control reports permission denied for ordinary readable fixture files; the
+correct read-call control compares them but prints empty headings for equal
+line sets. The proposal restores the same-lines result, including reordered
+lines, differing repeat counts, identical contents and the same pathname.
+Exact checks cover directional reports, retained duplicate unmatched lines,
+relative/absolute paths, raw filename parsing, empty/blank/unterminated files,
+CRLF, Unicode normalization differences and NUL text. A normal output-limit
+refusal preserves files and permits the next comparison. Actual pager entry/
+quit and InputTo line mode, echo, rearming and shell/body/directory state pass.
+
+Existing source behavior remains separate: this compares line membership,
+ignoring order and repeat counts for lines found in both files. Independently
+read arrays never reach its same-file identity branch on native. Terminal LF
+adds an empty comparison field. The raw handler has no command rule, glob
+expansion or quoted-filename parser; an unquoted second filename can contain
+spaces because sscanf consumes the remainder. Incoming stdin is ignored.
+Direct more/write output bypasses outgoing pipe/redirection buffers, retains
+the message layer's extra spacing and removes CR in rendered text while CRLF
+lines remain distinct in comparison. The proposal preserves these behaviors.
+
+All **22 complete focused targets compile across 25 checks**: baseline fails
+in CMD dispatch; dispatch/read controls and proposal/supports compile.
+Locked workspace all-target/all-feature Clippy and formatting pass. Initial
+fixture failures required only spacing and rendered-CR expectation corrections;
+proposal, controls, helpers, data and requested inputs were unchanged.
+All 1,547 library files, README, configuration, native implementation, CLI and
+original Lima remain unchanged. Distinct nil, preserved players and 4,000 ms
+tasks remain; prior 18/49 transitional and broader inventories retain their
+scope. Disposables stay in /tmp and notes under local; temporary test entries
+are removed. No upstream-driver execution is claimed.
+
+Next: commit this audit, then adopt and verify the one-file diff adaptation.
+
 #### Lima wizard cut port
 
 Adopted **9 October 2026** in dedicated Lima after committing the
@@ -3151,7 +3197,9 @@ unchanged. Distinct nil, preserved players and 4,000 ms tasks remain; broader
 inventories retain their scope. Temporary native test entries are removed;
 disposable fixtures/logs stay in /tmp and handoff notes under local.
 
-Next: commit cut and its notes, then audit trans/cmds/diff.c.
+Follow-up: cut and README are committed as dedicated **8c9d3fe3**, with
+comparison notes as native **2dae5cc4**. The [diff audit](#lima-wizard-diff-audit)
+now establishes the next adaptation.
 
 #### Lima wizard cut audit
 
@@ -13675,6 +13723,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-trans-cd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cd.c
 [lima-trans-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/Cmd_rules
 [lima-cut-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cut.c
+[lima-diff-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/diff.c
 [lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
