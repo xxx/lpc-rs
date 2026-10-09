@@ -3123,6 +3123,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard at port
+
+Adopted **9 October 2026** after committing the [at audit](#lima-wizard-at-audit)
+as native **57a8960b**. Its exact five-line dispatcher forwards parsed arguments
+to the existing private main. Only at.c and README are pending in dedicated
+Lima on lpc-rs-port, based on **3354c137**; native has comparison notes pending.
+No native API, command rule, target lookup, movement or forced-input code changed.
+
+All **fourteen audited scenarios pass across 39 registered inputs** against
+adopted source. Thirteen working cases use 37 inputs and load the dedicated
+command directly; only the baseline restores its frozen unadapted command.
+Every assertion, input, datum and helper is retained. All output, error, player,
+body location, shell directory, modal-stack and clone observations match the
+audit exactly. Temporary movement and normal return, self targeting,
+diagnostics, unknown children, word joining, quoted spacing and Unicode pass.
+
+Existing ignored move results and skipped return after a child exception
+retain their audited behavior. A refused outbound move runs the child in the
+starting room; a refused return or thrown child leaves the actor remote, with
+later commands retaining player context. An unplaced target reports its absent
+environment; an unplaced actor cannot resolve the tested named target. Separate
+child stdout, empty outer redirect/pipe output and ignored stdin remain.
+Modal xargs input executes after normal return to the starting room, and its
+handler clone is destroyed on exit. No expectation changed during adoption.
+
+Fresh compilation reaches **27/49 transitional commands** and all **46 complete
+supporting targets** across **79 distinct checks**. Only at is newly successful;
+no preceding success regresses and no timeout occurs. Supports retain preceding
+targets and add complete at dependencies, including actual target lookup,
+container, movement and human-body code. Locked workspace all-target/all-feature
+Clippy and workspace/fixture formatting pass. The other 1,546 library files,
+configuration, native implementation, CLI and original Lima remain unchanged;
+temporary native test entries are removed.
+
+The fixture retains two connected users with actual master, simuls, human
+bodies, wish, command, container, movement, modal and file code; only IMUD
+transport is stubbed. Every input checks line mode, echo and rearming.
+Distinct nil, preserved players and 4,000 ms tasks remain. Cargo uses two jobs
+and serial tests; CLI checks use at most two processes without overlap.
+Artifacts stay in /tmp and handoff notes under local. Earlier broader inventories
+retain their scope.
+
+Next: commit the at port and notes, then audit trans/cmds/force.c and its
+execution through the target user's shell.
+
 #### Lima wizard at audit
 
 Reviewed **9 October 2026** against pinned [at][lima-at-command],
@@ -3131,8 +3176,8 @@ Reviewed **9 October 2026** against pinned [at][lima-at-command],
 [target lookup][lima-object-grouping], [movement][lima-container-move],
 [wizard shell][lima-wizard-shell] and [forced input][lima-user-shell].
 Times and README are committed as dedicated **3354c137**, with native port
-notes as **52627b19**. Dedicated Lima is clean on lpc-rs-port; at matches
-pinned upstream byte for byte. No native API change is needed.
+notes as **52627b19**. Dedicated Lima was clean on lpc-rs-port during this
+audit; at matched pinned upstream byte for byte. No native API change is needed.
 
 The disposable one-file proposal appends protected variadic dispatch_main,
 forwarding its parsed first argument to the existing private main. At uses
@@ -3180,8 +3225,9 @@ CLI checks use at most two processes without overlap. Artifacts stay in /tmp
 and notes under local. Prior 26/49 transitional and broader inventories retain
 their scope.
 
-Next: commit this audit, then adopt and verify the exact at dispatcher,
-retaining the audited movement, lookup, output and modal behavior.
+This audit is committed as native **57a8960b**. The subsequent
+[at port](#lima-wizard-at-port) adopts and verifies its exact dispatcher. The
+movement, lookup, output and modal observations retain their audit scope.
 
 #### Lima wizard times port
 
