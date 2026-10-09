@@ -3123,6 +3123,49 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard directory navigation audit
+
+Reviewed **8 October 2026** against pinned [pwd][lima-wizard-pwd],
+[cd][lima-trans-cd], [transitional command rules][lima-trans-command-rules],
+[wizard shell][lima-wizard-shell], [command daemon][lima-command-daemon],
+[CMD base][lima-command-base], [path simuls][lima-simul-path],
+[shell variables][lima-shell-variables] and [save module][lima-save-module].
+The proposal changes only two commands: append protected variadic dispatch_main
+calling the existing private main() for pwd and main(arg) for cd. Both baseline
+checks fail at missing dispatch_main; both proposals compile. Private/nomask
+handlers, shell/rule/path/storage code and native APIs remain unchanged. No
+proposal is adopted in the dedicated checkout.
+
+Seven scenarios verify **28 input actions** through the real wizard shell.
+They cover unchanged-state baseline discovery failures, pwd's directory/current
+file/NONE reporting, absolute/relative/parent/trailing-slash resolution, home
+and /help fallback, tilde and repeated cd -, ordinary refusals, .c filenames,
+and saved pwd/lastpwd/cwf restored after actual shell removal/recreation.
+Subsequent input works, and directory navigation preserves user/body/room state.
+Five cases passed unchanged; two assertions were corrected for blank lines in
+captured output and rerun successfully. Their shared harness and LPC helpers
+remain unchanged; no proposal/output logic changed for those corrections.
+
+Source review also identifies an existing root-directory dash edge: cd deletes
+all occurrences of pwd from the resolved argument before comparing with /-.
+When pwd is /, resolved /- becomes -, missing the previous-directory branch.
+That finding is source-derived; runtime dash checks use non-root origins, and
+the proposal preserves the existing logic.
+
+The real master, simuls, user/body, command/rule/path and persistence code runs.
+Helpers seed state and invoke the existing stop/start path; connections are
+in-memory, and the fixture IMUD daemon has no transport. Evidence is source
+review and lpc-rs fixture execution, without upstream execution, a new full boot,
+service flow or connection-loop run. ls flags and pipeline behavior are outside
+this audit. Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+
+All **nine focused complete targets** compile, including both proposals and
+their supporting programs. Workspace all-target/all-feature locked Clippy and
+formatting pass. Active full-inventory counts remain **631/1,180**, **14/81 wizard**
+and **2/49 transitional** commands until adoption; that survey is not repeated.
+Next: adopt the two dispatch adapters, then audit trans/cmds/ls.c through the
+ordinary wizard shell while preserving its existing command and pipeline rules.
+
 #### Lima cold startup and login
 
 The adapted library was exercised through the actual driver and Telnet listener
@@ -12687,5 +12730,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/Cmd_rules
 [lima-imud-cache]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/mudlist.c
 [lima-wizard-shell]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/wish.c
+[lima-wizard-pwd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/pwd.c
+[lima-trans-cd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cd.c
+[lima-trans-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/Cmd_rules
+[lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
+[lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
 [lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
