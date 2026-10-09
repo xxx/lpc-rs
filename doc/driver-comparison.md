@@ -3123,6 +3123,41 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard xargs port
+
+Adopted **9 October 2026** after committing the
+[xargs audit](#lima-wizard-xargs-audit) as native **ee6331f9**. The exact
+one-file patch adds protected CMD dispatch, binds both interactive callbacks
+with `&handle_piping(arg[0])`, supplies this_object() to file_name, uses nil
+for the absent return callback and removes the extra argument dropped by the
+inherited input wrapper. Only xargs.c and README are pending in dedicated Lima;
+native has comparison notes pending. Native APIs and the input wrapper retain
+their preceding implementations.
+
+All **twelve audited scenarios pass across forty registered inputs** against
+adopted source. Every assertion, input, datum and LPC helper is retained.
+Eleven working cases load the dedicated command directly; the baseline retains
+its frozen source. Every output, error, user/body/directory/input-stack and
+clone-count observation matches the audit exactly. Per-line input, both
+placeholders, empty stdin, relative input, output routes, modal clone reuse,
+shell escape, both exits and recovery pass. Existing option-spacing failures,
+dropped lock and separate child stdout remain documented in the audit.
+
+Fresh checks compile **24/49 transitional commands** and all **33 supporting
+targets** across **69 distinct checks**, adding only xargs without regressions
+or timeouts. Locked workspace all-target/all-feature Clippy and formatting pass.
+Temporary test entries are removed. The other 1,546 library files, configuration,
+native implementation, CLI and original Lima remain unchanged. Distinct nil,
+preserved players and 4,000 ms tasks remain; preceding broader evidence keeps
+its scope. The fixture retains actual master, simuls, user, body, shell and
+file efuns, with an in-memory connection and no-transport IMUD. Every input
+checks line mode, echo and rearming. Cargo uses two jobs and serial tests; CLI
+checks use at most two processes without overlap. Disposables stay in /tmp,
+and handoff notes under local.
+
+Next: commit the xargs port and notes, then audit trans/cmds/do.c and its
+ordinary sequence of forced shell commands.
+
 #### Lima wizard xargs audit
 
 Reviewed **9 October 2026** against pinned [xargs][lima-xargs-command],
@@ -3183,8 +3218,9 @@ remain. Cargo uses two jobs and serial tests; CLI checks use at most two
 processes without Cargo overlap. Disposables stay in /tmp and notes under local.
 The preceding 23/49 transitional and broader inventories retain their scope.
 
-Next: commit this audit, then adopt and verify the exact xargs adaptation in
-dedicated Lima, retaining the documented option, lock and output limitations.
+Committed as native **ee6331f9**. The subsequent
+[xargs port](#lima-wizard-xargs-port) adopts the exact one-file proposal and
+retains the documented option, lock and output limitations.
 
 #### Lima wizard command-path port
 
