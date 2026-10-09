@@ -3123,6 +3123,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard locate port
+
+Adopted **8 October 2026** in the dedicated Lima checkout after committing the
+[locate audit](#lima-wizard-locate-audit) as **fc449984**. The one-file
+[locate][lima-ed-locate] adaptation adds protected dispatch, traverses native
+get_dir names with is_directory, uses explicit callbacks and supplies the
+formatter argument. Lookup reads the filename database once and matches its
+lines with native regexp, preserving order, duplicates and terminal newlines.
+It no longer requires M_ED or its buffer/line limits; raw # is an ordinary regex
+character. Command rules, flags, ignored stdin and index filenames remain.
+
+Rebuilding initializes the temporary file, sets busy state before scanning and
+keeps the original 50-directory batches. Publication uses rename from a separate
+zero-delay callback after writes commit. First-batch and empty-tree completion
+remain busy until publication, then permit another rebuild. File errors report
+diagnostics and clear busy state while preserving the old index. A scan error
+aborts rebuilding, following native get_dir's exception behavior. Completion
+and callback failure messages retain direct output; ordinary search/startup
+diagnostics follow CMD routing. No native API or configuration changes.
+
+All **12 scenarios pass across 61 registered inputs and 17 timer callbacks**.
+The complete copied tree publishes **1,845 unique entries / 45,116 bytes** across
+five continuation callbacks and one publication callback, including all 1,547
+library source paths. Directory, hidden, spaced, Unicode and index names remain
+included; the prior index stays searchable until publication. A **69-entry /
+1,505-byte** selection passes exact-content pipes/redirection and pager return.
+Regex/order, syntax/flags, ignored stdin, duplicates, empty/blank/unterminated
+records, repeated rebuilds and file-error recovery pass. InputTo callbacks check
+line mode, echo, rearming and shell/body/directory restoration. Original discovery,
+legacy callback and editor-limit controls retain their expected behavior; only
+the editor control has an expected caught input error.
+
+Native string concatenation still limits result output to **8,192 UTF-8 bytes**.
+The initial broad-result check exposed an uncaught overflow; the corrected
+lookup catches matching and output errors together. Exactly 8,192 bytes succeeds,
+larger results report a diagnostic without partial filename output, and a narrow
+query can follow. The full index is searchable, but arbitrary result sizes are
+not supported. No string-limit bypass or driver limit change is introduced.
+
+Fresh checks compile **16/49 transitional commands** and all **16 complete
+supporting targets** across **60 distinct checks**, adding only locate without
+regressions, timeouts or abnormal exits. Locked workspace all-target/all-feature
+Clippy and workspace/harness formatting pass. Working cases load dedicated
+source directly; small/empty-tree fixtures change only the initial traversal
+root in disposable copies. All other 1,546 library files, configuration, native
+implementation, CLI and original Lima remain unchanged. Distinct nil, preserved
+players and 4,000 ms tasks remain; broader inventories and startup/service
+evidence retain their preceding scope. Temporary test entries are removed.
+
+Next: commit the locate port, then audit trans/cmds/replace.c.
+
 #### Lima wizard locate audit
 
 Reviewed **8 October 2026** against pinned [locate][lima-ed-locate],
