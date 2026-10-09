@@ -3123,6 +3123,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard find audit
+
+Reviewed **8 October 2026** against pinned [find][lima-ed-find],
+[command rules][lima-trans-command-rules], [glob translator][lima-glob-module]
+and [regex helpers][lima-regex-module], after committing the directory-command
+port as dedicated **1ffbe834** and native notes **fe75241f**. The disposable
+one-file proposal adds protected dispatch_main calling main(arg, flags), inherits
+the already ported [M_ED search module](#lima-editor-search-and-substitution),
+and reports editor startup refusals per file before continuing. No native API
+change is needed; the proposal is unadopted.
+
+The **nine shell scenarios pass across 47 registered inputs**. They check paths,
+globs, grouped flags, numbering, regex/case behavior, Unicode, blank/unterminated
+text, per-file startup limits and continuation, output limits, ignored stdin,
+pipelines/redirection, refusals and command reuse. Actual InputTo callbacks
+verify line mode, echo-enabled registration, rearming and shell/body/directory
+restoration. One expected caught error checks the dispatch/editor-only control's
+uncaught startup limit. All **15 complete focused targets compile across 17
+checks**; workspace locked all-target/all-feature Clippy and workspace/harness
+formatting pass.
+
+Existing source behavior remains separate from the adaptation: without -i the
+pattern goes directly to the editor; with -i it first receives glob translation
+with anchors enabled. The file-only command rule refuses directories before
+the body despite its directory-expansion code, files are required and stdin is
+ignored. Bare slashes retain the editor's global-body diagnostic; an explicitly
+escaped slash matches. Empty files retain the editor's address diagnostic.
+The M_ED startup/output limits remain unchanged, below full-size file-search
+compatibility. Neither command rules nor pattern semantics are rewritten.
+
+All 1,547 library files, README, configuration, CLI and original Lima remain
+unchanged. The initial fixture corrections change only diagnostic expectations
+and head's omitted terminal newline; proposal, inputs and LPC helpers are
+unchanged. Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+Prior command/inventory results retain their scope; no new full boot, service,
+connection-loop or upstream execution is established.
+
+Next: adopt and verify the one-file find adaptation, then refresh transitional
+command compilation.
+
 #### Lima wizard directory-command port
 
 Adopted **8 October 2026** in the dedicated Lima checkout using the audited
