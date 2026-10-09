@@ -608,6 +608,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Whole-object enumeration | `objects()` accepts optional function or local-method-name filtering; the result is capped by `__MAX_ARRAY_SIZE__`. With `F_SET_HIDE`, visibility depends on caller status or `valid_hide`. Callback filtering can reorder entries. [Reference][fl-objects], [implementation][fl-objects-implementation], [visibility][fl-object-enumeration]. | [`objects()`](efun/objects.md) takes no arguments and returns all transaction-visible loaded objects without truncation or an ordering guarantee. Use `filter(objects(), predicate)` for selection, with native truthiness and callback behavior; use `foreach` when only side effects are wanted. Initialize missing counters before incrementing them in distinct-null mode. For clone counts, exclude prototypes explicitly: subtracting one undercounts when the prototype is absent. There is no corresponding hidden-object category. An LPC method-name wrapper must bind the original caller explicitly. |
 | Clone predicate | `clonep()` defaults to the current object; an explicit argument succeeds only for an object carrying the driver's clone flag. [Reference][fl-clonep]. | An LPC helper can inspect the terminal `#<digits>` suffix from [`file_name`](efun/file_name.md) when the mudlib reserves that naming convention for clones. That convention is a mudlib constraint, not a native restriction on ordinary source filenames. For exact classification without it, test membership in [`object_clones(ob)`](efun/object_clones.md), which allocates the clone group's array. A simul helper should default an omitted argument to `previous_object()` while returning `0` for explicit nil, destructed objects and other nonobjects. |
 | Clone enumeration | `children(path)` includes the loaded prototype and surviving clones sharing its base filename, in insertion order, even across prototype destruction and replacement. [Reference][fl-children], [object table][fl-children-table]. | [`object_clones(object)`](efun/object_clones.md) excludes the prototype, groups clones by compiled program version, and returns newest first. A mudlib helper can use `find_object(path)`, add the loaded prototype, and reverse the clone order. That helper cannot discover old groups through a missing or replacement prototype. Filtering [`objects()`](efun/objects.md) by base filename can find those groups, but does not reproduce insertion ordering. Audit reload, cleanup, uniqueness and registry-recovery code; in-place recompilation preserves the current group but does not merge earlier groups. |
+| Destruction of contents | With `NO_ENVIRONMENT` undefined, destruction calls each child's `move(parent_environment)` and destroys children remaining in the dying object. [Implementation][fl-renew-contents-source], source-reviewed 9 October 2026 without upstream execution. | Native [`destruct`](efun/destruct.md) removes the requested target without automatically moving or destroying its children. Direct children can remain live with a nil environment. Adapt content disposal in the mudlib when that policy is required; see the [Lima renew audit](#lima-wizard-renew-audit). |
 | Master lookup and reload | `master()` returns the current master object, or zero if absent; the getter does not load it. Destructing the master attempts to load and install a replacement before removing the old object. [Getter][fl-master-getter], [destruction][fl-master-destruct]. | A mudlib `master()` helper can return [`find_object(MASTER_OB)`](efun/find_object.md), provided the rooted mudlib constant matches the driver's configured `MASTER_OBJECT`. A mismatched path can return an unrelated object, so this agreement matters for identity-based security checks. Simul-efun initialization precedes the master: do not cache the initial missing result. Native [`destruct`](efun/destruct.md) does not recreate the master, and a subsequent lookup cannot reload it. Adapt reload commands to queued [`request_object_recompile("master")`](efun/request_object_recompile.md), including authorization and later status checks with [`query_object_recompile`](efun/query_object_recompile.md); it preserves state and identity and does not rerun `create()`. |
 | Live recompilation | `recompile_object` updates the prototype and its clones; inheritors need separate updates. [Reference][fl-reload]. | Use `request_object_recompile` and inspect its queued result with `query_object_recompile`; other tools need `valid_recompile` permission to read the status. Migration matches declaring source, name and exact type; compatible named callbacks rebind and closures retain their original code and captures. System selectors support state-preserving master/simul-efun upgrades. Active shadow chains and changes to cleanup eligibility are refused. [Reference](efun/request_object_recompile.md). |
 | Parser results and caching | `parse_sentence` documents integer results `1`, `0`, `-1`, `-2`, or a message; `parse_refresh` clears cached object information. [Results][fl-parser], [refresh][fl-refresh]. | An unresolved object can also produce `-3`; `parse_refresh` is a no-op. See the [parser package details below](#fluffos-parser-package). |
@@ -3123,6 +3124,81 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard renew audit
+
+Reviewed **9 October 2026** against pinned [renew][lima-renew-command],
+[command rules][lima-update-rules], [CMD][lima-command-base],
+[save module][lima-save-module], [object removal][lima-renew-removal] and
+[destruction wrapper][lima-overrides]. The dedicated checkout remains clean at
+**b41ce738** on lpc-rs-port; update notes are committed as native **2066a6ba**.
+No renew proposal is adopted and no native API changed. The checkout already
+uses clone_object instead of upstream string-valued new; the remaining baseline
+command code matches the pinned source.
+
+The minimal proposal adds protected dispatch forwarding `main(arg)` and replaces
+an integer return in its void handler with a bare return. Checkout renew is
+undiscoverable through the actual wizard shell; dispatch alone exposes the return
+type error. Leaf-clone renewal works with the committed update and M_SAVE:
+registered values retain integer zero, distinct nil, nested mappings/arrays,
+Unicode and embedded NUL, while unsaved state resets. Old prototype and selected
+clone identities are removed, a new clone is placed in the original environment,
+and sibling clones retain their state. Even unchanged source with an old
+timestamp reloads: renew passes an extensionless name to `do_update(file, 3)`,
+whose exact-file metadata check has no source result. The upstream comment says
+inherits are excluded, but the code requests update's timestamp-recursive mode;
+that helper can visit loaded ancestors.
+
+**Contents handling needs adaptation before adoption.** Recursive M_SAVE restores
+a new nested tree, while native destruction leaves the original direct child
+live with no environment and its descendants still inside it. At the reviewed
+[FluffOS source][fl-renew-contents-source], when `NO_ENVIRONMENT` is not defined,
+destruction instead calls each child's `move(parent_environment)` and destroys
+children that remain in the dying container. This is source review, not upstream
+execution. Upstream renew can also retain old children that move successfully
+alongside newly restored copies; duplication is not solely a native mismatch.
+M_SAVE also uses direct `move_object` for reconstructed children, bypassing
+container relations: the fixture's restored child has no relation and contributes
+zero capacity. That placement pattern is present upstream and remains a separate
+source limitation, rather than an additional compiler or efun requirement.
+
+Caught failures retain source ordering. Missing source and save/remove failures
+leave the original clone live. Recompile failure follows removal without a
+replacement; failed clone construction retires its pending clone. Restore failure
+or a changed registered field type leaves the replacement live and unplaced;
+strict store_variable checking is retained. A nonthrowing move refusal is ignored
+and likewise leaves a restored, unplaced clone. No extra nil-clone guard is
+needed: native clone failures raise. Input remains usable after each error.
+
+CMD buffers output: a successful renewal displays or routes renew's own
+“Updating” line, while the direct update helper accumulates its message in its
+own unflushed buffer. An exception bypasses renew's final flush too. These
+existing output and failure policies are documented without repair. Redirects,
+pipelines and ignored stdin are checked; wizard identity, body, room, current
+directory/file and modal ownership remain unchanged.
+
+All **14 cases pass across 36 registered inputs**, combining 13 expanded-run
+successes and the corrected recursive case in a focused rerun. Initial output
+expectations incorrectly assumed helper flushing; the revised checks inspect
+both command buffers. The added relation check initially expected integer zero;
+the declared string's missing result is nil, now checked explicitly. Command
+sources and the other cases are unchanged. All **21 compilation checks** have
+expected outcomes: the proposal, 13 complete supports and four fixture checks
+succeed; baseline renew, dispatch-only renew and standalone partial CMD retain
+their expected diagnostics. Locked workspace all-target/all-feature Clippy and
+workspace/fixture formatting pass.
+
+All 1,547 library files, README, configuration, native implementation, CLI and
+original Lima are unchanged; temporary test entries are removed. Tests use actual
+master/simuls/user/body/shell/command/input/object/container code, an in-memory
+connection and stubbed IMUD transport. Distinct nil, preserved players and
+4,000 ms tasks remain. Earlier inventories retain their scope; full gameplay,
+foreign save import and upstream-driver execution are not established here.
+Disposable evidence stays under /tmp; local holds notes only.
+
+Next: audit an explicit Lima-side contents-disposal adaptation alongside renew
+before adopting it. Keep native destruction semantics and existing renew
+output/failure behavior; loadall can follow the completed renewal port.
+
 #### Lima wizard update port
 
 Adopted **9 October 2026** after committing the [update
@@ -3171,7 +3247,8 @@ transport. Distinct nil, preserved players and 4,000 ms tasks remain. Earlier
 inventories retain their scope; upstream-driver execution, broad upgrades and
 complex virtual objects are not established here.
 
-Next: audit renew.c against this reload foundation; loadall can follow.
+Next: resolve the contents-handling mismatch in the [renew audit](#lima-wizard-renew-audit)
+before adopting that command; loadall can follow.
 
 #### Lima wizard update audit
 
@@ -14853,3 +14930,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-update-names]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/names.c
 
 [lima-update-baseobj]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/base_obj.c
+
+[lima-renew-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/renew.c
+
+[lima-renew-removal]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/non_object.c
+
+[fl-renew-contents-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/simulate.cc#L887-L915
