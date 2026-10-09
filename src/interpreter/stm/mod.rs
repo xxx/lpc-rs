@@ -13,7 +13,7 @@ use lpc_rs_errors::{LpcError, Result, span::Span};
 use crate::{
     command::registry::RuleList,
     interpreter::{
-        file_view::PendingEntryView,
+        file_view::{PendingDirectoryView, PendingEntryView},
         function_type::function_ptr::{FunctionPtr, ResolvedCall},
         lpc_array::LpcArray,
         lpc_class::LpcClass,
@@ -548,6 +548,11 @@ impl Transaction {
     /// Snapshot entry changes without copying file contents or performing IO.
     pub(crate) fn pending_entry_view(&self, server: &std::path::Path) -> PendingEntryView {
         PendingEntryView::new(&self.effects, server)
+    }
+
+    /// Snapshot directory membership without copying file contents or performing IO.
+    pub(crate) fn pending_directory_view(&self, server: &std::path::Path) -> PendingDirectoryView {
+        PendingDirectoryView::new(&self.effects, server)
     }
 
     /// Whether this attempt has recorded a `mkdir` of `server`.

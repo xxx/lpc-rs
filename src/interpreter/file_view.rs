@@ -14,8 +14,10 @@ use crate::{
     interpreter::stm::{PendingFileOp, TxnHandle},
 };
 
+mod directory;
 mod entry;
 
+pub(crate) use directory::{PendingDirectoryView, directory_is_empty};
 pub(crate) use entry::{EntryKind, PendingEntryView, entry_kind};
 
 /// Compiler inputs include the loading attempt's pending file changes.

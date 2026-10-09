@@ -19,7 +19,7 @@ pub(crate) enum EntryKind {
 }
 
 #[derive(Debug)]
-enum EntryOp {
+pub(super) enum EntryOp {
     Append(usize),
     Replace(usize),
     RemoveFile(usize),
@@ -28,11 +28,45 @@ enum EntryOp {
     Rename { from: usize, to: usize },
 }
 
+impl EntryOp {
+    pub(super) fn apply(&self, kinds: &mut [EntryKind]) -> bool {
+        use EntryKind::{Directory, File, Missing, Symlink};
+        match *self {
+            Self::Append(i) if kinds[i] == Missing => kinds[i] = File,
+            Self::Replace(i) if kinds[i] != Directory => kinds[i] = File,
+            Self::RemoveFile(i) if matches!(kinds[i], File | Symlink) => kinds[i] = Missing,
+            Self::MakeDir(i) if kinds[i] == Missing => kinds[i] = Directory,
+            Self::RemoveDir(i) if kinds[i] == Directory => kinds[i] = Missing,
+            Self::Rename { from, to }
+                if kinds[from] != Missing
+                    && (kinds[to] == Missing
+                        || (kinds[from] == Directory) == (kinds[to] == Directory)) =>
+            {
+                kinds[to] = kinds[from];
+                kinds[from] = Missing;
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    pub(super) fn indices(&self) -> (usize, Option<usize>) {
+        match *self {
+            Self::Append(i)
+            | Self::Replace(i)
+            | Self::RemoveFile(i)
+            | Self::MakeDir(i)
+            | Self::RemoveDir(i) => (i, None),
+            Self::Rename { from, to } => (from, Some(to)),
+        }
+    }
+}
+
 /// Only paths and effect tags escape the transaction lock; file payloads stay borrowed.
 #[derive(Debug, Default)]
 pub(crate) struct PendingEntryView {
-    paths: Vec<PathBuf>,
-    ops: Vec<EntryOp>,
+    pub(super) paths: Vec<PathBuf>,
+    pub(super) ops: Vec<EntryOp>,
 }
 
 impl PendingEntryView {
@@ -41,7 +75,10 @@ impl PendingEntryView {
             return Self::default();
         }
 
-        let mut paths = IndexSet::from([server]);
+        Self::collect(effects, IndexSet::from([server]))
+    }
+
+    pub(super) fn collect<'a>(effects: &'a [Effect], mut paths: IndexSet<&'a Path>) -> Self {
         let mut ops = Vec::new();
         // Walking backwards collects each rename's dependencies before replaying them forwards.
         for effect in effects.iter().rev() {
@@ -90,32 +127,14 @@ impl PendingEntryView {
         for path in &self.paths {
             kinds.push(on_disk(path).await?);
         }
-        use EntryKind::{Directory, File, Missing, Symlink};
         for op in self.ops {
-            match op {
-                EntryOp::Append(i) if kinds[i] == Missing => kinds[i] = File,
-                EntryOp::Replace(i) if kinds[i] != Directory => kinds[i] = File,
-                EntryOp::RemoveFile(i) if matches!(kinds[i], File | Symlink) => {
-                    kinds[i] = Missing;
-                }
-                EntryOp::MakeDir(i) if kinds[i] == Missing => kinds[i] = Directory,
-                EntryOp::RemoveDir(i) if kinds[i] == Directory => kinds[i] = Missing,
-                EntryOp::Rename { from, to }
-                    if kinds[from] != Missing
-                        && (kinds[to] == Missing
-                            || (kinds[from] == Directory) == (kinds[to] == Directory)) =>
-                {
-                    kinds[to] = kinds[from];
-                    kinds[from] = Missing;
-                }
-                _ => {}
-            }
+            op.apply(&mut kinds);
         }
         Ok(kinds[0])
     }
 }
 
-async fn on_disk(server: &Path) -> io::Result<EntryKind> {
+pub(super) async fn on_disk(server: &Path) -> io::Result<EntryKind> {
     match tokio::fs::symlink_metadata(server).await {
         Ok(metadata) if metadata.is_file() => Ok(EntryKind::File),
         Ok(metadata) if metadata.is_symlink() => Ok(EntryKind::Symlink),
