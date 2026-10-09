@@ -3123,6 +3123,36 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard cut port
+
+Adopted **9 October 2026** in dedicated Lima after committing the
+[cut audit](#lima-wizard-cut-audit) as native **e23d8ced**. The exact audited
+[cut][lima-cut-command] patch adds protected dispatch to its private main.
+The existing regex module and association simul handle field splitting;
+sizeof(nil) already handles absent stdin. The selection, delimiters, flags,
+command rules and output routes remain unchanged.
+
+All **10 audited scenarios pass against adopted source across 54 registered
+inputs**, retaining every assertion, command, fixture datum and LPC helper.
+Working cases load the dedicated command directly. Every output, caught error
+and shell/body/directory/input-stack observation matches the audit, including
+the two expected regex/output-limit errors followed by successful commands.
+Exact field/range/order/duplicate checks, regex separators, Unicode, file
+expansion, stdin precedence, pipes, redirection and actual pager entry/return
+pass. Source files remain unchanged. Existing final-field omission, extra
+newlines/separators and direct printf diagnostics stay recorded in the audit.
+
+Fresh adopted-source checks compile **18/49 transitional commands** and all
+**19 complete supporting targets** across **61 distinct checks**, adding only
+cut without regressions, timeouts or abnormal exits. Locked workspace
+all-target/all-feature Clippy and formatting pass. The other 1,546 library
+files, configuration, native implementation, CLI and original Lima remain
+unchanged. Distinct nil, preserved players and 4,000 ms tasks remain; broader
+inventories retain their scope. Temporary native test entries are removed;
+disposable fixtures/logs stay in /tmp and handoff notes under local.
+
+Next: commit cut and its notes, then audit trans/cmds/diff.c.
+
 #### Lima wizard cut audit
 
 Reviewed **9 October 2026** against pinned [cut][lima-cut-command], after
@@ -3163,7 +3193,8 @@ scope. Fixtures and logs stay in /tmp, with notes under local; temporary native
 test entries are removed. These are focused native checks, not upstream-driver
 execution or a new full-port inventory.
 
-Next: commit the audit notes, then adopt and verify the one-file cut dispatcher.
+Follow-up: this audit is committed as native **e23d8ced**. The
+[cut port](#lima-wizard-cut-port) now adopts and verifies its exact dispatcher.
 
 #### Lima wizard replace port
 
