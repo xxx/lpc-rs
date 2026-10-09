@@ -3123,6 +3123,36 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard diff port
+
+Adopted **9 October 2026** in dedicated Lima after committing the
+[diff audit](#lima-wizard-diff-audit) as native **d06c2ff9**. The exact audited
+one-file patch adds protected command dispatch, updates the direct
+[valid_read](apply/master/valid_read.md) call and checks both difference
+arrays for emptiness. Native array identity and the existing filter callback
+migration remain unchanged. Only diff.c and README are pending in dedicated
+Lima; native has comparison notes pending.
+
+All **11 audited scenarios pass across 40 registered inputs** against adopted
+source, preserving every assertion, command, datum and LPC helper. Working
+cases load the dedicated command directly; baseline, dispatch-only and
+read-call controls retain their audited sources. Every recorded output,
+error and shell/body/directory/input-stack observation matches the audit,
+including one expected concatenation-limit error with recovery. Exact
+line-membership reports, raw paths, empty/blank/terminal text, CRLF, Unicode/NUL,
+direct output routes and actual pager return pass. Existing algorithm,
+filename parser and display behavior remain separately recorded in the audit.
+
+Fresh checks compile **19/49 transitional commands** and all **22 supporting
+targets** across **63 distinct checks**, adding only diff without regressions.
+Locked workspace all-target/all-feature Clippy and formatting pass. Temporary
+test entries are removed. The other 1,546 library files, configuration,
+native implementation, CLI and original Lima remain unchanged. Distinct nil,
+preserved players and 4,000 ms tasks remain; preceding broader evidence retains
+its scope. Disposables stay in /tmp and handoff notes under local.
+
+Next: commit diff and its port notes, then audit trans/cmds/du.c.
+
 #### Lima wizard diff audit
 
 Reviewed **9 October 2026** against pinned [diff][lima-diff-command], after
@@ -3167,7 +3197,8 @@ tasks remain; prior 18/49 transitional and broader inventories retain their
 scope. Disposables stay in /tmp and notes under local; temporary test entries
 are removed. No upstream-driver execution is claimed.
 
-Next: commit this audit, then adopt and verify the one-file diff adaptation.
+Follow-up: this audit is committed as native **d06c2ff9**; the exact adaptation
+is [adopted and verified](#lima-wizard-diff-port) in dedicated Lima.
 
 #### Lima wizard cut port
 
