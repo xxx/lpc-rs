@@ -3123,12 +3123,73 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard to audit
+
+Reviewed **9 October 2026** against pinned [to][lima-to-command],
+[editor header][lima-edit-header], [text editor][lima-text-editor],
+[CMD][lima-command-base], [stdio][lima-command-stdio],
+[command parsing][lima-command-daemon], [wizard shell][lima-wizard-shell],
+[input stack][lima-inputsys] and [modal forwarding][lima-input-forwarding].
+Force and README are committed as dedicated **8ef65e50**, with native port
+notes as **b0a85b5e**. Dedicated Lima is clean on lpc-rs-port. To retains the
+earlier replacement of new with clone_object; its remaining source matches
+pinned upstream. This command edits arguments and then executes the chosen command.
+
+The unadapted command is undiscoverable because CMD cannot resolve dispatch_main.
+A dispatch-only control compiles and opens the editor, but its legacy
+`(: done_editing, arg :)` is a native comma-expression closure: completion
+returns arg without invoking done_editing. The child never runs, and explicit
+abort omits the command's abort notice. The disposable one-file proposal adds
+the ordinary protected dispatcher forwarding arg to private main and replaces
+that closure with `&done_editing(arg)`. No native API change is needed.
+
+All **fourteen scenarios pass across 53 registered inputs**: twelve proposal
+cases use 46 inputs; baseline and dispatch-only controls use seven. A missing
+command argument reports usage without creating an editor. Dot and double-star completion
+join lines with LF and retain interior blank lines, Unicode, quoted spacing and
+the bound command prefix. The child runs with the user's body, room and shell
+directory. Empty completion executes the child with no argument; abort discards
+the draft and reports the bound command. Help and preview do not execute it.
+
+Unknown and throwing children return to a usable shell, with no editor clone,
+stray modal handler or owned editing flag. Completion can start another editor;
+the new handler and flag survive the old editor's cleanup, and its binding
+remains independent. Repeated command use retains each prefix. Actual input-stack
+teardown discards the draft without invoking the continuation. This is a shell
+reset through the existing user code, without a network-disconnect claim.
+Incoming parent stdin remains ignored, and delayed child stdout bypasses the
+outer redirect's empty file. Existing editing and shell-routing behavior is
+retained. The mixed `0` initializer still creates an empty buffer in distinct
+nil mode; no typed-null conversion is needed at that site.
+
+All **27 complete focused targets compile across 29 checks**, retaining the
+expected unadapted dispatch failure and the successful dispatch-only control.
+An initial compile runner incorrectly expected that control to fail; its results
+and corrected expectation are retained, without changing source or runtime
+assertions. Locked workspace all-target/all-feature Clippy and workspace/fixture
+formatting pass. The fixture uses one in-memory connection with actual master,
+simuls, user, human body, wizard shell, commands, text editor, input and file code.
+Only IMUD transport is stubbed; recording, failure and state helpers are fixture
+additions. Each registered input checks line mode, echo and rearming.
+
+All 1,547 library files, README, configuration, native implementation, CLI and
+original Lima remain unchanged; temporary native test entries are removed.
+Distinct nil, preserved players and 4,000 ms tasks remain. Cargo uses two jobs
+and serial tests; CLI checks use at most two processes without overlap.
+Artifacts stay in /tmp and notes under local. Prior 28/49 transitional and
+broader inventories retain their scope. Source review and lpc-rs execution
+are distinct; no upstream driver execution is claimed.
+
+Next: commit this audit, then adopt and verify the exact to dispatcher and
+bound continuation, retaining the editor lifecycle and child routing.
+
 #### Lima wizard force port
 
 Adopted **9 October 2026** after committing the [force audit](#lima-wizard-force-audit)
 as native **3d738376**. Its exact dispatcher forwards raw input to the existing
-private main. Force.c and README are committed as dedicated **8ef65e50**
-on lpc-rs-port; the dedicated checkout is clean.
+private main. Force.c and README are committed as dedicated **8ef65e50**,
+with native port notes as **b0a85b5e**. The dedicated checkout is clean on
+lpc-rs-port.
 The command rule, account lookup, notices, logging and force_me remain unchanged.
 No native API change is needed.
 
@@ -3165,8 +3226,8 @@ two jobs and serial tests; CLI checks use at most two processes without overlap.
 Artifacts stay in /tmp and handoff notes under local. Earlier inventories
 retain their scope.
 
-Next: commit the force port and notes, then audit trans/cmds/to.c, including
-editor completion, cancellation and callback binding.
+The subsequent [to audit](#lima-wizard-to-audit) checks editor completion,
+cancellation and callback binding.
 
 #### Lima wizard force audit
 
@@ -14458,3 +14519,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-times-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/times.c
 [lima-at-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/at.c
 [lima-force-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/force.c
+
+[lima-to-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/to.c
+
+[lima-edit-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/edit.h
