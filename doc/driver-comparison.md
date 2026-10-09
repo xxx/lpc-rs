@@ -3123,12 +3123,75 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard force audit
+
+Reviewed **9 October 2026** against pinned [force][lima-force-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[stdio][lima-command-stdio], [command parsing][lima-command-daemon],
+[account lookup][lima-speaker-context], [user input stack][lima-inputsys],
+[logging][lima-emote-log], [wizard shell][lima-wizard-shell] and
+[player shell][lima-pshell]. At and README are committed as dedicated
+**c74c17f7**, with native port notes as **d7c9ff87**. Dedicated Lima is clean
+on lpc-rs-port; force matches pinned upstream byte for byte.
+
+The disposable one-file proposal appends protected variadic dispatch_main,
+forwarding original_input to the existing private main. Force uses
+no_redirection, so CMD supplies raw input first. The existing strsrch alias,
+`user str*` rule, exact account lookup, notices, log write and target force_me
+remain. No native API change is needed; the patch is unadopted.
+
+All **fourteen scenarios pass across 50 registered inputs**. Thirteen proposal
+cases use 48 inputs; the undiscoverable baseline has two. Forty inputs come
+from the caller and ten from the target, through their actual registered
+callbacks. Execution uses the target's user, body, room and shell directory;
+the caller retains its own context and subsequent input. Separate notices
+and child stdout reach the intended connections. Self forcing, diagnostics,
+raw spacing, quoted child arguments, Unicode, target directory changes,
+unknown children and nested forcing pass. The actual log daemon records
+requests in order before child execution, including unknown or throwing children.
+
+A thrown child error retains preceding notices and the log, propagates to
+the caller's input handler and leaves both users usable. Forcing xargs opens
+the target's modal while the caller's shell remains independent. Force_me
+also executes the target's bottom handler while its modal is already open;
+later target input still reaches that modal and normal exit destroys its clone.
+The ordinary-user case uses the actual player shell after shell recreation.
+
+Raw redirect and pipe suffixes are passed to the target's wizard shell and
+execute there; incoming parent stdin is ignored. Existing target-name mismatch
+is retained: the rule accepts `me` and a quoted account name, but main resolves
+the literal raw name with find_user and reports no such user. These are source
+and lpc-rs runtime findings, without an upstream execution claim or an unrelated
+Lima behavior fix.
+
+All **26 complete focused targets compile across 27 checks**, including the
+expected failure for unadapted force. Locked workspace all-target/all-feature
+Clippy and workspace/fixture formatting pass. Clippy initially rejected a
+one-element loop in the disposable fixture's room-copy setup. Replacing it
+with the same direct copy retains every test, input, assertion, proposal and
+LPC helper; all 50 final observations match the first successful runtime run.
+Both runtime logs, the lint failure and exact fixture diff are retained.
+
+The fixture uses two in-memory connections with actual master, simuls, users,
+human bodies, both shells, commands, input stacks, log daemon and file code.
+Only IMUD transport is stubbed; recorder, failure, state and room helpers are
+fixture additions. Every input checks line mode, echo and rearming. All 1,547
+library files, README, configuration, native implementation, CLI and original
+Lima remain unchanged; temporary native test entries are removed. Distinct nil,
+preserved players and 4,000 ms tasks remain. Cargo uses two jobs and serial
+tests; CLI checks use at most two processes without overlap. Artifacts stay
+in /tmp and notes under local. Prior 27/49 transitional and broader inventories
+retain their scope.
+
+Next: commit this audit, then adopt and verify the exact force dispatcher,
+retaining its account lookup, notices, logging and target-shell routing.
+
 #### Lima wizard at port
 
 Adopted **9 October 2026** after committing the [at audit](#lima-wizard-at-audit)
 as native **57a8960b**. Its exact five-line dispatcher forwards parsed arguments
-to the existing private main. Only at.c and README are pending in dedicated
-Lima on lpc-rs-port, based on **3354c137**; native has comparison notes pending.
+to the existing private main. At.c and README are committed as dedicated
+**c74c17f7**, with native port notes as **d7c9ff87**. The dedicated checkout is clean.
 No native API, command rule, target lookup, movement or forced-input code changed.
 
 All **fourteen audited scenarios pass across 39 registered inputs** against
@@ -3165,8 +3228,8 @@ and serial tests; CLI checks use at most two processes without overlap.
 Artifacts stay in /tmp and handoff notes under local. Earlier broader inventories
 retain their scope.
 
-Next: commit the at port and notes, then audit trans/cmds/force.c and its
-execution through the target user's shell.
+The subsequent [force audit](#lima-wizard-force-audit) records its unadopted
+dispatcher and verified target-shell execution, notices, logging and routing.
 
 #### Lima wizard at audit
 
@@ -14349,3 +14412,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
 [lima-times-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/times.c
 [lima-at-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/at.c
+[lima-force-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/force.c
