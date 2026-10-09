@@ -3123,6 +3123,61 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard locate audit
+
+Reviewed **8 October 2026** against pinned [locate][lima-ed-locate],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base] and
+[path simuls][lima-simul-path], after committing find as dedicated **fe6a49f6**
+and native notes **a1aa3f93**. The disposable diagnostic proposal adds protected
+dispatch, inherits existing M_ED, replaces metadata get_dir with names plus
+is_directory, uses bare rebuild_locate_db for call_out, publishes with native
+rename and supplies time_to_string's second argument. No proposal is adopted.
+
+The baseline is undiscoverable. Adding dispatch and M_ED exposes three compile
+failures: unavailable cp, the extra get_dir argument and the omitted formatter
+argument. All **15 complete focused targets compile across 18 checks** after
+adaptation. Retaining the old callback expression compiles but returns a
+function when fired, leaving the partial index and busy state without another
+timer. The explicit callback completes the real copied tree in **five firings**,
+publishes **1,845 entries / 45,116 bytes**, removes the temporary file and clears
+busy state. Every one of the 1,547 library source paths is present; directory,
+hidden, spaced, Unicode and index filenames remain included.
+
+That rebuilt database exceeds M_ED's 8,192-byte and 1,000-line startup limits.
+A normal lookup receives the expected editor startup refusal. A disposable
+read_file/explode/regexp helper searches it successfully and matches the editor
+on seven small-index patterns. Recommend replacing editor-based lookup with
+direct filename-line regexp matching. Native read_file loads the whole file
+before selecting lines, so repeated line-window calls would not provide
+streaming I/O. Existing regex caching suffices; no new native API is indicated.
+
+The **five scenarios pass across 23 registered inputs and six actual timer
+callbacks**. They check discovery, regex/order, directory entries, Unicode,
+ignored stdin, pipes/redirection, syntax/flag/regex diagnostics, duplicate
+rebuild requests, stale temporary data, old-index availability during rebuild,
+publication and reuse after the one expected caught editor-limit error.
+InputTo callbacks verify line mode, echo, rearming and shell/body/directory
+restoration. Rebuild accounts use Lima's existing administrator logon path;
+the initial fixture corrections change only account entry and two expectations,
+leaving proposal bytes and shell inputs unchanged. Workspace locked all-target/
+all-feature Clippy and workspace/harness formatting pass.
+
+Existing source issues remain distinct: raw # can terminate the editor pattern,
+and begin_database_build assigns busy state after a synchronous rebuild that
+may already have completed on a small tree. Native rename also requires its
+source to exist before commit. Recommend initializing the temporary file and
+publishing from a separate zero-delay callback after the writing task commits;
+this also gives first-batch completion a simple ordering. These small-tree
+cases are source-reviewed, not exercised by the full-tree fixture.
+
+All 1,547 library files, README, configuration, native implementation, CLI and
+original Lima remain unchanged. Distinct nil, preserved call-out players and
+4,000 ms tasks remain. Earlier inventories retain their scope; these in-memory
+fixtures establish no new full boot, service, connection-loop or upstream run.
+
+Next: adapt locate's lookup to native regexp and its publication to a committed
+temporary file, then verify and adopt the complete one-file port.
+
 #### Lima wizard find port
 
 Adopted **8 October 2026** in the dedicated Lima checkout after the find audit
