@@ -3123,6 +3123,39 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard grep port
+
+Adopted **8 October 2026** in the dedicated Lima checkout after the native
+[slice-read fix below](#lima-slice-read-evaluation-fix). The one-file
+[grep][lima-ed-grep] adaptation matches the rechecked proposal: protected
+dispatch, existing M_ED, bare out, mixed index/string pairs from regexp,
+terminal-LF field handling and per-file editor startup refusals. Absent stdin
+remains nil and explicit files retain precedence. The translator is unchanged.
+
+All **nine audited cases pass against adopted source**: eight shell scenarios
+across **57 inputs**, plus the independent actual-module range/glob check.
+Working searches load the dedicated command without replacement; only baseline
+and dispatch controls use frozen source. File selection/flags, numbering,
+inversion, case handling, Unicode/blank/empty/unterminated text, slash patterns,
+limits/continuation, pipelines/redirection, refusals and reuse retain their
+assertions and shell/body/directory state checks. Four expected caught errors
+cover the dispatch-only controls, inverse-directory read and invalid stdin regex.
+
+Fresh focused checks compile **8/49 transitional commands** and **16/16 complete
+supporting targets** across 60 distinct checks. Only grep is added, with no
+regressions, timeouts or abnormal exits. Workspace locked all-target/all-feature
+Clippy and workspace/harness formatting pass. Configuration, other library
+files and native implementations are unchanged by the command adoption.
+
+M_ED retains its 8,192 UTF-8 byte, 1,000-line and 2,048-byte line startup limits
+and 8,192-byte output limit, below grep's 1,000,000-byte outer guard. Inverse
+file mode retains its directory-expansion gap, and patterns retain the existing
+glob semantics. Prior wizard/player/verb/full-inventory results keep their
+earlier scope. Connections, account helpers and pipe capture are fixtures;
+no new full boot, service, connection-loop or upstream execution is claimed.
+
+Next: audit trans/cmds/more.c through file/stdin and modal pager routes.
+
 #### Lima slice-read evaluation fix
 
 The **8 October 2026** change fixes the native compiler defect found by the
