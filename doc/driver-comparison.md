@@ -3123,6 +3123,35 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard du port
+
+Adopted **9 October 2026** in dedicated Lima after committing the
+[du audit](#lima-wizard-du-audit) as native **abcef541**. The exact audited
+one-file patch adds protected dispatch calling main(arg). The directory rule,
+private handler, forward declarations and native file metadata remain.
+Only du.c and README are pending in dedicated Lima; native has comparison
+notes pending.
+
+All **nine audited scenarios pass across 32 registered inputs**, plus four
+direct disk_usage calls, against adopted source. Every assertion, command,
+datum and LPC helper is retained. Working cases load the dedicated command
+directly; the baseline control retains its audited source. Every recorded
+output, error and shell/body/directory/input-stack observation matches the
+audit, including the expected output-limit refusal with recovery. Directory
+totals/order, KB boundaries, path expansion and refusals, output routes and
+actual pager return pass. Existing size arithmetic, node-depth cutoff and
+blank root display label remain separately recorded in the audit.
+
+Fresh checks compile **20/49 transitional commands** and all **25 supporting
+targets** across **65 distinct checks**, adding only du without regressions.
+Locked workspace all-target/all-feature Clippy and formatting pass. Temporary
+test entries are removed. The other 1,546 library files, configuration, native
+implementation, CLI and original Lima remain unchanged. Distinct nil, preserved
+players and 4,000 ms tasks remain; preceding broader evidence retains its scope.
+Disposables stay in /tmp and handoff notes under local.
+
+Next: commit du and its port notes, then audit addpath, rmpath and printpath.
+
 #### Lima wizard du audit
 
 Reviewed **9 October 2026** against pinned [du][lima-du-command], after
@@ -3162,7 +3191,8 @@ preceding 19/49 transitional and broader evidence retain their scope. Temporary
 test entries are removed; disposables stay in /tmp and notes under local.
 No upstream-driver execution is claimed.
 
-Next: commit this audit, then adopt and verify the one-file du dispatcher.
+Follow-up: this audit is committed as native **abcef541**; the exact dispatcher
+is [adopted and verified](#lima-wizard-du-port) in dedicated Lima.
 
 #### Lima wizard diff port
 
