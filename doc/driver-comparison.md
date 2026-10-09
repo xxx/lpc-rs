@@ -3123,6 +3123,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard head and tail port
+
+Adopted **8 October 2026** in the dedicated Lima checkout. The two-file
+[head][lima-head-command]/[tail][lima-tail-command] patch matches the audited
+proposal: each appends protected variadic dispatch_main calling its existing
+private main(arg, flags, input), preserving nil for absent stdin. Private
+handlers, line/count expressions, rules, CMD/stdio guards, shell, simuls,
+file APIs and native implementations retain their source.
+
+All **eight audited cases pass together across 57 shell inputs**, preserving
+their assertions, fixture data and helpers. Working paths load adopted source
+directly; only the baseline discovery control substitutes frozen originals.
+Real user/shell/CMD/stdio/pipeline/getopt/simul/filesystem execution verifies
+paths, grouped files, flags/counts, text edges, actual cat/file stdin and its
+precedence, absent input, ordinary refusals and head's raw output routes,
+with shell/body/directory state assertions. Tail's direct-pager routing behavior
+and exact blank-line output retain their audited checks. The pipe consumer
+remains fixture code; connections are in-memory, with a no-transport fixture
+IMUD daemon. Interactive pager navigation is outside this run's scope.
+
+Fresh focused compilation verifies **7/49 transitional commands** and **12/12
+complete targets** across 57 distinct checks. Only head and tail are added,
+with no regressions, timeouts or abnormal exits. Workspace locked all-target/
+all-feature Clippy and formatting pass. Prior wizard/player/verb and full
+inventory evidence retains its earlier scope. Distinct nil, preserved call-out
+players and 4,000 ms tasks remain. Tail's outgoing-route limitation and head's
+snippet/count behavior described below are preserved. No new full boot, service
+flow, connection-loop or upstream execution is claimed.
+
+Next: audit grep's file and pipeline-input routes.
+
 #### Lima wizard head and tail audit
 
 Reviewed **8 October 2026** against pinned [head][lima-head-command],
