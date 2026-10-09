@@ -3123,6 +3123,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard times port
+
+Adopted **9 October 2026** after committing the [times audit](#lima-wizard-times-audit)
+as native **62fb7c39**. Its exact five-line dispatcher forwards original input
+and parsed arguments to the existing private main. Only times.c and README
+are pending in dedicated Lima on lpc-rs-port, based on **88ff5c16**; native has
+comparison notes pending. The rule, count guard, word join, repeat loop,
+force_me, shell and native APIs retain their preceding implementations.
+
+All **fifteen audited scenarios pass across 46 registered inputs** against
+adopted source. Fourteen working cases use 44 inputs and load the dedicated
+command directly; the baseline uses its frozen unadapted command. Every
+assertion, input, datum and helper is retained. All output, error, player,
+directory, modal-stack and clone observations match the audit exactly.
+Counts and diagnostics, ordinary limit and real administrator login, nesting,
+context, second-call exception recovery and repeated modal entry/exit pass.
+Numeric-prefix parsing, word joining and ignored outer routes/stdin retain
+their audited behavior; no expectation changed during adoption.
+
+Fresh compilation reaches **26/49 transitional commands** and all **38 complete
+supporting targets** across **72 distinct checks**. Only times is newly
+successful; no preceding success regresses and no timeout occurs. Supports
+retain preceding targets and add the complete times audit dependencies;
+partial sw_body is verified through the assembled secure/user target.
+Locked workspace all-target/all-feature Clippy and workspace/fixture
+formatting pass. The other 1,546 library files, configuration, native
+implementation, CLI and original Lima remain unchanged; temporary test entries
+are removed.
+
+The fixture retains actual master, simuls, user, body, wish, command, modal
+and file code with an in-memory connection; only IMUD transport is stubbed.
+Administrator entry uses the existing logon path and verifies privilege 1.
+Every input checks line mode, echo and rearming. Distinct nil, preserved
+players and 4,000 ms tasks remain. Cargo uses two jobs and serial tests;
+CLI checks use at most two processes without overlap. Artifacts stay in /tmp
+and handoff notes under local. Earlier broader inventories retain their scope.
+
+Next: commit the times port and notes, then audit trans/cmds/at.c and its
+forced command execution with temporary player movement.
+
 #### Lima wizard times audit
 
 Reviewed **9 October 2026** against pinned [times][lima-times-command],
@@ -3130,7 +3170,7 @@ Reviewed **9 October 2026** against pinned [times][lima-times-command],
 [stdio][lima-command-stdio], [command parsing][lima-command-daemon],
 [wizard shell][lima-wizard-shell] and [user input stack][lima-inputsys].
 Do and README are committed as dedicated **88ff5c16**, with port notes as
-native **4940cc21**. Dedicated Lima remains clean; times still matches pinned
+native **4940cc21**. Dedicated Lima was clean during this audit; times matched pinned
 upstream byte for byte. No native API change is needed.
 
 The disposable one-file proposal appends protected variadic dispatch_main,
@@ -3178,7 +3218,8 @@ tests; CLI checks use at most two processes without overlap. Artifacts stay
 in /tmp and notes under local. Preceding 25/49 transitional and broader
 inventories retain their scope.
 
-Next: commit this audit, then adopt and verify the times dispatcher.
+This audit is committed as native **62fb7c39**. The subsequent
+[times port](#lima-wizard-times-port) adopts and verifies its exact dispatcher.
 
 #### Lima wizard do port
 
