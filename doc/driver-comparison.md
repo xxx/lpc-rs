@@ -3123,6 +3123,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard cut audit
+
+Reviewed **9 October 2026** against pinned [cut][lima-cut-command], after
+committing replace as dedicated **72ab76b7** and its notes as native **4b53ee17**.
+The unchanged command fails CMD's required dispatch_main calls. A disposable
+one-file proposal adds only protected dispatch to the existing private main.
+The existing [regex module][lima-regex-module] uses the port's reg_assoc simul;
+absent stdin already works through sizeof(nil). No native API or nil adapter is
+needed. The proposal is not adopted.
+
+All **10 scenarios pass across 54 registered shell inputs**. Exact output checks
+cover field indices, inclusive ranges, ordering, duplicates, regex delimiters,
+matched separator text, empty fields, Unicode, file expansion and repeated
+paths. Named files take precedence over stdin. Pipes, input redirection,
+overwrite/append output and actual pager entry/quit pass; callbacks check line
+mode, echo, rearming and stable account/body/directory state. Ordinary invalid
+regex and output-limit errors are caught by the existing input handler, preserve
+source files and permit subsequent commands. A file larger than 8,192 bytes
+works when selected output remains small; output concatenation retains that
+native byte limit.
+
+Existing Lima source behavior remains separate from compatibility work:
+the last field is omitted unless followed by a delimiter, so `cut -f3` on
+`one two three` emits no field. Duplicate selections may retain an extra
+separator. Terminal LF creates an extra empty line, and each processed file
+adds another trailing LF; empty files are skipped. Descending/malformed field
+specifications produce blank lines, while numeric prefixes are accepted.
+Missing-field and nothing-to-cut diagnostics use printf and bypass outgoing
+pipes. The proposal preserves these behaviors. [Command rules][lima-trans-command-rules]
+and [stdio][lima-command-stdio] otherwise retain their existing contracts.
+
+The proposal and **18 supporting targets compile across 20 checks**, including
+the expected baseline failure. Locked workspace all-target/all-feature Clippy
+and formatting pass. All 1,547 dedicated library files, README, configuration,
+native implementation, CLI and original Lima remain unchanged. Distinct nil,
+preserved players and 4,000 ms tasks remain; prior inventories retain their
+scope. Fixtures and logs stay in /tmp, with notes under local; temporary native
+test entries are removed. These are focused native checks, not upstream-driver
+execution or a new full-port inventory.
+
+Next: commit the audit notes, then adopt and verify the one-file cut dispatcher.
+
 #### Lima wizard replace port
 
 Adopted **9 October 2026** in dedicated Lima after committing the
@@ -3159,7 +3201,9 @@ tasks remain. Broader inventories and startup/service evidence retain their
 preceding scope; temporary native test entries are removed after all gates.
 Disposable fixtures/logs stay in /tmp, with the handoff under local.
 
-Next: commit the replace port, then audit trans/cmds/cut.c.
+Follow-up: replace and README are committed as dedicated **72ab76b7**, with
+comparison notes as native **4b53ee17**. The [cut audit](#lima-wizard-cut-audit)
+now establishes the next adaptation.
 
 #### Lima wizard replace audit
 
@@ -13599,6 +13643,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-pwd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/pwd.c
 [lima-trans-cd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cd.c
 [lima-trans-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/Cmd_rules
+[lima-cut-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cut.c
 [lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
