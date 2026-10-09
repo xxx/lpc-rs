@@ -8,15 +8,16 @@ object's directory.
 
 `start` is a 1-based line number (0 is the first line too) and `lines` a
 count; `0` or an absent `lines` reads to the end. A start past the last line
-returns `0`, allowing chunk-reading loops to detect EOF. An empty file read
-from the beginning (`start` omitted, 0, or 1) returns `""`. A negative `start`
-or `lines` is a runtime error. Lines keep the newline they had in the file.
+returns `nil` in distinct null mode, or `0` in zero null mode. A truth test
+detects EOF in either mode. An empty file read from the beginning (`start`
+omitted, 0, or 1) returns `""`. A negative `start` or `lines` is a runtime
+error. Lines keep the newline they had in the file.
 
 Every call is first put to the master's `valid_read(path, "read_file",
 caller, program)`. A refusal, or a master that does not define the apply, is
 the runtime error `read_file: permission denied`. A file that cannot be read
 is a runtime error naming its in-game path. Both are caught by `catch()`;
-`read_file` never returns 0 for a failure.
+`read_file` never returns a null value for a failure.
 
 A path that leads out of the lib (`..` past the root) is a runtime error
 before the master is asked.

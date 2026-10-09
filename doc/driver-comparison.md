@@ -3123,6 +3123,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard file output audit
+
+Reviewed **8 October 2026** against pinned [cat][lima-cat-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[stdio][lima-command-stdio] and [wizard shell][lima-wizard-shell]. The proposal
+changes only trans/cmds/cat.c: protected variadic dispatch_main calls private
+main(arg, flags, input || ""), and the chunk loop tests EOF by truth rather than
+comparison with integer zero, retaining its explicit empty-string check.
+
+Baseline compilation fails at missing dispatch. The adapter alone compiles but
+reproduces string + nil at EOF; fixing EOF alone reproduces the same error with
+absent stdin. The complete proposal passes **nine cases across 34 shell inputs**,
+including those two expected-error controls. Real shell/CMD/stdio/pipeline/rules/
+path/glob/filesystem execution verifies terminal text, paths, grouped files,
+empty/unterminated text, repeated calls, chunk boundaries, ordinary refusals,
+incoming ls/chained cat/file input, explicit-file precedence and output
+overwrite/append. State assertions cover shell/body/directory/current-file state.
+The capture consumer remains fixture code; connections are in-memory, with a
+no-transport fixture IMUD daemon.
+
+The original cursor advances by 101 for each 100-line read: a 405-line fixture
+omits exactly lines 201, 302 and 403. [FluffOS's core read_file source][fl-cat-read-lines]
+at **44532e0228f34be2184c701a361df4079371b8b0** uses the same zero/one first-line
+alias and positive 1-based start/count semantics. Source review therefore also
+predicts those omissions upstream; no FluffOS build or execution is claimed.
+The core package source was reviewed on this date, without exercising build
+options. This existing Lima bug is preserved separately from compatibility work.
+The absent current-file fallback promised by cat's prose and its treatment of
+flag-like text as filenames are also preserved.
+
+All **nine focused complete targets compile**, with baseline and partial
+controls recorded separately. Workspace locked all-target/all-feature Clippy
+and formatting pass. The proposal is unadopted; the dedicated checkout remains
+clean and active **15/81 wizard**, **4/49 transitional**, **65/67 player**, verb
+and full-inventory results retain their preceding scope. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain. The canonical
+[`read_file`](efun/read_file.md) prose now correctly describes its existing
+configured nil EOF result; native implementations are unchanged. No full boot,
+service flow, connection-loop or upstream execution was repeated.
+
+Next: adopt cat's dispatch/nil/absent-input patch, then audit head and tail.
+
 #### Lima wizard listing port
 
 Adopted **8 October 2026** in the dedicated Lima checkout. The one-file
@@ -12830,5 +12872,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
 [lima-ls-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/ls.c
+[lima-cat-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cat.c
+[fl-cat-read-lines]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc#L325-L451
 [lima-player-mode]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mode.c
 [lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
