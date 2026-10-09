@@ -3123,6 +3123,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard force port
+
+Adopted **9 October 2026** after committing the [force audit](#lima-wizard-force-audit)
+as native **3d738376**. Its exact dispatcher forwards raw input to the existing
+private main. Force.c and README are committed as dedicated **8ef65e50**
+on lpc-rs-port; the dedicated checkout is clean.
+The command rule, account lookup, notices, logging and force_me remain unchanged.
+No native API change is needed.
+
+All **fourteen audited scenarios pass across 50 registered inputs** against
+adopted source. Thirteen working cases use 48 inputs and load the dedicated
+command directly; only the baseline restores its frozen unadapted command.
+Every assertion, input, datum and helper is retained, and all 50 observations
+match the audit exactly. Both actual shells, target user/body/room/directory
+context, caller restoration, separate notices, logging order, self and nested
+forcing, arguments and diagnostics pass. A throwing child remains logged and
+notified beforehand, propagates its error to the caller and leaves both users
+usable. No expectation changed during adoption.
+
+Forcing xargs opens the target's modal while the caller remains independent.
+Force_me still executes the target's bottom handler while that modal is open;
+later target input reaches the modal, and exit destroys its clone. Raw redirect
+and pipe suffixes execute in the target's wizard shell; incoming parent stdin
+is ignored. Existing literal account-name lookup still rejects the rule's
+`me` and quoted-name forms. These retain their audited behavior.
+
+Fresh compilation reaches **28/49 transitional commands** and all **48 complete
+supporting targets** across **80 distinct checks**. Only force is newly
+successful; no preceding success regresses and no timeout occurs. Supports
+retain previous targets and add complete force and logging dependencies.
+Locked workspace all-target/all-feature Clippy and workspace/fixture formatting
+pass. The other 1,546 library files, configuration, native implementation, CLI
+and original Lima remain unchanged; temporary native test entries are removed.
+
+The fixture retains two in-memory connections with actual master, simuls,
+users, human bodies, both shells, commands, input stacks, log daemon and file
+code; only IMUD transport is stubbed. Every input checks line mode, echo and
+rearming. Distinct nil, preserved players and 4,000 ms tasks remain. Cargo uses
+two jobs and serial tests; CLI checks use at most two processes without overlap.
+Artifacts stay in /tmp and handoff notes under local. Earlier inventories
+retain their scope.
+
+Next: commit the force port and notes, then audit trans/cmds/to.c, including
+editor completion, cancellation and callback binding.
+
 #### Lima wizard force audit
 
 Reviewed **9 October 2026** against pinned [force][lima-force-command],
@@ -3131,8 +3176,8 @@ Reviewed **9 October 2026** against pinned [force][lima-force-command],
 [account lookup][lima-speaker-context], [user input stack][lima-inputsys],
 [logging][lima-emote-log], [wizard shell][lima-wizard-shell] and
 [player shell][lima-pshell]. At and README are committed as dedicated
-**c74c17f7**, with native port notes as **d7c9ff87**. Dedicated Lima is clean
-on lpc-rs-port; force matches pinned upstream byte for byte.
+**c74c17f7**, with native port notes as **d7c9ff87**. Dedicated Lima was clean
+on lpc-rs-port during this audit; force matched pinned upstream byte for byte.
 
 The disposable one-file proposal appends protected variadic dispatch_main,
 forwarding original_input to the existing private main. Force uses
@@ -3183,8 +3228,8 @@ tests; CLI checks use at most two processes without overlap. Artifacts stay
 in /tmp and notes under local. Prior 27/49 transitional and broader inventories
 retain their scope.
 
-Next: commit this audit, then adopt and verify the exact force dispatcher,
-retaining its account lookup, notices, logging and target-shell routing.
+This audit is committed as native **3d738376**. The subsequent
+[force port](#lima-wizard-force-port) adopts and verifies its exact dispatcher.
 
 #### Lima wizard at port
 
