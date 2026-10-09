@@ -3123,6 +3123,43 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard directory-command port
+
+Adopted **8 October 2026** in the dedicated Lima checkout using the audited
+[mkdir][lima-mkdir-command], [rmdir][lima-rmdir-command] and
+[rm][lima-remove-command] proposal. Each gains protected dispatch_main calling
+main(arg); mkdir's grouped path vector is mixed *, and mkdir/rmdir catch refusals
+per path to preserve existing messages and continuation. The rm algorithm,
+argument rules and flags remain unchanged. Native directory visibility is
+committed as **189ee0c4**; this adoption needs no further native change.
+
+All **12 scenarios pass against adopted source across 42 registered inputs**.
+Every assertion, fixture datum and LPC helper is retained from the corrected
+native-fix recheck. Working cases load the dedicated commands without replacement;
+only original discovery and uncaught-refusal controls substitute frozen sources.
+Child/parent batches remove both directories, duplicate removal reports one
+success and one refusal, and pending creation/removal, paths/globs, binary/NUL/
+Unicode files, continuation, input refusals and status pipes/redirection pass.
+Committed InputTo callbacks check line mode, echo-enabled registration, rearming
+and restored shell/body/directory state. Both expected caught errors remain the
+existing-mkdir and nonempty-rmdir controls.
+
+Fresh checks compile **14/49 transitional commands** and all **12 supporting
+targets** across **57 distinct checks**, adding only mkdir, rmdir and rm with no
+regressions, timeouts or abnormal exits. Workspace locked build, warning-free
+all-target/all-feature Clippy and workspace/harness formatting pass. The other
+1,544 library files, configuration and original Lima remain unchanged; the CLI
+is rebuilt against the committed native fix. Temporary test entries are removed.
+
+The existing parent-expansion rule still refuses creating a missing parent and
+its child in the same command before either is created. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain. Broader inventory and startup evidence
+keeps its preceding scope; these in-memory connection fixtures do not establish
+new full-boot, service, connection-loop or upstream execution behavior.
+
+Next: commit the directory-command port, then audit the remaining file-search
+commands, starting with trans/cmds/find.c.
+
 #### Lima native directory-removal visibility
 
 Fixed **8 October 2026** after the pinned directory-command audit below. Native
