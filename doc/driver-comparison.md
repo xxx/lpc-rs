@@ -3123,6 +3123,36 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard file output port
+
+Adopted **8 October 2026** in the dedicated Lima checkout. The one-file
+[cat][lima-cat-command] patch matches the audited proposal: protected variadic
+dispatch_main calls private main(arg, flags, input || ""), and the chunk loop
+tests EOF by truth, retaining the explicit empty-string check. Private handlers,
+chunk cursor/size, command rules, shell/CMD/stdio guards and native APIs retain
+their implementations.
+
+All **nine audited cases pass together across 34 shell inputs**, preserving
+their assertions, fixture data and helpers. Working paths load adopted cat
+directly; only the three controls substitute frozen unadapted/partial versions,
+including two expected caught nil errors. Real shell/CMD/stdio/pipeline/rules/
+path/glob/filesystem execution verifies files, read boundaries, refusals,
+incoming ls/chained cat/file stdin, explicit-file precedence, absent input and
+output overwrite/append, with shell/body/directory/current-file state assertions.
+The capture consumer remains fixture code; connections are in-memory, with a
+no-transport fixture IMUD daemon.
+
+Fresh focused compilation verifies **5/49 transitional commands** and **10/10
+complete targets** across 57 distinct checks. Only cat is added, with no
+regressions, timeouts or abnormal exits. Workspace locked all-target/all-feature
+Clippy and formatting pass. Prior wizard/player/verb and full-inventory results
+retain their earlier scope. Distinct nil, preserved call-out players and 4,000 ms
+tasks remain. The cursor omissions, absent current-file fallback and flag-like
+filename handling described below are preserved. No new full boot, service
+flow, connection-loop or upstream execution is claimed.
+
+Next: audit head and tail through ordinary file, flag and pipeline-input routes.
+
 #### Lima wizard file output audit
 
 Reviewed **8 October 2026** against pinned [cat][lima-cat-command],
