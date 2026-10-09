@@ -3123,13 +3123,73 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard at audit
+
+Reviewed **9 October 2026** against pinned [at][lima-at-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[stdio][lima-command-stdio], [command parsing][lima-command-daemon],
+[target lookup][lima-object-grouping], [movement][lima-container-move],
+[wizard shell][lima-wizard-shell] and [forced input][lima-user-shell].
+Times and README are committed as dedicated **3354c137**, with native port
+notes as **52627b19**. Dedicated Lima is clean on lpc-rs-port; at matches
+pinned upstream byte for byte. No native API change is needed.
+
+The disposable one-file proposal appends protected variadic dispatch_main,
+forwarding its parsed first argument to the existing private main. At uses
+the ordinary stdio path and the `user str*` rule. Its target lookup, movement,
+word join, force_me and return movement remain unchanged. The patch is unadopted.
+
+All **fourteen scenarios pass across 39 registered inputs**. Thirteen proposal
+cases use 37 inputs; the undiscoverable baseline has two. Normal execution in
+the target's room restores the actor's room, retains shell directory and player
+context, and leaves the target unchanged. Self targeting, missing/invalid
+arguments, unknown child verbs, word joining, quoted spacing and Unicode pass.
+An unplaced target produces the existing no-environment diagnostic. An unplaced
+actor cannot resolve the tested named target: get_object guards both room
+lookup and its later find_body fallback with the actor's environment check.
+
+Existing movement limitations are retained. At ignores both move return
+values: refusal on the outbound move still runs the child in the starting
+room, while refusal on return leaves the actor in the target's room. A thrown
+child error also skips return movement; a following command retains the same
+user/body context in that room. These behaviors follow the existing source
+and are tested on lpc-rs, without an upstream execution claim or an unrelated
+Lima behavior fix.
+
+The child keeps its own stdout route; the outer redirect file and downstream
+pipe receive empty output, and incoming stdin is ignored. Opening xargs
+returns the actor to the starting room before later modal input executes there.
+Modal entry, registered callbacks, normal exit and clone destruction pass.
+
+All **26 complete focused targets compile across 27 checks**, including the
+expected failure for unadapted at. Locked workspace all-target/all-feature
+Clippy and workspace/fixture formatting pass. The first runtime pass had one
+incorrect test expectation for target resolution from an unplaced actor;
+only that case's assertion and subsequent recovery check changed. Its first
+input observation and all other case observations match the initial run.
+Both logs, the test diff, unchanged proposal and helpers are retained.
+
+The fixture uses two connected users with actual master, simuls, human bodies,
+wish, command, container, movement, modal and file code. Only IMUD transport
+is stubbed; recorder, failure, state and refusal helpers are fixture additions.
+Every input checks line mode, echo and rearming. All 1,547 library files,
+README, configuration, native implementation, CLI and original Lima remain
+unchanged; temporary native test entries are removed. Distinct nil, preserved
+players and 4,000 ms tasks remain. Cargo uses two jobs and serial tests;
+CLI checks use at most two processes without overlap. Artifacts stay in /tmp
+and notes under local. Prior 26/49 transitional and broader inventories retain
+their scope.
+
+Next: commit this audit, then adopt and verify the exact at dispatcher,
+retaining the audited movement, lookup, output and modal behavior.
+
 #### Lima wizard times port
 
 Adopted **9 October 2026** after committing the [times audit](#lima-wizard-times-audit)
 as native **62fb7c39**. Its exact five-line dispatcher forwards original input
-and parsed arguments to the existing private main. Only times.c and README
-are pending in dedicated Lima on lpc-rs-port, based on **88ff5c16**; native has
-comparison notes pending. The rule, count guard, word join, repeat loop,
+and parsed arguments to the existing private main. Times.c and README are
+committed as dedicated **3354c137**, with native port notes as **52627b19**.
+The dedicated checkout is clean. The rule, count guard, word join, repeat loop,
 force_me, shell and native APIs retain their preceding implementations.
 
 All **fifteen audited scenarios pass across 46 registered inputs** against
@@ -3160,8 +3220,8 @@ players and 4,000 ms tasks remain. Cargo uses two jobs and serial tests;
 CLI checks use at most two processes without overlap. Artifacts stay in /tmp
 and handoff notes under local. Earlier broader inventories retain their scope.
 
-Next: commit the times port and notes, then audit trans/cmds/at.c and its
-forced command execution with temporary player movement.
+The subsequent [at audit](#lima-wizard-at-audit) records its unadopted
+dispatcher and existing movement, lookup, output and modal behavior.
 
 #### Lima wizard times audit
 
@@ -14242,3 +14302,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-player-mode]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mode.c
 [lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
 [lima-times-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/times.c
+[lima-at-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/at.c
