@@ -3123,6 +3123,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard more audit
+
+Reviewed **8 October 2026** against pinned [more][lima-more-command],
+[command rules][lima-trans-command-rules], [pager][lima-pager] and
+[simul helpers][lima-more-helpers]. The unadopted one-file proposal converts
+function(string file) to a native typed closure, adds protected dispatch_main
+and uses nil for the two absent function continuations. Numeric default-height
+arguments remain zero. No native API or pager/input-stack change is needed.
+
+All **nine cases pass across 56 inputs**, driven through the native InputTo
+callbacks committed by the actual user stack, with the user as command giver.
+Line mode, echo-enabled registration, rearming, pager ownership/count and
+restoration of the shell/body/directory state are checked. Cases cover baseline discovery; relative
+files and Unicode/blank/empty text; absent and supplied stdin/file precedence;
+paging/help/shell escapes; forward/backward search and recovery; multiple files;
+exact-page/stdin completion; outgoing routes; and refusals/limits/cleanup.
+Invalid regex and overlong-line concatenation are the two expected caught errors.
+
+The existing direct pager output bypasses CMD's outgoing pipe/redirection buffer.
+File mode reads only the first 999 lines without refill. The current wrap path
+adds a blank line after each displayed line; string stdin also retains its final
+LF split field. The advertised -c option is treated as a filename by the current
+rule, and directory arguments are refused during obfile expansion. These
+behaviors are recorded separately and left unchanged by the proposal; upstream
+execution/equivalence is unchecked.
+
+All **12 complete focused targets compile across 16 checks**, retaining the
+four baseline/partial compile refusals. Workspace locked all-target/all-feature
+Clippy and workspace/harness formatting pass. Source, README, configuration,
+CLI and native implementation are unchanged. Distinct nil, preserved call-out
+players and 4,000 ms tasks remain; prior command/inventory evidence keeps its
+earlier scope. Account helpers and connections are fixtures, and no new full
+boot, service or connection-loop run is claimed.
+
+Next: adopt the one-file more command adaptation.
+
 #### Lima wizard grep port
 
 Adopted **8 October 2026** in the dedicated Lima checkout after the native
@@ -12867,6 +12903,7 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-news-user-state]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/user/newsdata.c
 [lima-news-number-sets]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_set.c
+[lima-more-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/more.c
 [lima-pager]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/more_ob.c
 [lima-text-editor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/edit_ob.c
 [lima-more-helpers]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/more.c
