@@ -3123,13 +3123,70 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard times audit
+
+Reviewed **9 October 2026** against pinned [times][lima-times-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[stdio][lima-command-stdio], [command parsing][lima-command-daemon],
+[wizard shell][lima-wizard-shell] and [user input stack][lima-inputsys].
+Do and README are committed as dedicated **88ff5c16**, with port notes as
+native **4940cc21**. Dedicated Lima remains clean; times still matches pinned
+upstream byte for byte. No native API change is needed.
+
+The disposable one-file proposal appends protected variadic dispatch_main,
+forwarding original_input and parsed_args to the existing private main.
+Times calls no_redirection, so CMD supplies the raw input first and the
+rule's parsed array second. Its `num str*` rule, count guard, word joining,
+repeat loop and force_me calls remain unchanged. The patch is unadopted.
+
+All **fifteen scenarios pass across 46 registered inputs**. Fourteen proposal
+cases use 44 inputs; the undiscoverable baseline has two. Exact repetitions,
+the ordinary ten-repeat boundary, real administrator login with privilege 1
+and eleven repetitions, missing/invalid/nonpositive counts, nested times,
+player/directory context, unknown children and exception recovery pass.
+A second-call child exception retains its first output, stops the third call
+and leaves the player and shell usable. Repeating xargs twice creates two
+modal handlers and clones; each accepts input and exits normally.
+
+Existing parsing and routing are retained: numeric prefixes, signs and leading
+zeroes are accepted by the rule's sscanf conversion. Parsed words are joined
+with single spaces, with surrounding quotes removed before the child command
+is parsed again; spacing inside a quoted word and Unicode survive the tested
+cases. Outer redirection and downstream pipe suffixes are ignored through
+the existing no_redirection shell path, and incoming stdin is ignored.
+These are source/native-runtime observations, without claiming identical
+upstream driver execution or changing these Lima behaviors.
+
+All **22 complete focused targets compile across 24 checks**, including expected
+failures for unadapted times and standalone partial sw_body. The assembled
+secure/user target and real login case pass. Locked workspace
+all-target/all-feature Clippy and workspace/fixture formatting pass. The first
+runtime pass exposed an off-by-one in the test-only failure helper's split-field
+count; exact recorded
+text now triggers its intended second-call exception. The proposal, inputs,
+assertions, Rust fixture and all other helpers remain unchanged; all other
+case observations match the first run, whose logs are retained.
+
+The fixture retains actual master, simuls, user, body, wish, command, modal
+and file code with an in-memory connection; only IMUD transport is stubbed.
+Administrator entry uses the existing logon path and verifies privilege 1.
+Every input checks line mode, echo and rearming. All 1,547
+library files, README, configuration, native implementation, CLI and original
+Lima remain unchanged; temporary native test entries are removed. Distinct nil,
+preserved players and 4,000 ms tasks remain. Cargo uses two jobs and serial
+tests; CLI checks use at most two processes without overlap. Artifacts stay
+in /tmp and notes under local. Preceding 25/49 transitional and broader
+inventories retain their scope.
+
+Next: commit this audit, then adopt and verify the times dispatcher.
+
 #### Lima wizard do port
 
 Adopted **9 October 2026** after committing the [do audit](#lima-wizard-do-audit)
 as native **cab7c286**. Its exact one-file patch adds protected CMD dispatch
-and separates the syntax write from its bare return. Only do.c and README are
-pending in dedicated Lima on lpc-rs-port, based on **3415e694**; native has
-comparison notes pending. No native API, rule, shell or callback changes are needed.
+and separates the syntax write from its bare return. Do.c and README are
+committed as dedicated **88ff5c16**, with native port notes as **4940cc21**.
+The dedicated checkout is clean. No native API, rule, shell or callback changed.
 
 All **thirteen audited scenarios pass across 31 registered inputs** against
 adopted source. The twelve working cases use 29 inputs and load the dedicated
@@ -3154,8 +3211,8 @@ players and 4,000 ms tasks remain configured. Cargo uses two jobs and serial
 tests; CLI checks use at most two processes without overlap. Artifacts stay
 in /tmp and handoff notes under local. Earlier broader inventories retain their scope.
 
-Next: commit the do port and notes, then audit trans/cmds/times.c and its
-repeat-count parsing, privilege handling and forced command execution.
+The subsequent [times audit](#lima-wizard-times-audit) records its unadopted
+dispatcher proposal and retained repeat-count, output and modal behavior.
 
 #### Lima wizard do audit
 
@@ -14143,3 +14200,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-cat-read-lines]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc#L325-L451
 [lima-player-mode]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/player/mode.c
 [lima-regex-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_regex.c
+[lima-times-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/times.c
