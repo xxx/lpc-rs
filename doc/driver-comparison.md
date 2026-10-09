@@ -3123,6 +3123,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard backup and restore port
+
+Adopted **9 October 2026** after committing the
+[backup and restore audit](#lima-wizard-backup-and-restore-audit) as native
+**f7eacb21**. The exact two-file patch adds protected command dispatchers,
+binds all three restore callbacks with `&prompt_user(asContents, sPath, sOrigFile)`,
+and catches existing file reads/writes so their diagnostics and cleanup run.
+The read assignment inside catch also resolves rst's negation/assignment type
+error. Bk.c, rst.c and README are committed as dedicated **6cc443fb** on
+lpc-rs-port; the checkout is clean. No native API changed.
+
+All **eighteen audited cases pass across 64 registered inputs**. Fourteen cases
+use the checkout commands directly for 53 inputs; the collision case appends
+only its fixture clock for two inputs. Three diagnostic controls retain frozen
+sources for nine inputs. Every assertion, input, datum and helper is retained.
+Context, file state, handler state and errors match the audit observations.
+Real-time backup names can differ between runs; raw output equality is not claimed.
+
+Backup directory creation, calendar naming, .c fallback, empty files, source and
+backup bytes, current-file state and timestamp collisions pass. Restore selection,
+menu redisplay, repeated invalid input and q/x cancellation retain their binding.
+Deleted backups and directory destinations report errors, remove the restore
+handler and leave a usable shell. Existing initial and callback output routes pass.
+Absolute-current-file reads, missing nested backup directories, continuation after
+failed backup reads and the final collision overwrite remain recorded source quirks.
+
+Fresh checks compile **31/49 transitional commands** and all **52 complete
+supporting targets** across **81 distinct checks**. Only bk and rst are newly
+successful, with no regressions or timeouts. Locked workspace all-target/all-feature
+Clippy and workspace/fixture formatting pass. The other 1,545 library files,
+configuration, native implementation, CLI and original Lima remain unchanged;
+temporary native test entries are removed.
+
+The fixture uses one in-memory connection with actual master, simuls, user,
+human body, wizard shell, commands, input and file code; IMUD transport is stubbed.
+Each registered input checks line mode, echo and rearming. Distinct nil, preserved
+players and 4,000 ms tasks remain. Cargo uses two jobs and serial tests, with CLI
+checks limited to two processes and no overlap. Disposables stay in /tmp and
+handoff notes under local. Earlier inventory scope remains; concurrent restores,
+stack teardown, upstream-driver execution and commit-time delivery failure are
+not established by these fixtures.
+
+Next: commit the backup/restore port and notes, then audit trans/cmds/update.c,
+the wizard object-reload command.
+
 #### Lima wizard backup and restore audit
 
 Reviewed **9 October 2026** against pinned [bk][lima-backup-command],
@@ -3131,8 +3176,8 @@ Reviewed **9 October 2026** against pinned [bk][lima-backup-command],
 [wizard shell][lima-wizard-shell], [path simuls][lima-simul-path],
 [input stack][lima-inputsys] and [modal forwarding][lima-input-forwarding].
 To and README are committed as dedicated **3929049b**, with native port notes
-as **a670e9ec**. Dedicated Lima is clean on lpc-rs-port; bk and rst match pinned
-upstream byte for byte. No proposal is adopted.
+as **a670e9ec**. At this audit, dedicated Lima was clean on lpc-rs-port;
+bk and rst matched pinned upstream byte for byte. Its proposal was not adopted.
 
 Both commands lack dispatch_main. Dispatch alone compiles bk but exposes rst's
 `!sFileContents = read_file(...)` type error: the native parser negates the
@@ -3198,8 +3243,9 @@ tests; CLI checks use at most two processes without overlap. Artifacts stay in
 retain their scope. Concurrent restoration, stack teardown, upstream-driver
 execution and commit-time filesystem delivery failure remain unestablished.
 
-Next: commit this audit, then adopt and verify its dispatch, callback and I/O
-adaptations, retaining the documented naming and path behavior.
+This audit is committed as native **f7eacb21**. The subsequent
+[backup and restore port](#lima-wizard-backup-and-restore-port) adopts and verifies
+its dispatch, callback and I/O adaptations while retaining naming and path behavior.
 
 #### Lima wizard to port
 
