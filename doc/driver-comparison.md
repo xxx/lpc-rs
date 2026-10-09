@@ -3123,6 +3123,69 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard xargs audit
+
+Reviewed **9 October 2026** against pinned [xargs][lima-xargs-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[stdio][lima-command-stdio], [command parsing][lima-command-daemon],
+[getopt][lima-shell-getopt], [wizard shell][lima-wizard-shell],
+[input forwarding][lima-input-forwarding], [input stack][lima-inputsys]
+and [spacing reconstruction][lima-xargs-spacing]. Command-path changes are
+committed as dedicated **24c59996**, with port notes as native **f7eb4363**.
+Dedicated source remains clean; the xargs proposal is disposable and unadopted.
+Its preceding adaptation only replaced object-new syntax with clone_object.
+
+The one-file proposal appends protected variadic dispatch_main calling the
+existing private main with all four arguments. It supplies this_object() to
+[file_name](efun/file_name.md), uses nil for the omitted return callback,
+and removes the fifth modal_push argument that the four-parameter inherited
+wrapper never forwards. Both interactive callbacks become
+`&handle_piping(arg[0])`: native `(: name, arg :)` returns the last
+comma-expression value rather than calling the handler. Existing
+[bound function pointers](lpc/function_type.md) supply the entered line as
+the remaining argument. No native API or input-wrapper change is proposed.
+
+All **twelve scenarios pass across forty registered inputs**, including eleven
+proposal cases using 38 inputs and the undiscoverable baseline using two.
+Piped input skips empty lines, retains whitespace-only lines, and substitutes
+every occurrence of either $* or $$. Empty input stays in the stdin branch
+without opening a modal; piped . and ** remain data. Relative input uses the
+current directory. Interactive input reuses one clone, preserves user/body/
+directory context, allows the normal ! shell escape, and destroys the clone
+on either terminator. An unknown child command and the 8,192-byte concatenation
+limit leave input usable; a subsequent small line and exit succeed.
+
+Existing Lima limitations stay separate from compatibility work. Option parsing
+removes -! or -- from arguments without removing their spacing entries, so
+implode_by_arr rejects both ordinary forms before mode entry. The pinned shell
+and parser already have that mismatch. Independently, the inherited input
+wrapper drops the lock argument; the lock branch is compiled but is not reached
+by these shell tests. Child commands execute through force_me and keep their
+own stdout: redirecting or piping xargs itself receives its empty buffer while
+child output reaches the terminal. These behaviors are retained and documented,
+without claiming an upstream execution test.
+
+All **19 complete focused targets compile across 23 checks**. Baseline,
+dispatch-only and arity-only controls expose the successive signature errors;
+the comma-callback control compiles but the first runtime pass showed silent
+interactive callbacks. The final bound-callback proposal passes all scenarios.
+One fixture expectation was corrected to the actual Cmd_rules usage display;
+all other assertions, commands, data and helpers remain. Locked workspace
+all-target/all-feature Clippy and formatting pass.
+
+The fixture executes the actual master, simuls, user, body, shell, command,
+input stack and file efuns; only IMUD transport is stubbed. Connections are
+in-memory, recorder/capture commands are test helpers, and every input checks
+line mode, echo and rearming. All 1,547 library files, README, configuration,
+native implementation, CLI and original Lima remain unchanged; temporary test
+entries are removed. Distinct nil, preserved call-out players and 4,000 ms tasks
+remain. Cargo uses two jobs and serial tests; CLI checks use at most two
+processes without Cargo overlap. Disposables stay in /tmp and notes under local.
+The preceding 23/49 transitional and broader inventories retain their scope.
+
+Next: commit this audit, then adopt and verify the exact xargs adaptation in
+dedicated Lima, retaining the documented option, lock and output limitations.
+
 #### Lima wizard command-path port
 
 Adopted **9 October 2026** in dedicated Lima after committing the
@@ -3130,9 +3193,9 @@ Adopted **9 October 2026** in dedicated Lima after committing the
 The exact audited three-file patch adds protected CMD dispatch, replaces
 callback-based implode with native [reduce](efun/reduce.md), and preserves
 integer zero for empty printpath. The callbacks, seeded formatting, directory
-rules, shell lookup and persistence remain. Only addpath.c, rmpath.c,
-printpath.c and README are pending in dedicated Lima; native has comparison
-notes pending.
+rules, shell lookup and persistence remain. Addpath.c, rmpath.c, printpath.c
+and README are committed as dedicated **24c59996**, with comparison notes
+committed as native **f7eb4363**. The dedicated checkout is clean.
 
 All **ten audited scenarios pass across 55 registered inputs** against the
 adopted source. Every assertion, command, datum and LPC helper is retained.
@@ -3152,7 +3215,8 @@ configuration, native implementation, CLI and original Lima remain unchanged.
 Distinct nil, preserved players and 4,000 ms tasks remain; preceding broader
 evidence retains its scope. Disposables stay in /tmp and handoff notes under local.
 
-Next: commit the command-path port and notes, then audit trans/cmds/xargs.c.
+The subsequent [xargs audit](#lima-wizard-xargs-audit) leaves its disposable
+proposal unadopted and records the remaining command adaptations.
 
 #### Lima wizard command-path audit
 
@@ -13940,6 +14004,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-printpath-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/printpath.c
 [fl-path-fold]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/array.cc#L397-L435
 [lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
+[lima-xargs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/xargs.c
+[lima-xargs-spacing]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L641-L655
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
 [lima-ls-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/ls.c
