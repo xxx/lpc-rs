@@ -3123,13 +3123,92 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard backup and restore audit
+
+Reviewed **9 October 2026** against pinned [bk][lima-backup-command],
+[rst][lima-restore-command], [localtime header][lima-localtime-header],
+[CMD][lima-command-base], [stdio][lima-command-stdio],
+[wizard shell][lima-wizard-shell], [path simuls][lima-simul-path],
+[input stack][lima-inputsys] and [modal forwarding][lima-input-forwarding].
+To and README are committed as dedicated **3929049b**, with native port notes
+as **a670e9ec**. Dedicated Lima is clean on lpc-rs-port; bk and rst match pinned
+upstream byte for byte. No proposal is adopted.
+
+Both commands lack dispatch_main. Dispatch alone compiles bk but exposes rst's
+`!sFileContents = read_file(...)` type error: the native parser negates the
+assignment target. Explicit grouping compiles. That syntax control opens the
+restore menu, but its comma callback never invokes prompt_user, so selecting a
+backup changes nothing and retains the menu handler. Bound callbacks are needed
+at all three initial, menu and retry sites.
+
+Native [read_file](efun/read_file.md) and [write_file](efun/write_file.md)
+raise for file failures. An uncaught-I/O control selects a backup deleted after
+the menu opened; its read error reaches the user dispatcher and leaves the old
+restore handler active. The disposable two-file proposal adds ordinary protected
+dispatch, binds prompt_user with &prompt_user(asContents, sPath, sOrigFile),
+and catches the existing read/write sites so their diagnostics and cleanup run.
+The read assignment inside catch also removes the ambiguous negation. Native
+writes succeed with 1 or raise, so their old false-result branches become catch
+checks. No native API change is needed; existing path and naming logic remain.
+
+All **eighteen scenarios pass across 64 registered inputs**. Fifteen proposal
+cases use 55 inputs; baseline, comma-callback and I/O controls use nine.
+The first run passed seventeen cases; the collision case failed because its
+message assertion assumed an unwrapped line. Only that fixture assertion was
+changed to normalize whitespace before the full rerun; the original run and
+diff are retained.
+Backup creates bak, preserves source bytes, formats the native calendar date,
+adds the .c fallback and sets cwf. Empty files back up and restore correctly.
+Relative cwf works. The timestamp-collision case alone appends a fixture clock
+returning 1700000000: existing dated and timed backups remain, while the final
+incremented-seconds fallback overwrites its preexisting file as the source does.
+It uses real native localtime and file operations, without a real-time scheduling
+or upstream-execution claim.
+
+Restoration selects among sorted backups, replaces or recreates the target,
+preserves backup bytes and sets the original literal cwf path. Menu redisplay
+and repeated invalid selections retain binding through modal_simple; q and x
+cancel. Empty input is invalid rather than cancellation, and `1junk` retains
+the existing leading-integer selection. Deleted backups and directory destinations
+report the original read/write messages, pop the handler and leave a usable
+shell with unchanged file state. Initial buffered output follows outer redirects;
+later restoration messages reach the connection. Context and input rearming pass.
+
+Existing quirks stay separate from compatibility work: bk prepends pwd even when
+cwf is absolute, so an absolute default can fail its read; its read-failure branch
+continues and can create an empty bak directory before reporting write failure.
+A relative subdirectory source lacks a corresponding backup subdirectory and
+reports write failure. The final collision fallback can overwrite an older
+backup. None of these algorithms or policies is repaired by this proposal.
+
+All **23 complete focused targets compile across 31 checks**, retaining both
+baseline refusals, the dispatch-only rst type error and successful grouped,
+bound, guarded and clock controls. Initial compile results and source copies
+are retained. Locked workspace all-target/all-feature Clippy and workspace/fixture
+formatting pass. The fixture uses one in-memory connection with actual master,
+simuls, user, human body, wizard shell, commands, input and file code. Only IMUD
+transport is stubbed; source selection, state access and one clock are fixture
+controls. Every registered input checks line mode, echo and rearming.
+
+All 1,547 library files, README, configuration, native implementation, CLI and
+original Lima remain unchanged; temporary test entries are removed. Distinct
+nil, preserved players and 4,000 ms tasks remain. Cargo uses two jobs and serial
+tests; CLI checks use at most two processes without overlap. Artifacts stay in
+/tmp and notes under local. Prior 29/49 transitional and broader inventories
+retain their scope. Concurrent restoration, stack teardown, upstream-driver
+execution and commit-time filesystem delivery failure remain unestablished.
+
+Next: commit this audit, then adopt and verify its dispatch, callback and I/O
+adaptations, retaining the documented naming and path behavior.
+
 #### Lima wizard to port
 
 Adopted **9 October 2026** after committing the [to audit](#lima-wizard-to-audit)
 as native **151fab5d**. Its exact one-file patch adds the ordinary protected
 dispatcher forwarding arg to private main and replaces the comma closure with
-`&done_editing(arg)`. To.c and README are committed as dedicated **3929049b**
-on lpc-rs-port; the dedicated checkout is clean.
+`&done_editing(arg)`. To.c and README are committed as dedicated **3929049b**,
+with native port notes as **a670e9ec**. The dedicated checkout is clean on
+lpc-rs-port.
 The existing editor, force_me, command lookup and routing code remain unchanged.
 No native API change is needed.
 
@@ -3166,8 +3245,8 @@ nil, preserved players and 4,000 ms tasks remain. Cargo uses two jobs and serial
 tests; CLI checks use at most two processes without overlap. Artifacts stay in
 /tmp and handoff notes under local. Earlier inventories retain their scope.
 
-Next: commit the to port and notes, then audit trans/cmds/bk.c and
-trans/cmds/rst.c, the paired file backup and restoration commands.
+The subsequent [backup and restore audit](#lima-wizard-backup-and-restore-audit)
+checks the paired bk and rst commands.
 
 #### Lima wizard to audit
 
@@ -14571,3 +14650,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-to-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/to.c
 
 [lima-edit-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/edit.h
+
+[lima-backup-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/bk.c
+
+[lima-restore-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/rst.c
