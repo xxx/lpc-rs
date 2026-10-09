@@ -3123,14 +3123,85 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard command-path audit
+
+Reviewed **9 October 2026** against pinned [addpath][lima-addpath-command],
+[rmpath][lima-rmpath-command], [printpath][lima-printpath-command],
+[command rules][lima-trans-command-rules], [wizard shell][lima-wizard-shell],
+[shell variables][lima-shell-variables] and [path simuls][lima-simul-path],
+after committing du as dedicated **b1af8f57** and its port notes as native
+**bb40d8a9**. The three commands are unchanged from upstream and lack CMD
+dispatch. The disposable proposal adds protected dispatch calling main(arg)
+for addpath/rmpath and main() for printpath. Native implode accepts a delimiter,
+so replace the three callback-based calls with [reduce](efun/reduce.md),
+retaining the callbacks and explicit initializers.
+
+The pinned [FluffOS fold implementation][fl-path-fold] returns integer zero
+for an empty array without an initializer, and returns a supplied initializer
+unchanged. Native reduce returns nil for the first case in distinct-nil mode.
+The proposal therefore handles empty printpath explicitly with integer zero;
+nonempty paths still use the original left fold. Its empty report remains
+`Your current path is: 0`. No native API or null-mode change is needed, and
+no proposal is adopted. This is public source review and lpc-rs execution,
+without upstream-driver execution or a FluffOS build.
+
+The shell's saved path array and normalized lookup cache are distinct. Adding
+a directory starts with the normalized cache and appends one trailing slash;
+the variable hook normalizes the cache again, while persistence retains the
+supplied array. Removing a directory saves the remaining normalized entries.
+Duplicate additions and absent-member removals preserve both arrays. Root is
+normalized to `/` while a new root entry is saved as `//`. The existing save
+module and real shell reload restore the saved array and rebuild the cache.
+Actual command selection follows path order immediately, including after a
+removal, readdition, rehash and reload.
+
+Existing source behavior remains separate: both addpath and rmpath require one
+existing directory through Cmd_rules, despite addpath's optional-argument prose.
+Removing the final entry prints `Your path is now` because the unchanged seeded
+formatter slices off its last two characters. Printpath ignores extra arguments;
+all three commands ignore incoming text. Absolute command paths and the shell's
+resetpath binding still work when the search path is empty. These behaviors are
+retained rather than repaired during compatibility work.
+
+All **ten scenarios pass across 55 registered inputs**: eight proposal cases
+use 48 inputs, the undiscoverable baseline uses four, and the unguarded empty-fold
+control uses three, including recovery. Exact reports and both path arrays cover
+empty/singleton/default paths, duplicate and absent members, directory-rule
+refusals, relative/absolute/quoted/Unicode paths, single-match globbing and root.
+Ordinary lookup order, saved payloads and actual shell reload pass. Pipelines,
+overwrite/append redirection and ignored stdin pass. The expected empty-fold
+control error and the proposal's output-limit refusal rearm input and permit
+the next command; the latter preserves paths and sends no downstream partial
+report. Real account/body/room/directory state and shell input-stack return are
+checked through line-mode callbacks with echo and rearming.
+
+All **16 complete focused targets compile across 25 checks**. Baseline commands
+fail the four required dispatch calls each; dispatch-only controls expose the
+functional-implode type/arity mismatch. Reduce controls and final proposal/support
+checks compile. Shell and shellvars are reviewed through their complete wish
+composition, rather than checked as incomplete standalone programs. The first
+compiler harness mistakenly checked them independently and misnamed the save
+module; corrected final checks use secure/modules/m_save. The initial runtime
+control assertion used the wrong diagnostic wording; only that assertion was
+corrected. Proposal source and all eight working cases were unchanged.
+
+Locked workspace all-target/all-feature Clippy and formatting pass. All 1,547
+library files, README, configuration, native implementation, CLI and original
+Lima remain unchanged. Distinct nil, preserved players and 4,000 ms tasks remain;
+preceding 20/49 transitional and broader evidence retain their scope. Temporary
+test entries are removed; disposables stay in /tmp and handoff notes under local.
+
+Next: commit this audit, then adopt and verify the three-command dispatch/reduce
+adaptation with printpath's explicit empty result.
+
 #### Lima wizard du port
 
 Adopted **9 October 2026** in dedicated Lima after committing the
 [du audit](#lima-wizard-du-audit) as native **abcef541**. The exact audited
 one-file patch adds protected dispatch calling main(arg). The directory rule,
 private handler, forward declarations and native file metadata remain.
-Only du.c and README are pending in dedicated Lima; native has comparison
-notes pending.
+Du and README are committed as dedicated **b1af8f57**, with port notes as
+native **bb40d8a9**.
 
 All **nine audited scenarios pass across 32 registered inputs**, plus four
 direct disk_usage calls, against adopted source. Every assertion, command,
@@ -3150,7 +3221,8 @@ implementation, CLI and original Lima remain unchanged. Distinct nil, preserved
 players and 4,000 ms tasks remain; preceding broader evidence retains its scope.
 Disposables stay in /tmp and handoff notes under local.
 
-Next: commit du and its port notes, then audit addpath, rmpath and printpath.
+Follow-up: du and its port notes are committed; the next
+[command-path audit](#lima-wizard-command-path-audit) leaves its proposals unadopted.
 
 #### Lima wizard du audit
 
@@ -13829,6 +13901,10 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-cut-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/cut.c
 [lima-diff-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/diff.c
 [lima-du-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/du.c
+[lima-addpath-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/addpath.c
+[lima-rmpath-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/rmpath.c
+[lima-printpath-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/printpath.c
+[fl-path-fold]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/array.cc#L397-L435
 [lima-simul-path]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/path.c
 [lima-shell-variables]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/shellvars.c
 [lima-glob-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_glob.c
