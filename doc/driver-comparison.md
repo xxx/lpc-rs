@@ -3123,6 +3123,96 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard update audit
+
+Reviewed **9 October 2026** against pinned [update][lima-update-command],
+[command rules][lima-update-rules], [CMD][lima-command-base],
+[command parsing][lima-command-daemon], [destruction wrapper][lima-overrides]
+and [master][lima-master]. The backup/restore port is committed as dedicated
+**6cc443fb**, with native notes as **b4c47429**. Dedicated Lima is clean on
+lpc-rs-port; update.c matches pinned upstream. No proposal is adopted.
+
+The command needs protected dispatch forwarding arguments and flags, native
+`(: [object ob] { ... } :)` closure syntax, and a bare return in its void main.
+Its `-z` branch uses only file size, modification time and prototype load time
+from stat. Pinned [FluffOS stat source][fl-update-stat-source] (F_STAT enabled)
+returns those in its first three fields. A private helper can compose
+[file_size](efun/file_size.md), [file_time](efun/file_time.md), find_object and
+[object_time](efun/object_time.md); no new stat efun is needed. This is source
+review and native execution, with no upstream-driver execution claim.
+
+Retain synchronous destruct/load: the prototype's identity and globals are
+replaced, create runs again, remove receives integer 1, and old clones keep their
+old program and state. Queued [in-place recompilation](efun/request_object_recompile.md)
+would change that contract. Resident master/simul objects cannot use this path;
+the proposal refuses them before cleanup and directs master users to the existing
+master command. Its public do_update also applies the check for direct callers.
+The existing permission policy is unchanged.
+
+Native [load_object](efun/load_object.md) returns nil on compile or initializer
+failure. The unguarded control destroys the old prototype and falsely reports
+"Updated and loaded." The proposal checks both load sites and raises an error
+instead. Existing per-file catch in plural/glob handling still suppresses errors
+and continues the batch. A default-current-file error reaches input handling and
+leaves a usable shell; successful loads alone report success. Destruction retained
+by a caught error is not restored, and players evacuated from a failed room reload
+stay in Void. Successful room reload returns connected players and removes
+unlinked contents through the existing closure.
+
+All **25 cases pass across 50 registered inputs**: normal/unloaded/current-file
+reloads, new identity and reset globals, old clones, direct and recursive inherit
+prototype reloads, flag precedence, timestamp skips/updates, batch recovery,
+compile and initializer errors, direct do_update, room occupants and output routes.
+The first runtime run passed eighteen of nineteen cases. Its failed -z expectation
+exposed the source's second-resolution edge: a changed parent's returned time can
+equal a child's load time, leaving that child unchanged. The ordinary propagation
+case now waits for a later second without removing any assertion; an additional
+case controls only command time to prove the edge. Initial sources, logs and the
+diff remain. Older cases gain inherited-code assertions, and five cases add the
+clock edge, resident-object checks, initializer failures and inherited-room failure cleanup.
+The expanded run passed 23/24; its room assertion conflated inherited-load failure
+with a clean timestamp skip. That case now uses an explicitly broken parent source
+and verifies its load error and prior cleanup in a passing focused rerun. Other
+twenty-three cases, command source and helpers are unchanged. A separate
+fixture records the original per-file catch to confirm the earlier deep-room
+failure, with no source-parent edits: it cannot load /std/object/names.c.
+A standalone compile confirms that [fragment][lima-update-names] lacks
+pluralize and is_visible, supplied by its [full object][lima-update-baseobj]
+through inheritance. The per-file catch suppresses this error after moving the
+player to Void; the old room stays loaded. This port mismatch must be resolved
+before ordinary room -z updates can work. The tested proposal needs an inherited-module
+adaptation before adoption: do not instantiate unloaded inheritance fragments;
+reload existing parent prototypes when requested, and inspect inherited source
+timestamps for -z using the child's inheritance metadata.
+
+Native compilation reads current inherited source even when parent prototypes
+remain loaded. The default and -r/-R cases confirm this separately from which
+prototype identities are destroyed; the command does not change compiler policy.
+Other source behavior remains: -r updates direct parents, -R recurses, -z wins
+over both, shell cwf is set before failure, and room contents are processed before
+-z decides whether to skip reloading. A failed inherited load leaves the old
+room live, unlinked contents removed and evacuated players in Void. Per-file
+error suppression and early cleanup remain source policies; inherited-fragment
+loading is the compatibility issue to resolve.
+
+All **24 complete focused targets compile across 29 checks**, retaining parser,
+void-return and missing-stat controls. An initial compile-runner expectation
+omitted dispatch; corrected controls expose the actual later errors. Locked
+workspace all-target/all-feature Clippy and workspace/fixture formatting pass.
+The fixture uses one in-memory connection and actual master, simuls, user, human
+body, shell, command/input, object and room code; IMUD transport is stubbed, with
+recording helpers and small reload targets. Every input checks line mode, echo
+and rearming. All 1,547 library files, README, configuration, native implementation,
+CLI and original Lima remain unchanged; temporary entries are removed. Distinct
+nil, preserved players and 4,000 ms tasks remain. Cargo uses two jobs and serial
+tests, CLI checks at most two processes without overlap, disposables in /tmp and
+notes in local. Earlier inventory scope remains; broad system upgrades, complex
+virtual objects and cleanup-error recovery are not established by these fixtures.
+
+Next: commit this audit, then adapt inherited-module handling and verify
+ordinary room -z updates before adopting the command. Retain destructive reload
+semantics and the documented timestamp edge.
+
 #### Lima wizard backup and restore port
 
 Adopted **9 October 2026** after committing the
@@ -3132,7 +3222,8 @@ binds all three restore callbacks with `&prompt_user(asContents, sPath, sOrigFil
 and catches existing file reads/writes so their diagnostics and cleanup run.
 The read assignment inside catch also resolves rst's negation/assignment type
 error. Bk.c, rst.c and README are committed as dedicated **6cc443fb** on
-lpc-rs-port; the checkout is clean. No native API changed.
+lpc-rs-port, with native port notes as **b4c47429**; the checkout is clean.
+No native API changed.
 
 All **eighteen audited cases pass across 64 registered inputs**. Fourteen cases
 use the checkout commands directly for 53 inputs; the collision case appends
@@ -3165,8 +3256,8 @@ handoff notes under local. Earlier inventory scope remains; concurrent restores,
 stack teardown, upstream-driver execution and commit-time delivery failure are
 not established by these fixtures.
 
-Next: commit the backup/restore port and notes, then audit trans/cmds/update.c,
-the wizard object-reload command.
+The subsequent [update audit](#lima-wizard-update-audit) reviews the wizard
+object-reload command.
 
 #### Lima wizard backup and restore audit
 
@@ -14700,3 +14791,13 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-backup-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/bk.c
 
 [lima-restore-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/rst.c
+
+[lima-update-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/update.c
+
+[lima-update-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/Cmd_rules
+
+[fl-update-stat-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc
+
+[lima-update-names]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/names.c
+
+[lima-update-baseobj]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/base_obj.c
