@@ -607,7 +607,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Colour expansion | `terminal_colour` in `PACKAGE_CONTRIB` looks up split text segments, including ordinary text, and can insert a default `RESET` into the supplied mapping. [Implementation][fl-colour-source]. | Looks up only explicit colour tokens and leaves input mappings unchanged. Callers relying on implicit text replacement or the added mapping entry need changes. [Reference](efun/terminal_colour.md). |
 | Deep copying | `copy` in `PACKAGE_CONTRIB` copies arrays, mapping values, classes, and buffers; mapping keys remain shared. Repeated container references are copied independently; cycles encountered during value traversal hit the nesting limit. Objects and functions retain identity. [Implementation][fl-copy], [declaration][fl-contrib-spec]. | [`deep_copy`](efun/deep_copy.md) copies arrays, mapping keys and values, and all retained class fields. It preserves cycles and shared references within the copy; objects and functions retain identity, and immutable bytes can remain shared. Rename `copy` calls or supply a wrapper after checking key identity and sharing assumptions. There is no native `copy` alias. Cycle-preserving copying does not make a mudlib traversal cycle-safe: recursive flatteners still need acyclic array nesting or their own cycle detection. |
 | `foreach` separator | Uses `in` between the loop variables and the collection. [Reference][fl-foreach], [grammar][fl-parameter-grammar]. | Accepts `in` and `:` with identical iteration behavior. `in` is contextual and remains available as an identifier elsewhere. The collection value is retained at loop entry even if its source variable is reassigned. Native loop scope and type checks remain. [Reference](lpc/foreach.md). |
-| Catch blocks | Supports `catch(expr)` and `catch { statements }`; rejects `break` and `continue` that leave the catch. Returns zero on success, a string for runtime errors, or the value passed to `throw`. [Reference][fl-catch], [jumps][fl-catch-jumps]. | Supports both forms with the existing zero-or-error-message result. `throw` stringifies its argument. `return`, `break`, and `continue` may leave catch blocks and remove the exited handlers; inner loops and switches retain ordinary jump behavior. Prior writes remain in the current transaction. [Reference](efun/catch.md). |
+| Catch blocks | Supports `catch(expr)` and `catch { statements }`; rejects `break` and `continue` that leave the catch. Returns zero on success, a string for runtime errors, or the value passed to `throw`. With mudlib error handler enabled, caught runtime errors also reach the master; explicit throws bypass that reporting. [Reference][fl-catch], [jumps][fl-catch-jumps], [reporting][fl-dbxwhere-errors], [throw][fl-caught-input-throw]. | Supports both forms with the existing zero-or-error-message result. `throw` stringifies its argument. `return`, `break`, and `continue` may leave catch blocks and remove the exited handlers; inner loops and switches retain ordinary jump behavior. Prior writes remain in the current transaction. Catch does not call error_handler; see the [Lima input audit](#lima-caught-command-and-input-errors-audit). [Reference](efun/catch.md). |
 | Unnamed prototype parameters | Accepts typed parameters without names, including arrays, in prototypes such as `void start_shell(int);`. [Grammar][fl-parameter-grammar], [declarations][fl-variadic-declarations]. | Accepts named, unnamed, and mixed parameter lists in prototypes. Prototypes remain ignored with a warning; calls are checked against definitions, including eligible sibling or child definitions for otherwise unresolved local names. An object being compiled still requires implementations for every call. Definitions and declared closure parameters require names. [Reference](lpc/anatomy_of_a_program.md#function-prototypes). |
 | Trailing call commas | Allows one trailing comma after a nonempty argument list. [Grammar][fl-call-arguments]. | Supports `f(a,)`, including method, inherited, efun and computed function calls, spreads and reference arguments. The comma adds no argument; declaration parameter lists and partial-application slots retain their own syntax. [Reference](lpc/anatomy_of_a_program.md#function-calls). |
 | Array literal spreading | Accepts `({ first, xs..., last })`; expression-list generation evaluates the expressions before expanding their arrays. [Grammar][fl-parameter-grammar], [code generation][fl-array-spread-codegen]. | Supports the same syntax and evaluation timing, with array or `mixed` operands and native element-type inference. Expansion makes a fresh shallow array. [Reference](lpc/array_spreading.md). |
@@ -3142,6 +3142,71 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima caught command and input errors audit
+
+Reviewed **10 October 2026** against the dedicated lpc-rs-port checkout at
+**c6f34acf**, with native dbxwhere notes committed as **fff051c9**, pinned
+[Lima input dispatch][lima-inputsys] and [master][lima-master], and the listed
+FluffOS revision with `mudlib error handler` enabled (its
+[reviewed default][fl-dbxwhere-error-config]).
+This audit adopts no mudlib patch, native API or apply change.
+
+Native [`catch`](efun/catch.md) resumes with a runtime error's message after
+discarding the failing frames. It does not call
+[`error_handler`](apply/master/error_handler.md). Lima's two outer input catches
+discard that message: both ordinary modal input and an unlocked `!` command sent
+to the bottom shell can fail without updating dbxwhere's saved record.
+Caught compilation failures can retain the native rendered diagnostic, including
+source location and excerpt; runtime messages do not contain the original stack
+or locals. Native load_object returns nil on failure, so catching that call alone
+does not obtain a compiler diagnostic. The control uses a string-target call
+that propagates the compilation error.
+
+With its mudlib error handler enabled, the reviewed
+[FluffOS runtime][fl-dbxwhere-errors] reports caught runtime errors to the master
+with a caught flag and structured trace. Its
+[explicit throw path][fl-caught-input-throw] transfers the supplied value directly
+to catch without that master reporting. Recording every message at Lima's outer
+input catch therefore differs from FluffOS, including for explicit throws.
+Internal errors already handled by a callback need not become input-error records.
+
+A temporary prototype retains the two catch results, uses stringp to distinguish
+failure strings (including empty and `"0"`) from success integer zero, and calls
+a mudlib record_input_error method inside another catch before normal input
+recapture. The master stores a marked message record under the account and last,
+attempts the existing catch log, and provides wizard detail or player BUG_MSG.
+The recorder requires the initiating user as caller and the inputsys declaring
+program; query_error keeps its existing privilege rule. These are mudlib records,
+without invented object/location/trace fields or a call to native error_handler.
+
+All **7 cases / 24 registered inputs** pass. The current-source control silently
+discards a real invalid-regexp command failure and recovers. The prototype checks
+ordinary and escaped shell errors, nested modal failures, internal handled-error
+silence, exact stored messages, self/last reports, pipes, player feedback, empty
+and zero throws, compiler excerpts, and recovery when the recorder itself throws.
+Caught writes retain native transaction semantics; a nested target write commits,
+and successful input leaves saved history intact. User/body/room/shell/directory
+state stays stable and normal input is rearmed. Five cases append the recorder to
+the temporary master; two controls retain the current master or a failing recorder.
+The existing native error handler and adopted dbxwhere command remain unchanged.
+
+Actual user/body/wish/CMD/master/simuls execute with in-memory connections,
+stub IMUD create and controlled HELP_D data. Lima uses only distinct nil,
+preserved call-out players and 4,000 ms tasks. All **8 compile controls** match
+expectations: current/proposed masters, complete users and dbxwhere compile;
+standalone inputsys retains the same four unresolved containing-user calls in
+both versions. Workspace warning-free locked all-target/all-feature Clippy and
+formatting pass, including the retained fixture. The dedicated/original checkouts,
+configuration and native implementation remain unchanged. There is no new full
+boot, complete inventory, full workspace test suite or FluffOS execution;
+preceding results retain their scope.
+
+Recommend the small Lima boundary recorder for useful message history, while
+keeping native catch behavior and internal catches unchanged. Full caught runtime
+diagnostics and dbxframe's structured arguments/locals require separate native
+support; this prototype cannot recover discarded data. Review that requirement
+when auditing dbxframe rather than treating message history as frame inspection.
+
 #### Lima wizard dbxwhere port
 
 Adopted **10 October 2026** after committing the
@@ -3225,7 +3290,7 @@ input state stays stable.
 
 **Caught errors remain a compatibility gap.** With mudlib error handler enabled,
 the reviewed [FluffOS runtime][fl-dbxwhere-errors] also calls the master for caught
-errors. Its [reviewed default][fl-dbxwhere-error-config] enables that option.
+runtime errors. Its [reviewed default][fl-dbxwhere-error-config] enables that option.
 Native LPC catch does not call error_handler. Lima's input layer catches command
 failures, so those do not create a new dbxwhere record; the control confirms its
 previous record survives a caught shell failure. This command adaptation is for
@@ -3251,6 +3316,7 @@ and NO_ANSI, then audit caught-error recording before deciding how to port dbxfr
 [fl-dbxwhere-grammar]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y#L2664-L2759
 [fl-dbxwhere-errors]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/simulate.cc#L1749-L1880
 [fl-dbxwhere-error-config]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/base/internal/rc.cc#L76
+[fl-caught-input-throw]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/simulate.cc#L1704-L1725
 
 #### Lima wizard dbxvars port
 
@@ -14912,6 +14978,8 @@ do not expect `program`, `file`, `line`, `trace` or a caught-error argument.
 `standard_trace` can retain its mudlib call shape while returning that diagnostic.
 The [dbxwhere audit](#lima-wizard-dbxwhere-audit) checks saved-record retrieval
 and distinguishes native uncaught records from FluffOS caught-error history.
+The [input-error audit](#lima-caught-command-and-input-errors-audit) evaluates
+a mudlib recorder for the outer input catches and documents its message-only limit.
 Use `this_interactive()` for the initiating user and retain wizard-only detail.
 Store the error independently of optional log, user and channel delivery, and
 avoid loading services from the error handler. The driver also logs uncaught
