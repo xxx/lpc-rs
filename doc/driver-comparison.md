@@ -3143,6 +3143,53 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard checkpriv audit
+
+Audited **10 October 2026** against the dedicated lpc-rs-port checkout at
+**1c19df6c**, after the dbxframe notes commit **7f6e386c**. The
+[command][lima-checkpriv-command] still matches pinned Lima
+`eefaff66adcae9b01e16059574c925b0d63e70a1`. It fails compilation because the
+adapted command base needs a visible protected `dispatch_main`.
+
+A temporary dispatcher makes the existing privilege checks work. Exact `0` and
+`1` strings become integer privileges; other input remains a named privilege.
+The command validates it with the existing security daemon and invokes the
+existing `check_privilege` simul efun. Runtime controls produce wizard/admin
+allow and deny results, including named owners and suffixes; `01` remains invalid.
+No new native API or security-daemon change is needed.
+
+Two small command changes accompany dispatch: normalize absent/blank input to
+usage, and use `outf` for invalid-privilege feedback. A dispatcher-only control
+reports a trimmed blank string as an invalid privilege and prints invalid input
+directly to the client, leaving a redirected file empty. The proposed command
+keeps usage, success, denial and invalid-input messages in stdout. Argument quotes
+remain literal; the adapter does not change shell parsing.
+
+All **5 runtime cases / 34 registered shell inputs** and **4 direct argument
+controls** pass using actual master, simuls, user/body/wish/CMD and security-daemon
+methods, with in-memory connections and controlled IMUD startup/HELP_D data.
+Temporary role helpers register wizard/admin fixture state; direct blank-argument
+controls use a temporary wrapper that calls the command's private entry.
+Role changes, whitespace, invalid numeric/named input, pipelines, exact redirected
+reports, input recovery, context stability and absence of new saved-error records
+pass.
+Two initial failures were fixture assumptions that quotes would be stripped;
+corrected tests retain the same proposed command and shell behavior.
+
+All **9 compile controls** match: seven successes, plus the expected current
+command and standalone command-base dispatcher failures. No source patch is
+adopted by this audit. Warning-free locked workspace Clippy across all targets/
+features, workspace formatting and retained fixture formatting pass.
+Dedicated source/configuration, original Lima and native
+implementation/CLI stay unchanged; the prior **46/49** command inventory retains
+its scope. No full native suite, Lima inventory/boot or upstream-driver execution
+is rerun. Evidence is in /tmp/lima-checkpriv-audit-20261010.
+
+**Recommendation:** adopt the small dispatcher/input/stdout adaptation, then
+audit the remaining `snoop` and `unsnoop` commands separately.
+
+[lima-checkpriv-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/checkpriv.c
+
 #### Lima wizard dbxframe adaptation
 
 Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, using native
