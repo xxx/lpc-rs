@@ -3143,6 +3143,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dbxframe adaptation
+
+Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, using native
+saved-frame support committed as **57d095b7**. The command reads the `frames`
+schema described by [`error_handler`](apply/master/error_handler.md), displaying
+runtime types, names and rendered values directly. It reports defining programs,
+receiver names, omitted frames/variables and truncation flags. Frame numbers index
+the retained root-to-leaf list from zero; current-account, named-account and `last`
+lookups retain their prior rules. The protected dispatcher and explicit query
+inside `unguarded` replace the audited command/callback failures.
+
+Caught records explicitly report unavailable frame data. Source excerpts use the
+saved source file, including included files whose program and receiver differ.
+The first-line path avoids `read_file` with a zero line count. Missing or empty
+files and failed source reads leave history intact, and files changed since the
+failure show their current contents. Empty strings need explicit checks because
+they are truthy natively. Reports preserve command stdout for pipelines and
+redirection, with a display cap of 1,600 Unicode characters plus a truncation
+notice to fit Lima's command buffer under the native 8 KiB string limit. This
+display cap does not alter the saved snapshot.
+
+All **6 runtime cases** pass against actual master, simuls, user/body/wish/CMD and
+in-memory connections, with IMUD startup and HELP_D data controlled. They cover
+usage/history/bounds, ref and captured values, scalar/container summaries,
+escaped Unicode/control characters, GC, named/last selection, pipelines,
+redirection, included first-line/EOF source, missing/changed files, snapshot/report
+limits, caught regexp/modal errors and interrupted evaluations. Input is rearmed
+and user/body/room/shell/directory/modal state and saved records stay stable.
+
+The bounded inventory is now **46/49 transitional commands**, with **69 support
+checks / 97 distinct targets**, one new success (`dbxframe`) and no regressions.
+Warning-free locked workspace Clippy across all targets/features and formatting
+pass, including the retained runtime fixtures.
+Remaining commands are `checkpriv`, `snoop` and `unsnoop`; next audit `checkpriv`.
+Original Lima, port configuration and native implementation/CLI remain unchanged.
+This is no full Lima inventory, boot or upstream-driver execution rerun.
+Evidence and disposable fixtures are in /tmp/lima-dbxframe-port-20261010.
+
 #### Lima saved error frame support
 
 Native support added **10 October 2026**, after the
@@ -3176,10 +3214,10 @@ and rearm input. These use in-memory connections in disposable fixtures, with
 IMUD startup and HELP_D data controlled. Dedicated source/configuration is unchanged.
 The dedicated Lima master already retains the full uncaught error mapping.
 The caught-input recorder still saves only the message: `catch` results and
-handler timing are unchanged. The dbxframe command remains unported and must
-explicitly report unavailable frame data for caught records. Adapting that
-command is the next port item; this native change does not advance the preceding
-45/49 transitional command inventory or claim a full Lima boot.
+handler timing are unchanged. At this native adoption, the dbxframe command was
+still unported; the [subsequent adaptation](#lima-wizard-dbxframe-adaptation)
+reports unavailable frame data for caught records. This native change did not
+advance the preceding 45/49 transitional command inventory or claim a full Lima boot.
 
 #### Lima wizard dbxframe audit
 
