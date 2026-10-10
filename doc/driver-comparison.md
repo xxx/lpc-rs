@@ -3124,6 +3124,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard stat audit
+
+Reviewed **9 October 2026** against pinned [stat][lima-stat-command],
+[command rules][lima-update-rules], [CMD][lima-command-base],
+[body][lima-body] and [descriptions][lima-description]. Dedicated lpc-rs-port
+remains clean at **1ed841c3**; native loadall notes are **89062ad8**. No proposal
+is adopted by this audit and no native implementation changes.
+
+Protected dispatch exposes the private stat handler. Runtime testing also finds
+a named-callback adaptation in body creation: `set_long((: our_description :))`
+evaluates to a function pointer under native expression-closure semantics,
+causing stat me to fail during description concatenation. Passing the bare
+`our_description` function produces the expected body description. Recommend
+these two small Lima changes, retaining the resolver and report implementation.
+
+All **13 cases pass across 27 registered shell inputs**, including unavailable
+baseline and dispatch-only callback-failure controls. Actual user/body/shell/CMD
+code handles resident and cold prototype paths, relative paths, clone state,
+inventory IDs and first-match/body-before-room resolution, inherited reports,
+me/here/shell targets, arguments, redirection, pipelines and ignored stdin.
+Caller/player identity, ordinary shell state and input ownership remain;
+callback writes survive errors caught by the input layer, and input rearms.
+Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+
+Original result handling stays: nil, missing methods and literal zero report no
+information; empty strings produce an empty report. Dynamic malformed results
+retain native string coercion/errors: an integer becomes text in CMD's buffer,
+whereas a mapping raises an error. No additional result-type policy is added.
+The existing pager's blank lines and first annotation-daemon startup message
+are retained; raw buffers and redirected files preserve report text.
+
+**23 compile checks** have expected results: unavailable baseline, dispatched
+stat, fifteen complete supports, and six targets with the body callback
+adaptation, including human/elf bodies. Locked workspace all-target/all-feature
+Clippy and workspace/fixture formatting pass. All 1,547 dedicated library files,
+README, configuration, native implementation, CLI and original Lima are
+unchanged; temporary test entries are removed. Earlier inventories retain their
+scope; this audit does not constitute a new full compile sweep or startup test.
+
+Next: adopt the audited stat dispatcher and body callback adaptation, then
+validate the actual checkout.
+
 #### Lima wizard loadall port
 
 Adopted **9 October 2026** after committing the [loadall
@@ -15070,6 +15112,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-renew-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/renew.c
 
 [lima-loadall-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/loadall.c
+[lima-stat-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/stat.c
 
 [fl-loadall-loader]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/simulate.cc#L414-L503
 
