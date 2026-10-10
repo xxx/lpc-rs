@@ -357,6 +357,13 @@ the dump_prog declaration present. Output framing comes from the pinned
 formatter; no upstream execution was performed. [Declaration][fl-program-dump-spec],
 [implementation][fl-program-dump], [formatter][fl-program-dump-format].
 
+FluffOS function declaration inspection was source-reviewed on **10 October 2026**
+at **44532e0228f34be2184c701a361df4079371b8b0**, with PACKAGE_CONTRIB enabled.
+Detailed rows use saved parameter types when available (SAVE_TYPES is enabled
+by default); unsaved types are zero. This is source review, with no upstream
+execution. [Reference][fl-function-declarations],
+[implementation][fl-function-declarations-source], [options][fl-function-declarations-options].
+
 ## Overview
 
 These cells describe selected capabilities, not complete feature inventories.
@@ -379,6 +386,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
+| Function inspection | [`functions`](efun/functions.md) lists resolved visible names; [`function_exists`](efun/function_exists.md) reports the defining program and [`function_info`](efun/function_info.md) inspects pointer bindings. Declaration signatures are not exposed. | **Not checked**. | **Not checked**. | [`functions(ob, 1)`][fl-function-declarations] returns declaration rows, including inherited and nonpublic functions; requires PACKAGE_CONTRIB. | **Not checked**. |
 | Program disassembly | [`disassemble`](efun/disassemble.md) returns the live object's current compiled listing as lines. [CLI `-S` / `--emit-asm`](../lpc-rs-lpcc/README.md#usage) prints instructions without executing LPC. | **Not checked**. | **Not checked**. | [`dump_prog`][fl-program-dump] writes program details and optional disassembly; requires `PACKAGE_DEVELOP`. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
@@ -585,6 +593,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Array and mapping predicates | `pointerp` tests arrays; `arrayp` is an alias. `mapp` tests mappings. Each returns integer `1` for its type and `0` otherwise. [Declarations][fl-core-spec], [implementations][fl-type-predicates]. | Use [`arrayp`](efun/arrayp.md) and [`mappingp`](efun/mappingp.md). Rename `pointerp` and `mapp` calls or provide simul wrappers. These predicates test container type, independently of whether the container is empty. |
 | Type inspection | `typeof` returns a string such as `"int"` or `"float"`; its `T_*` constants name those strings. [Reference][fl-typeof], [implementation][fl-typeof-source]. | [`typeof`](efun/typeof.md) returns an integer type tag. Replace simple checks with predicates such as [`intp`](efun/intp.md) and [`floatp`](efun/floatp.md), or define mudlib constants for the native tags when retaining a switch. String-valued foreign constants will not match. For a numeric variadic helper such as Lima's `sum`, validate each argument before adding it; numeric strings and nested arrays remain invalid. Call `sum(values...)` to spread an array, or use Lima's `array_sum(values)` wrapper. Preserve integer accumulation and the switch to floating arithmetic when a float is encountered; nil acts as zero only in zero mode. |
 | Character input | `get_char` delivers one UTF-8 character or control byte, then returns to line mode unless rearmed. Its reference specifies first-registration-wins and extra arguments after the input. [Reference][fl-get-char]. | [`get_char`](efun/get_char.md) shares transactional registration with `input_to`; the last registration wins across both APIs. Its second argument is boolean no-echo; use ordinary pointer binding for extra arguments, which precede the character. Classic SGA negotiation is supported; RFC LINEMODE is refused. Unread input is preserved across mode changes. Audit repeated registrations, callback argument order, and flag use. |
+| Function inspection | `functions(ob, 1)` returns name, declared argument count, return type and saved parameter types for inherited and local functions, including nonpublic declarations. Flag 2 excludes inherited definitions; flag 3 combines both choices. Unsaved argument types are zero. [Reference][fl-function-declarations], [implementation][fl-function-declarations-source]. | [`functions(ob, 1)`](efun/functions.md) returns local names; the default includes inherited names. Both hide foreign nonpublic functions. [`function_exists`](efun/function_exists.md) supplies the defining program. [`function_info`](efun/function_info.md) describes pointer bindings rather than declaration types or arity. Detailed signature records need further native support; see the [Lima dbxfuncs audit](#lima-wizard-dbxfuncs-audit). |
 | Program disassembly | `dump_prog(ob, flags, file)` writes program details to a file; flag 1 includes disassembly and flag 2 line information. Requires `PACKAGE_DEVELOP` and write permission. [Implementation][fl-program-dump], [declaration][fl-program-dump-spec], [format][fl-program-dump-format]. | Use [`disassemble(ob)`](efun/disassemble.md) for a fresh array of native instruction lines, including nonpublic code and initializers. Print lines individually when the complete listing exceeds one string's limit; no output file or heading split is needed. The diagnostic format differs and is not stable. For source compilation without LPC execution use [CLI assembly output](../lpc-rs-lpcc/README.md#usage); [`compile_string`](efun/compile_string.md) initializes its object normally. There is no native `dump_prog` file API. |
 | Stack inspection | `call_stack(0/1/2)` returns defining programs, executing objects, or function names, starting with the current frame. `all_previous_objects()` aliases `previous_object(-1)`. [Reference][fl-call-stack], [declaration][fl-core-spec]. | [`calling_program(-1)`](efun/calling_program.md), [`calling_object(-1)`](efun/calling_object.md), and [`calling_function(-1)`](efun/calling_function.md) provide aligned caller arrays, excluding the inspecting function. A local helper can include the requesting function as row zero. Use direct no-argument queries for immediate-caller checks. Replace `all_previous_objects()` with [`previous_object(-1)`](efun/previous_object.md) at the call site; a simul wrapper adds its own caller entry. Frame counts and synthetic labels need not match FluffOS. |
 | Privileged callback owner chains | Function-pointer dispatch installs a synthetic owner frame before invoking the target, including efun and simul-efun pointers. [Implementation][fl-pointer-dispatch]. | Dynamic pointers, bound `call_other`, and simul-efun pointers can reach the target without an executing owner frame. For Lima-style `unguarded` checks, an inherited helper can wrap those same-owner pointers in `(: $(code)() :)`, using [`function_info`](efun/function_info.md) to select them. Leave foreign-owned callbacks on their existing path. Named callbacks, closures and ordinary efun pointers already provide the needed context; wrapping them all can introduce extra owner entries and reject valid calls. Preserve source, handle, privilege and protection checks, and evaluate bound arguments before entering the privileged callback. |
@@ -3131,6 +3140,50 @@ starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
 ordinary shell state, defaults, directory resolution, flags and pipeline behavior
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
+
+#### Lima wizard dbxfuncs audit
+
+Reviewed **10 October 2026** against pinned [dbxfuncs][lima-dbxfuncs-command].
+Native codefor/disassembly is committed as **c2f2c675**; the dedicated lpc-rs-port
+checkout is clean at **a6376606**. Dbxfuncs is byte-identical to upstream.
+
+The command needs the protected variadic dispatcher and native closure syntax.
+Those changes compile but do not supply its signature rows: FluffOS
+`functions(ob, 1)` returns name, declared argument count and return type, followed
+by optional saved parameter types. Native [`functions(ob, 1)`](efun/functions.md)
+returns local names. [`function_info`](efun/function_info.md) describes pointer
+bindings, and its empty arguments array does not mean a declaration has no
+parameters. The command's `string *funcs` also misstates its intended row shape.
+
+Recommend `mapping function_signature(string name, object ob)` over the retained
+compiled prototype, composed with existing functions for enumeration. Return
+fresh declared types, fixed/default argument counts, reference positions,
+varargs/ellipsis and declaration flags plus the defining program; inspect the
+transaction-visible winning definition without calling, initializing or loading
+anything. Preserve existing self/foreign visibility and qualified-name lookup.
+No declaration parameter names, default values or collector type are currently
+retained in FunctionPrototype; do not invent those fields. Pointer binding
+inspection and functions' local-only selector remain unchanged. Adapt dbxfuncs
+with that API, direct name filtering and command stdout for headings and rows.
+
+All **25 compile checks** match expectations, including **17 support targets**.
+**5 cases / 12 registered inputs** pass through actual user/body/wish/CMD and
+master/simuls: current-command unavailability, the signature-row type error,
+names/defining-program inspection of inheritance, overrides and clones, foreign
+visibility, usage/missing/no-match paths, invalid regex and a valid retry. Names
+controls deliberately omit signatures and are not a completed port. The method side-effect counter remains zero, absent targets stay unloaded and shell/modal/input
+state remains usable. Connections are in-memory; IMUD is stubbed and HELP_D
+starts with a controlled saved index. Distinct nil, preserved call-out players
+and 4,000 ms tasks remain.
+
+Workspace all-target/all-feature locked Clippy and formatting pass. No mudlib or
+native API implementation is adopted; all 1,547 library files, README,
+configuration, compiler binary and original Lima remain unchanged. Temporary
+native test entries are removed. Source review pins FluffOS **44532e02** with
+PACKAGE_CONTRIB enabled and SAVE_TYPES noted; no upstream execution or new
+full-startup run is claimed. Earlier compile inventories retain their scope.
+
+Next: add general function signature inspection, then port dbxfuncs against it.
 
 #### Lima wizard codefor port
 
@@ -15842,3 +15895,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-program-dump]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/develop/disassembler.cc
 [fl-program-dump-format]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/disassembler.cc
 [fl-program-dump-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/develop/develop.spec
+
+[lima-dbxfuncs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/dbxfuncs.c
+[fl-function-declarations]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/contrib/functions.md
+[fl-function-declarations-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/contrib/contrib.cc#L325-L429
+[fl-function-declarations-options]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/local_options
