@@ -3124,6 +3124,55 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard docs audit
+
+Reviewed **9 October 2026** against pinned [docs command][lima-docs-command],
+[help daemon][lima-help-timers], [widgets][lima-widgets],
+[colour tables][lima-message-colours] and [command discovery][lima-command-daemon].
+The dedicated lpc-rs-port checkout remains clean at **50ab36d5**, with dataedit
+merge port notes committed as native **24d76c4b**. Recommend one command-only
+compatibility patch: protected dispatch_main, explicit calls followed by bare
+returns in void branches, local path-split normalization, integer category
+initialization and an empty array for absent RST tags. The preceding three
+filter_array migrations remain. No native API or implementation changes;
+this audit adopts no source.
+
+All **14 cases pass across 23 registered inputs**: ten use the proposal and
+four isolate the existing entry/reporting failures. Current docs is unavailable
+through the shell; dispatch alone exposes two rejected void-expression returns.
+The callable control counts absolute pages but omits their categories. Path
+normalization exposes incrementing a missing nil count; initializing counts
+exposes member_array on absent RST tags. The proposal restores categories and
+handles an empty index or an absent tag without weakening native types.
+
+Actual user/body/wizard-shell/CMD, HELP_D, command discovery and widgets run.
+Reports deduplicate pages, count RST/Markdown/other files, restrict categories,
+retain tagged counts, and leave the help index unchanged. Topic lists sort and
+stop at ten untagged files; unknown topics retain the ordinary report. ASCII,
+Unicode and simplified bars execute. Administrator playerdoc generation uses
+real player-command and verb discovery, overwrites the help page deterministically,
+and handles an empty verb directory. Existing write restrictions remain.
+
+Refresh exercises the real help daemon: flat completion, nested directory
+call-outs, the busy guard, initiator notification, native saved index, scan
+failure with unchanged saved bytes and a successful retry. Directory callbacks
+fire through native prioritize_call_out without wall-clock sleeps. Input
+rearms and user/body/shell/directory context remains after commands and errors;
+no pager or editor is opened. Connections are in-memory, IMUD transport is
+stubbed and initial help data is a controlled saved index. Distinct nil,
+preserved players and 4,000 ms tasks remain. Full help-tree/startup scanning,
+commit-time delivery failures and upstream execution were not repeated.
+
+All **29 compile checks** match expected outcomes: two entry failures,
+four compiling command variants and **23 Lima support targets**. Locked
+workspace all-target/all-feature Clippy with warnings denied and workspace/
+fixture formatting pass. All 1,547 library files, README, configuration, native
+implementation, CLI and original Lima are unchanged; temporary test entries are
+removed. The preceding 40/49 transitional inventory retains its scope.
+
+Next: commit the audit notes, adopt the one-file docs patch, and validate the
+command cases against the adopted checkout source.
+
 #### Lima wizard dataedit actions port
 
 Adopted **9 October 2026** after committing the [actions
@@ -3158,7 +3207,7 @@ implementation, CLI and original Lima are unchanged; temporary test entries are
 removed. Other inventories retain their preceding scope; startup, services and
 upstream execution were not repeated.
 
-Next: audit trans/cmds/docs.c.
+Next: the [docs audit](#lima-wizard-docs-audit) records the next command-only compatibility patch.
 
 #### Lima wizard dataedit actions audit
 
@@ -15655,3 +15704,5 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [fl-dataedit-empty-max]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/contrib/contrib.cc#L2578-L2590
 [fl-dataedit-file-open]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc#L287-L314
+
+[lima-docs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/docs.c
