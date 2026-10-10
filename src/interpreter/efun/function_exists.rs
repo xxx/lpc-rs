@@ -5,6 +5,8 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     efun::{arg_or_this_object, efun_context::EfunContext},
     lpc_ref::LpcRef,
+    process::Process,
+    program::Function,
 };
 
 /// `function_exists(name [, ob])`: the file defining `name` in `ob` (the
@@ -22,7 +24,21 @@ pub async fn function_exists<const N: usize>(context: &mut EfunContext<'_, N>) -
         context.return_efun_result(context.txn().nil());
         return Ok(());
     };
-    let own = Arc::ptr_eq(&target, context.process());
+    let result = visible_function(context, &target, name).map_or(context.txn().nil(), |function| {
+        let file = function.prototype.filename.with_extension("");
+        LpcRef::from(context.config().paths().source_name(&file).to_string())
+    });
+    context.return_efun_result(result);
+    Ok(())
+}
+
+/// Resolve a visible definition using the caller's self scope or the foreign root.
+pub(super) fn visible_function<const N: usize>(
+    context: &EfunContext<'_, N>,
+    target: &Arc<Process>,
+    name: &str,
+) -> Option<Function> {
+    let own = Arc::ptr_eq(target, context.process());
     let program = target.program(context.txn());
     let function = match name.split_once("::") {
         Some(_) if own => context
@@ -33,15 +49,7 @@ pub async fn function_exists<const N: usize>(context: &mut EfunContext<'_, N>) -
             .cloned(),
         None => program.lookup_function(name).cloned(),
     };
-    let result = function.filter(|function| own || function.public()).map_or(
-        context.txn().nil(),
-        |function| {
-            let file = function.prototype.filename.with_extension("");
-            LpcRef::from(context.config().paths().source_name(&file).to_string())
-        },
-    );
-    context.return_efun_result(result);
-    Ok(())
+    function.filter(|function| own || function.public())
 }
 
 #[cfg(test)]

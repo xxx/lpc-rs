@@ -63,4 +63,4 @@ mixed inherited_foo_file() {
 
 ### See also
 
-`functions`, `call_inherited`, `call_other`, `functionp`, `file_name`
+[`function_signature`](function_signature.md), `functions`, `call_inherited`, `call_other`, `functionp`, `file_name`

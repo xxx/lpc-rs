@@ -47,6 +47,7 @@ pub(crate) mod function_exists;
 pub(crate) mod function_info;
 pub(crate) mod function_name;
 pub(crate) mod function_object;
+pub(crate) mod function_signature;
 pub(crate) mod functions;
 pub(crate) mod get_char;
 pub(crate) mod get_dir;
@@ -1363,6 +1364,11 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
+    function_signature => {
+        returns: LpcType::Mapping(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::Object(false)],
+    },
 
 }
 
@@ -1749,6 +1755,7 @@ mod tests {
                 "socket_info",
                 "query_sockets",
                 "disassemble",
+                "function_signature",
             ]
         );
     }
