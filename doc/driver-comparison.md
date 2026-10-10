@@ -3143,6 +3143,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard snoop adaptation
+
+Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following
+audit notes committed as native **a606d739**. The protected dispatcher forwards
+the parsed target/reason array to the existing private handler. The daemon passes
+bare `detect_cycle_recursive` to `filter`, making ordinary chains work while
+retaining self-edge and back-edge rejection. Both source edits match the audit
+proposals. README documents defaults, consent/admin behavior, logs and shared
+relays.
+
+The existing argument rule, quoted groups, default reason, duplicate feedback,
+buffered stdout, consent/admin policy and native array fallback retain their
+audited behavior. No native API, master policy, relay or configuration change is
+introduced. The inspector-path mismatch and converging-graph issue remain
+separate recorded source issues. `unsnoop` is still unadopted; its temporary
+dispatcher is used only for named-target cleanup in disposable controls.
+
+All **5 runtime cases / 28 registered shell inputs / 7 native starts** pass on
+the first adopted run. Three cases use copied dedicated command/daemon sources
+without replacing them; two restore original-source controls. Actual master,
+simuls, user/body/wish/CMD and snoop/logging daemons run with in-memory connections
+and native asynchronous capture/delivery of ordinary synthetic text. Scope and
+fixture controls match the audit below; input rearms, checked shell/context state
+stays stable and no registered input has a caught error. No socket transport or
+automatic capture through multiple relay hops is exercised.
+
+Fresh compilation reaches **48/49 transitional commands**, with **72 support
+checks / 99 distinct targets**, including the snoop daemon and relay. Only
+`snoop` newly succeeds; there are no regressions or timeouts. Warning-free locked
+workspace Clippy across all targets/features, workspace formatting and retained
+fixture formatting pass. The temporary test-module hook is restored byte-for-byte.
+The other 1,545 library files, configuration, original Lima and native
+implementation/CLI remain unchanged. No new full native suite, complete Lima
+inventory/boot or upstream-driver execution is claimed.
+Evidence: /tmp/lima-snoop-port-20261010.
+
+Next commit command/daemon/README and comparison notes, then audit `unsnoop`,
+the final transitional command, including all-target removal and daemon cleanup.
+
 #### Lima wizard snoop audit
 
 Audited **10 October 2026** against the dedicated lpc-rs-port checkout at
