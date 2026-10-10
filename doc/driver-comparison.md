@@ -351,6 +351,12 @@ and header. No cross-driver execution was performed. [FluffOS wrapper][fl-trim],
 [Unicode helper][fl-trim-helper], [build option][fl-trim-build],
 [LDMud reference][ld-trim], [header][ld-trim-header].
 
+FluffOS program dumping was source-reviewed on **9 October 2026** at
+`44532e0228f34be2184c701a361df4079371b8b0`, with `PACKAGE_DEVELOP` enabled and
+the dump_prog declaration present. Output framing comes from the pinned
+formatter; no upstream execution was performed. [Declaration][fl-program-dump-spec],
+[implementation][fl-program-dump], [formatter][fl-program-dump-format].
+
 ## Overview
 
 These cells describe selected capabilities, not complete feature inventories.
@@ -373,6 +379,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
+| Program disassembly | [CLI `-S` / `--emit-asm`](../lpc-rs-lpcc/README.md#usage) prints native instructions without execution; no LPC disassembly API. | **Not checked**. | **Not checked**. | [`dump_prog`][fl-program-dump] writes program details and optional disassembly; requires `PACKAGE_DEVELOP`. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
 | Connection model | [Raw TCP sockets](tcp-sockets.md) and [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). Connection metadata supplies idle time for [Lima player naming](#lima-player-naming). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
@@ -578,6 +585,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Array and mapping predicates | `pointerp` tests arrays; `arrayp` is an alias. `mapp` tests mappings. Each returns integer `1` for its type and `0` otherwise. [Declarations][fl-core-spec], [implementations][fl-type-predicates]. | Use [`arrayp`](efun/arrayp.md) and [`mappingp`](efun/mappingp.md). Rename `pointerp` and `mapp` calls or provide simul wrappers. These predicates test container type, independently of whether the container is empty. |
 | Type inspection | `typeof` returns a string such as `"int"` or `"float"`; its `T_*` constants name those strings. [Reference][fl-typeof], [implementation][fl-typeof-source]. | [`typeof`](efun/typeof.md) returns an integer type tag. Replace simple checks with predicates such as [`intp`](efun/intp.md) and [`floatp`](efun/floatp.md), or define mudlib constants for the native tags when retaining a switch. String-valued foreign constants will not match. For a numeric variadic helper such as Lima's `sum`, validate each argument before adding it; numeric strings and nested arrays remain invalid. Call `sum(values...)` to spread an array, or use Lima's `array_sum(values)` wrapper. Preserve integer accumulation and the switch to floating arithmetic when a float is encountered; nil acts as zero only in zero mode. |
 | Character input | `get_char` delivers one UTF-8 character or control byte, then returns to line mode unless rearmed. Its reference specifies first-registration-wins and extra arguments after the input. [Reference][fl-get-char]. | [`get_char`](efun/get_char.md) shares transactional registration with `input_to`; the last registration wins across both APIs. Its second argument is boolean no-echo; use ordinary pointer binding for extra arguments, which precede the character. Classic SGA negotiation is supported; RFC LINEMODE is refused. Unread input is preserved across mode changes. Audit repeated registrations, callback argument order, and flag use. |
+| Program disassembly | `dump_prog(ob, flags, file)` writes program details to a file; flag 1 includes disassembly and flag 2 line information. Requires `PACKAGE_DEVELOP` and write permission. [Implementation][fl-program-dump], [declaration][fl-program-dump-spec], [format][fl-program-dump-format]. | [CLI assembly output](../lpc-rs-lpcc/README.md#usage) is available, but LPC metadata efuns do not expose instructions. There is no native `dump_prog` or in-game listing API. See the [Lima codefor audit](#lima-wizard-codefor-audit) for the proposed native disassemble API; the proposal is not implemented. |
 | Stack inspection | `call_stack(0/1/2)` returns defining programs, executing objects, or function names, starting with the current frame. `all_previous_objects()` aliases `previous_object(-1)`. [Reference][fl-call-stack], [declaration][fl-core-spec]. | [`calling_program(-1)`](efun/calling_program.md), [`calling_object(-1)`](efun/calling_object.md), and [`calling_function(-1)`](efun/calling_function.md) provide aligned caller arrays, excluding the inspecting function. A local helper can include the requesting function as row zero. Use direct no-argument queries for immediate-caller checks. Replace `all_previous_objects()` with [`previous_object(-1)`](efun/previous_object.md) at the call site; a simul wrapper adds its own caller entry. Frame counts and synthetic labels need not match FluffOS. |
 | Privileged callback owner chains | Function-pointer dispatch installs a synthetic owner frame before invoking the target, including efun and simul-efun pointers. [Implementation][fl-pointer-dispatch]. | Dynamic pointers, bound `call_other`, and simul-efun pointers can reach the target without an executing owner frame. For Lima-style `unguarded` checks, an inherited helper can wrap those same-owner pointers in `(: $(code)() :)`, using [`function_info`](efun/function_info.md) to select them. Leave foreign-owned callbacks on their existing path. Named callbacks, closures and ordinary efun pointers already provide the needed context; wrapping them all can introduce extra owner entries and reject valid calls. Preserve source, handle, privilege and protection checks, and evaluate bound arguments before entering the privileged callback. |
 | Snooping | `snoop` replaces occupied relationships. With `receive snoop` enabled, it calls `receive_snoop(text)` synchronously; otherwise it forwards text prefixed with `%`. The reviewed native setter does not call a master authorization hook. [Source][fl-snoop]. | [`snoop`](efun/snoop.md) errors on occupied endpoints; stop explicitly before changing partners. Start, stop and live queries require [`valid_snoop`](apply/master/valid_snoop.md). Adapt relays to [`receive_snoop(text, target, direction)`](apply/object/receive_snoop.md), delivered in a fresh transaction without player context. Noninteractive relays work without a runtime switch. Hidden input is excluded; errors and overflow retire the registration. Connection transfers terminate observation. Mudlib relays must handle asynchronous delivery and their own subscriber policy. |
@@ -3124,6 +3132,47 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard codefor audit
+
+Reviewed **9 October 2026** against pinned [codefor][lima-codefor-command].
+The dedicated lpc-rs-port checkout is clean at **7fc053a8**, with docs port
+notes committed as native **96cb7f07**. Codefor is unchanged from upstream.
+It lacks protected dispatch_main, returns an integer from void main and calls
+unsupported dump_prog. Five command variants and a direct efun probe separate
+these compile failures. A temporary empty dump_prog body is only a compilation
+control; it does not provide disassembly or establish a working command.
+
+The original command is unavailable through the real wizard shell. Native
+compile_string controls compile an expression without invoking it, retain an
+existing EVAL.c, clean up their scratch object, report a syntax error and permit
+a valid retry. All **3 runtime cases / 7 registered inputs** pass and preserve
+user/body/shell/directory, rearmed input and modal state. The wizard's home is
+provisioned through the existing set_protection operation. Connections are
+in-memory and IMUD transport is stubbed. Distinct nil, preserved players and
+4,000 ms tasks remain.
+
+All **33 compile checks** match expectations, including **19 support targets**
+and six native CLI assembly cases. Arithmetic, branches, closures, classes and
+containers emit instructions; neither create nor the expression is executed.
+The abstract command base is a separate expected failure without a descendant
+dispatcher. Workspace Clippy and formatting pass. All 1,547 library files,
+README, configuration, native implementation, CLI and original Lima are unchanged.
+The preceding 41/49 transitional inventory retains its scope.
+
+Recommend native `string *disassemble(object ob)` using the existing program
+listing: return diagnostic lines rather than one string constrained by the
+8,192-byte string limit. Read the transaction's current program, include
+inherited and initializer code, and avoid file writes or function invocation.
+Metadata efuns cannot reconstruct instructions. Then adapt codefor to
+compile_string, print the returned lines and destruct its scratch object on
+success or error. Remove its output-file round trip and driver-specific heading
+split. This is a recommendation; no new API or source patch is adopted.
+FluffOS program dumping and output framing are source-reviewed separately;
+no upstream execution is claimed. Full boot and commit-time delivery failures
+retain their preceding scope.
+
+Next: implement the native listing API, then audit and port codefor against it.
+
 #### Lima wizard docs port
 
 Adopted **9 October 2026** after committing the [docs
@@ -3160,7 +3209,7 @@ Clippy with warnings denied and workspace/fixture formatting pass. The other
 are unchanged; temporary test entries are removed. Other inventories retain
 their preceding scope.
 
-Next: commit docs, README and port notes, then audit trans/cmds/codefor.c.
+Next: the [codefor audit](#lima-wizard-codefor-audit) records the disassembly API gap.
 
 #### Lima wizard docs audit
 
@@ -15743,3 +15792,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-dataedit-file-open]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc#L287-L314
 
 [lima-docs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/docs.c
+[lima-codefor-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/codefor.c
+[fl-program-dump]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/develop/disassembler.cc
+[fl-program-dump-format]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/disassembler.cc
+[fl-program-dump-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/develop/develop.spec
