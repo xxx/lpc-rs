@@ -388,7 +388,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
 | Function inspection | [`functions`](efun/functions.md) lists resolved visible names; [`function_exists`](efun/function_exists.md) reports the defining program, [`function_signature`](efun/function_signature.md) exposes compiled declaration metadata and [`function_info`](efun/function_info.md) inspects pointer bindings. | **Not checked**. | **Not checked**. | [`functions(ob, 1)`][fl-function-declarations] returns declaration rows, including inherited and nonpublic functions; requires PACKAGE_CONTRIB. | **Not checked**. |
 | Program disassembly | [`disassemble`](efun/disassemble.md) returns the live object's current compiled listing as lines. [CLI `-S` / `--emit-asm`](../lpc-rs-lpcc/README.md#usage) prints instructions without executing LPC. | **Not checked**. | **Not checked**. | [`dump_prog`][fl-program-dump] writes program details and optional disassembly; requires `PACKAGE_DEVELOP`. | **Not checked**. |
-| Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
+| Named global access | [`variable_info`](efun/variable_info.md) reads all declarations, with master authorization for foreign inspection; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate authorization for foreign writes. | **Not checked**. | **Not checked**. | [`variables`][fl-global-declarations] enumerates names or name/type rows, including nonpublic declarations; [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] read/write values with `PACKAGE_CONTRIB`. [Lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
 | Connection model | [Raw TCP sockets](tcp-sockets.md) and [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). Connection metadata supplies idle time for [Lima player naming](#lima-player-naming). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
 | Build and configuration | [Cargo build and installation](../README.md#build-and-install), [environment settings and explicit dotenv files](../default.env). | [Make-based build][cd-readme], with settings in [config.h][cd-config]. | [Configure/Make build][ld-install], with [command-line options and argument files][ld-invocation]. | [CMake build][fl-readme] and a [runtime configuration file][fl-config]. | [Make-based build][dgd-build] and a separate [driver configuration file][dgd-config]. |
@@ -659,6 +659,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Saved-file migration | The reader skips `#` lines, decodes unescaped carriage returns inside strings as newlines, and reads positional `(/.../)` class records. [Implementation][fl-object-persistence]. | Headers need removal, string values need decoding and re-encoding, and classes need nominal identities and typed named fields. Header removal alone does not establish equivalence. See the [native format](save-format.md) and [Lima persistence notes](#lima-daemon-persistence). |
 | Value serialization | `save_variable(mixed)` returns a string and `restore_variable(string)` reads one, using the driver's object-save format. [Save][fl-save-variable], [restore][fl-restore-variable]. | Use [`save_value`](efun/save_value.md) and [`restore_value`](efun/restore_value.md). They use the native [save format](save-format.md), including class and bytes encodings and configured nil handling. Renaming calls does not establish compatibility with existing saved strings; audit and migrate persisted data separately. Cross-driver data interchange is **not checked**. |
 | Named global reads and writes | `fetch_variable(name, object?)` and `store_variable(name, value, object?)` default to the current object. Lookup takes the first match, searching inherits before the object's own globals. The implementation rejects a private match on a foreign target; it does not enforce the reference's public-only description. Self-access includes private globals, and `nosave` globals remain accessible. The setter copies the value without a declared-type check. [References][fl-fetch-variable], [setter][fl-store-variable], [implementation][fl-named-globals], [lookup][fl-global-lookup], [assignment][fl-global-assignment]. | Read through [`variable_info`](efun/variable_info.md); no native `fetch_variable` is needed for a name lookup. The native setter takes the target **first**, requires a live object, and accepts an optional exact declaring-source path. Duplicate names require that selector; it does not choose the first match. Writes check retained types, configured nil semantics and scalar class identity. Foreign writes require [`valid_store_variable`](apply/master/valid_store_variable.md), including public fields, separately from inspection permission. Update argument order, duplicate-name handling, type assumptions, and master policy together. |
+| Global declaration enumeration | `variables(ob)` lists inherited declarations before local ones, including private/protected/nosave globals and duplicate names. A nonzero second argument returns name/type pairs; enumeration does not read values or ask `valid_bind`. [Reference][fl-global-declarations], [implementation][fl-global-declarations-source]. | [`variable_info(ob)`](efun/variable_info.md) returns every retained declaration with its exact source, type, flags and actual value. Foreign inspection requires [`valid_variable_info`](apply/master/valid_variable_info.md) before any entries are returned. Report separate values for shadowed globals instead of repeatedly fetching the first match; see the [Lima dbxvars audit](#lima-wizard-dbxvars-audit). |
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
 | Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
 
@@ -3140,6 +3141,69 @@ starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
 ordinary shell state, defaults, directory resolution, flags and pipeline behavior
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
+
+#### Lima wizard dbxvars audit
+
+Reviewed **10 October 2026** against pinned [dbxvars][lima-dbxvars-command] and
+[Lima's binding policy][lima-variable-bind-policy]. Native function_signature is
+committed as **a7ab409d** on lima-support; the dedicated lpc-rs-port dbxfuncs patch
+and README are committed as **9da6697d**. Dbxvars is unchanged from upstream.
+This audit adopts no source patch or native API.
+
+Dbxvars lacks protected dispatch and depends on variables, fetch_variable and
+bind. Its closure spelling is accepted; an entry-only control exposes the missing
+efuns. Pinned FluffOS **44532e02**, with PACKAGE_CONTRIB and SENSIBLE_MODIFIERS,
+enumerates all inherited/local declarations, including nonpublic/nosave globals
+and duplicate names. Fetch_variable chooses the first ancestor-first match.
+The [rebound pointer][fl-variable-bind-source] runs as its target, allowing
+private self-reads. Consequently, the old command repeats the first value when
+globals share a name. That is an upstream command limitation, not a native
+regression. [Enumeration][fl-global-declarations-source],
+[reader][fl-variable-read-source], [lookup][fl-variable-read-lookup],
+[pointer context][fl-variable-bound-context]. Source review uses pinned local Git
+objects and public links; browser fetches returned cache misses. No FluffOS
+execution is claimed.
+
+Recommend a Lima-only port through existing
+[`variable_info`](efun/variable_info.md): protected variadic dispatch, regex-filtered
+declaration rows and one actual value per match. Keep unique name/value output;
+qualify duplicate names with their exact declaring source, including .c. Keep
+out/outf buffered stdout for every message. Native
+[`%Q`](efun/sprintf.md) quotes strings and nested string values, preserving the
+original [FluffOS %O presentation][fl-variable-value-format]; native %O prints
+strings literally. No enumeration alias, named reader or general bind is needed.
+
+The current Lima master has no valid_variable_info hook. Copy valid_bind's exact
+check_privilege(get_protection(base_name(target), "wf")) rule into the native
+inspection apply, preserving target write protection and the full caller/user
+privilege checks. This grants the same kind of access as the rebound reader,
+including shared container values; the command only formats them. Native
+authorization precedes enumeration and filtering, so even a no-match inspection
+of a protected target is refused. The old command returned before bind in that
+case. [Lima privilege evaluation][lima-variable-privilege-policy].
+
+All **24 compile checks** match expectations, including **17 support targets**
+and the quoted-value variant. All **6 cases / 19 registered inputs** pass through
+actual master/simuls/user/body/wish/CMD: unavailable-command control, missing
+policy refusal, inherited/private/nosave and shadowed values, clones, wizard/staff
+write-protection decisions, usage/missing/no-match paths, regex failure/retry,
+pipeline filtering and redirected contents. Five authorization receipts check
+caller, source, previous object and player. These temporary shell controls retain
+native %O; quoting is compiled separately and covered by the existing native
+sprintf tests. Target effect counts stay unchanged, absent sources remain
+unloaded and shell/body/user/directory/modal/input state remains stable.
+Connections are in-memory; IMUD is stubbed and HELP_D has a controlled saved index.
+Distinct nil, preserved players and 4,000 ms tasks remain.
+
+Workspace all-target/all-feature locked Clippy, formatting and retained fixture
+formatting pass. All 1,547 library files, README, configuration, native
+implementation, CLI and original Lima remain unchanged; temporary native entries
+are removed. Initial fixture failures came from an error/throw macro collision
+and Lima refusing a new protected child beneath /open; the corrected fixtures
+use a different local name and the existing /secure write protection.
+
+Next: port dbxvars and add the Lima master inspection hook. The preceding
+43/49 transitional inventory, full-boot and broader results retain their scope.
 
 #### Lima wizard dbxfuncs port
 
@@ -15944,6 +16008,16 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-program-dump-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/develop/develop.spec
 
 [lima-dbxfuncs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/dbxfuncs.c
+[lima-dbxvars-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/dbxvars.c
+[lima-variable-bind-policy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/master.c
+[lima-variable-privilege-policy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/secure_d.c
+[fl-global-declarations]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/contrib/variables.md
+[fl-global-declarations-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/contrib/contrib.cc#L425-L473
+[fl-variable-read-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/contrib/contrib.cc#L167-L190
+[fl-variable-read-lookup]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/object.cc#L1238-L1275
+[fl-variable-bind-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L100-L152
+[fl-variable-bound-context]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/base/interpret.cc#L1502-L1524
+[fl-variable-value-format]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/sprintf.cc#L329-L345
 [fl-function-declarations]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/contrib/functions.md
 [fl-function-declarations-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/contrib/contrib.cc#L325-L429
 [fl-function-declarations-options]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/local_options
