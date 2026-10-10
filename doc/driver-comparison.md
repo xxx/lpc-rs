@@ -3142,6 +3142,70 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dbxwhere audit
+
+Reviewed **10 October 2026** against pinned [Lima dbxwhere][lima-dbxwhere-command]
+and [master][lima-master], with native dbxvars notes committed as **b8801ed5**
+and the dedicated lpc-rs-port dbxvars/master/README committed as **c4317c4d**.
+This audit adopts no command patch or native API.
+
+Dbxwhere needs three command edits: protected variadic dispatch, a local named
+record instead of error because audit.h expands error to the keyword throw, and
+an invocation closure: `unguarded(1, (: master()->query_error($(str)) :))`.
+The old comma-style closure compiles after the first two edits but evaluates to
+the player-name string, rather than calling query_error; the report then fails
+when it indexes diagnostic. FluffOS's [constructor grammar][fl-dbxwhere-grammar]
+supports the original bound-function spelling. Native ordinary comma expressions
+retain their existing behavior; the existing Lima unguarded policy is unchanged.
+
+The already-adapted master saves native
+[`error_handler`](apply/master/error_handler.md) records by initiating user and
+as last. Its standard_trace renders the stored diagnostic with a timestamp;
+the legacy flag argument does not introduce FluffOS frame numbers. The explicit
+closure preserves the existing privileged command lookup. A direct ordinary
+wizard query is refused, while the command retrieves self, named and last records.
+No new trace API or reconstructed FluffOS error mapping is needed for dbxwhere.
+
+All **7 cases / 19 registered inputs** pass. The original is unavailable; the
+dispatch/rename control reproduces the wrong-type failure and input recovery.
+The invocation control handles empty self/live-player/last records, unknown names,
+saved records without a live body, user versus background attribution, pipes and
+redirected files. Real nested runtime failures go through the native reporting
+helper and the actual master; no fabricated error record or replacement handler
+is used. Redirected diagnostics retain their exact contents; normal display uses
+the existing pager's wrapping. Reads do not alter saved records; writes from
+uncaught failed operations are rolled back. User/body/room/shell/directory/modal/
+input state stays stable.
+
+**Caught errors remain a compatibility gap.** With mudlib error handler enabled,
+the reviewed [FluffOS runtime][fl-dbxwhere-errors] also calls the master for caught
+errors. Its [reviewed default][fl-dbxwhere-error-config] enables that option.
+Native LPC catch does not call error_handler. Lima's input layer catches command
+failures, so those do not create a new dbxwhere record; the control confirms its
+previous record survives a caught shell failure. This command adaptation is for
+stored uncaught diagnostics and does not establish equivalent caught-error history
+or the structured frame data dbxframe expects. Keep those as explicit later work.
+
+All **22 compile controls**, including 17 supporting targets, match expectations;
+the final edited invocation and legacy controls are separately rechecked. Workspace
+warning-free all-target/all-feature locked Clippy and formatting pass, including
+the retained fixture. Actual user/body/wish/CMD/master/simuls and stdio execute with
+in-memory connections, stub IMUD create and a controlled HELP_D saved index.
+Lima uses distinct nil, preserved call-out players and 4,000 ms tasks. Source
+review uses pinned local Git objects; browser fetches returned cache misses.
+FluffOS execution, a new full boot and a new full command inventory are unchecked.
+The preceding **44/49** transitional count retains its scope. Dedicated/original
+sources, configuration, native implementation/CLI are unchanged and temporary
+test entries are removed.
+
+Recommendation: adopt the three command edits with existing buffered out/outf
+and NO_ANSI, then audit caught-error recording before deciding how to port dbxframe.
+
+[lima-dbxwhere-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/dbxwhere.c
+[fl-dbxwhere-grammar]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y#L2664-L2759
+[fl-dbxwhere-errors]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/simulate.cc#L1749-L1880
+[fl-dbxwhere-error-config]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/base/internal/rc.cc#L76
+
 #### Lima wizard dbxvars port
 
 Adopted **10 October 2026** after committing the
@@ -14800,6 +14864,8 @@ Replace the master's structured-trace formatter with the native
 [`error_handler`](apply/master/error_handler.md) mapping's rendered `diagnostic`;
 do not expect `program`, `file`, `line`, `trace` or a caught-error argument.
 `standard_trace` can retain its mudlib call shape while returning that diagnostic.
+The [dbxwhere audit](#lima-wizard-dbxwhere-audit) checks saved-record retrieval
+and distinguishes native uncaught records from FluffOS caught-error history.
 Use `this_interactive()` for the initiating user and retain wizard-only detail.
 Store the error independently of optional log, user and channel delivery, and
 avoid loading services from the error handler. The driver also logs uncaught
