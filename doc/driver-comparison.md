@@ -3143,6 +3143,60 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard snoop audit
+
+Audited **10 October 2026** against the dedicated lpc-rs-port checkout at
+**bd6f0d74**, after native checkpriv notes **6101eed1**. The
+[command][lima-snoop-command] and its [argument rule][lima-snoop-rules] still
+match pinned Lima `eefaff66adcae9b01e16059574c925b0d63e70a1`.
+The command needs the established protected dispatcher, forwarding the parsed
+array to its private handler. The rule supplies an optional user body and reason
+words; quoted groups are unquoted here. Existing usage, consent/admin checks,
+duplicate feedback, default reason, logging and buffered stdout work.
+
+The [daemon's][lima-entry-snoop] legacy `(: detect_cycle_recursive :)` callback
+returns a function pointer on lpc-rs. Its filter therefore rejects an acyclic
+chain when the target already observes another body. Pass the bare function
+`detect_cycle_recursive` to `filter`. Temporary controls confirm that chains
+then succeed while back edges and self edges still fail. The `||` array fallback
+preserves its selected operand and needs no change.
+
+The existing native bridge, master policy and typed relay already support this
+command. One native registration per watched user serves multiple mudlib
+subscribers. No new efun, permission policy, relay or configuration change is
+proposed. Named-target `unsnoop` uses a temporary dispatcher only for cleanup;
+its adoption and broader lifecycle paths remain a separate audit.
+
+All **5 runtime cases / 28 registered shell inputs / 7 native starts** pass with
+actual master/simuls/user/body/wish/CMD, logging and snoop daemons. In-memory
+connections consume committed start controls and capture synthetic ordinary
+text through native asynchronous delivery. Consent, admin override, quoted and
+default reasons, duplicate targets, pipelines, partial output, decoded input,
+subscriber fanout, partial/last removal and restarting a relation pass. Input
+rearms and checked shell/context state stays stable. No socket transport or
+automatic capture through multiple relay hops is exercised. IMUD startup,
+HELP_D data and role/access helpers are controlled. Initial failures were fixture
+assumptions about spacing, message newlines and the secure log path; corrections
+retain the same proposal, and both runs are preserved.
+
+All **14 compile controls** match: 12 successes and two expected original command
+dispatcher failures. Warning-free locked workspace Clippy across all targets/
+features, workspace formatting and retained fixture formatting pass. The temporary
+test-module hook is restored byte-for-byte. All 1,547 library files, README/config,
+original checkout and native implementation/CLI stay unchanged. This audit does
+not rerun the full native suite, full Lima inventory/boot or upstream driver;
+the preceding **47/49** transitional-command inventory retains its scope.
+Evidence: /tmp/lima-snoop-audit-20261010.
+
+Separate existing source issues remain recorded: the admin inspector's actual
+path differs from the daemon's authorized path, and global visited marks can
+reject converging acyclic paths. The latter is source-reviewed here, not executed
+or repaired by the callback proposal. Next adopt the dispatcher and direct
+cycle-check callback, then audit `unsnoop` and its daemon cleanup paths.
+
+[lima-snoop-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/snoop.c
+[lima-snoop-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/Cmd_rules
+
 #### Lima wizard checkpriv adaptation
 
 Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following the
