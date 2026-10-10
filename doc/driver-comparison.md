@@ -3124,14 +3124,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard testargs port
+
+Adopted **9 October 2026** after committing the [testargs
+audit](#lima-wizard-testargs-audit) as native **6b2b4b46**. Its exact three
+compatibility edits and README are committed in the dedicated lpc-rs-port
+checkout as **d3b05e5c**: protected command dispatch, this_object() for
+file_name, and `&handle_piping(arg[0])` for the modal callback. No native API or
+implementation changed; the earlier clone_object migration remains.
+
+All **10 cases pass across 43 registered inputs**, retaining every audited
+assertion and LPC helper. Eight leave the adopted checkout command unchanged;
+the controls restore unavailable dispatch and the old callback. Actual user/body/wizard-shell/CMD,
+argument parsing, input callbacks and force_me() validate repeated input,
+Unicode, blank lines, clone reuse/cleanup, both exits, shell escapes, shared
+directory changes, child errors and input recovery, output routes and context.
+Connections are in-memory and IMUD transport is stubbed. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain.
+
+The existing Lima argument problems remain recorded: unquoted prefix words are
+dropped, stdin fails when its command argument remains an array, and the optional
+missing command fails on nil indexing after creating an unused clone. Quoting
+the whole interactive command retains its prefix. Ordinary shell input remains
+usable after those caught errors. Child exceptions leave the modal usable;
+normal exit removes its handler and destroys its clone. Parent redirects and
+outgoing pipes receive an empty buffer, while the banner and interactive child
+output reach the user directly. Command rules and argument handling remain.
+
+Fresh compilation reaches **39/49 transitional commands**, with all **62 support
+checks** across **90 distinct targets**. Only testargs becomes newly successful,
+without regressions, timeouts or abnormal exits. Locked workspace all-target/all-feature
+Clippy with warnings denied and workspace/fixture formatting pass. The other
+1,546 library files, configuration, native implementation, CLI and original Lima
+are unchanged; temporary test entries are removed. Broader inventories retain
+their preceding scope; startup, services and upstream execution were not repeated.
+
+Next: audit trans/cmds/dataedit.c and its saved-data editor entry.
+
 #### Lima wizard testargs audit
 
 Reviewed **9 October 2026** against pinned [testargs][lima-testargs-command],
 [command rules][lima-trans-command-rules], [CMD][lima-command-base],
 [argument parsing][lima-command-daemon], [input forwarding][lima-input-forwarding]
-and [user input][lima-inputsys]. The dedicated lpc-rs-port checkout is clean at
-**dba88349**; native tsh port notes are **6a43ce4d**. Recommend three command-only
-compatibility edits for documented interactive use: append protected dispatch,
+and [user input][lima-inputsys]. The dedicated lpc-rs-port checkout was clean at
+**dba88349** at the audit baseline; native tsh port notes were **6a43ce4d**.
+Recommend three command-only compatibility edits for documented interactive use: append protected dispatch,
 supply this_object() to file_name, and replace the old comma callback with
 `&handle_piping(arg[0])`. The earlier object-new migration to clone_object remains.
 No native API or implementation change is needed; this audit adopts no source.
@@ -3171,7 +3208,7 @@ configuration, native implementation, CLI and original Lima are unchanged;
 temporary test entries are removed. The prior 38/49 transitional inventory
 retains its scope; startup, services and upstream execution were not repeated.
 
-Next: adopt and validate the exact three compatibility edits.
+Next: the [testargs port](#lima-wizard-testargs-port) adopts and validates the edits.
 
 #### Lima wizard tsh port
 
