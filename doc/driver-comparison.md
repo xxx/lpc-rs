@@ -380,7 +380,7 @@ across all five drivers; the broader rows describe differences within each area.
 | File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`rm`](efun/rm.md) checks pending entry changes, and [`rmdir`](efun/rmdir.md) checks pending directory membership without reading file contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
 | Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), [deferred failure diagnostics](apply/master/parser_error_message.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md) and [structured parser registration inspection](efun/query_parser_registry.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
-| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
+| Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. [`error_handler`](apply/master/error_handler.md) receives text diagnostics; [saved frame values](#lima-wizard-dbxframe-audit) are not implemented. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
 | Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer or [NPC action queues](#lima-action-queues) with one-shot timers. Lima [spell casting](#lima-spell-casting), [companion following](#lima-dancing-lights) and [fluid evaporation](#lima-conjure-ale-and-fluids) adapters also use native function callbacks. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
@@ -595,6 +595,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Character input | `get_char` delivers one UTF-8 character or control byte, then returns to line mode unless rearmed. Its reference specifies first-registration-wins and extra arguments after the input. [Reference][fl-get-char]. | [`get_char`](efun/get_char.md) shares transactional registration with `input_to`; the last registration wins across both APIs. Its second argument is boolean no-echo; use ordinary pointer binding for extra arguments, which precede the character. Classic SGA negotiation is supported; RFC LINEMODE is refused. Unread input is preserved across mode changes. Audit repeated registrations, callback argument order, and flag use. |
 | Function inspection | `functions(ob, 1)` returns name, declared argument count, return type and saved parameter types for inherited and local functions, including nonpublic declarations. Flag 2 excludes inherited definitions; flag 3 combines both choices. Unsaved argument types are zero. [Reference][fl-function-declarations], [implementation][fl-function-declarations-source]. | [`functions(ob, 1)`](efun/functions.md) returns local names; the default includes inherited names. Both hide foreign nonpublic functions. [`function_exists`](efun/function_exists.md) supplies the defining program. [`function_info`](efun/function_info.md) describes pointer bindings rather than declaration types or arity. Use [`function_signature(name, ob)`](efun/function_signature.md) alongside name enumeration for fresh declaration records, including fixed/default counts, parameter types, reference flags and modifiers. Counts exclude variadic collectors; program paths retain source extensions. See the [Lima dbxfuncs port](#lima-wizard-dbxfuncs-port). |
 | Program disassembly | `dump_prog(ob, flags, file)` writes program details to a file; flag 1 includes disassembly and flag 2 line information. Requires `PACKAGE_DEVELOP` and write permission. [Implementation][fl-program-dump], [declaration][fl-program-dump-spec], [format][fl-program-dump-format]. | Use [`disassemble(ob)`](efun/disassemble.md) for a fresh array of native instruction lines, including nonpublic code and initializers. Print lines individually when the complete listing exceeds one string's limit; no output file or heading split is needed. The diagnostic format differs and is not stable. For source compilation without LPC execution use [CLI assembly output](../lpc-rs-lpcc/README.md#usage); [`compile_string`](efun/compile_string.md) initializes its object normally. There is no native `dump_prog` file API. |
+| Structured frame inspection | Core `dump_trace()` returns root-to-current frame mappings with source details and current argument/local values where available; the runtime error handler uses the same builder. Container values retain shared references. [Builder][fl-dbxframe-trace], [efun][fl-dbxframe-efun]. | No native structured frame or saved local-value API. [`error_handler`](apply/master/error_handler.md) receives a rendered diagnostic; caught failures retain a string after unwinding. See the [Lima dbxframe audit](#lima-wizard-dbxframe-audit). |
 | Stack inspection | `call_stack(0/1/2)` returns defining programs, executing objects, or function names, starting with the current frame. `all_previous_objects()` aliases `previous_object(-1)`. [Reference][fl-call-stack], [declaration][fl-core-spec]. | [`calling_program(-1)`](efun/calling_program.md), [`calling_object(-1)`](efun/calling_object.md), and [`calling_function(-1)`](efun/calling_function.md) provide aligned caller arrays, excluding the inspecting function. A local helper can include the requesting function as row zero. Use direct no-argument queries for immediate-caller checks. Replace `all_previous_objects()` with [`previous_object(-1)`](efun/previous_object.md) at the call site; a simul wrapper adds its own caller entry. Frame counts and synthetic labels need not match FluffOS. |
 | Privileged callback owner chains | Function-pointer dispatch installs a synthetic owner frame before invoking the target, including efun and simul-efun pointers. [Implementation][fl-pointer-dispatch]. | Dynamic pointers, bound `call_other`, and simul-efun pointers can reach the target without an executing owner frame. For Lima-style `unguarded` checks, an inherited helper can wrap those same-owner pointers in `(: $(code)() :)`, using [`function_info`](efun/function_info.md) to select them. Leave foreign-owned callbacks on their existing path. Named callbacks, closures and ordinary efun pointers already provide the needed context; wrapping them all can introduce extra owner entries and reject valid calls. Preserve source, handle, privilege and protection checks, and evaluate bound arguments before entering the privileged callback. |
 | Snooping | `snoop` replaces occupied relationships. With `receive snoop` enabled, it calls `receive_snoop(text)` synchronously; otherwise it forwards text prefixed with `%`. The reviewed native setter does not call a master authorization hook. [Source][fl-snoop]. | [`snoop`](efun/snoop.md) errors on occupied endpoints; stop explicitly before changing partners. Start, stop and live queries require [`valid_snoop`](apply/master/valid_snoop.md). Adapt relays to [`receive_snoop(text, target, direction)`](apply/object/receive_snoop.md), delivered in a fresh transaction without player context. Noninteractive relays work without a runtime switch. Hidden input is excluded; errors and overflow retire the registration. Connection transfers terminate observation. Mudlib relays must handle asynchronous delivery and their own subscriber policy. |
@@ -3141,6 +3142,81 @@ starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
 ordinary shell state, defaults, directory resolution, flags and pipeline behavior
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
+
+#### Lima wizard dbxframe audit
+
+Reviewed **10 October 2026** against dedicated Lima lpc-rs-port **60059159**
+and native lima-support **5d68e337**, after the caught-input recorder was committed.
+The pinned [command][lima-dbxframe-command] and [help examples][lima-dbx-help]
+require saved frames, their current argument/local values, and nearby source.
+This audit adopts no source patch or native API change.
+
+Small command adaptations are insufficient: it needs the established protected
+dispatch_main adapter, bytesp in place of bufferp, a bare return after out, and
+an explicit query_error invocation inside unguarded. Its old comma closure
+returns the requested account name; indexing trace in that string fails and the
+adopted input recorder saves the new failure. Integer-plus-string formatting
+works, but the float branch fails; to_string renders that value successfully.
+The original formatter also lacks object/class handling. Source excerpts should
+use the frame's source file rather than assuming its program owns the line;
+avoid a zero-line read before line one, because native read_file's zero count
+means the rest of the file. These are command/source issues separate from the
+missing native frame data.
+
+The reviewed [FluffOS trace builder][fl-dbxframe-trace] supplies root-to-current
+mapping entries with function, program, object, file and line, plus argument/local
+arrays where available. Values are copied by reference-counted assignment;
+mutable containers are not deep snapshots. Zero-argument and synthetic frames
+can omit value arrays. Core [dump_trace][fl-dbxframe-efun] returns these entries,
+and the [runtime handler][fl-dbxwhere-errors] includes them in its trace field.
+The reviewed mudlib error-handler option is enabled by default and in
+[Lima's configuration][lima-dbx-error-config]. The separate trace-code option
+controls instruction tracing and is not required by this structured builder.
+These claims are pinned source review at FluffOS **44532e0228f34be2184c701a361df4079371b8b0**,
+with no upstream execution test.
+
+Native [error_handler](apply/master/error_handler.md) receives error, location,
+object and a rendered diagnostic, without structured frames. Caught input records
+retain the message after [catch](efun/catch.md) discards the failing frames.
+After the small command adaptations, both real uncaught and caught records
+produce "No such frame." The missing trace is not an empty saved stack.
+Caller inspection or evaluating a new callback cannot recover the lost values;
+debug("snapshot_stack") is a test-only facility and rejects production calls.
+
+The compiler already retains parameter/local symbols and their locations.
+Register packing gives named locals distinct slots and updates that metadata.
+A retained failed Task exposes the expected scalar arguments and locals,
+including an unused value, while its exported diagnostic contains only a text
+stack. Captured and reference parameters use upvalue cells, so raw register
+slicing is insufficient. Container contents and captured values must be read
+from the failing transaction before it is discarded; ordinary references handed
+to a fresh handler do not preserve those contents.
+
+All **3 runtime cases / 9 registered inputs** pass, including legacy-callback
+failure/recovery, usage and empty history, real uncaught/caught records, self/last
+lookup, history retention, float formatting and named-register inspection.
+All **9 compile controls** match, isolating dispatcher, predicate and void-return
+failures and preserving complete master/user/dbxwhere compilation. User/body/
+room/shell/directory/modal/input state stays stable and input is rearmed.
+Actual Lima master, simuls and command stack run with in-memory connections;
+IMUD startup is stubbed and HELP_D has controlled saved data. Native metadata
+controls retain a Rust Task, not an LPC-accessible frame API.
+
+Recommendation: design general structured error diagnostics with bounded rendered
+argument/local values captured on failure, then adapt dbxframe to that contract.
+Immutable diagnostic data avoids retaining mutable transaction graphs or adding
+live-frame storage. Define frame ordering, variable names, missing values and
+truncation before implementation, preserving the successful execution path and
+the existing 64-byte CallFrame layout. Start with uncaught error reporting;
+caught message records need an explicit unavailable-frame report until a separate
+captured-error access contract is agreed. Keep catch results and handler timing
+unchanged. No Lima-specific trace efun or fabricated empty trace is proposed.
+
+Workspace warning-free locked all-target/all-feature Clippy and formatting pass.
+Original Lima, all dedicated source/configuration and native implementation/CLI
+are unchanged. The preceding 45/49 transitional inventory retains its scope;
+this audit is not a full inventory, boot or workspace-suite rerun. Evidence and
+temporary fixtures live in /tmp/lima-dbxframe-audit-20261010.
 
 #### Lima caught command and input error recording
 
@@ -16297,3 +16373,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-function-declarations]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/contrib/functions.md
 [fl-function-declarations-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/contrib/contrib.cc#L325-L429
 [fl-function-declarations-options]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/local_options
+
+[lima-dbxframe-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/dbxframe.c
+[lima-dbx-help]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/help/wizard/coding/dbx
+[lima-dbx-error-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/resources/oldconfig.lima#L152-L155
+[fl-dbxframe-trace]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/trace.cc#L174-L330
+[fl-dbxframe-efun]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/trace.cc#L5-L7
