@@ -3124,13 +3124,53 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dataedit entry port
+
+Adopted **9 October 2026** after committing the [entry
+audit](#lima-wizard-dataedit-entry-audit) as native **ab1e22ca**. Its exact
+command and editor compatibility patches and README are committed in the
+dedicated lpc-rs-port checkout as **3e02d55f**. Protected dispatch,
+per-declaration visibility, a typed nil return, assignment parentheses, existing
+value codec names, function callbacks and local split boundary normalization
+support saved-file entry. Earlier clone_object and mapping migrations remain;
+no native API or implementation changed.
+
+All **8 cases pass across 25 registered inputs**, retaining every audited
+assertion and LPC helper. Five use the adopted checkout sources; three restore
+unavailable dispatch, the uncompiled editor and the terminal empty split field.
+Actual master/simuls, user/body/wizard-shell/CMD, argument parsing, menus and
+registered input callbacks run. Native saved files enter the real menu. Discard
+preserves exact file bytes; save and native reload preserve integers, zero, nil,
+floats, Unicode and escaped text, arrays, mappings and nominal class records.
+Both quit paths remove the handler and destroy the active clone. Empty/comment-only
+files, argument handling and quoted relative paths retain shell/input context.
+Connections are in-memory and IMUD transport is stubbed. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain.
+
+Existing malformed/interior-blank record errors and non-UTF-8 reader rejection
+remain. Reader exceptions leave unused clones before modal installation, while
+shell input and a valid retry remain usable; normal exit retires only the active
+clone. The compatibility patch retains those source behaviors. Delete, rename,
+set, list, print, expression evaluation, merge and save-as interactions remain
+to be audited; the full editor is not yet validated.
+
+Fresh compilation reaches **40/49 transitional commands**, with all **66 support
+checks** across **94 distinct targets**. Only dataedit becomes newly successful,
+without regressions, timeouts or abnormal exits. Locked workspace all-target/all-feature
+Clippy with warnings denied and workspace/fixture formatting pass. The other
+1,545 library files, configuration, native implementation, CLI and original Lima
+are unchanged; temporary test entries are removed. Broader inventories retain
+their preceding scope; startup, services and upstream execution were not repeated.
+
+Next: audit the editing actions in trans/obj/dataedit.c.
+
 #### Lima wizard dataedit entry audit
 
 Reviewed **9 October 2026** against pinned [command][lima-dataedit-command],
 [editor][lima-dataedit-editor], [command rules][lima-trans-command-rules],
 [CMD][lima-command-base], [menu][lima-menu], [frame][lima-frame] and
-[modal input][lima-inputsys] sources. The dedicated lpc-rs-port checkout remains
-clean at **d3b05e5c**; native testargs port notes are **bbaa6e36**.
+[modal input][lima-inputsys] sources. The dedicated lpc-rs-port checkout was clean at
+**d3b05e5c** at the audit baseline; native testargs port notes were **bbaa6e36**.
 Recommend two-file compatibility edits: protected command dispatch; individual
 private declaration modifiers; nil for a failed mapping return; parentheses
 around the load assignment before negation; native [restore_value](efun/restore_value.md)
@@ -3172,8 +3212,7 @@ library files, README, configuration, native implementation, CLI and original
 Lima are unchanged; temporary test entries are removed. The preceding 39/49
 transitional inventory retains its scope; startup and services were not repeated.
 
-Next: adopt the two-file compatibility patch and validate entry against the
-checkout, then audit the editing actions.
+Next: the [dataedit entry port](#lima-wizard-dataedit-entry-port) adopts and validates the compatibility patch.
 
 #### Lima wizard testargs port
 
