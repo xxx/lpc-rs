@@ -3124,6 +3124,54 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard loadall audit
+
+Reviewed **9 October 2026** against pinned [loadall][lima-loadall-command],
+[command rules][lima-update-rules], [CMD][lima-command-base] and the committed
+[destruction wrapper](#lima-wizard-renew-port). The dedicated lpc-rs-port checkout
+remains clean at **4798ac87**; renew notes are native **3f09e109**. No loadall
+proposal is adopted and no native API changes.
+
+Protected dispatch makes the private handler available to the wizard shell.
+Its original positional callbacks, value capture and zero subtraction remain:
+the callbacks already compile, and the destruction wrapper safely ignores
+missing or destroyed references. The proposal checks every load result because
+native [load_object](efun/load_object.md) returns nil on compilation or
+initialization failure. Without the check, the command can print success after
+a failed load. The reviewed [FluffOS loader][fl-loadall-loader] can throw on
+compilation errors; this is source review at **44532e02**, without upstream
+execution. Missing-file paths can also return zero there, as its
+[reference][fl-loadall-reference] describes, so the original command's unchecked
+results are not solely a driver mismatch.
+
+The proposal preserves removal of all existing prototypes before any loads,
+sorted nonrecursive selection, self-source exclusion and old clone state.
+Remove hooks that leave their target alive still run again through explicit
+destruct. Failed loads stop later replacements; prior removals and successful
+loads remain after the input layer catches the error, and command output stays
+buffered. Matching directory names ending in .c remain part of source selection.
+As in update, resident master/simul targets are rejected before any cleanup and
+require queued recompilation. That preflight is reviewed and compiled; runtime
+cases do not attempt to remove live resident system objects.
+
+All **17 cases pass across 25 registered inputs** against the final proposal,
+including three baseline/dispatch/unchecked-load controls. They cover prototype
+and clone identity/state, ordering, nil/dead references, real container cleanup,
+missing remove methods, cleanup errors and repeated hooks, compile/initializer
+failures and retry, source removal, argument handling, empty directories,
+relative/trailing paths, self-exclusion, output routes and shell/input context.
+Fixtures use actual user/body/shell/command code, an in-memory connection and
+stubbed IMUD transport. Distinct nil, preserved players and 4,000 ms tasks
+remain. **19 compile checks** have their expected outcomes: the original command
+fails on missing dispatch, while three adapted variants and 15 supporting
+targets compile. Locked workspace all-target/all-feature Clippy and workspace/
+fixture formatting pass. All 1,547 dedicated library files, README,
+configuration, native implementation and CLI are unchanged; temporary test
+entries are removed. Earlier compile inventories retain their scope.
+
+Recommend adopting this command-only proposal after the audit notes are
+committed. It requires no new driver facility.
+
 #### Lima wizard renew port
 
 Adopted **9 October 2026** after committing the [renew
@@ -14985,6 +15033,12 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-update-baseobj]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/base_obj.c
 
 [lima-renew-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/renew.c
+
+[lima-loadall-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/loadall.c
+
+[fl-loadall-loader]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/simulate.cc#L414-L503
+
+[fl-loadall-reference]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/docs/efun/objects/load_object.md
 
 [lima-renew-removal]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/non_object.c
 
