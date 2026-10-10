@@ -659,7 +659,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Saved-file migration | The reader skips `#` lines, decodes unescaped carriage returns inside strings as newlines, and reads positional `(/.../)` class records. [Implementation][fl-object-persistence]. | Headers need removal, string values need decoding and re-encoding, and classes need nominal identities and typed named fields. Header removal alone does not establish equivalence. See the [native format](save-format.md) and [Lima persistence notes](#lima-daemon-persistence). |
 | Value serialization | `save_variable(mixed)` returns a string and `restore_variable(string)` reads one, using the driver's object-save format. [Save][fl-save-variable], [restore][fl-restore-variable]. | Use [`save_value`](efun/save_value.md) and [`restore_value`](efun/restore_value.md). They use the native [save format](save-format.md), including class and bytes encodings and configured nil handling. Renaming calls does not establish compatibility with existing saved strings; audit and migrate persisted data separately. Cross-driver data interchange is **not checked**. |
 | Named global reads and writes | `fetch_variable(name, object?)` and `store_variable(name, value, object?)` default to the current object. Lookup takes the first match, searching inherits before the object's own globals. The implementation rejects a private match on a foreign target; it does not enforce the reference's public-only description. Self-access includes private globals, and `nosave` globals remain accessible. The setter copies the value without a declared-type check. [References][fl-fetch-variable], [setter][fl-store-variable], [implementation][fl-named-globals], [lookup][fl-global-lookup], [assignment][fl-global-assignment]. | Read through [`variable_info`](efun/variable_info.md); no native `fetch_variable` is needed for a name lookup. The native setter takes the target **first**, requires a live object, and accepts an optional exact declaring-source path. Duplicate names require that selector; it does not choose the first match. Writes check retained types, configured nil semantics and scalar class identity. Foreign writes require [`valid_store_variable`](apply/master/valid_store_variable.md), including public fields, separately from inspection permission. Update argument order, duplicate-name handling, type assumptions, and master policy together. |
-| Global declaration enumeration | `variables(ob)` lists inherited declarations before local ones, including private/protected/nosave globals and duplicate names. A nonzero second argument returns name/type pairs; enumeration does not read values or ask `valid_bind`. [Reference][fl-global-declarations], [implementation][fl-global-declarations-source]. | [`variable_info(ob)`](efun/variable_info.md) returns every retained declaration with its exact source, type, flags and actual value. Foreign inspection requires [`valid_variable_info`](apply/master/valid_variable_info.md) before any entries are returned. Report separate values for shadowed globals instead of repeatedly fetching the first match; see the [Lima dbxvars audit](#lima-wizard-dbxvars-audit). |
+| Global declaration enumeration | `variables(ob)` lists inherited declarations before local ones, including private/protected/nosave globals and duplicate names. A nonzero second argument returns name/type pairs; enumeration does not read values or ask `valid_bind`. [Reference][fl-global-declarations], [implementation][fl-global-declarations-source]. | [`variable_info(ob)`](efun/variable_info.md) returns every retained declaration with its exact source, type, flags and actual value. Foreign inspection requires [`valid_variable_info`](apply/master/valid_variable_info.md) before any entries are returned. Report separate values for shadowed globals instead of repeatedly fetching the first match; see the [Lima dbxvars port](#lima-wizard-dbxvars-port). |
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
 | Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
 
@@ -3141,6 +3141,55 @@ starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
 ordinary shell state, defaults, directory resolution, flags and pipeline behavior
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
+
+#### Lima wizard dbxvars port
+
+Adopted **10 October 2026** after committing the
+[dbxvars audit](#lima-wizard-dbxvars-audit) as native **f8d14204**. The dedicated
+lpc-rs-port checkout commits dbxvars, the master inspection hook and README
+as **c4317c4d**. Native APIs and apply contracts are unchanged.
+
+Dbxvars uses protected variadic dispatch and existing
+[`variable_info`](efun/variable_info.md). It filters declaration names with regexp
+and prints each matching storage declaration's actual value, including inherited,
+private and non-persistent globals. Duplicate names include their exact declaring
+source, retaining .c, so shadowed values remain distinguishable. Unique labels
+retain the name/value layout. Native [`%Q`](efun/sprintf.md) quotes strings and
+nested string values and escapes embedded newlines and quotes. Out/outf keep
+usage, missing/no-match messages, headings and values on buffered stdout.
+
+The Lima master implements existing
+[`valid_variable_info`](apply/master/valid_variable_info.md) with valid_bind's
+exact target-write privilege expression through the real security daemon. It
+preserves full caller/user privilege evaluation, including private state and
+shared container values. Authorization runs before filtering, so a no-match
+pattern does not bypass it. No named-reader alias or pointer-rebinding API is
+introduced. The command only formats values and does not load absent targets.
+
+All **7 cases / 20 registered inputs** pass. Five cases use the adopted command
+and master without replacement: inherited/private/nosave, nil/zero, array/mapping
+and shadowed values; clones; wizard/staff target-write decisions; usage, missing
+and no-match paths; regex recovery; pipeline headings/values; redirected report
+contents; recursively quoted/escaped nested values. Two controls retain the
+unavailable original command and remove only the inspection hook from a temporary
+copy to confirm refusal. Target effect counts remain unchanged and missing
+sources remain unloaded. User/body/room/shell/directory/pager/modal/input state is
+stable. Actual master/simuls/user/body/wish/CMD and stdio execute, with in-memory
+connections, stub IMUD create and a controlled HELP_D saved index. Distinct nil,
+preserved call-out players and 4,000 ms tasks remain.
+
+Fresh compilation reaches **44/49 transitional commands**, with all **69 support
+checks across 97 targets**; dbxvars is the only new success, without regressions
+or timeouts. The five remaining commands are checkpriv, dbxframe, dbxwhere, snoop
+and unsnoop. Full boot, broader inventories and upstream execution retain their
+preceding scope.
+
+Workspace all-target/all-feature locked Clippy, workspace formatting and retained
+fixture formatting pass. Only dbxvars, master and README change in the dedicated
+checkout; the other 1,545 library files, configuration, native implementation/CLI
+and original Lima are unchanged. Temporary native test entries are removed.
+
+Next: audit trans/cmds/dbxwhere.c and its stored-error path.
 
 #### Lima wizard dbxvars audit
 
