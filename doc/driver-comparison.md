@@ -3124,6 +3124,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard tsh audit
+
+Reviewed **9 October 2026** against pinned [tsh][lima-tsh-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[shell input][lima-shell] and [user input][lima-inputsys]. The dedicated
+lpc-rs-port checkout is clean at **b190727d**; native whoguests notes are
+**9c52f60c**. Recommend only the established protected dispatcher calling
+its private handler with parsed arguments. No native API or implementation
+change is needed, and this audit adopts no source. The earlier migration from
+map_array to native map is retained.
+
+All **11 cases pass across 28 registered inputs**, including the unavailable-command
+control. Actual user/body/wizard-shell/CMD, file argument parsing, force_me(),
+do and xargs execute ordered and nested batches, relative and quoted paths,
+directory changes, empty files, blank lines, Unicode and CRLF, argument/read
+errors and retry, child diagnostics and exceptions, output routes and modal
+entry/exit. Temporary commands record arguments and user/body/directory context,
+raise an ordinary child exception and collect pipe input. Connections are
+in-memory and IMUD transport is stubbed. Distinct nil, preserved call-out players
+and the 4,000 ms task limit remain.
+
+Existing behavior stays: files are read before their lines execute, blank text
+uses normal shell trimming, and an unknown command reports a diagnostic without
+stopping the batch. A child exception stops subsequent lines while preserving
+completed effects. Directory changes remain in the shell. Child stdout and its
+own routes remain separate from tsh: the parent redirects or pipes an empty
+buffer and ignores incoming stdin. After a modal command opens, later file lines
+still go to the bottom shell handler; subsequent interactive input uses the
+modal handler and normal exit restores the shell.
+
+All **23 compile checks** match expected outcomes: unchanged tsh fails on missing
+dispatch, its wrapper compiles, and **18 Lima supporting targets plus three fixture
+commands** pass. Locked workspace all-target/all-feature Clippy with warnings
+denied and workspace/fixture formatting pass. All 1,547 library files, port README,
+configuration, native implementation, CLI and original Lima remain unchanged;
+temporary test entries are removed. The prior 37/49 transitional inventory
+retains its preceding scope; startup, services and upstream execution were not repeated.
+
+Next: adopt and validate the exact command dispatcher.
+
 #### Lima wizard whoguests port
 
 Adopted **9 October 2026** after committing the [whoguests
@@ -3154,8 +3194,7 @@ Clippy with warnings denied and workspace/fixture formatting pass. The other
 are unchanged; temporary test entries are removed. Broader inventories retain
 their preceding scope.
 
-Next: audit trans/cmds/tsh.c for file-based command batches through the existing
-wizard shell and user input path.
+Next: the [tsh audit](#lima-wizard-tsh-audit) records the command-only recommendation.
 
 #### Lima wizard whoguests audit
 
@@ -15307,3 +15346,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-spew-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/spew.c
 [lima-whoguests-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/whoguests.c
 [lima-guest-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/guest_d.c
+[lima-tsh-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/tsh.c
