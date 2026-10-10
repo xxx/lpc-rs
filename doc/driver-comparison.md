@@ -3143,6 +3143,60 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard unsnoop and cleanup audit
+
+Audited **10 October 2026** against dedicated lpc-rs-port **b25a4665**, after
+native snoop adaptation notes **988cad9a**. The [unsnoop command][lima-unsnoop-command]
+still matches pinned Lima `eefaff66adcae9b01e16059574c925b0d63e70a1`.
+Its existing [rule][lima-snoop-rules] supplies one optional user body. Add the
+protected dispatcher that forwards this array to private `main`, and correct
+the copied command comments to describe optional/all-target removal.
+Existing feedback, named/all removal, pipelines and redirection work.
+
+The [daemon][lima-entry-snoop] already returns integer zero from successful
+`unsnoop_all`: the compiler supplies the typed default return. A direct result
+control confirms `0`, followed by `-1` after repeated removal. Its explicit
+`(: unsnoop($(snooper), $1) :)` nested call also retains local origin. Neither
+needs a return-value or callback adaptation.
+
+In `remove()`, legacy `(: unsnoop_all :)` and `(: destruct :)` expressions return
+function pointers here. Actual `update /secure/daemons/snoop_d` removes and reloads
+the daemon but leaves both independent relays alive and forwarding. A bare
+`unsnoop_all` callback also leaves subscriptions intact: `map` callbacks enter
+with [efun origin](efun/origin.md), so the existing local/caller guard rejects it.
+Use direct `unsnoop_all(snooper)` calls in a `foreach`, then destruct any live
+cached dummy in a second loop. The proposed cleanup retires relays, stops
+delivery and permits a fresh subscription after reload. No guard, master policy,
+relay, configuration or native API change is proposed.
+
+All **6 runtime cases / 33 registered shell inputs / 12 native starts** pass.
+Actual master/simuls/user/body/wish/CMD, daemon and relay use in-memory connections
+and explicit native asynchronous capture/delivery of ordinary text. Temporary
+seed/access/state helpers, controlled IMUD startup and HELP_D data bound the
+fixture. Cases cover unavailable-command recovery, unknown/extra arguments,
+named/all removal, shared subscribers, exact redirected output, raw returns,
+original/bare cleanup controls, actual daemon reload, stopped delivery and
+restart. A helper on the real body calls `bye()` with the actual caller identity:
+outgoing/incoming removal, another surviving subscriber and repeated departure
+work. Full quit/netdead and socket transport are not exercised. Input rearms;
+checked shell/modal/context stays stable except update's expected `cwf` change.
+
+All **16 compile controls** match (15 successes/one expected missing-dispatcher
+failure). Warning-free locked workspace Clippy across all targets/features,
+workspace formatting and retained fixture formatting pass. Earlier fixture-only
+Rust type and extra-argument message failures are retained with the corrected run.
+All 1,547 library files, README/configuration, original checkout and native
+implementation/CLI remain unchanged; the temporary test hook is restored exactly.
+The preceding 48/49 transitional inventory, full-suite, full-boot and upstream
+execution results retain their recorded scope. Evidence:
+/tmp/lima-unsnoop-audit-20261010. The inspector-path and converging-graph findings
+remain separate source notes.
+
+Next: commit audit notes, adopt the dispatcher and explicit cleanup loops in the
+dedicated checkout, then verify adoption and the transitional-command inventory.
+
+[lima-unsnoop-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/unsnoop.c
+
 #### Lima wizard snoop adaptation
 
 Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following
@@ -3179,8 +3233,8 @@ implementation/CLI remain unchanged. No new full native suite, complete Lima
 inventory/boot or upstream-driver execution is claimed.
 Evidence: /tmp/lima-snoop-port-20261010.
 
-Next commit command/daemon/README and comparison notes, then audit `unsnoop`,
-the final transitional command, including all-target removal and daemon cleanup.
+Command/daemon/README are now committed as Lima **b25a4665**, with native notes
+**988cad9a**. The subsequent unsnoop/cleanup audit is recorded above.
 
 #### Lima wizard snoop audit
 
