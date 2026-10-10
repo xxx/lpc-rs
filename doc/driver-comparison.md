@@ -3124,14 +3124,50 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dataedit actions port
+
+Adopted **9 October 2026** after committing the [actions
+audit](#lima-wizard-dataedit-actions-audit) as native **259df96d**. The dedicated
+lpc-rs-port editor merge patch and README are committed as **50ab36d5**. Merge uses mappingp and arrayp because native
+[typeof](efun/typeof.md) returns integer tags. Arrays and mappings now combine;
+scalar comparison/diagnostics, false-value replacement and mismatch behavior
+remain. No native implementation or API changes.
+
+All **14 retained cases pass across 105 registered inputs**: thirteen read the
+adopted checkout editor and one restores the original editor in a temporary
+fixture as a merge control. Every audited assertion and LPC helper remains.
+Actual user/body/wizard-shell/CMD, menus, prompt callbacks, reg_assoc, dynamic
+expression compilation and native persistence run. Delete, rename, set, print,
+list, merge and save-as retain values and context, including native reload and
+checkpoint/discard checks. Prompts rearm at the expected depth; normal quit
+removes the editor handler and clone. Connections are in-memory, with IMUD
+transport stubbed. Distinct nil, preserved players and 4,000 ms tasks remain.
+
+The five expected error paths retain their audited behavior and usable input:
+empty listing, mismatched merge, expression compilation/runtime failures and
+missing-parent save-as. Valid retries succeed; expression retry cleans up the
+previous generated artifacts. Existing error feedback, cleanup and false-value
+rules stay recorded in the audit. Concurrent editors and commit-time delivery
+failures were not exercised.
+
+Fresh compilation retains **40/49 transitional commands**, with all **66 support
+checks** across **94 distinct targets** and no regressions or timeouts. Locked
+workspace all-target/all-feature Clippy with warnings denied and workspace/
+fixture formatting pass. The other 1,546 library files, configuration, native
+implementation, CLI and original Lima are unchanged; temporary test entries are
+removed. Other inventories retain their preceding scope; startup, services and
+upstream execution were not repeated.
+
+Next: audit trans/cmds/docs.c.
+
 #### Lima wizard dataedit actions audit
 
 Reviewed **9 October 2026** against pinned [editor][lima-dataedit-editor],
 [menu][lima-menu], [modal forwarding][lima-input-forwarding],
 [input dispatch][lima-inputsys] and [regex associations][lima-regex-module].
-The dedicated lpc-rs-port checkout remains clean at **3e02d55f**, with entry
-port notes committed as native **7c517a7c**. Recommend one editor-only
-compatibility change: replace the merge switch's string cases with mappingp
+The dedicated lpc-rs-port checkout was clean at **3e02d55f** at the audit
+baseline, with entry port notes committed as native **7c517a7c**. Recommend one
+editor-only compatibility change: replace the merge switch's string cases with mappingp
 and arrayp predicates. Native [typeof](efun/typeof.md) returns integer tags,
 so the old cases never select container addition. The proposal retains scalar
 diagnostics, false-value replacement and the existing mismatch behavior. No
@@ -3174,8 +3210,7 @@ README, configuration, native implementation, CLI and original Lima are unchange
 temporary test entries are removed. The preceding 40/49 transitional inventory
 retains its scope; startup and services were not repeated.
 
-Next: commit the audit notes, adopt the predicate-based merge dispatch, and
-validate the editing cases against the adopted source.
+Next: the [dataedit actions port](#lima-wizard-dataedit-actions-port) adopts and validates the merge compatibility change.
 
 #### Lima wizard dataedit entry port
 
