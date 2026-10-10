@@ -28,6 +28,7 @@ pub(crate) mod deep_copy;
 pub(crate) mod deep_inventory;
 pub(crate) mod destruct;
 pub(crate) mod disable_commands;
+pub(crate) mod disassemble;
 pub(crate) mod dump;
 pub(crate) mod enable_commands;
 pub(crate) mod environment;
@@ -1357,6 +1358,11 @@ efuns! {
         returns: LpcType::Mapping(true), arity: (1, 1),
         args: [LpcType::Object(false) | LpcType::Int(false)],
     },
+    disassemble => {
+        returns: LpcType::String(true),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
 
 }
 
@@ -1742,6 +1748,7 @@ mod tests {
                 "socket_acquire",
                 "socket_info",
                 "query_sockets",
+                "disassemble",
             ]
         );
     }

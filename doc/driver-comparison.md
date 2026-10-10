@@ -379,7 +379,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
-| Program disassembly | [CLI `-S` / `--emit-asm`](../lpc-rs-lpcc/README.md#usage) prints native instructions without execution; no LPC disassembly API. | **Not checked**. | **Not checked**. | [`dump_prog`][fl-program-dump] writes program details and optional disassembly; requires `PACKAGE_DEVELOP`. | **Not checked**. |
+| Program disassembly | [`disassemble`](efun/disassemble.md) returns the live object's current compiled listing as lines. [CLI `-S` / `--emit-asm`](../lpc-rs-lpcc/README.md#usage) prints instructions without executing LPC. | **Not checked**. | **Not checked**. | [`dump_prog`][fl-program-dump] writes program details and optional disassembly; requires `PACKAGE_DEVELOP`. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate master authorization for foreign writes. | **Not checked**. | **Not checked**. | [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] with `PACKAGE_CONTRIB`; [lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
 | Connection model | [Raw TCP sockets](tcp-sockets.md) and [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). Connection metadata supplies idle time for [Lima player naming](#lima-player-naming). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
@@ -585,7 +585,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Array and mapping predicates | `pointerp` tests arrays; `arrayp` is an alias. `mapp` tests mappings. Each returns integer `1` for its type and `0` otherwise. [Declarations][fl-core-spec], [implementations][fl-type-predicates]. | Use [`arrayp`](efun/arrayp.md) and [`mappingp`](efun/mappingp.md). Rename `pointerp` and `mapp` calls or provide simul wrappers. These predicates test container type, independently of whether the container is empty. |
 | Type inspection | `typeof` returns a string such as `"int"` or `"float"`; its `T_*` constants name those strings. [Reference][fl-typeof], [implementation][fl-typeof-source]. | [`typeof`](efun/typeof.md) returns an integer type tag. Replace simple checks with predicates such as [`intp`](efun/intp.md) and [`floatp`](efun/floatp.md), or define mudlib constants for the native tags when retaining a switch. String-valued foreign constants will not match. For a numeric variadic helper such as Lima's `sum`, validate each argument before adding it; numeric strings and nested arrays remain invalid. Call `sum(values...)` to spread an array, or use Lima's `array_sum(values)` wrapper. Preserve integer accumulation and the switch to floating arithmetic when a float is encountered; nil acts as zero only in zero mode. |
 | Character input | `get_char` delivers one UTF-8 character or control byte, then returns to line mode unless rearmed. Its reference specifies first-registration-wins and extra arguments after the input. [Reference][fl-get-char]. | [`get_char`](efun/get_char.md) shares transactional registration with `input_to`; the last registration wins across both APIs. Its second argument is boolean no-echo; use ordinary pointer binding for extra arguments, which precede the character. Classic SGA negotiation is supported; RFC LINEMODE is refused. Unread input is preserved across mode changes. Audit repeated registrations, callback argument order, and flag use. |
-| Program disassembly | `dump_prog(ob, flags, file)` writes program details to a file; flag 1 includes disassembly and flag 2 line information. Requires `PACKAGE_DEVELOP` and write permission. [Implementation][fl-program-dump], [declaration][fl-program-dump-spec], [format][fl-program-dump-format]. | [CLI assembly output](../lpc-rs-lpcc/README.md#usage) is available, but LPC metadata efuns do not expose instructions. There is no native `dump_prog` or in-game listing API. See the [Lima codefor audit](#lima-wizard-codefor-audit) for the proposed native disassemble API; the proposal is not implemented. |
+| Program disassembly | `dump_prog(ob, flags, file)` writes program details to a file; flag 1 includes disassembly and flag 2 line information. Requires `PACKAGE_DEVELOP` and write permission. [Implementation][fl-program-dump], [declaration][fl-program-dump-spec], [format][fl-program-dump-format]. | Use [`disassemble(ob)`](efun/disassemble.md) for a fresh array of native instruction lines, including nonpublic code and initializers. Print lines individually when the complete listing exceeds one string's limit; no output file or heading split is needed. The diagnostic format differs and is not stable. For source compilation without LPC execution use [CLI assembly output](../lpc-rs-lpcc/README.md#usage); [`compile_string`](efun/compile_string.md) initializes its object normally. There is no native `dump_prog` file API. |
 | Stack inspection | `call_stack(0/1/2)` returns defining programs, executing objects, or function names, starting with the current frame. `all_previous_objects()` aliases `previous_object(-1)`. [Reference][fl-call-stack], [declaration][fl-core-spec]. | [`calling_program(-1)`](efun/calling_program.md), [`calling_object(-1)`](efun/calling_object.md), and [`calling_function(-1)`](efun/calling_function.md) provide aligned caller arrays, excluding the inspecting function. A local helper can include the requesting function as row zero. Use direct no-argument queries for immediate-caller checks. Replace `all_previous_objects()` with [`previous_object(-1)`](efun/previous_object.md) at the call site; a simul wrapper adds its own caller entry. Frame counts and synthetic labels need not match FluffOS. |
 | Privileged callback owner chains | Function-pointer dispatch installs a synthetic owner frame before invoking the target, including efun and simul-efun pointers. [Implementation][fl-pointer-dispatch]. | Dynamic pointers, bound `call_other`, and simul-efun pointers can reach the target without an executing owner frame. For Lima-style `unguarded` checks, an inherited helper can wrap those same-owner pointers in `(: $(code)() :)`, using [`function_info`](efun/function_info.md) to select them. Leave foreign-owned callbacks on their existing path. Named callbacks, closures and ordinary efun pointers already provide the needed context; wrapping them all can introduce extra owner entries and reject valid calls. Preserve source, handle, privilege and protection checks, and evaluate bound arguments before entering the privileged callback. |
 | Snooping | `snoop` replaces occupied relationships. With `receive snoop` enabled, it calls `receive_snoop(text)` synchronously; otherwise it forwards text prefixed with `%`. The reviewed native setter does not call a master authorization hook. [Source][fl-snoop]. | [`snoop`](efun/snoop.md) errors on occupied endpoints; stop explicitly before changing partners. Start, stop and live queries require [`valid_snoop`](apply/master/valid_snoop.md). Adapt relays to [`receive_snoop(text, target, direction)`](apply/object/receive_snoop.md), delivered in a fresh transaction without player context. Noninteractive relays work without a runtime switch. Hidden input is excluded; errors and overflow retire the registration. Connection transfers terminate observation. Mudlib relays must handle asynchronous delivery and their own subscriber policy. |
@@ -3132,11 +3132,56 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard codefor port
+
+Adopted **9 October 2026** after committing the [codefor
+audit](#lima-wizard-codefor-audit) as native **d05acae7**. The dedicated
+lpc-rs-port command patch and README are committed as **a6376606**.
+Native disassemble and its reference/tests accompany these notes on lima-support.
+
+[`disassemble`](efun/disassemble.md) exposes the transaction-visible program's
+existing listing formatter as separate diagnostic lines. It includes inherited,
+nonpublic, closure and initializer code, projects inherited global operands and
+rejects invalid/dead targets or oversized lines. It does not invoke functions,
+initialize objects, load paths, read mutable globals or write files. Existing
+efun IDs remain unchanged. Nine native tests cover those behaviors, fresh
+arrays, large listings, clones and recompilation.
+
+Codefor uses protected dispatch and a usage guard, compiles its wrapper in memory,
+prints actual instruction lines through Lima's raw-message flags and destructs
+its CODEFOR scratch object after output or a listing error. The expression is
+not invoked; native compile_string authorization and initialization still apply.
+The command retains prior EVAL source and objects, refuses an occupied scratch
+name without replacing it and removes the dump-file/heading round trip. Output
+bypasses the command's single-string buffer and does not open a pager.
+
+All **6 adopted-source runtime cases / 14 registered inputs** pass through
+actual user/body/wish/CMD and master/simuls. Expressions with side-effect calls,
+branches, captured closures and containers emit real instructions. A **23,198-byte**
+listing prints intact without a pager. Missing input, compiler errors and an
+oversized listing line retain usable input; a valid retry succeeds. Prior EVAL.c
+and its loaded object remain, and a preoccupied CODEFOR retains its value.
+Scratch objects and shell/user/body/directory/modal state are checked after
+inputs. Connections are in-memory, IMUD is stubbed and HELP_D starts with a
+controlled saved index. Distinct nil, preserved players and 4,000 ms tasks remain.
+
+Fresh compilation reaches **42/49 transitional commands** with all **69 support
+checks** across **97 distinct targets**; only codefor becomes newly successful,
+without regressions or timeouts. The locked workspace build and serial suite
+pass (**5,032 tests; 2 ignored**), including the nine new native cases. Workspace
+all-target/all-feature Clippy with warnings denied and workspace/fixture formatting
+pass. The other 1,546 library files, configuration and original Lima are unchanged.
+Temporary native entries are removed. Full boot, commit-time delivery failure and
+upstream execution retain prior scope.
+
+Next: audit trans/cmds/dbxfuncs.c against the existing native metadata APIs.
+
 #### Lima wizard codefor audit
 
 Reviewed **9 October 2026** against pinned [codefor][lima-codefor-command].
-The dedicated lpc-rs-port checkout is clean at **7fc053a8**, with docs port
-notes committed as native **96cb7f07**. Codefor is unchanged from upstream.
+The dedicated lpc-rs-port checkout was clean at the audit baseline **7fc053a8**,
+with docs port notes committed as native **96cb7f07**. Codefor was unchanged
+from upstream.
 It lacks protected dispatch_main, returns an integer from void main and calls
 unsupported dump_prog. Five command variants and a direct efun probe separate
 these compile failures. A temporary empty dump_prog body is only a compilation
@@ -3166,12 +3211,13 @@ inherited and initializer code, and avoid file writes or function invocation.
 Metadata efuns cannot reconstruct instructions. Then adapt codefor to
 compile_string, print the returned lines and destruct its scratch object on
 success or error. Remove its output-file round trip and driver-specific heading
-split. This is a recommendation; no new API or source patch is adopted.
+split. This audit proposed the API without adopting it; the [subsequent
+port](#lima-wizard-codefor-port) implements it.
 FluffOS program dumping and output framing are source-reviewed separately;
 no upstream execution is claimed. Full boot and commit-time delivery failures
 retain their preceding scope.
 
-Next: implement the native listing API, then audit and port codefor against it.
+Next: the [codefor port](#lima-wizard-codefor-port) implements and validates the listing API.
 
 #### Lima wizard docs port
 
