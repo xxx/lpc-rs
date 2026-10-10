@@ -3124,6 +3124,55 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard testargs audit
+
+Reviewed **9 October 2026** against pinned [testargs][lima-testargs-command],
+[command rules][lima-trans-command-rules], [CMD][lima-command-base],
+[argument parsing][lima-command-daemon], [input forwarding][lima-input-forwarding]
+and [user input][lima-inputsys]. The dedicated lpc-rs-port checkout is clean at
+**dba88349**; native tsh port notes are **6a43ce4d**. Recommend three command-only
+compatibility edits for documented interactive use: append protected dispatch,
+supply this_object() to file_name, and replace the old comma callback with
+`&handle_piping(arg[0])`. The earlier object-new migration to clone_object remains.
+No native API or implementation change is needed; this audit adopts no source.
+
+All **10 cases pass across 43 registered inputs**. Eight use the temporary
+proposal; one restores unavailable dispatch, and one retains the old callback
+after compilation repairs. That callback control enters a modal but neither
+executes lines nor recognizes exit; the bound function pointer invokes the
+handler and makes both `.` and `**` work. Actual user/body/wizard-shell/CMD, argument
+parsing, input callbacks and force_me() validate repeated input, Unicode, blank
+lines, clone reuse and cleanup, shell escapes, shared directory changes, child
+exceptions and diagnostics, retry, output routes and shell/input context.
+Connections are in-memory and IMUD transport is stubbed. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain.
+
+Existing Lima argument problems remain separate from the compatibility edits.
+The plural rule returns an array inside arg[0]. Interactive start_cmd receives
+that array and binds only its first token, dropping unquoted prefix words;
+quoting the entire command preserves the prefix as one token. The stdin branch
+passes the array to a string search and fails, including empty stdin and quoted
+commands. The optional rule also permits a missing command: the handler clones,
+then indexes nil before pushing input, leaving one unused clone. Source review
+identifies these mismatches in the pinned rules and handler; no upstream execution
+is claimed. Normal shell input remains usable after those caught errors.
+
+Child exceptions leave the modal usable; normal exit removes its handler and
+destroys its clone. Parent redirects and outgoing pipes receive an empty buffer,
+while the mode banner and interactive child output reach the user directly.
+The audit recommends the compatibility patch with these existing behaviors recorded.
+
+All **25 compile checks** match expected outcomes: baseline fails on missing
+dispatch, dispatch alone exposes the file_name arity error, both corrected
+callback variants compile, and **18 Lima support targets plus three fixture
+commands** pass. Locked workspace all-target/all-feature Clippy with warnings
+denied and workspace/fixture formatting pass. All 1,547 library files, README,
+configuration, native implementation, CLI and original Lima are unchanged;
+temporary test entries are removed. The prior 38/49 transitional inventory
+retains its scope; startup, services and upstream execution were not repeated.
+
+Next: adopt and validate the exact three compatibility edits.
+
 #### Lima wizard tsh port
 
 Adopted **9 October 2026** after committing the [tsh audit](#lima-wizard-tsh-audit)
@@ -3158,8 +3207,8 @@ Clippy with warnings denied and workspace/fixture formatting pass. The other
 are unchanged; temporary test entries are removed. Broader inventories retain
 their preceding scope; startup, services and upstream execution were not repeated.
 
-Next: audit trans/cmds/testargs.c for its argument contract and modal input loop
-through the existing wizard shell.
+Next: the [testargs audit](#lima-wizard-testargs-audit) records its compatibility
+patch and existing argument problems.
 
 #### Lima wizard tsh audit
 
@@ -15384,3 +15433,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-whoguests-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/whoguests.c
 [lima-guest-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/guest_d.c
 [lima-tsh-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/tsh.c
+[lima-testargs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/testargs.c
