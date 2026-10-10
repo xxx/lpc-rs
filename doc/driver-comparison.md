@@ -3124,12 +3124,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard whoguests port
+
+Adopted **9 October 2026** after committing the [whoguests
+audit](#lima-wizard-whoguests-audit) as native **cbd32ffc**. Its exact protected
+dispatcher and README are committed in the dedicated lpc-rs-port checkout as
+**b190727d**. No native implementation or API changed.
+
+All **7 cases pass across 18 registered inputs**, retaining every audited assertion
+and LPC helper. Six leave the adopted checkout command unchanged; one restores
+unavailable dispatch. Actual user/body/wizard-shell/CMD, guest daemon and inherited
+save/restore code validate empty lists, sorted output, duplicate additions,
+removal/clear, Unicode names, extra arguments, daemon reload, the existing
+administrator requirement and retry, output routes and shell/input state.
+Connections are in-memory and IMUD transport is stubbed. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain.
+
+The original handler, rules and guest/login policy remain. Listing sorts a copy
+without changing daemon order, membership or saved bytes. Extra command text is
+ignored, and no_redirection() keeps redirects and outgoing pipe suffixes as raw
+text: all names go directly to the user, no redirect file is created, and no
+following pipe stage runs. Incoming pipeline text is ignored.
+
+Fresh compilation reaches **37/49 transitional commands** and all **62 support
+checks** across **90 distinct targets**. Only whoguests becomes newly successful,
+without regressions, timeouts or abnormal exits. Locked workspace all-target/all-feature
+Clippy with warnings denied and workspace/fixture formatting pass. The other
+1,546 library files, configuration, native implementation, CLI and original Lima
+are unchanged; temporary test entries are removed. Broader inventories retain
+their preceding scope.
+
+Next: audit trans/cmds/tsh.c for file-based command batches through the existing
+wizard shell and user input path.
+
 #### Lima wizard whoguests audit
 
 Reviewed **9 October 2026** against pinned [whoguests][lima-whoguests-command],
 [guest daemon][lima-guest-daemon], [daemon persistence][lima-daemon-data],
 [CMD][lima-command-base] and [command rules][lima-trans-command-rules]. The dedicated
-lpc-rs-port checkout is clean at **80390c0c**; native spew notes are **f411d1fc**.
+lpc-rs-port checkout was clean at **80390c0c** at the audit baseline; native spew
+notes were **f411d1fc**.
 Recommend only the established protected dispatcher calling the private handler.
 No native API or implementation change is needed, and this audit adopts no source.
 
@@ -3157,7 +3191,8 @@ native implementation, CLI and original Lima remain unchanged; temporary test
 entries are removed. The prior 36/49 transitional inventory retains its preceding
 scope; this audit does not repeat a full startup or upstream execution.
 
-Next: adopt and validate the exact command dispatcher.
+Next: the [whoguests port](#lima-wizard-whoguests-port) records adoption and
+actual-checkout validation.
 
 #### Lima wizard spew port
 
