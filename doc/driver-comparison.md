@@ -3124,6 +3124,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dataedit entry audit
+
+Reviewed **9 October 2026** against pinned [command][lima-dataedit-command],
+[editor][lima-dataedit-editor], [command rules][lima-trans-command-rules],
+[CMD][lima-command-base], [menu][lima-menu], [frame][lima-frame] and
+[modal input][lima-inputsys] sources. The dedicated lpc-rs-port checkout remains
+clean at **d3b05e5c**; native testargs port notes are **bbaa6e36**.
+Recommend two-file compatibility edits: protected command dispatch; individual
+private declaration modifiers; nil for a failed mapping return; parentheses
+around the load assignment before negation; native [restore_value](efun/restore_value.md)
+and [save_value](efun/save_value.md); and bare or explicitly bound function
+callbacks. Earlier clone_object and mapping-membership migrations remain.
+No native API or implementation change is needed; this audit adopts no source.
+
+The reader also needs local normalization of the split array: remove one leading
+and one terminal empty field while retaining interior empties. Native
+[explode](efun/explode.md) preserves both boundary fields; the reviewed
+[FluffOS configuration](#explode) drops them with sane explode enabled and
+reversible explode disabled. Without normalization, the terminal newline in a
+native saved file becomes an empty record and raises "Syntax error in data file."
+This adapts the reader without changing native string splitting or save formats.
+
+All **8 cases pass across 25 registered inputs**: five proposal cases and three
+controls for unavailable dispatch, the uncompiled editor and the terminal split
+field. Actual master/simuls, user/body/wizard-shell/CMD, argument parsing, menu
+and registered input callbacks run with in-memory connections and IMUD transport
+stubbed. Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+Native save_map files enter the real menu. Discard preserves file bytes; save
+and native reload preserve integers, zero, nil, floats, Unicode and escaped
+text, arrays, mappings and nominal class records. Both quit paths remove the
+handler and destroy the active clone. Empty/comment-only files, missing or extra
+arguments and quoted relative paths retain the checked shell and input context.
+
+Malformed records and interior blank lines retain the reader's syntax error;
+non-UTF-8 files raise read_file's encoding error. These failures occur before
+the modal handler is installed and leave unused editor clones, while ordinary
+shell input and a subsequent valid entry remain usable. Source review identifies
+the existing clone lifetime behavior; no upstream execution is claimed. The
+audit covers file entry and both quit paths. Delete, rename, set, list, print,
+expression evaluation, merge and save-as interactions remain a follow-up.
+
+All **26 compile checks** match expected outcomes, including both proposed
+sources and **19 Lima support targets**. Locked workspace all-target/all-feature
+Clippy with warnings denied and workspace/fixture formatting pass. All 1,547
+library files, README, configuration, native implementation, CLI and original
+Lima are unchanged; temporary test entries are removed. The preceding 39/49
+transitional inventory retains its scope; startup and services were not repeated.
+
+Next: adopt the two-file compatibility patch and validate entry against the
+checkout, then audit the editing actions.
+
 #### Lima wizard testargs port
 
 Adopted **9 October 2026** after committing the [testargs
@@ -3159,7 +3210,7 @@ Clippy with warnings denied and workspace/fixture formatting pass. The other
 are unchanged; temporary test entries are removed. Broader inventories retain
 their preceding scope; startup, services and upstream execution were not repeated.
 
-Next: audit trans/cmds/dataedit.c and its saved-data editor entry.
+Next: the [dataedit entry audit](#lima-wizard-dataedit-entry-audit) records its compatibility edits and remaining editing scope.
 
 #### Lima wizard testargs audit
 
@@ -15471,3 +15522,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-guest-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/guest_d.c
 [lima-tsh-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/tsh.c
 [lima-testargs-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/testargs.c
+
+[lima-dataedit-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/dataedit.c
+[lima-dataedit-editor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/dataedit.c
