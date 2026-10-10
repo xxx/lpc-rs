@@ -3124,14 +3124,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard tsh port
+
+Adopted **9 October 2026** after committing the [tsh audit](#lima-wizard-tsh-audit)
+as native **297fd272**. Its exact protected dispatcher and README are committed
+in the dedicated lpc-rs-port checkout as **dba88349**. No native
+implementation or API changed; the earlier map_array-to-map migration remains.
+
+All **11 cases pass across 28 registered inputs**, retaining every audited
+assertion and LPC helper. Ten leave the adopted checkout command unchanged;
+one restores unavailable dispatch. Actual user/body/wizard-shell/CMD, file
+argument parsing, force_me(), do and xargs validate ordered and nested batches,
+relative and quoted paths, directory changes, empty files, blank lines, Unicode
+and CRLF, argument/read errors and retry, child diagnostics and exceptions,
+output routes and modal entry/exit. Three temporary commands record context,
+raise an ordinary exception and collect pipe input. Connections are in-memory
+and IMUD transport is stubbed. Distinct nil, preserved call-out players and
+4,000 ms tasks remain.
+
+The handler and command rules retain their behavior: files are read before lines
+execute; unknown commands report normally and the batch continues, while child
+exceptions stop later lines and keep completed effects. Directory changes remain
+in the shell. Child output retains its own routes; tsh redirects or pipes an
+empty parent buffer and ignores incoming stdin. Later batch lines still use the
+bottom shell after a modal command opens; interactive input uses the modal
+handler, and normal exit restores the shell.
+
+Fresh compilation reaches **38/49 transitional commands**, with all **62 support
+checks** across **90 distinct targets**. Only tsh becomes newly successful,
+without regressions, timeouts or abnormal exits. Locked workspace all-target/all-feature
+Clippy with warnings denied and workspace/fixture formatting pass. The other
+1,546 library files, configuration, native implementation, CLI and original Lima
+are unchanged; temporary test entries are removed. Broader inventories retain
+their preceding scope; startup, services and upstream execution were not repeated.
+
+Next: audit trans/cmds/testargs.c for its argument contract and modal input loop
+through the existing wizard shell.
+
 #### Lima wizard tsh audit
 
 Reviewed **9 October 2026** against pinned [tsh][lima-tsh-command],
 [command rules][lima-trans-command-rules], [CMD][lima-command-base],
 [shell input][lima-shell] and [user input][lima-inputsys]. The dedicated
-lpc-rs-port checkout is clean at **b190727d**; native whoguests notes are
-**9c52f60c**. Recommend only the established protected dispatcher calling
-its private handler with parsed arguments. No native API or implementation
+lpc-rs-port checkout was clean at **b190727d** at the audit baseline; native
+whoguests notes were **9c52f60c**. Recommend only the established protected
+dispatcher calling its private handler with parsed arguments. No native API or implementation
 change is needed, and this audit adopts no source. The earlier migration from
 map_array to native map is retained.
 
@@ -3162,7 +3199,7 @@ configuration, native implementation, CLI and original Lima remain unchanged;
 temporary test entries are removed. The prior 37/49 transitional inventory
 retains its preceding scope; startup, services and upstream execution were not repeated.
 
-Next: adopt and validate the exact command dispatcher.
+Next: the [tsh port](#lima-wizard-tsh-port) adopts and validates the dispatcher.
 
 #### Lima wizard whoguests port
 
