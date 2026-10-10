@@ -78,6 +78,8 @@ pub enum SeedArg {
     Value(LpcRef),
     /// A mapping minted into the attempt's transaction at frame build.
     FreshMapping(LpcMapping),
+    /// An error record whose nested diagnostic cells are minted for each attempt.
+    FreshErrorMapping(Box<crate::interpreter::error_frames::ErrorMapping>),
 }
 
 /// The function a [`TaskSeed`] enters.
@@ -221,6 +223,7 @@ impl TaskSeed {
             SeedArg::FreshMapping(mapping) => {
                 LpcRef::Mapping(txn.with(|t| t.mint_mapping(mapping.clone())))
             }
+            SeedArg::FreshErrorMapping(mapping) => mapping.materialize(txn),
         }
     }
 }
@@ -674,7 +677,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 &seed.process,
                 seed.args.iter().map(|arg| match arg {
                     SeedArg::Value(value) => value.type_name(),
-                    SeedArg::FreshMapping(_) => "mapping",
+                    SeedArg::FreshMapping(_) | SeedArg::FreshErrorMapping(_) => "mapping",
                 }),
             );
             let initializes = seed.initializes;
@@ -1001,10 +1004,14 @@ impl<const N: usize> Drop for RunningTask<'_, N> {
                 .stack
                 .last()
                 .and_then(CallFrame::current_debug_span);
-            self.task
-                .context
-                .txn()
-                .record_interruption(span, self.task.stack.stack_trace());
+            self.task.context.txn().record_interruption(
+                span,
+                self.task.stack.stack_trace(),
+                crate::interpreter::error_frames::capture(
+                    &self.task.stack,
+                    self.task.context.txn(),
+                ),
+            );
         }
     }
 }

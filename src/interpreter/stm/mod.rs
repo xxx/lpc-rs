@@ -120,6 +120,7 @@ pub(crate) struct Transaction {
 struct InterruptedExecution {
     span: Option<Span>,
     frames: Vec<String>,
+    values: lpc_rs_errors::error_frames::ErrorFrames,
 }
 
 impl Transaction {
@@ -752,22 +753,37 @@ impl TxnHandle {
     }
 
     /// Capture cancelled tasks as they unwind, preserving the innermost location.
-    pub(crate) fn record_interruption(&self, span: Option<Span>, mut frames: Vec<String>) {
+    pub(crate) fn record_interruption(
+        &self,
+        span: Option<Span>,
+        mut frames: Vec<String>,
+        mut values: lpc_rs_errors::error_frames::ErrorFrames,
+    ) {
         self.with(|txn| {
             let span = if let Some(inner) = txn.interrupted.take() {
                 frames.extend(inner.frames);
+                let mut merged = inner.values;
+                merged.prepend(values);
+                values = merged;
                 inner.span.or(span)
             } else {
                 span
             };
-            txn.interrupted = Some(InterruptedExecution { span, frames });
+            txn.interrupted = Some(InterruptedExecution {
+                span,
+                frames,
+                values,
+            });
         });
     }
 
     /// Attach and consume the trace saved when evaluation was cancelled.
     pub(crate) fn with_interruption(&self, error: LpcError) -> LpcError {
         self.with(|txn| match txn.interrupted.take() {
-            Some(trace) => error.or_span(trace.span).with_stack_trace(trace.frames),
+            Some(trace) => error
+                .or_span(trace.span)
+                .with_stack_trace(trace.frames)
+                .with_error_frames(trace.values),
             None => error,
         })
     }

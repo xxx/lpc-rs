@@ -222,6 +222,11 @@ string command_not_found(object player, string line) {
  * Report a failed operation in a fresh transaction after its changes roll back.
  * error contains "error" (message), "location" (source position), "object"
  * (affected object) and "diagnostic" (the rendered source diagnostic).
+ * When evaluation frames were captured, "frames" contains root-to-leaf
+ * mappings with source details and rendered named argument/local values;
+ * "frames_omitted" counts dropped outer frames, and per-frame limits can
+ * omit or shorten values. These diagnostics contain no live container graphs;
+ * caught errors do not call this hook or expose saved frames.
  * this_interactive() identifies the initiating client's body, which may differ
  * from error["object"]; input_to() and get_char() callbacks keep this context.
  * Boot errors and call-outs have no initiating client.

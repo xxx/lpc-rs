@@ -222,7 +222,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         self.catch_error(e)?;
                     } else {
                         let stack_trace = self.stack.stack_trace();
-                        return Err(e.with_stack_trace(stack_trace));
+                        let frames = crate::interpreter::error_frames::capture(
+                            &self.stack,
+                            self.context.txn(),
+                        );
+                        return Err(e.with_stack_trace(stack_trace).with_error_frames(frames));
                     }
                 }
             }

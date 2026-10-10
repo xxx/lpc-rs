@@ -49,6 +49,17 @@ impl Display for Span {
 }
 
 impl Span {
+    /// Source filename and one-based line/column, absent for an invalid location.
+    pub fn file_position(&self) -> Option<(String, usize, usize)> {
+        let files = SOURCE_MAP.read();
+        let index = files.line_index(self.file_id(), self.l()).ok()?;
+        Some((
+            files.name(self.file_id()).ok()?.to_owned(),
+            files.line_number(self.file_id(), index).ok()?,
+            files.column_number(self.file_id(), index, self.l()).ok()?,
+        ))
+    }
+
     /// Create a new [`Span`]
     ///
     /// # Arguments

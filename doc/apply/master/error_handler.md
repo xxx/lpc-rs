@@ -14,6 +14,53 @@ The error mapping has the following keys:
 * `error["object"]` (object) - The object in which the error occurred.
 * `error["diagnostic"]` (string) - The rendered diagnostic, source excerpt
   included, no terminal color codes.
+* `error["frames"]` (array of mappings, when available) - A bounded snapshot
+  of active LPC frames at the uncaught failure, ordered from root to leaf.
+* `error["frames_omitted"]` (int, when frames are available) - The number of
+  outer frames excluded by snapshot limits.
+
+Each frame mapping contains:
+
+| Key | Value |
+|---|---|
+| `function` | Function name, including generated names for anonymous closures. |
+| `program` | The compiled function's defining program path. |
+| `object` | The receiver's object name as a string, including any clone suffix. |
+| `file`, `line`, `column` | The current instruction's source file and one-based position; an empty file and zero position mean unknown. The file can differ from the program through inclusion. |
+| `arguments`, `locals` | Arrays of variable mappings in declaration order. Arguments are fixed parameters; a named variadic collector appears among locals. Implicit closure arguments use names such as `$1`. |
+| `variables_omitted` | Number of argument/local slots excluded by the limits. |
+| `truncated` | Integer 1 if a field was shortened or variable slots omitted, otherwise 0. |
+
+A variable mapping contains `name`, `type`, `value` and `truncated`.
+The type is the runtime type name, or `"unknown"` when the slot cannot be read.
+The value is rendered text: numbers and nil use their ordinary spelling,
+strings are quoted with control characters escaped, and arrays, mappings and
+bytes show their sizes. Classes show their nominal identity, objects their names
+or a destructed marker, and functions a summary. An unreadable slot uses
+`"<unavailable>"`. `truncated` is integer 1 when the name or value was shortened.
+These strings are diagnostic data, not values to execute or parse back into LPC.
+
+Parameters show their current values, including writes through `ref` or closure
+cells. Locals include retained named slots, even when their lexical block has
+finished or their declaration has not executed. Shadowed declarations can have
+the same name. Compiler temporaries and captured variables belonging only to an
+outer function are not added to the local list. The snapshot freezes rendered
+data before rollback and contains no live container graphs or object references;
+later changes or garbage collection do not change it. Source text itself is not
+saved, so reading the file later may show a newer version.
+
+The limits are 32 frames, 32 variables per frame, 256 UTF-8 bytes per rendered
+field and 65,536 rendered bytes across all frames. Strings shortened by the byte
+limit end in `...` at a UTF-8 boundary. Frames nearest the failure are retained,
+and variables are considered with arguments first. Snapshot order stays
+root-to-leaf among the retained frames. The limits apply across nested tasks too.
+
+Frame capture occurs only on uncaught evaluation errors or interrupted active
+evaluation. A direct compilation failure, an error before a frame is entered,
+or a timeout between attempts has no snapshot and omits both frame keys.
+An LPC-triggered compilation failure can retain the active caller frames.
+[`catch`](../../efun/catch.md) keeps its string result, does not invoke this
+handler and provides no saved-frame interface.
 
 To find the player to show the error to, call `this_interactive()` inside the
 handler. For a command, `input_to`, or `get_char` failure, it returns the
@@ -56,7 +103,8 @@ If the handler throws or times out, both errors go to the server and debug
 logs, and the original diagnostic goes to that connection; the driver does
 not call the handler recursively. A successful handler controls player output.
 The handler runs in a fresh transaction, so its output survives the failed
-operation's rollback. Legacy `runtime_error(...)` applies are not called.
+operation's rollback. Its mapping and nested frame data are built again within
+each handler attempt on retry. Legacy `runtime_error(...)` applies are not called.
 
 An exhausted execution limit is a runtime error too. Its diagnostic includes
 the interrupted LPC source line and nested call stack when evaluation was
