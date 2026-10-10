@@ -3124,6 +3124,59 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dataedit actions audit
+
+Reviewed **9 October 2026** against pinned [editor][lima-dataedit-editor],
+[menu][lima-menu], [modal forwarding][lima-input-forwarding],
+[input dispatch][lima-inputsys] and [regex associations][lima-regex-module].
+The dedicated lpc-rs-port checkout remains clean at **3e02d55f**, with entry
+port notes committed as native **7c517a7c**. Recommend one editor-only
+compatibility change: replace the merge switch's string cases with mappingp
+and arrayp predicates. Native [typeof](efun/typeof.md) returns integer tags,
+so the old cases never select container addition. The proposal retains scalar
+diagnostics, false-value replacement and the existing mismatch behavior. No
+native API or implementation change is needed; this audit adopts no source.
+
+All **14 cases pass across 105 registered inputs**: twelve use the unchanged
+checkout editor and two use the merge proposal. Actual user/body/wizard-shell/CMD,
+menus, prompt callbacks, the reg_assoc simul, dynamic expression compilation and
+native persistence run. Delete and rename retain zero/nil membership and
+collision checks; set and print handle variables, escaped dollars, Unicode,
+floats, nil, arrays and mappings. Normal listing sorts names. Save-as updates
+the filename/title and creates a checkpoint that discard preserves alongside
+the original file. Save and native reload retain edited and merged values.
+Prompt depth, callback ownership, input rearming and user/body/shell context
+remain; normal quit retires the active editor. Connections are in-memory and
+IMUD transport is stubbed. Distinct nil, preserved players and 4,000 ms tasks remain.
+
+The unchanged merge control retains arrays/mappings and reports that they
+cannot be merged; the proposal combines both. Existing zero/nil destinations
+are replaced, differing nonzero scalars retained, and equal scalars unchanged.
+A type mismatch still warns and can raise during addition, leaving input usable;
+diagnostics use native integer type tags. Existing empty listing calls max on
+an empty array and raises. Reviewed [FluffOS source][fl-dataedit-empty-max]
+also rejects that call with PACKAGE_CONTRIB/F_MAX enabled; this is source review,
+not upstream execution.
+
+Expression errors retain the old variable and menu. Runtime failure leaves the
+generated file and object; compilation failure leaves the file and produces a
+call-on-nil error after load_object returns nil. A valid retry removes those
+artifacts. Missing-parent save-as raises and retains the old filename/data;
+retry succeeds. Reviewed [FluffOS file-open handling][fl-dataedit-file-open]
+also raises on open failure. These existing error/cleanup paths are recorded;
+no cleanup or failure-feedback redesign is proposed. Commit-time delivery
+failures and concurrent editors were not exercised.
+
+Both current sources, the proposed editor and all **19 Lima support targets**
+pass **22 compile checks**. Locked workspace all-target/all-feature Clippy with
+warnings denied and workspace/fixture formatting pass. All 1,547 library files,
+README, configuration, native implementation, CLI and original Lima are unchanged;
+temporary test entries are removed. The preceding 40/49 transitional inventory
+retains its scope; startup and services were not repeated.
+
+Next: commit the audit notes, adopt the predicate-based merge dispatch, and
+validate the editing cases against the adopted source.
+
 #### Lima wizard dataedit entry port
 
 Adopted **9 October 2026** after committing the [entry
@@ -3162,7 +3215,7 @@ Clippy with warnings denied and workspace/fixture formatting pass. The other
 are unchanged; temporary test entries are removed. Broader inventories retain
 their preceding scope; startup, services and upstream execution were not repeated.
 
-Next: audit the editing actions in trans/obj/dataedit.c.
+Next: the [dataedit actions audit](#lima-wizard-dataedit-actions-audit) records the merge compatibility change and checked behavior.
 
 #### Lima wizard dataedit entry audit
 
@@ -15564,3 +15617,6 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-dataedit-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/dataedit.c
 [lima-dataedit-editor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/dataedit.c
+
+[fl-dataedit-empty-max]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/contrib/contrib.cc#L2578-L2590
+[fl-dataedit-file-open]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/file.cc#L287-L314
