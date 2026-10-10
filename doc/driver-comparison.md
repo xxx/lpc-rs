@@ -3124,12 +3124,49 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard spew port
+
+Adopted **9 October 2026** after committing the [spew
+audit](#lima-wizard-spew-audit) as native **95074858**. Its exact protected
+dispatcher and the README are committed in the dedicated lpc-rs-port checkout
+as **80390c0c**. No native implementation or API changed.
+
+All **9 cases pass across 28 registered inputs** against adopted sources,
+retaining the audited behavior checks. The whitespace diagnostic assertion
+accepts Lima's existing random reply list rather than requiring one choice.
+Eight use the checkout command unchanged;
+one restores unavailable dispatch, and the delivery case keeps its direct-say
+control. Actual user/body/wizard-shell/CMD/parser/say code delivers selected
+lines to the speaker and a second player in order and updates both speech
+histories. Paths, ranges, arguments, empty files, EOF, whitespace, Unicode,
+read errors and retry, output routes, ignored stdin and ordinary shell/input
+state pass. Fixtures use in-memory Connections and stubbed IMUD transport.
+Distinct nil, preserved players and 4,000 ms tasks remain.
+
+The existing handler and help remain. Empty lines are skipped; whitespace-only
+lines retain the normal parser diagnostics. Partial numeric scans retain defaults
+or partial results, and speech uses ordinary shell trimming and Lima punctuation.
+Speech bypasses CMD output: redirected files are empty and pipelines do not
+capture it. The help's alternate-delivery claim remains a separate source quirk.
+
+Fresh compilation reaches **36/49 transitional commands** and all **58 support
+checks** across **86 distinct targets**. Only spew becomes newly successful,
+without regressions or timeouts. Locked workspace all-target/all-feature Clippy
+with warnings denied and workspace/fixture formatting pass. The other 1,546
+library files, configuration, native implementation, CLI and original Lima
+are unchanged; temporary test entries are removed. Broader inventories retain
+their scope.
+
+Next: audit trans/cmds/whoguests.c for ordinary guest-list reporting through the
+wizard shell and existing guest daemon.
+
 #### Lima wizard spew audit
 
 Reviewed **9 October 2026** against pinned [spew][lima-spew-command],
 [command rules][lima-trans-command-rules], [CMD][lima-command-base],
 [say][lima-say-verb] and [body command delivery][lima-body-cmd]. Dedicated
-lpc-rs-port is clean at **7678af28**; native stat notes are **cd5a814a**.
+lpc-rs-port was clean at **7678af28** at the audit baseline; native stat notes
+were **cd5a814a**.
 Recommend only protected dispatch calling the private handler. No proposal is
 adopted by this audit and no native API or implementation changes.
 
@@ -3146,7 +3183,7 @@ Distinct nil, preserved call-out players and 4,000 ms tasks remain.
 Existing behavior stays: start zero and one select the first line, count zero
 reads to the end, and incomplete numeric scans retain defaults or partial
 results. Empty lines are skipped; whitespace-only lines reach the shell and
-produce say's existing missing-text response. Speech uses normal trimming,
+produce the existing parser diagnostics. Speech uses normal trimming,
 punctuation, recipient delivery and history. It bypasses CMD's output buffer:
 redirected files are empty and pipelines do not capture speech. The source's
 help claim that `| command` selects the delivery command remains a separate
@@ -3162,7 +3199,8 @@ their scope. Evidence is pinned Lima source review and lpc-rs execution;
 upstream execution, full startup and alternate speech configurations are not
 repeated by this audit.
 
-Next: adopt the exact command-only dispatcher and validate the checkout source.
+The [spew port](#lima-wizard-spew-port) adopts the exact command-only
+dispatcher after committing this audit.
 
 #### Lima wizard stat port
 
