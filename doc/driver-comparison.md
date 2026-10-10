@@ -3124,13 +3124,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard docs port
+
+Adopted **9 October 2026** after committing the [docs
+audit](#lima-wizard-docs-audit) as native **2ea40429**. The dedicated lpc-rs-port
+docs patch and README are committed as **7fc053a8**.
+The command uses protected dispatch_main, explicit calls/bare void returns,
+local path-split normalization, integer category counts and empty absent RST
+tags. The previous filter migrations remain. No native API or implementation changes.
+
+All **14 retained cases pass across 23 registered inputs**: ten read the
+adopted checkout command and four restore the audited entry/reporting controls
+in temporary fixtures. Every audited assertion and LPC helper remains.
+Actual user/body/wizard-shell/CMD, HELP_D, discovery and widgets run. Reports
+preserve the index, deduplicate totals and retain category/tag counts, sorted
+ten-file topic output and empty/unknown-topic handling. ASCII, Unicode and
+simplified bars execute. Administrator playerdoc uses actual player/verb
+listing, handles empty verbs and overwrites the help file deterministically;
+existing write rules remain.
+
+Refresh retains flat/nested completion, the busy guard, initiator notification,
+native saved data, scan failure with unchanged saved bytes and a valid retry.
+Directory callbacks fire through native prioritize_call_out without sleeping.
+The two expected control errors retain usable input and shell context. No
+pager or editor is opened. Connections are in-memory, IMUD transport is stubbed
+and initial help data is a controlled saved index. Distinct nil, preserved
+players and 4,000 ms tasks remain. Full help-tree/startup scanning, commit-time
+delivery failure and upstream execution were not repeated.
+
+Fresh compilation reaches **41/49 transitional commands**, with all **69 support
+checks** across **97 distinct targets**. Only docs becomes newly successful;
+there are no regressions or timeouts. Locked workspace all-target/all-feature
+Clippy with warnings denied and workspace/fixture formatting pass. The other
+1,546 library files, configuration, native implementation, CLI and original Lima
+are unchanged; temporary test entries are removed. Other inventories retain
+their preceding scope.
+
+Next: commit docs, README and port notes, then audit trans/cmds/codefor.c.
+
 #### Lima wizard docs audit
 
 Reviewed **9 October 2026** against pinned [docs command][lima-docs-command],
 [help daemon][lima-help-timers], [widgets][lima-widgets],
 [colour tables][lima-message-colours] and [command discovery][lima-command-daemon].
-The dedicated lpc-rs-port checkout remains clean at **50ab36d5**, with dataedit
-merge port notes committed as native **24d76c4b**. Recommend one command-only
+The dedicated lpc-rs-port checkout was clean at the audit baseline **50ab36d5**,
+with dataedit merge port notes committed as native **24d76c4b**. Recommend one command-only
 compatibility patch: protected dispatch_main, explicit calls followed by bare
 returns in void branches, local path-split normalization, integer category
 initialization and an empty array for absent RST tags. The preceding three
@@ -3170,8 +3208,7 @@ fixture formatting pass. All 1,547 library files, README, configuration, native
 implementation, CLI and original Lima are unchanged; temporary test entries are
 removed. The preceding 40/49 transitional inventory retains its scope.
 
-Next: commit the audit notes, adopt the one-file docs patch, and validate the
-command cases against the adopted checkout source.
+Next: the [docs port](#lima-wizard-docs-port) adopts and validates the one-file patch.
 
 #### Lima wizard dataedit actions port
 
