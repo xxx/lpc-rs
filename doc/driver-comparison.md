@@ -3124,13 +3124,47 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard stat port
+
+Adopted **9 October 2026** after committing the [stat
+audit](#lima-wizard-stat-audit) as native **0af3aff0**. Its exact dispatcher and
+body callback adaptation, plus the README, are committed in the dedicated
+lpc-rs-port checkout as **7678af28**. No native implementation or API changed.
+
+Protected dispatch exposes the private handler. Passing the bare
+`our_description` callback in body creation fixes the description concatenation
+failure reached by stat me. Original object resolution and report handling,
+including dynamic nonstring coercion/errors, remain; the existing pager's
+blank lines and annotation-daemon startup output stay separate from report
+buffers and redirected files.
+
+All **13 cases pass across 27 registered inputs** against adopted sources,
+retaining every audit assertion. Eleven use the checkout stat/body unchanged;
+two preserve unavailable-dispatch and unchanged-body controls. Real body/room
+reports, cold/resident prototypes, clone state, paths and IDs, absent information,
+argument/callback errors, retries, output routes, ignored stdin, caller/player
+identity and ordinary shell/input state pass. Fixtures retain actual
+user/body/shell/CMD code with an in-memory connection and stubbed IMUD transport.
+Distinct nil, preserved players and 4,000 ms tasks remain.
+
+Fresh compilation reaches **35/49 transitional commands** and all **55 support
+checks** across **83 distinct targets**. Only stat becomes newly successful,
+without regressions or timeouts. Locked workspace all-target/all-feature Clippy
+and workspace/fixture formatting pass. The other 1,545 library files,
+configuration, native implementation, CLI and original Lima are unchanged;
+temporary test entries are removed. Broader inventories retain their scope.
+
+Next: audit trans/cmds/spew.c for
+file-to-speech delivery through the existing player command path.
+
 #### Lima wizard stat audit
 
 Reviewed **9 October 2026** against pinned [stat][lima-stat-command],
 [command rules][lima-update-rules], [CMD][lima-command-base],
 [body][lima-body] and [descriptions][lima-description]. Dedicated lpc-rs-port
-remains clean at **1ed841c3**; native loadall notes are **89062ad8**. No proposal
-is adopted by this audit and no native implementation changes.
+was clean at **1ed841c3** at the audit baseline; native loadall notes were
+**89062ad8**. No proposal was adopted by that audit and no native implementation
+changed.
 
 Protected dispatch exposes the private stat handler. Runtime testing also finds
 a named-callback adaptation in body creation: `set_long((: our_description :))`
@@ -3163,8 +3197,8 @@ README, configuration, native implementation, CLI and original Lima are
 unchanged; temporary test entries are removed. Earlier inventories retain their
 scope; this audit does not constitute a new full compile sweep or startup test.
 
-Next: adopt the audited stat dispatcher and body callback adaptation, then
-validate the actual checkout.
+The [stat port](#lima-wizard-stat-port) adopts the exact two-file proposal after
+committing this audit, retaining its assertions against the checkout sources.
 
 #### Lima wizard loadall port
 
