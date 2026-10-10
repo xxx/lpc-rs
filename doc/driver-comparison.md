@@ -3124,13 +3124,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard loadall port
+
+Adopted **9 October 2026** after committing the [loadall
+audit](#lima-wizard-loadall-audit) as native **5165897f**. The exact audited
+command and README are committed in the dedicated lpc-rs-port checkout as
+**1ed841c3**. No native implementation, apply or permission policy changed.
+
+Protected dispatch exposes the private handler. Explicit load-result checks
+report the failed file and stop later loads; a resident master/simul preflight
+runs before cleanup. The original callbacks, value capture, zero subtraction
+and batch removal before loading remain. Old clones retain their program/state,
+self-source exclusion and nonrecursive selection remain, and ordinary contents
+cleanup uses the committed destruction wrapper. Already completed removals and
+loads survive a caught later error; buffered output and repeated remove hooks
+retain their audited behavior. Resident preflight is reviewed and compiled,
+without attempting to remove live system objects in runtime cases.
+
+All **17 cases pass across 25 registered inputs** on the adopted sources,
+retaining the audit assertions. Fourteen use the checkout command unchanged;
+three preserve baseline, dispatch-only and unchecked-load controls. They retain
+identity/state, ordering, contents, cleanup/load errors, retry, missing methods,
+source changes, paths, argument handling, output routes and shell/input checks.
+Fixtures use actual user/body/shell/command code, an in-memory connection and
+stubbed IMUD transport. Distinct nil, preserved players and 4,000 ms tasks remain.
+
+Fresh compilation reaches **34/49 transitional commands** and all **55 support
+checks** across **83 distinct targets**. Only loadall becomes newly successful,
+without regressions or timeouts. Locked workspace all-target/all-feature Clippy
+and workspace/fixture formatting pass. The other 1,546 library files,
+configuration, native implementation, CLI and original Lima are unchanged;
+temporary test entries are removed. Broader inventories retain their scope.
+
+Next: audit trans/cmds/stat.c for
+ordinary object inspection through stat_me().
+
 #### Lima wizard loadall audit
 
 Reviewed **9 October 2026** against pinned [loadall][lima-loadall-command],
 [command rules][lima-update-rules], [CMD][lima-command-base] and the committed
 [destruction wrapper](#lima-wizard-renew-port). The dedicated lpc-rs-port checkout
-remains clean at **4798ac87**; renew notes are native **3f09e109**. No loadall
-proposal is adopted and no native API changes.
+was clean at **4798ac87** at the audit baseline; renew notes were native
+**3f09e109**. No proposal was adopted by that audit and no native API changed.
 
 Protected dispatch makes the private handler available to the wizard shell.
 Its original positional callbacks, value capture and zero subtraction remain:
@@ -3169,8 +3204,8 @@ fixture formatting pass. All 1,547 dedicated library files, README,
 configuration, native implementation and CLI are unchanged; temporary test
 entries are removed. Earlier compile inventories retain their scope.
 
-Recommend adopting this command-only proposal after the audit notes are
-committed. It requires no new driver facility.
+The [loadall port](#lima-wizard-loadall-port) adopts the exact proposal after
+committing this audit, retaining its assertions without a new driver facility.
 
 #### Lima wizard renew port
 
