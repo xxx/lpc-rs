@@ -3142,6 +3142,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dbxwhere port
+
+Adopted **10 October 2026** after committing the
+[dbxwhere audit](#lima-wizard-dbxwhere-audit) as native **b00422c7**. The dedicated
+lpc-rs-port checkout commits dbxwhere and README as **c6f34acf**.
+
+Dbxwhere uses protected variadic dispatch, a record local that does not collide
+with audit.h's error macro, and an invocation closure for query_error inside
+the existing unguarded context. The existing master/security policy is unchanged.
+Reports retrieve the current account, a named account or last; saved named
+records remain usable without a live body. Empty and unknown-player messages,
+buffered out/outf and NO_ANSI remain. The master supplies a timestamp and stored
+native [`error_handler`](apply/master/error_handler.md) diagnostic; source
+excerpts and stack traces are shown when available. Pipes and redirected files
+receive the report. Normal screen display uses existing pager wrapping.
+
+All **7 cases / 19 registered inputs** pass. Five use the adopted command and
+master without replacement: empty self/live-player/last and unknown names,
+saved names without live bodies, nested native failures, user/background
+attribution, existing caught-versus-uncaught storage, pipes, exact redirected
+diagnostics and input recovery. Two controls retain the original command and
+the dispatch/rename-only legacy closure. The original is unavailable; the old
+closure returns a name instead of a mapping and the shell recovers from that
+failure. Saved records and shell/context/input state remain stable; uncaught
+failed writes are rolled back. Errors go through the native reporting helper
+and actual master, with no fabricated record or replacement handler.
+
+Fresh compilation reaches **45/49 transitional commands**, with all **69 support
+checks across 97 targets**. Dbxwhere is the only new success, without regressions
+or timeouts. Remaining commands are checkpriv, dbxframe, snoop and unsnoop.
+Workspace warning-free all-target/all-feature locked Clippy and formatting pass,
+including the retained fixture. Actual user/body/wish/CMD/master/simuls and stdio
+execute with in-memory connections, stub IMUD create and controlled HELP_D data.
+Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+
+Only dbxwhere and README change in the dedicated checkout. Native APIs, applies,
+the master, other library files, configuration, original Lima and native
+implementation/CLI are unchanged; temporary test entries are removed. Full boot,
+broader inventories and FluffOS execution retain their preceding scope.
+
+Caught command failures still do not create native saved error records. The
+[audit](#lima-wizard-dbxwhere-audit) records this difference from FluffOS with
+mudlib error handler enabled. Structured FluffOS frame data is also absent.
+Next: audit caught-error recording before dbxframe.
+
+
 #### Lima wizard dbxwhere audit
 
 Reviewed **10 October 2026** against pinned [Lima dbxwhere][lima-dbxwhere-command]
