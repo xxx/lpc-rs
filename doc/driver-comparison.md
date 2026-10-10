@@ -3143,6 +3143,41 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard checkpriv adaptation
+
+Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following the
+audit committed as native **738fbe67**. The protected dispatcher forwards the
+first command argument to the existing private handler. Initial trimming and
+explicit empty-string handling report usage for absent or blank input. The
+invalid-privilege message uses `outf`, so it joins usage, success and denial in
+command stdout for pipelines and redirection.
+
+The audited privilege validation and simul calls stay unchanged: only exact `0`
+and `1` input strings become integer levels; registered owners/suffixes remain
+strings, and `01` remains invalid. Literal shell quotes retain their existing
+meaning. No native API, security-daemon policy or configuration change is needed.
+
+All **5 runtime cases / 34 registered shell inputs / 4 direct argument controls**
+pass on the first adopted run. Three cases use the copied dedicated command body;
+two retain the unavailable original and dispatcher-only controls. Actual master,
+simuls, user/body/wish/CMD and security-daemon methods run with in-memory
+connections, controlled IMUD startup/HELP_D data and temporary role/access helpers.
+The direct blank-argument wrapper exists only in disposable fixtures. Numeric and
+named results, role changes, blank/invalid input, literal quotes, pipelines and
+exact redirected files pass. Input rearms, shell/context state stays stable and
+the adopted commands do not create saved-error records.
+
+Fresh compilation reaches **47/49 transitional commands**, with **70 support
+checks / 97 distinct targets**. Only `checkpriv` newly succeeds; there are no
+regressions or timeouts. The remaining commands are `snoop` and `unsnoop`; audit
+`snoop` next. The reviewed command patch is unchanged from the audit proposal.
+Warning-free locked workspace Clippy across all targets/features, workspace
+formatting and retained fixture formatting pass.
+Original Lima, port configuration, the other 1,546 library files and native
+implementation/CLI remain unchanged. No new full native suite, full Lima inventory/
+boot or upstream-driver execution is claimed. Evidence is in
+/tmp/lima-checkpriv-port-20261010.
+
 #### Lima wizard checkpriv audit
 
 Audited **10 October 2026** against the dedicated lpc-rs-port checkout at
