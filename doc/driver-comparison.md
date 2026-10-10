@@ -3143,6 +3143,49 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard unsnoop adaptation
+
+Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following
+audit notes committed as native **ea90c37c**. The protected dispatcher forwards
+the parsed optional body array to the existing private handler. Command comments
+now describe named/all-target removal. Both source changes exactly match the
+frozen audit proposals: the command dispatcher and the daemon's explicit cleanup
+loops. README documents removal and restart after daemon reload.
+
+Named/all removal, existing messages, argument rules, command stdout, pipelines,
+redirection and shared subscribers retain their audited behavior. The daemon calls
+`unsnoop_all` directly from `foreach`, retaining local origin and its existing
+caller guard; a second loop destructs live cached relays. Reload stops old delivery
+and permits fresh subscriptions. `unsnoop_all` retains its typed integer-zero
+implicit success return and explicit nested callback. No native API, guard, master
+policy, relay or configuration change is introduced.
+
+All **6 runtime cases / 33 registered shell inputs / 12 native starts** pass.
+Three cases use the copied dedicated command and daemon; three retain the
+unavailable-command, original-cleanup and bare-callback controls.
+Actual master/simuls/user/body/wish/CMD, daemon and relay run with in-memory
+connections and explicit native asynchronous delivery of ordinary text. Scope and
+fixture controls match the audit below. Named/all removal, exact redirected output,
+typed return/repeated result, shared subscribers, actual daemon update/reload,
+stopped delivery and restart pass. The real-body helper also verifies outgoing/
+incoming `bye()` cleanup and a surviving subscriber. Full quit/netdead and socket
+transport are not exercised. Input rearms; checked context/modal state remains
+stable except update's expected `cwf` change. No registered input has a caught error.
+
+Fresh compilation reaches **49/49 transitional commands**, with **73 support
+checks / 99 distinct targets**. Only `unsnoop` newly succeeds; there are no
+regressions or timeouts. Warning-free locked workspace Clippy across all
+targets/features, workspace formatting and retained fixture formatting pass.
+The temporary native test hook is restored byte-for-byte. The other 1,545 library
+files, configuration, original Lima and native implementation/CLI remain unchanged.
+No new full native suite, whole-library inventory/boot or upstream-driver execution
+is claimed. Evidence: /tmp/lima-unsnoop-port-20261010.
+
+Next: commit command/daemon/README and adaptation notes. Transitional commands
+are all compiling; audit the administrator `snoops` inspector next, including its
+existing daemon authorization-path mismatch. The converging-graph cycle finding
+remains a separate source note.
+
 #### Lima wizard unsnoop and cleanup audit
 
 Audited **10 October 2026** against dedicated lpc-rs-port **b25a4665**, after
@@ -3192,8 +3235,8 @@ execution results retain their recorded scope. Evidence:
 /tmp/lima-unsnoop-audit-20261010. The inspector-path and converging-graph findings
 remain separate source notes.
 
-Next: commit audit notes, adopt the dispatcher and explicit cleanup loops in the
-dedicated checkout, then verify adoption and the transitional-command inventory.
+The audit is committed as native **ea90c37c**. Dispatcher/cleanup adoption and
+the fresh transitional-command inventory are verified above.
 
 [lima-unsnoop-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/cmds/unsnoop.c
 
