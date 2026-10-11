@@ -3143,6 +3143,43 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator guest-command audit
+
+Reviewed **10 October 2026**, after listeners source/README were committed as
+Lima **fca90f94** and adoption notes as native **44a6cfd6**. Both checkouts were
+clean at baseline. Lima remains on distinct nil, preserved call-out players and
+4,000 ms tasks. Recommend only protected dispatch_main wrappers calling the
+existing private main(arg) in [addguest][lima-addguest-command] and
+[removeguest][lima-removeguest-command]. No source is adopted by this audit.
+
+All **8 cases / 55 registered inputs** pass: seven proposal cases and one
+unavailable-command control. The two existing administrator-rejection exceptions
+are expected; no other input errors occur. Actual user/body/wish/CMD, the
+[guest daemon][lima-guest-daemon] and its [persistence module][lima-daemon-data]
+check cold/empty lists, additions/removals, duplicates, case/order, Unicode,
+required string rules, saved bytes, reload, whoguests and input/context state.
+Connections are in-memory, optional HELP_D data is provided and IMUD startup is
+inactive. NO_NEW_PLAYERS remains undefined; conditional account admission is
+outside this fixture.
+
+Preserve the existing no_redirection and direct write behavior. The commands
+receive raw argument text: quoted names retain quotes, extra spaces remain,
+and outgoing redirect/pipe suffixes become part of the guest name. No redirect
+file is created or outgoing pipe stage executed; incoming pipeline text is
+ignored. Duplicate additions and missing removals keep their success messages
+and unchanged saved bytes. The daemon, rules and login configuration need no edit.
+
+All **9 compile controls** match (seven successes and two expected missing-dispatch
+failures); workspace and fixture formatting pass. The temporary native hook is
+restored. All 1,547 library files, README/config, native implementation/CLI and
+original Lima remain unchanged. Five pinned public source responses match the
+clean original checkout. Prior full-suite, complete inventory/boot, socket and
+upstream execution results retain their scope. Proposals and frozen evidence:
+/tmp/lima-guest-commands-audit-20261010.
+
+Next: commit audit notes, then adopt both dispatchers and update the port README;
+verify the adopted commands through these routes and refresh bounded coverage.
+
 #### Lima administrator listeners adaptation
 
 Adopted and verified **10 October 2026**, following audit notes committed as
@@ -3179,9 +3216,10 @@ Previous full-suite, complete inventory/boot and upstream execution retain their
 scope. Frozen audit evidence is unchanged; adoption records are in
 /tmp/lima-listeners-port-20261010.
 
-Next: commit the command/README and adaptation notes, then audit administrator
-addguest/removeguest and their guest-management dependency. Keep stale-target
-unsnoop and the converging-graph finding separate.
+Source/README are committed as Lima **fca90f94**, with adoption notes as native
+**44a6cfd6**. The [guest-command audit](#lima-administrator-guest-command-audit)
+records the next recommendation; stale-target unsnoop and the converging-graph
+finding remain separate.
 
 #### Lima administrator listeners audit
 
@@ -17021,5 +17059,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-dbxframe-efun]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/trace.cc#L5-L7
 
 [lima-snoops-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/snoops.c
+[lima-addguest-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/addguest.c
+[lima-removeguest-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/removeguest.c
 [lima-listeners-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/listeners.c
 [lima-admin-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/Cmd_rules
