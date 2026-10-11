@@ -3143,6 +3143,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard print/null-command adaptation
+
+Reviewed **11 October 2026**, after audit notes were committed as native
+**8050fe13** on lima-support. Dedicated Lima /home/mpd/git-sources/lima-lpc-rs
+on lpc-rs-port over **47bf6de2** adopts the exact two audited protected varargs
+adapters and a README note. Print calls its private main(arg, flags, stdin);
+null calls main(). Their handlers, rules, CMD/stdio, aliases and pipeline retain
+behavior. No native implementation changes are needed.
+
+All **10 cases / 57 registered inputs** pass together against copied checkout
+source: nine leave the adopted commands untouched and one restores the originals
+as an unavailable-command control. Raw text/quotes/spacing, text newline, empty
+and unterminated stdin, overwrite/append, chained pipes, null discard/empty output,
+aliases, first-use arithmetic/player/zero evaluation, invalid routes, shell recovery
+and role exclusion/retry retain exact output and checked input/modal ownership.
+Bare print's missing-argument type error and two home-output refusals are the
+three expected caught input errors; none are unexpected. Repeated evaluation's
+existing temporary-object destruct refusal is independently asserted and remains
+separate from the command adapters. Use explicit print backticks for redirected
+evaluation; the shipped @ alias wraps its whole remainder in the expression.
+
+Refreshed bounded compilation covers **147 targets**: **29/81 wizard**, **49/49
+transitional**, **9/9 administrator** and eight complete supports. Only print and
+null newly compile; there are no regressions, timeouts or abnormal exits. All
+**13 controls** match: two restored-original failures, two adopted commands,
+eight supports and the alias daemon. Workspace/fixture formatting passes. The
+other 1,545 library files, configuration, CLI, native implementation and original
+Lima are unchanged; the native test hook is restored and all 204 frozen audit
+artifacts match. Prior pinned source comparisons and broader validation retain
+scope.
+
+Evidence: /tmp/lima-wizard-print-null-port-20261011, using in-memory lpc-rs shell
+execution and bounded compilation. Distinct nil, preserved call-out players and
+4,000 ms tasks remain. No upstream execution or new full boot/service/physical
+transport run. Commands/README are committed as Lima **053a39e3**. Next:
+audit exec_code temporary-object cleanup while retaining the existing permission
+policy. Bare print's usage guard remains a separate source
+issue.
+
 #### Lima wizard print/null-command audit
 
 Reviewed **11 October 2026**, after heal/README were committed as Lima
@@ -3193,8 +3232,8 @@ call-out players and 4,000 ms tasks remain. Alias restore, long interactive pagi
 upstream execution and full boot/service/physical transport were not rerun.
 Previous 27/81 wizard and broader checks retain scope.
 
-Next: commit audit notes, adopt the two tested adapters and a README note, then
-verify copied source and bounded command compilation. Then review exec_code
+Audit notes are committed as native **8050fe13**; the adoption above verifies
+checkout source and bounded command compilation. Next review exec_code
 temporary-object cleanup with existing permission policy. Other findings retain
 scope.
 
