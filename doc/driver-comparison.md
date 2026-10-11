@@ -3143,6 +3143,56 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima exec_code cleanup audit
+
+Reviewed **11 October 2026**, after print/null were committed as Lima
+**053a39e3** on lpc-rs-port and adoption notes as native **3f722420** on
+lima-support. [Exec_code][lima-exec-code] generates dir/exec.c, evaluates it,
+removes the source and leaves the object for cleanup on the next call.
+The first expression works; repeated evaluation fails before the next expression.
+
+Compiled-instruction inspection and master callback records confirm two port
+mismatches. The bare destruct in misc.c resolves to the native efun, carrying
+misc.c provenance; the port's existing policy permits destruction through the
+overrides.c wrapper. Explicit self dispatch reaches that wrapper, but an implicit
+file->exec_foo call does not reload a name removed in the same transaction and
+returns nil. A wrapper-only trial passed one case and failed three; its sources
+and logs are retained. This is source and lpc-rs execution review, without an
+upstream execution claim.
+
+Recommend this_object()->destruct(tmp), followed by explicit
+[compile_string(file, contents)](efun/compile_string.md) and tmp->exec_foo().
+The existing API supports explicit replacement of a removed name. Keep exec.c,
+source generation/writing/removal, optional includes, resident-object lifecycle,
+[M_ACCESS][lima-access] and current permission checks. Compile_string additionally
+runs its normal write/load authorization; no native API, privilege exception,
+new temporary-name scheme or permission-policy change is needed. Generated
+set_privilege(1) is reduced to the directory's permitted privilege: the ordinary
+wizard fixture's object has porter privilege and porter protection, rather than privilege `1`.
+The refusal is caused by defining-program provenance.
+
+All **5 cases / 21 registered inputs** pass with the temporary proposal and
+current-source control. Nine cleanup snapshots and three direct controls verify
+old-object removal, replacement under the retained name, source deletion, alias
+arithmetic/player/zero results, two evaluations in one transaction, nil results,
+syntax/expression error recovery, optional headers and exact overwrite/append/pipe
+output. Shell/input/modal ownership remains; the existing home-output refusal is
+the one expected caught input error, with none unexpected. All **16 compile
+checks** pass: eight complete targets under current and proposed source.
+Workspace/fixture formatting passes. Eight pinned original source comparisons
+and four native source files are reviewed.
+
+All 1,547 library files, README/configuration, CLI, native implementation and
+original Lima are unchanged; the native hook is restored and all 203 frozen
+print/null adoption artifacts match. Evidence:
+/tmp/lima-exec-code-cleanup-audit-20261011, using in-memory shell execution and
+bounded compilation. Distinct nil, preserved call-out players and 4,000 ms tasks
+remain. Earlier 29/81 wizard and broader checks retain scope; no upstream or new
+full boot/service/physical transport run. Proposal is not adopted. Next: commit
+audit notes, adopt the tested exec_code change and update the README's known
+repeat-evaluation limitation, then verify checkout source. Eval's separate bare
+destruct site and bare print's usage guard remain separate.
+
 #### Lima wizard print/null-command adaptation
 
 Reviewed **11 October 2026**, after audit notes were committed as native
@@ -3177,10 +3227,9 @@ scope.
 Evidence: /tmp/lima-wizard-print-null-port-20261011, using in-memory lpc-rs shell
 execution and bounded compilation. Distinct nil, preserved call-out players and
 4,000 ms tasks remain. No upstream execution or new full boot/service/physical
-transport run. Commands/README are committed as Lima **053a39e3**. Next:
-audit exec_code temporary-object cleanup while retaining the existing permission
-policy. Bare print's usage guard remains a separate source
-issue.
+transport run. Commands/README are committed as Lima **053a39e3**, with adoption
+notes **3f722420**. The exec_code audit above reviews repeated-evaluation cleanup.
+Bare print's usage guard remains a separate source issue.
 
 #### Lima wizard print/null-command audit
 
@@ -3202,7 +3251,7 @@ ignores its optional argument and incoming input, emits nothing and passes empty
 output to the next pipeline stage. Extra arguments retain the rule's refusal.
 Actual aliases and first-use backtick arithmetic, current-player lookup and
 integer-zero evaluation reach print. Repeated evaluation instead fails while
-exec_code destructs its previous privilege-1 temporary object; wish catches the
+exec_code destructs its previous temporary object; wish catches the
 permission refusal and produces no output, before print dispatch. A direct reuse
 control confirms destruct: permission denied. Keep this evaluation teardown
 finding separate from the two command adapters; preserve existing permission
@@ -18187,3 +18236,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-heal]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/heal.c
 [lima-wizard-print]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/print.c
 [lima-wizard-null]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/null.c
+[lima-exec-code]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L253-L299
