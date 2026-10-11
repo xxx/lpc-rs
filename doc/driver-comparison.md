@@ -3143,6 +3143,39 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator objpurge-command adaptation
+
+Adopted and verified **10 October 2026**, after audit notes were committed as
+native **03283723**. Dedicated lpc-rs-port at **42e4dfb3** has the exact
+[objpurge][lima-objpurge-command] dispatcher proposal and README update, ready
+to commit. Selection, cleanup sequence, existing master policy and native APIs
+retain their behavior. Lima stays on distinct nil, preserved call-out players
+and 4,000 ms tasks.
+
+All **12 cases / 40 registered inputs** pass: eleven leave the copied adopted
+command unchanged and one restores the unavailable control. Prototype/clone/
+orphan-clone selection, self-removal, absent hooks, mixed cleanup, fallback,
+exact redirected bytes, pipes and checked shell/input/pager/modal state pass.
+The audit's in-memory connections, controlled roles, optional HELP_D data and
+inactive IMUD startup remain. Five caught errors match the audited role,
+cleanup and missing-selector expectations. Surviving objects retain their
+second cleanup hook; caught cleanup writes remain and retry succeeds. Raw
+selectors and missing-filename feedback are unchanged.
+
+Fresh bounded compilation reaches **6/9 administrator commands** (before: 5/9),
+retains **49/49 transitional commands**, and passes **79 support checks** among
+**108 distinct targets**. Only objpurge newly succeeds; the three remaining
+administrator diagnostics match fresh pre-adoption logs byte-for-byte, without
+regressions or timeouts. All seven compile controls and workspace/fixture
+formatting pass. The native test hook is restored; the other 1,546 library files,
+configuration, native implementation/CLI and original Lima stay unchanged.
+All 72 frozen audit artifacts match. Prior full-suite, complete inventory/boot,
+transport and upstream execution retain their scope. Adoption evidence:
+/tmp/lima-objpurge-port-20261010.
+
+Next: commit objpurge/README and adoption notes, then audit administrator shutdown.
+Keep the deferred snoop findings separate.
+
 #### Lima administrator objpurge-command audit
 
 Reviewed **10 October 2026**, after master/README were committed as Lima
@@ -3184,8 +3217,9 @@ unchanged. Prior full-suite, complete inventory/boot, transport and upstream
 execution retain their scope. Frozen proposal/evidence:
 /tmp/lima-objpurge-audit-20261010.
 
-Next: commit audit notes, adopt the exact dispatcher proposal and update README,
-then verify adopted source and refresh bounded command/dependency compilation.
+Audit notes are committed as **03283723**; the [objpurge
+adaptation](#lima-administrator-objpurge-command-adaptation) records adopted-source
+verification.
 Keep the deferred snoop findings separate.
 
 #### Lima administrator master-command adaptation
