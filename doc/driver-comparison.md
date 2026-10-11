@@ -3143,12 +3143,56 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard visibility-command audit
+
+Reviewed **11 October 2026**, after message commands/README were committed as
+Lima **f19264c4** on lpc-rs-port and adoption notes as native **c7a634b8** on
+lima-support. [Vis][lima-wizard-vis] and [invis][lima-wizard-invis] still fail
+first at dispatch_main. Recommend only protected varargs dispatchers calling
+their zero-argument main(), retaining private handlers and ignoring arguments,
+flags and incoming stdin. Rules, visibility/message modules and daemon remain.
+
+All **7 cases / 34 registered inputs** pass: six use temporary proposals, one
+checks unavailable originals. Visible/invisible flags and body descriptions,
+named actor/onlooker messages, room-only delivery, custom Unicode templates,
+repeated calls, files/pipes, ignored input and ordinary-player exclusion with
+wizard retry pass. Checked shell state, rearmed input and pager/modal ownership
+remain intact. Invis announces before hiding; vis makes the body visible before
+announcing, retaining the actor's name in both room messages. Repeated calls
+send no room action. The already-visible vis branch uses direct printf, so its
+message bypasses stdout and leaves redirected output empty; other status text
+uses stdout. Two expected home-output refusals retain existing command policy,
+direct messages and visibility changes; no unexpected caught input errors occur.
+
+Both commands' existing finger_d->update_me() call loads the real daemon and
+returns nil for its absent method without an error. Retain it; no daemon change
+is needed. All **12 compile controls** match: two original failures, two proposed
+successes and eight supporting successes, including the complete finger daemon.
+Workspace/fixture formatting and nineteen pinned original-Git-blob comparisons
+with active snapshots are recorded. Initial fixture corrections retain evidence;
+the two command proposals never changed. The final run reuses the Cargo-built
+unchanged Rust fixture after correcting its LPC helper.
+
+Distinct nil, preserved call-out players, existing options and 4,000 ms tasks
+remain. All 1,547 library files, README/configuration, CLI, native implementation
+and original Lima stay unchanged; the native hook is restored and all 222 frozen
+message-adoption artifacts match. Evidence: /tmp/lima-wizard-visibility-audit-20261011,
+with in-memory lpc-rs execution and bounded compilation. No visibility source is adopted;
+previous broader checks retain scope, with no new upstream-driver/full boot or
+physical transport execution.
+
+Next: commit audit notes, adopt the two dispatchers/README, then verify copied
+source and bounded command coverage. [Quiet][lima-wizard-quiet] is the next audit
+after adoption; retain its earlier nil adaptation and inspect M_ACTIONS behavior.
+Separate Lima/client/snoop findings retain scope.
+
 #### Lima wizard message-command adaptation
 
 Reviewed **11 October 2026**, after message-command audit notes were committed
 as native **3d3a21a9** on lima-support. The dedicated lpc-rs-port checkout over
-Lima **6bd520b7** now contains the three audited dispatchers and README update,
-pending commit. [Emotem][lima-wizard-emotem], [msg][lima-wizard-msg] and
+Lima **6bd520b7** contains the three audited dispatchers and README update,
+later committed as Lima **f19264c4**. [Emotem][lima-wizard-emotem],
+[msg][lima-wizard-msg] and
 [review][lima-wizard-review] match their frozen proposals exactly, preserving
 private handlers, rules, message modules and shared pipeline. Distinct nil,
 preserved call-out players, existing build options and 4,000 ms tasks remain.
@@ -3178,12 +3222,9 @@ eighteen pinned source comparisons and previous broader validation retain scope;
 no new upstream-driver, full boot/restart, service or physical transport execution
 is established.
 
-Next: commit commands/README and adoption notes, then audit
-[vis][lima-wizard-vis] and [invis][lima-wizard-invis]. Both unchanged commands and
-wizard rules match pinned original Git blobs and still stop first at dispatch_main.
-Check visibility/message ordering, repeated calls, room recipients, the existing
-finger-daemon call and shell state before adoption. Separate Lima/client/snoop
-findings retain scope.
+Commands/README are committed as Lima **f19264c4**, and adoption notes as native
+**c7a634b8**. The following visibility-command audit is recorded above. Separate
+Lima/client/snoop findings retain scope.
 
 #### Lima wizard message-command audit
 
@@ -17767,4 +17808,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/review.c
 [lima-wizard-vis]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/vis.c
 [lima-wizard-invis]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/invis.c
+[lima-wizard-quiet]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/quiet.c
 [lima-wizard-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
