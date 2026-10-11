@@ -3143,6 +3143,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator listeners adaptation
+
+Adopted and verified **10 October 2026**, following audit notes committed as
+native **6e4d978e**. The dedicated lpc-rs-port checkout at **07a85de0** now has
+three edits in the [listeners command][lima-listeners-command] and an updated
+README, ready to commit. Lima remains on distinct nil, preserved call-out players
+and 4,000 ms tasks.
+
+The protected dispatcher calls the existing main(arg); the all-channel map uses
+bare show_one_channel; display subtraction uses nil to omit destroyed references
+and literal nil. Stored channel membership stays unchanged. Existing flags,
+formatting, channel order, admin and unknown-channel feedback, command stdout and
+rules remain. The object-argument report keeps its unfinished placeholder. No
+native API, daemon policy or apply change is needed.
+
+All **7 runtime cases / 32 registered inputs** pass with no caught errors: four
+exercise the adopted command copied from the dedicated checkout, and three keep
+the audit's original controls. Named/all/quoted/empty channels, linked/link-dead/
+plain objects, flags, destroyed/nil omission, pipelines, exact redirected bytes,
+admin feedback, object arguments and rule rejection pass. All 14 membership
+snapshots retain stored contents and order; checked input/context/modal state
+stays stable. The fixture retains the audit's in-memory connections, controlled
+roles/channel data, optional HELP_D data and inactive IMUD startup. Full netdead
+and socket transport are outside its scope.
+
+Fresh bounded compilation reaches **2/9 administrator commands** (before: 1/9),
+retains **49/49 transitional commands**, and passes **75 support checks** among
+**108 distinct targets**. Only listeners newly succeeds; all seven remaining
+administrator failure diagnostics are byte-identical to the fresh pre-adoption
+checks. There are no regressions or timeouts. Workspace and fixture formatting
+pass. The temporary native hook is restored; native implementation/CLI, the
+other 1,546 library files, configuration and original Lima remain unchanged.
+Previous full-suite, complete inventory/boot and upstream execution retain their
+scope. Frozen audit evidence is unchanged; adoption records are in
+/tmp/lima-listeners-port-20261010.
+
+Next: commit the command/README and adaptation notes, then audit administrator
+addguest/removeguest and their guest-management dependency. Keep stale-target
+unsnoop and the converging-graph finding separate.
+
 #### Lima administrator listeners audit
 
 Audited **10 October 2026**, after native array set matching was committed as
@@ -3192,7 +3232,8 @@ prior scope. This audit needs no native API/apply change.
 Public command/rule bytes at the pinned upstream revision match the clean
 original checkout. Evidence is source review and lpc-rs execution, with frozen
 controls and the three-edit proposal in /tmp/lima-listeners-audit-20261010.
-Next: commit audit notes, then adopt and verify the one-file listeners adaptation.
+Audit notes are committed as **6e4d978e**; the verified adoption is recorded in
+the [listeners adaptation](#lima-administrator-listeners-adaptation).
 
 #### Lima array set matching correction
 
