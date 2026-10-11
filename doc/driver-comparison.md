@@ -3143,6 +3143,39 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator guest-command adaptation
+
+Adopted and verified **10 October 2026**, after audit notes were committed as
+native **830d4451**. Dedicated lpc-rs-port at **fca90f94** now has dispatcher-only
+edits in [addguest][lima-addguest-command] and [removeguest][lima-removeguest-command],
+plus a README update, ready to commit. Each dispatcher calls the existing private
+main(arg). Lima stays on distinct nil, preserved call-out players and 4,000 ms
+tasks; the guest daemon, rules and login configuration retain their behavior.
+
+All **8 cases / 55 registered inputs** pass: seven copy the adopted commands
+unchanged and one restores the original unavailable control. The two existing
+administrator-rejection errors are expected; there are no unexpected errors.
+Cold/empty lists, additions/removals, duplicates, case/order, Unicode, required
+rules, saved bytes, reload, whoguests, raw no_redirection suffixes and checked
+input/context/pager/modal state pass. The audit's in-memory connections,
+controlled roles, optional HELP_D data and inactive IMUD startup remain. Conditional
+NO_NEW_PLAYERS admission and socket transport are outside the fixture.
+
+Fresh bounded compilation reaches **4/9 administrator commands** (before: 2/9),
+retains **49/49 transitional commands**, and passes **77 support checks** among
+**108 distinct targets**. Only addguest/removeguest newly succeed; the five
+remaining administrator failure diagnostics are byte-identical to fresh
+pre-adoption checks. There are no regressions or timeouts. Workspace/fixture
+formatting pass; the native test hook is restored. The other 1,545 library files,
+configuration, native implementation/CLI and original Lima are unchanged. No
+native API or apply change is needed. Prior full-suite, complete inventory/boot
+and upstream execution retain their scope. Frozen audit evidence is unchanged;
+adoption records are in /tmp/lima-guest-commands-port-20261010.
+
+Next: commit both commands/README and adaptation notes, then audit the remaining
+administrator master command. Keep stale-target unsnoop and the converging-graph
+finding separate.
+
 #### Lima administrator guest-command audit
 
 Reviewed **10 October 2026**, after listeners source/README were committed as
@@ -3177,8 +3210,8 @@ clean original checkout. Prior full-suite, complete inventory/boot, socket and
 upstream execution results retain their scope. Proposals and frozen evidence:
 /tmp/lima-guest-commands-audit-20261010.
 
-Next: commit audit notes, then adopt both dispatchers and update the port README;
-verify the adopted commands through these routes and refresh bounded coverage.
+Audit notes are committed as **830d4451**; the [guest-command
+adaptation](#lima-administrator-guest-command-adaptation) records adopted-source verification.
 
 #### Lima administrator listeners adaptation
 
