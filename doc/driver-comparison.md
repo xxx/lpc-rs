@@ -3143,6 +3143,53 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard message-command audit
+
+Reviewed **11 October 2026**, after echo commands/README were committed as Lima
+**6bd520b7** and adoption notes as native **a6a890d6**. The dedicated lpc-rs-port
+checkout stays clean, with original Lima unchanged at eefaff66. Distinct nil,
+preserved call-out players, existing build options and 4,000 ms tasks remain.
+Recommend only protected variadic dispatchers for [emotem][lima-wizard-emotem],
+[msg][lima-wizard-msg] and [review][lima-wizard-review], preserving private handlers.
+Emotem receives raw input, msg receives parsed arguments, and review also receives
+flags. All three compile without further source edits; the proposal applies
+cleanly and no source is adopted.
+
+All **10 cases / 60 registered inputs** pass: nine use temporary proposals and
+one checks all three unavailable originals. Real users/bodies, wizard/player
+shells, CMD/stdio, rules, filesystem and message/grammar modules verify actor
+prefixing, room/target/onlooker views, self-targeting, body/carried/room lookup,
+missing-target fallback, raw Unicode quotes, message updates and variant arrays,
+default restoration, own/other review, flags, rule rejection and stdout/pipelines.
+State, rearmed input and pager/modal ownership remain intact. One expected home
+write denial follows emotem delivery under existing command privilege; there are
+no unexpected caught input errors.
+
+Existing [message storage][lima-messages] makes msg clear remove an override:
+stock defaults become visible again, while a custom type disappears. Review
+renders every variant, uses the actor view for oneself and the onlooker view for
+other bodies, and does not deliver to the inspected user. Its -d flag exposes
+templates; accepted -c is unused. The raw template display removes the last
+character even without a newline, retaining the pinned source's behavior.
+[Punctuation][lima-message-grammar] leaves a closing quote unpunctuated. Emotem
+sends directly, leaving permitted redirected stdout empty and ignoring stdin;
+msg and review use normal buffered output. Preserve these behaviors here.
+
+All **13 compile controls** and workspace/fixture formatting pass. Eighteen
+original files match pinned local Git blobs, with public revision URLs, active
+snapshots and the port's pipeline retained. Fixture execution uses in-memory
+connections and a no-transport IMUD stub. Initial formatting/rejection expectation
+corrections remain evidence; all dispatcher proposals are unchanged. Native hook
+restored; all 1,547 library files, README/config, CLI and native implementation
+stay unchanged. All 225 frozen echo-adoption artifacts match. No new native API,
+apply, unrelated Lima bug fix, upstream-driver execution, full boot/restart,
+service or physical transport coverage is established. Evidence:
+/tmp/lima-wizard-messages-audit-20261011.
+
+Next: commit audit notes, adopt the three dispatchers and README, then verify
+copied source and bounded wizard-command coverage. Preceding broader validation
+and separate Lima/client/snoop findings retain scope.
+
 #### Lima wizard echo-command adaptation
 
 Reviewed **11 October 2026**, after the echo audit notes were committed as native
@@ -3181,12 +3228,8 @@ validation retain scope; no new upstream-driver, full boot/restart, service or
 physical transport execution is established. Evidence:
 /tmp/lima-echo-port-20261011. No native API or unrelated Lima bug fix is needed.
 
-Next: audit
-[emotem][lima-wizard-emotem], [msg][lima-wizard-msg] and
-[review][lima-wizard-review] through the existing message modules and
-[wizard rules][lima-wizard-command-rules]. Their unchanged sources match the
-pinned original Git blobs and still stop first at dispatch_main; later diagnostics
-remain unestablished until adapters are tested. Existing Lima/client/snoop findings
+Adoption notes are committed as native **a6a890d6**; the subsequent
+emotem/msg/review audit is recorded above. Existing Lima/client/snoop findings
 retain their separate scopes.
 
 #### Lima wizard echo-command audit
