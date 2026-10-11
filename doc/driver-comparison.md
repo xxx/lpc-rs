@@ -3143,12 +3143,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard lightme-command audit
+
+Reviewed **11 October 2026**, after quiet/README were committed as Lima
+**13cf856f** on lpc-rs-port and their adoption notes as native **2b0af7a0** on
+lima-support. [Lightme][lima-wizard-lightme] still fails first at dispatch_main.
+Recommend only the established protected varargs adapter calling main(arg),
+retaining its private handler, [numeric rule][lima-wizard-command-rules],
+[light setter][lima-object-light], [container][lima-container] and
+[room propagation][lima-base-room]. No native API or unrelated Lima fix is needed.
+
+All **8 cases / 38 registered inputs** pass with the temporary proposal and
+unavailable-original control. Absolute positive/negative/zero light and repeats,
+room transitions and recipients, carried light, movement, numeric parsing,
+rejections, ignored stdin, files/pipes and player-shell exclusion with wizard
+retry retain checked state, rearmed input and pager/modal ownership. Room totals
+crossing below one announce darkness; crossing back announces visibility. Those
+messages stay direct and precede stdout status, including redirected status.
+
+The existing setter assigns total body light, including visible inventory light.
+With a carried emitter at three, lightme 0 sets body light to zero but retains
+cached contained light three; moving the emitter out leaves body light minus
+three. Retain this characterized source behavior. The numeric rule's sscanf %d
+also retains integer-prefix parsing: 3tail and 1.5 become integers 3 and 1. This
+is unchanged command parsing, not new native numeric coercion.
+
+The sole expected home-output refusal preserves existing privileges, direct
+room messages and changed light; there are no unexpected caught input errors.
+All **11 compile controls** match: original failure, proposed command, an OBJ
+emitter and eight complete supports, including body, container and base room.
+Workspace/fixture formatting passes. Sixteen pinned original-Git-blob comparisons
+and active snapshots are recorded.
+
+Distinct nil, preserved call-out players, existing options and 4,000 ms tasks
+remain. All 1,547 library files, README/configuration, CLI, native implementation
+and original Lima stay unchanged; the native hook is restored and all 217 frozen
+quiet-adoption artifacts match. Evidence: /tmp/lima-wizard-lightme-audit-20261011,
+with in-memory lpc-rs execution and bounded compilation. No lightme source is
+adopted; previous broader checks retain scope, with no new upstream-driver,
+full boot/restart, service or physical transport run.
+
+Next: commit audit notes, adopt the exact lightme adapter and README note, then
+verify copied source and bounded command compilation. Separate Lima/client/snoop
+findings retain scope.
+
 #### Lima wizard quiet-command adaptation
 
 Reviewed **11 October 2026**, after quiet audit notes were committed as native
 **4c1f6177** on lima-support. The dedicated lpc-rs-port checkout over Lima
 **031c3e63** contains the exact audited [quiet][lima-wizard-quiet] dispatcher and
-README note, pending commit. The adapter calls main(arg); its private handler,
+README note, later committed as Lima **13cf856f**. The adapter calls main(arg);
+its private handler,
 [object rule][lima-wizard-command-rules] and [action module][lima-follow-actions]
 remain unchanged, including the earlier nil adaptation.
 
@@ -3176,9 +3221,9 @@ previous broader validation. Evidence: /tmp/lima-wizard-quiet-port-20261011,
 with copied-source in-memory lpc-rs execution and bounded compilation. No new
 upstream-driver, full boot/restart, service or physical transport run is established.
 
-Next: commit command/README and adoption notes, then audit lightme through its
-numeric rule and body/room light propagation. Separate Lima/client/snoop findings
-retain scope.
+Adoption notes are committed as native **2b0af7a0**; the lightme audit above
+continues through its numeric rule and body/room light propagation. Separate
+Lima/client/snoop findings retain scope.
 
 #### Lima wizard quiet-command audit
 
@@ -17923,3 +17968,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-invis]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/invis.c
 [lima-wizard-quiet]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/quiet.c
 [lima-wizard-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
+[lima-wizard-lightme]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/lightme.c
