@@ -3143,6 +3143,39 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator master-command adaptation
+
+Adopted and verified **10 October 2026**, after audit notes were committed as
+native **023f6de5**. Dedicated lpc-rs-port at **03b82556** now has the exact
+[master-command][lima-master-command] dispatcher/local-variable proposal and a
+README update, ready to commit. The earlier queued in-place update behavior,
+status mapping keys, master policy and native APIs remain unchanged. Lima stays
+on distinct nil, preserved call-out players and 4,000 ms tasks.
+
+All **8 cases / 47 registered inputs** pass without caught input errors: seven
+leave the copied adopted command unchanged and one restores the unavailable
+control. Six updates succeed; three expected compilation, initializer and
+role-change failures preserve the old master. Master/simul identity, compatible
+state, create count, queued/succeeded/failed reports, canonical/unknown IDs,
+retry, exact redirected bytes, pipes and checked shell/input/pager/modal state
+pass. The audit's in-memory connections, controlled roles, optional HELP_D data
+and inactive IMUD startup remain; committed updates use the production executor,
+awaited explicitly by the fixture.
+
+Fresh bounded compilation reaches **5/9 administrator commands** (before: 4/9),
+retains **49/49 transitional commands**, and passes **78 support checks** among
+**108 distinct targets**. Only master newly succeeds; four remaining administrator
+failure logs match fresh pre-adoption diagnostics byte-for-byte, with no
+regressions or timeouts. All seven compile controls and workspace/fixture
+formatting pass. The native test hook is restored. The other 1,546 library files,
+configuration, native implementation/CLI and original Lima remain unchanged;
+all 80 frozen audit artifacts match. No native API or apply change is needed.
+Prior full-suite, complete inventory/boot, transport and upstream execution
+retain their scope. Adoption evidence: /tmp/lima-master-command-port-20261010.
+
+Next: commit master/README and adoption notes, then audit administrator objpurge.
+Keep the deferred snoop findings separate.
+
 #### Lima administrator master-command audit
 
 Reviewed **10 October 2026**, after guest commands/README were committed as
@@ -3182,9 +3215,9 @@ execution retain their scope; this fixture does not exercise the running-status
 branch or status-history eviction. Frozen evidence and proposal:
 /tmp/lima-master-command-audit-20261010.
 
-Next: commit audit notes, then adopt and verify the two-edit command proposal and
-update the dedicated README. Audit administrator objpurge after that adoption.
-Keep the deferred snoop findings separate.
+Audit notes are committed as **023f6de5**; the [master-command
+adaptation](#lima-administrator-master-command-adaptation) records adopted-source
+verification. Keep the deferred snoop findings separate.
 
 #### Lima administrator guest-command adaptation
 
