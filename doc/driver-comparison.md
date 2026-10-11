@@ -3143,6 +3143,61 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard print/null-command audit
+
+Reviewed **11 October 2026**, after heal/README were committed as Lima
+**47bf6de2** on lpc-rs-port and adoption notes as native **7be0194e** on
+lima-support. [Print][lima-wizard-print] and [null][lima-wizard-null] fail first
+at dispatch_main. Recommend the established protected varargs adapters calling
+main(arg, flags, stdin) for print and main() for null. Keep both private handlers,
+[command rules][lima-wizard-command-rules], [CMD/stdio][lima-command-stdio],
+[command parsing][lima-command-daemon] and [wizard shell][lima-wizard-shell].
+Print has no dedicated rule; null accepts one optional string.
+
+All **10 cases / 57 registered inputs** are verified with temporary proposals
+and the unavailable-original control. Print retains raw spacing and quote characters,
+appends a newline to text, and prefers stdin even when empty. File and pipe stdin
+retain their bytes, including unterminated input. Overwrite, append and chained
+pipes have exact contents without leaking redirected text to the actor. Null
+ignores its optional argument and incoming input, emits nothing and passes empty
+output to the next pipeline stage. Extra arguments retain the rule's refusal.
+Actual aliases and first-use backtick arithmetic, current-player lookup and
+integer-zero evaluation reach print. Repeated evaluation instead fails while
+exec_code destructs its previous privilege-1 temporary object; wish catches the
+permission refusal and produces no output, before print dispatch. A direct reuse
+control confirms destruct: permission denied. Keep this evaluation teardown
+finding separate from the two command adapters; preserve existing permission
+policy. Alias definition requires escaped backticks; unalias before redefining
+the shipped @ xverb avoids its existing duplicate-entry behavior. The @ template
+wraps its entire remainder into the expression, so use explicit print backticks
+for redirection. Verification combines nine complete-run successes with one
+focused corrected zero case; the other nine bodies and all helpers/proposals
+remain unchanged. Failed snapshots and diagnostic results are retained.
+
+Bare print without text or stdin has no usage guard and attempts nil + a newline,
+raising the checked type error. Keep this missing-argument source issue separate
+from the dispatcher port. Invalid input/output routes, shell recovery and
+player-shell exclusion retain checked state/input/modal ownership. Two expected
+home-output refusals preserve the existing policy. Together with bare print,
+these are the three expected caught input errors; the separate internal repeat-
+evaluation refusal is also expected. No unexpected caught input errors occur.
+
+All **12 compile controls** match: two original failures, both proposals and
+eight complete supports. Workspace/fixture formatting passes. Sixteen pinned
+original-Git-blob comparisons and the existing port's pipeline module are
+reviewed. All 1,547 library files, README/configuration, CLI, native implementation
+and original Lima remain unchanged; the hook is restored and all 209 frozen
+heal-adoption artifacts match. Evidence: /tmp/lima-wizard-print-null-audit-20261011,
+using in-memory lpc-rs execution and bounded compilation. Distinct nil, preserved
+call-out players and 4,000 ms tasks remain. Alias restore, long interactive paging,
+upstream execution and full boot/service/physical transport were not rerun.
+Previous 27/81 wizard and broader checks retain scope.
+
+Next: commit audit notes, adopt the two tested adapters and a README note, then
+verify copied source and bounded command compilation. Then review exec_code
+temporary-object cleanup with existing permission policy. Other findings retain
+scope.
+
 #### Lima wizard heal-command adaptation
 
 Reviewed **11 October 2026**, after audit notes were committed as native
@@ -3179,8 +3234,9 @@ lpc-rs execution and bounded compilation. Injury provisioning and private health
 access remain fixture helpers; complete combat/death/reincarnation, other health
 styles, upstream execution, full boot/services and physical transport were not
 rerun. Distinct nil, preserved call-out players and 4,000 ms tasks remain.
-Command/README are committed as Lima **47bf6de2**. Next: audit the small wizard
-print and null commands through text/stdin dispatch and command IO.
+Command/README are committed as Lima **47bf6de2**, with adoption notes
+**7be0194e**. The print/null audit above continues through text/stdin dispatch
+and command IO.
 
 #### Lima wizard heal-command audit
 
@@ -18090,3 +18146,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
 [lima-wizard-lightme]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/lightme.c
 [lima-wizard-heal]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/heal.c
+[lima-wizard-print]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/print.c
+[lima-wizard-null]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/null.c
