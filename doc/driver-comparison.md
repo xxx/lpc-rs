@@ -3143,12 +3143,59 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator wall-command audit
+
+Reviewed **10 October 2026**, after shutdown/master/README were committed as
+Lima **f7a66cb3** and adoption notes as native **2e214a68**. The dedicated
+lpc-rs-port checkout is clean at baseline. Recommend only the protected
+`dispatch_main` adapter calling existing private `main(arg)` in
+[wall][lima-wall-command]. Preserve `no_redirection`, privilege checking,
+punctuation, logging and direct `tell(users(), ..., MSG_INDENT)` delivery.
+No source is adopted by this audit; no rule, master policy, simul or native
+API change is needed. Lima stays on distinct nil, preserved call-out players
+and 4,000 ms tasks.
+
+All **9 cases / 43 registered inputs** pass: eight proposal cases and the
+current unavailable-command control. Actual user/body/wish/CMD, master,
+security daemon and simuls use in-memory connections, controlled roles,
+optional HELP_D data and inactive IMUD startup. Eighteen broadcasts are
+logged and delivered to the sender and a second attached user, including an
+ordinary recipient and one without a live body or shell. Exact logged text,
+sender name and timestamp shape, default rendered bytes and recipient-specific
+wrapping pass. Empty/whitespace input shows usage without logging or broadcasting.
+Two caught errors are expected for wizard and ordinary roles; no broadcast/log
+occurs, checked shell/input state remains usable and administrator retry succeeds.
+
+The command keeps raw message text: quotes, repeated spaces, option-looking
+words and the existing punctuation/URL rules remain. Output redirects, append
+redirects, incoming-file syntax and outgoing pipe suffixes are literal message
+text; they neither touch named files nor execute the suffix command. Earlier
+incoming pipeline text is ignored and does not fill an empty message. This
+uses the adopted shell's existing no-redirection behavior. Recipient formatting
+may add indentation or wrap independently of the logged text; the raw log and
+rendered output are checked separately. The exploratory fixture's indentation
+expectation and unavailable `echo` input command were corrected, using `pwd`
+for incoming pipeline data. The proposed command stayed unchanged.
+
+All **9 bounded compile controls**, workspace/fixture formatting and seven
+pinned public source comparisons pass. Upstream source is reviewed rather than
+newly executed. The native test hook is restored; all 1,547 library files,
+README/config, native implementation/CLI, original Lima and 195 predecessor
+artifacts remain unchanged. Prior full-suite, complete inventory/boot,
+transport and upstream execution retain scope. Frozen proposal/evidence:
+/tmp/lima-wall-audit-20261010.
+
+Next: commit audit notes, adopt the exact wall dispatcher and README, and
+verify adopted source and bounded command coverage. Telnet command/client
+integration remains afterward; existing Lima and deferred snoop findings stay
+separate.
+
 #### Lima administrator shutdown-command adaptation
 
 Adopted and verified **10 October 2026**, after audit notes were committed as
-native **e0c88ec8**. Dedicated lpc-rs-port at **a7fda68f** has the exact
-[shutdown][lima-shutdown-command] dispatcher/callback proposal, the
-`valid_shutdown` hook added to its master and README update, ready to commit.
+native **e0c88ec8**. The exact [shutdown][lima-shutdown-command]
+dispatcher/callback proposal, master `valid_shutdown` hook and README are
+committed as Lima **f7a66cb3**; adoption notes are native **2e214a68**.
 The existing privileged simul, Cmd_rules and native API/apply contracts stay unchanged.
 Lima stays on distinct nil, preserved call-out players and 4,000 ms tasks.
 
@@ -3178,9 +3225,9 @@ audit artifacts match. Prior full-suite, complete inventory/boot, transport and
 upstream execution retain scope. Adoption evidence:
 /tmp/lima-shutdown-port-20261010.
 
-Next: commit shutdown/master/README and adoption notes, then audit administrator
-wall. Telnet command/client integration remains afterward. Keep existing Lima
-and deferred snoop findings separate.
+Both commits are complete; the wall audit is above. Telnet command/client
+integration remains afterward. Keep existing Lima and deferred snoop findings
+separate.
 
 #### Lima administrator shutdown-command audit
 
@@ -17350,3 +17397,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-master-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/master.c
 [lima-objpurge-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/objpurge.c
 [lima-shutdown-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/shutdown.c
+[lima-wall-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/wall.c
