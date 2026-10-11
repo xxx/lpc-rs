@@ -3143,12 +3143,60 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard heal-command audit
+
+Reviewed **11 October 2026**, after lightme/README were committed as Lima
+**05d8d540** on lpc-rs-port and adoption notes as native **d92e817b** on
+lima-support. [Heal][lima-wizard-heal] still fails first at dispatch_main.
+Recommend the established protected varargs adapter calling main(arg), plus
+explicit parentheses around the negated assignment: !(target = find_body(arg)).
+The dispatch-only proposal fails type checking because !target is the assignment
+target. Retain the remaining private handler, raw-string command parsing,
+[connected-player lookup][lima-speaker-context], [limb health][lima-health-limbs] and action messages.
+The configured [health style][lima-combat-config] remains HEALTH_LIMBS with
+LIMB_SHIELDS undefined; other health styles are not executed by this audit.
+
+All **7 cases / 35 registered inputs** pass with the temporary proposal and
+unavailable-original control. Omitted arguments, me, myself and own account heal
+self; account, lower-case display name and nickname resolve other connected
+bodies locally or remotely. All enabled/disabled limbs reach their maxima,
+drunkenness clears and reflex points refill; limb metadata and abuse remain.
+Healthy repeats still announce the action. Actual target health and actor/target/
+onlooker messages are checked; a remote target receives its direct message,
+while observers in the target's remote room do not receive the actor-room action.
+
+Names retain case-sensitive/raw-string matching, including quoted and extra-word
+refusals. Bodyless or detached users are excluded by default; the separate
+including-linkdead lookup still finds the detached user's body. Messages and
+refusals remain direct, leaving redirected files/pipes empty. Stdin does not
+supply a target. Ordinary player-shell exclusion and wizard retry preserve checked
+state/input/modal ownership. The sole expected home-output refusal retains policy,
+delivered action and changed health; no unexpected caught input errors occur.
+
+All **13 compile controls** match: original and dispatch-only failures, corrected
+proposal, nine complete supports and the expected standalone limb-module failure.
+Complete body, human race, body daemon and nickname compile; the limb module needs
+sibling definitions and has identical diagnostics in both control runs.
+Formatting passes. Seventeen pinned original-Git-blob comparisons are recorded.
+All 1,547 library files, README/configuration, CLI, native implementation and
+original Lima stay unchanged; the native hook is restored and all 202 frozen
+lightme-adoption artifacts match. Evidence: /tmp/lima-wizard-heal-audit-20261011,
+using in-memory lpc-rs execution and bounded compilation. Injury provisioning
+and state access are fixture helpers; no complete combat/death/reincarnation,
+other-health-style, upstream-driver, boot/service or physical transport run is
+established. Previous 26/81 wizard and broader checks retain scope.
+
+Next: commit audit notes, adopt the tested heal proposal and README note, then
+verify copied source and bounded command compilation. Separate Lima/client/snoop
+findings retain scope.
+
 #### Lima wizard lightme-command adaptation
 
 Reviewed **11 October 2026**, after audit notes were committed as native
 **1b1713ad** on lima-support. The dedicated lpc-rs-port checkout over Lima
 **13cf856f** contains the exact audited [lightme][lima-wizard-lightme] dispatcher
-and README note, pending commit. It calls main(arg), retaining the private handler,
+and README note, later committed as Lima **05d8d540**. It calls main(arg),
+retaining the private handler,
 [numeric rule][lima-wizard-command-rules], [light setter][lima-object-light],
 [container][lima-container] and [room propagation][lima-base-room].
 
@@ -3172,7 +3220,7 @@ artifacts match. Sixteen audit source comparisons and preceding broader checks
 retain scope. Evidence: /tmp/lima-wizard-lightme-port-20261011, using copied-source
 in-memory lpc-rs execution and bounded compilation.
 
-Next: commit lightme/README and adoption notes, then audit the wizard heal command
+Adoption notes are committed as native **d92e817b**; the heal audit above continues
 through body lookup, healing and action messages. Separate Lima/client/snoop
 findings and previous upstream/full boot/service/physical transport evidence
 retain scope.
@@ -18002,3 +18050,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-quiet]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/quiet.c
 [lima-wizard-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
 [lima-wizard-lightme]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/lightme.c
+[lima-wizard-heal]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/heal.c
