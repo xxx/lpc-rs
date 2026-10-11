@@ -3143,13 +3143,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator master-command audit
+
+Reviewed **10 October 2026**, after guest commands/README were committed as
+Lima **03b82556** and adoption notes as native **738d2419**. Both checkouts were
+clean at baseline. Lima remains on distinct nil, preserved call-out players and
+4,000 ms tasks. Recommend adding the protected `dispatch_main` wrapper to the
+[master command][lima-master-command] and renaming its local `error` variable to
+`problem`. The compatibility header's object-like `error` macro otherwise turns that
+identifier into the reserved `throw` keyword. Keep the status mapping's `"error"` key.
+No source is adopted by this audit and no native API or master-policy change is needed.
+
+The dedicated command already adapts upstream destruct/load to queued in-place
+master updates. Preserve that adaptation: `master` queues a request, and
+`master <request-id>` reports its later status. Compatible state and identity remain;
+`create()` does not rerun. The macro collision is in the earlier port adaptation,
+rather than the original Lima command.
+
+All **8 cases / 47 registered inputs** pass without caught input errors: seven
+proposal cases and one unavailable-command control. Actual user/body/wish/CMD,
+master and simuls use in-memory connections, controlled roles, optional HELP_D
+data and inactive IMUD startup. Committed requests run through the native update
+executor, awaited explicitly by the fixture. Six updates succeed; three expected
+failures cover compilation, initialization and a role change before preparation.
+Old master state/code remain usable after failure, retry succeeds, and successful
+updates keep identity, compatible state, create count and the simul object.
+Queued/succeeded/failed reports, canonical positive decimal IDs, unknown IDs,
+ordinary role feedback, exact redirected output, pipes and checked input/context/
+pager/modal state pass. Incoming stdin does not supply a request ID.
+
+All **7 bounded compile controls** match: current missing-dispatch failure,
+dispatcher-only macro failure, complete proposal, resident master, simuls, command
+daemon and wish. Workspace/fixture formatting pass. Two pinned public source
+responses match clean original Lima. The native test hook is restored; all 1,547
+library files, README/config, native implementation/CLI and original Lima remain
+unchanged. Prior full-suite, complete inventory/boot, transport and upstream
+execution retain their scope; this fixture does not exercise the running-status
+branch or status-history eviction. Frozen evidence and proposal:
+/tmp/lima-master-command-audit-20261010.
+
+Next: commit audit notes, then adopt and verify the two-edit command proposal and
+update the dedicated README. Audit administrator objpurge after that adoption.
+Keep the deferred snoop findings separate.
+
 #### Lima administrator guest-command adaptation
 
 Adopted and verified **10 October 2026**, after audit notes were committed as
-native **830d4451**. Dedicated lpc-rs-port at **fca90f94** now has dispatcher-only
-edits in [addguest][lima-addguest-command] and [removeguest][lima-removeguest-command],
-plus a README update, ready to commit. Each dispatcher calls the existing private
-main(arg). Lima stays on distinct nil, preserved call-out players and 4,000 ms
+native **830d4451**. Dispatcher-only edits in [addguest][lima-addguest-command] and
+[removeguest][lima-removeguest-command], plus the README update, are committed as
+Lima **03b82556**; adoption notes are committed as native **738d2419**.
+Each dispatcher calls the existing private main(arg). Lima stays on distinct nil,
+preserved call-out players and 4,000 ms
 tasks; the guest daemon, rules and login configuration retain their behavior.
 
 All **8 cases / 55 registered inputs** pass: seven copy the adopted commands
@@ -3172,9 +3216,8 @@ native API or apply change is needed. Prior full-suite, complete inventory/boot
 and upstream execution retain their scope. Frozen audit evidence is unchanged;
 adoption records are in /tmp/lima-guest-commands-port-20261010.
 
-Next: commit both commands/README and adaptation notes, then audit the remaining
-administrator master command. Keep stale-target unsnoop and the converging-graph
-finding separate.
+The [master-command audit](#lima-administrator-master-command-audit) follows this
+adoption. Keep stale-target unsnoop and the converging-graph finding separate.
 
 #### Lima administrator guest-command audit
 
@@ -17096,3 +17139,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-removeguest-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/removeguest.c
 [lima-listeners-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/listeners.c
 [lima-admin-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/Cmd_rules
+[lima-master-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/master.c
