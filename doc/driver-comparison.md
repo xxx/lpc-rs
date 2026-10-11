@@ -3143,6 +3143,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard message-command adaptation
+
+Reviewed **11 October 2026**, after message-command audit notes were committed
+as native **3d3a21a9** on lima-support. The dedicated lpc-rs-port checkout over
+Lima **6bd520b7** now contains the three audited dispatchers and README update,
+pending commit. [Emotem][lima-wizard-emotem], [msg][lima-wizard-msg] and
+[review][lima-wizard-review] match their frozen proposals exactly, preserving
+private handlers, rules, message modules and shared pipeline. Distinct nil,
+preserved call-out players, existing build options and 4,000 ms tasks remain.
+
+All **10 cases / 60 registered inputs** pass again: nine copy adopted commands
+directly from the checkout, and one restores the three unavailable originals.
+Every audited action/assertion and LPC helper is retained. Emote recipients and
+views, target lookup, message storage/variants, clear/default restoration,
+own/other review and flags, rejection, IO, ordinary-player exclusion and wizard
+retry pass with checked state, rearmed input and pager/modal ownership preserved.
+The sole expected home-output denial retains existing command privileges;
+there are no unexpected caught input errors. The source behaviors recorded in
+the audit below remain, including raw-template display and unused review -c.
+
+Fresh compilation across **146 distinct targets** reaches **22/81 wizard
+commands**, retaining **49/49 transitional**, **9/9 administrator** and seven
+complete supporting successes. Only the three message commands newly succeed
+against the frozen echo-adoption coverage; no regressions, timeouts or abnormal
+exits occur. All **13 compile controls** and workspace/fixture formatting pass.
+Other 1,544 library files, configuration, CLI, native implementation and original
+Lima remain unchanged; the temporary native hook is restored. All 152 frozen
+audit artifacts match. No native API or unrelated Lima bug fix is needed.
+
+Evidence: /tmp/lima-wizard-messages-port-20261011, with copied-source lpc-rs
+execution using in-memory connections and bounded compilation. The audit's
+eighteen pinned source comparisons and previous broader validation retain scope;
+no new upstream-driver, full boot/restart, service or physical transport execution
+is established.
+
+Next: commit commands/README and adoption notes, then audit
+[vis][lima-wizard-vis] and [invis][lima-wizard-invis]. Both unchanged commands and
+wizard rules match pinned original Git blobs and still stop first at dispatch_main.
+Check visibility/message ordering, repeated calls, room recipients, the existing
+finger-daemon call and shell state before adoption. Separate Lima/client/snoop
+findings retain scope.
+
 #### Lima wizard message-command audit
 
 Reviewed **11 October 2026**, after echo commands/README were committed as Lima
@@ -3186,9 +3228,9 @@ apply, unrelated Lima bug fix, upstream-driver execution, full boot/restart,
 service or physical transport coverage is established. Evidence:
 /tmp/lima-wizard-messages-audit-20261011.
 
-Next: commit audit notes, adopt the three dispatchers and README, then verify
-copied source and bounded wizard-command coverage. Preceding broader validation
-and separate Lima/client/snoop findings retain scope.
+Audit notes are committed as native **3d3a21a9**; adoption and copied-source
+verification are recorded above. Preceding broader validation and separate
+Lima/client/snoop findings retain scope.
 
 #### Lima wizard echo-command adaptation
 
@@ -17723,4 +17765,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-emotem]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/emotem.c
 [lima-wizard-msg]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/msg.c
 [lima-wizard-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/review.c
+[lima-wizard-vis]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/vis.c
+[lima-wizard-invis]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/invis.c
 [lima-wizard-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
