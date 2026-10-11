@@ -3143,6 +3143,54 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator snoops audit
+
+Audited **10 October 2026** against dedicated lpc-rs-port **3a9409ee**, after
+native unsnoop adaptation notes **527fcefe**. The [administrator inspector]
+[lima-snoops-command] needs a protected dispatcher calling its zero-argument
+private handler. The [daemon][lima-entry-snoop] authorizes /trans/cmds/snoops,
+although the command lives at /trans/admincmds/snoops. With only the dispatcher,
+an active subscription incorrectly reports “Nobody is being snooped.” The frozen
+proposal corrects that existing source-path mismatch while retaining the caller
+check and command's admin-only behavior.
+
+The inspector's intended destroyed-target pruning needs a live-object filter:
+`filter(raw_data[snoop_ob], objectp)`. Both integer-zero subtraction and a tried
+nil subtraction leave stored dead object references; formatting then fails in
+capitalize. The final proposal filters them before the existing explicit mapping
+closure and ascending sorts. It preserves names, rows, trailing-argument behavior
+and stdout buffering. The touched pruning comment becomes one sentence.
+
+All **6 runtime cases / 37 registered inputs / 5 native starts** pass, including
+the expected formatting-error control. Actual master/simuls/user/body/wish/CMD,
+daemon and relay execute with in-memory connections. Checks cover unavailable
+command recovery, false empty output with the original path, empty/sorted/shared
+subscriptions, pipeline filtering, exact redirection, named/all removal, existing
+admin-only feedback and filtered destroyed-target output. Input rearms and checked
+shell/context/modal state remains stable. Temporary helpers seed roles, inspect
+state and add/destruct one disposable target; IMUD startup and HELP_D data are
+controlled. This is not full quit/netdead or socket transport execution.
+
+The artificial stale target also exposes a separate cleanup failure in unsnoop.
+Source review finds array subtraction uses raw stored equality, unlike scalar
+comparison and member_array's transaction-aware equality. This is recorded for
+a focused native audit; the inspector filter does not repair daemon cleanup.
+Normal real-body departure retained its preceding successful validation. Earlier
+fixture failures (explicit native destruction rejected by valid_override, display
+spacing) and the nil-subtraction and stale-cleanup failures remain in the evidence.
+
+All **16 compile controls** match: 15 successes and one expected missing-dispatcher
+failure. Warning-free locked workspace Clippy across all targets/features,
+workspace formatting and retained fixture formatting pass. No proposal is adopted:
+all 1,547 library files, README/config, original Lima and native implementation/CLI
+remain unchanged; the temporary test hook is restored. The preceding 49/49
+transitional inventory and full-suite/boot/upstream results retain their scope.
+Evidence: /tmp/lima-snoops-audit-20261010.
+
+Next: commit these audit notes, then adopt and verify the inspector dispatcher,
+correct daemon path and live-object filter. Audit stored-reference equality in
+native array subtraction separately before continuing to the next admin command.
+
 #### Lima wizard unsnoop adaptation
 
 Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following
@@ -3181,10 +3229,10 @@ files, configuration, original Lima and native implementation/CLI remain unchang
 No new full native suite, whole-library inventory/boot or upstream-driver execution
 is claimed. Evidence: /tmp/lima-unsnoop-port-20261010.
 
-Next: commit command/daemon/README and adaptation notes. Transitional commands
-are all compiling; audit the administrator `snoops` inspector next, including its
-existing daemon authorization-path mismatch. The converging-graph cycle finding
-remains a separate source note.
+Committed as Lima **3a9409ee** and native **527fcefe**. Transitional commands
+are all compiling; the administrator inspector audit above records its dispatcher,
+existing daemon path mismatch and destroyed-target filtering proposal. The
+converging-graph cycle finding remains a separate source note.
 
 #### Lima wizard unsnoop and cleanup audit
 
@@ -16727,3 +16775,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-dbx-error-config]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/resources/oldconfig.lima#L152-L155
 [fl-dbxframe-trace]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/vm/internal/trace.cc#L174-L330
 [fl-dbxframe-efun]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/trace.cc#L5-L7
+
+[lima-snoops-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/snoops.c
