@@ -3143,13 +3143,67 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima compile inventory after command migrations
+
+Reviewed **10 October 2026**, after telnet command/client/README were committed
+as Lima **78f88c16** on lpc-rs-port; adoption notes are native **d092f8f9** on
+lima-support. All **1,180 existing .c sources** in the committed dedicated
+checkout were checked: **690 compile and 490 fail**, in **211.606 seconds**,
+with no timeouts, crashes or abnormal exits. The 1,547-file library, README,
+configuration and compiler binary stay unchanged during this sweep.
+Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+
+The identical target set from 8 October yields **59 new successes and no
+regressions**: pwd, 47 transitional commands, nine administrator commands,
+dataedit and the telnet client. Since that checkpoint, 64 source files and the
+compiler binary changed; these are cumulative results. Still-failing sources
+retain their previous first-error lines.
+
+| Command family | Compile | Fail | First failure is dispatch_main |
+| --- | ---: | ---: | ---: |
+| Player | 65 | 2 | 2 |
+| Wizard | 15 | 66 | 66 |
+| Guild | 0 | 4 | 4 |
+| Transitional | 49 | 0 | 0 |
+| Transitional administrator | 9 | 0 | 0 |
+
+All 90 verbs and the complete master, simuls, user, body, shells, IMUD, IMAIL,
+HTTP, FTP and RST compile. The two player exclusions remain deferred random2 and
+upstream-disabled suicide. **81 checks** stop first at dispatch_main, including
+partial/base compositions, so that count does not describe usable commands.
+**166 failures** start outside their target; containing-object requirements and
+earlier inherited failures can hide later diagnostics. Other recurring typing
+and preprocessing errors remain port leads rather than proof of missing native
+APIs or upstream bugs. trans/obj/config_editor.c is the remaining transitional
+source failure; its typed returns/zeros need review when selected.
+
+Recommend auditing [echo][lima-wizard-echo], [echoall][lima-wizard-echoall],
+[echoto][lima-wizard-echoto] and [echom][lima-wizard-echom] with their
+[wizard rules][lima-wizard-command-rules]. Their pinned sources were read;
+all four stop first at dispatch_main. Preserve raw/structured argument shapes
+and check room/world/target delivery, stdout/direct routing, message formatting,
+role access and subsequent input before adopting protected dispatchers.
+Source review does not establish functional or upstream-driver behavior.
+
+Checks use at most two CLI processes with two Tokio workers, 4 GiB and 40-second
+limits; --check retains normal simul initialization and does not run target
+constructors. No full driver or service is started. No source is adopted;
+native implementation/CLI, original Lima and the clean dedicated checkout
+remain unchanged. All 200 frozen telnet adoption artifacts and the historical
+inventory package match. Prior runtime/full-suite, boot/restart, saved-data,
+physical transport, service and upstream execution retain their scopes.
+Evidence: /tmp/lima-compile-inventory-20261010.
+
+Next: commit inventory notes, then audit the four wizard echo commands. Existing
+Lima source issues and deferred snoop findings remain separate.
+
 #### Lima administrator telnet command/client adaptation
 
 Adopted and verified **10 October 2026**, after audit notes were committed as
-native **83d309be**. Dedicated lpc-rs-port at **564d330d** has the exact audited
-[telnet][lima-telnet-command] dispatcher and [client][lima-telnet-client] patch,
-with README updated and ready to commit. The client uses the existing `SOCKET`
-text wrapper, native bound callbacks, dot class fields, `classp`, distinct nil
+native **83d309be**. The exact audited [telnet][lima-telnet-command] dispatcher,
+[client][lima-telnet-client] patch and README are committed as Lima **78f88c16**
+on lpc-rs-port; adoption notes are native **d092f8f9**. The client uses the
+existing `SOCKET` text wrapper, native bound callbacks, dot class fields, `classp`, distinct nil
 and explicit numeric output. The existing control-character fallback, rules,
 shared wrapper, master policy, simuls and native APIs remain unchanged.
 
@@ -3181,9 +3235,8 @@ without new upstream execution. Prior full-suite, complete inventory/boot and
 physical transport checks retain their scope. Adoption evidence:
 /tmp/lima-telnet-port-20261010.
 
-Next: commit command/client/README and adoption notes, then refresh the complete
-compile inventory against the 8 October checkpoint to select remaining command
-work. Existing Lima and deferred snoop findings stay separate.
+Telnet source/README and adoption notes are committed; the complete inventory
+refresh is above. Existing Lima and deferred snoop findings stay separate.
 
 #### Lima administrator telnet command/client audit
 
@@ -17523,3 +17576,8 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-telnet-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/telnet.c
 [lima-telnet-client]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/telnet_ob.c
+[lima-wizard-echo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/echo.c
+[lima-wizard-echoall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/echoall.c
+[lima-wizard-echoto]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/echoto.c
+[lima-wizard-echom]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/echom.c
+[lima-wizard-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
