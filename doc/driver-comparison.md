@@ -3143,13 +3143,69 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator shutdown-command audit
+
+Reviewed **10 October 2026**, after objpurge/README were committed as Lima
+**a7fda68f** and adoption notes as native **2335c02a**. The dedicated lpc-rs-port
+checkout is clean at baseline. Recommend the protected dispatcher calling
+existing private `main(arg, flags)`, two callback adaptations in
+[shutdown][lima-shutdown-command], and the existing native
+[`valid_shutdown`](apply/master/valid_shutdown.md) hook in [master][lima-master].
+No source is adopted by this audit. Lima stays on distinct nil, preserved
+call-out players and 4,000 ms tasks.
+
+Use `unguarded(1, (: shutdown() :))` and `call_out(&count_down(num, s), 60)`.
+Native `(: shutdown :)` returns a function value; `(: count_down, num, s :)`
+returns the last comma-expression value. Neither invokes its named function.
+The dispatcher-only exploratory control logs out the user without queuing
+shutdown, and its timer silently returns without advancing the countdown.
+The proposed master hook accepts only the loaded simul object, the defining
+`/secure/simul_efun/overrides.c` program and `check_privilege(1)`, retaining
+Lima's [privileged shutdown wrapper][lima-overrides]. It does not require a
+live initiating user after the command quits users. No Cmd_rules, simul,
+native API or native apply-contract change is needed.
+
+All **10 cases / 34 registered inputs** pass: eight full-proposal cases, the
+current unavailable-command control and the adapted command without the new
+master hook. Actual user/body/wish/CMD, master, security daemon and simuls use
+in-memory connections, controlled roles, optional HELP_D data and inactive
+IMUD startup. Immediate, timed and zero-minute requests queue three native
+shutdown effects with code zero after actual user/body/shell cleanup. Five
+explicit timer firings cover countdown, cancellation, a changed role and the
+automatic entry point. Preserved player identity, current privilege checks,
+logs, redirected bytes, pipes, ignored stdin and surviving shell/input state
+pass. The missing-hook control catches the expected permission error after
+logout; no unexpected caught input or timer errors occur. The fixture consumes
+VM shutdown requests without running the exit loop; host or live-driver shutdown
+and real elapsed-minute scheduling are not tested.
+
+One existing Lima bug is reproduced and retained: a second request clears
+`call_number` while leaving the first timer queued, so subsequent cancellation
+reports no shutdown in progress. Keep that repair separate from compatibility
+work. Unchecked source-review leads also remain separate: negative/malformed
+delays, repeated automatic starts and master's old `/trans/cmds/shutdown` path
+in `slow_shutdown`; no out-of-memory scenario is exercised.
+
+All **10 bounded compile controls**, workspace/fixture formatting and five
+pinned public source comparisons pass. The exploratory fixture's number-word
+expectations were corrected to the actual numeric announcements. The native
+test hook is restored; all 1,547 library files, README/config, native
+implementation/CLI, original Lima and 180 predecessor artifacts stay unchanged.
+Prior full-suite, complete inventory/boot, transport and upstream execution
+retain their scope. Frozen proposal/evidence:
+/tmp/lima-shutdown-audit-20261010.
+
+Next: commit audit notes, adopt the exact command/master proposal and README,
+then verify adopted source and bounded command coverage. Keep existing Lima
+and deferred snoop findings separate.
+
 #### Lima administrator objpurge-command adaptation
 
 Adopted and verified **10 October 2026**, after audit notes were committed as
-native **03283723**. Dedicated lpc-rs-port at **42e4dfb3** has the exact
-[objpurge][lima-objpurge-command] dispatcher proposal and README update, ready
-to commit. Selection, cleanup sequence, existing master policy and native APIs
-retain their behavior. Lima stays on distinct nil, preserved call-out players
+native **03283723**. The exact [objpurge][lima-objpurge-command] dispatcher
+proposal and README are committed as Lima **a7fda68f**; adoption notes are
+native **2335c02a**. Selection, cleanup sequence, existing master policy and
+native APIs retain their behavior. Lima stays on distinct nil, preserved call-out players
 and 4,000 ms tasks.
 
 All **12 cases / 40 registered inputs** pass: eleven leave the copied adopted
@@ -3173,8 +3229,8 @@ All 72 frozen audit artifacts match. Prior full-suite, complete inventory/boot,
 transport and upstream execution retain their scope. Adoption evidence:
 /tmp/lima-objpurge-port-20261010.
 
-Next: commit objpurge/README and adoption notes, then audit administrator shutdown.
-Keep the deferred snoop findings separate.
+Both commits are complete; the shutdown audit is above. Keep the deferred snoop
+findings separate.
 
 #### Lima administrator objpurge-command audit
 
@@ -17254,3 +17310,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-admin-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/Cmd_rules
 [lima-master-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/master.c
 [lima-objpurge-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/objpurge.c
+[lima-shutdown-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/shutdown.c
