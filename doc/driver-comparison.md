@@ -3143,6 +3143,60 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima array set matching audit
+
+Audited **10 October 2026** against native **ba9851fc**, after the inspector
+adaptation was committed as Lima **07a85de0**. Native array subtraction,
+intersection and union all compare stored members with raw, type-sensitive
+equality. A stored destroyed-object reference therefore fails to match the
+selected null value or a different destroyed object, despite scalar equality
+and member_array recognizing those matches. The mismatch occurs in the
+destructing attempt, in a later attempt after committed removal, and with
+expired weak references. Rebuilding an array from a destroyed object variable
+also retains the reference.
+
+For example, in Lima's distinct-nil configuration:
+
+```c
+object o = clone_object("/target");
+mixed *a = ({ o });
+destruct(o);
+a[0] == nil;                  // 1
+member_array(nil, a);          // 0
+sizeof(a - ({ nil }));         // 1: the stored reference remains
+sizeof(a & ({ nil }));         // 0
+sizeof(a | ({ nil }));         // 2
+```
+
+Integer zero is a different selector in distinct mode. Numeric type-sensitive
+[collection matching](lpc/comparisons.md#collection-matching) is intentional:
+1 and 1.0 remain different set members even though scalar equality and
+member_array match them. Replacing raw matching with eq_in would change that
+contract. The recommended correction normalizes only destroyed object operands
+to the configured null value for comparison in all three array set operators.
+It retains identity matching, input order, duplicate rules, fresh outer results
+and original operand contents, without changing raw Eq/Hash or grouping.
+Liveness must be read through the transaction; the operators currently hold
+TxnHandle::with, so nested acquisition through eq_in/is_dead_object would spin.
+
+All **12 focused native audit cases** confirm the current behavior and controls,
+including literal nil, distinct-mode zero, numeric boundaries, string/bytes
+content, nested container/class/function identity, compound assignments, pending
+and committed removal, rollback, old snapshots and read conflicts. These are
+standalone native fixtures for the configurable driver; Lima remains distinct
+nil. An initial incorrect expectation that rebuilding the array would normalize
+its members is retained in the evidence. Workspace and fixture formatting pass;
+the temporary native test hook is restored byte-for-byte. Native implementation,
+CLI, dedicated library/README/config and original Lima remain unchanged.
+Evidence: /tmp/lima-array-set-audit-20261010. Full-suite and complete Lima
+inventory/boot results retain their prior scope; no upstream execution is claimed.
+
+Retain the adopted inspector and ammunition objectp filters. A native matching
+correction alone does not make stale-target unsnoop safe: the daemon still
+calls get_dummy_object on the target after subtraction. That cleanup remains
+separate mudlib work. Next: commit these audit notes, then implement and verify
+the bounded native array set matching correction.
+
 #### Lima administrator snoops adaptation
 
 Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following
@@ -3181,9 +3235,9 @@ implementation/CLI remain unchanged. Full native suite, whole-library inventory/
 boot and upstream-driver execution retain their preceding scope.
 Evidence: /tmp/lima-snoops-port-20261010.
 
-Next: commit command/daemon/README and adaptation notes, then audit native array
-subtraction's equality for stored dead object references before the next admin
-command. Keep that driver correction separate from this inspector adaptation.
+The adaptation is committed as Lima **07a85de0** and native notes **ba9851fc**.
+The separate native array set matching audit above records the next correction
+before continuing to administrator commands.
 
 #### Lima administrator snoops audit
 
