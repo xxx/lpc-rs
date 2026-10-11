@@ -3143,6 +3143,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator snoops adaptation
+
+Adapted **10 October 2026** in the dedicated lpc-rs-port checkout, following
+inspector audit notes committed as native **e5dc858f**. The command and daemon
+exactly match the frozen proposals: a protected dispatcher calls the existing
+zero-argument main; SNOOPS_CMD points to /trans/admincmds/snoops; an objectp
+filter drops destroyed target references before name formatting. README describes
+the inspector's sorted listing and command stdout behavior.
+
+The existing administrator check, daemon caller check, mapping closure, ascending
+sorts, messages, ignored trailing text and stdout buffering remain. Pipelines,
+exact redirected rows, empty listings and named/all removal reflect the actual
+shared subscriptions. No native API, master policy, relay or configuration change is
+introduced. The separate native array-subtraction and converging-graph findings
+remain recorded; this inspector patch does not repair stale-entry daemon cleanup.
+
+All **6 runtime cases / 37 registered inputs / 5 native starts** pass. Three use
+the copied dedicated command and daemon, and three retain the unavailable-command,
+wrong-path and original-pruning controls. Actual master/simuls/user/body/wish/CMD,
+daemon and relay execute with in-memory connections and the audit's same role,
+state, IMUD/HELP_D and disposable-target controls. Sorted/shared rows, pipeline,
+exact redirection, ignored trailing text, existing admin-only messages and live
+filtering pass. The filtered display leaves the stored target array unchanged.
+The only caught input error is the expected original-pruning failure. Input rearms
+and checked context/modal state remains stable. Full quit/netdead, dead observer
+keys, socket transport and stale-target cleanup retain their earlier scope.
+
+Fresh compilation reaches **1/9 administrator commands** (previously 0/9), while
+**49/49 transitional commands** and **74 support checks / 108 distinct targets**
+retain their expected results. Only snoops newly succeeds; there are no regressions
+or timeouts. The eight remaining administrator failures are unchanged. Warning-free
+locked workspace Clippy across all targets/features, workspace formatting and
+retained fixture formatting pass. The native test hook is restored byte-for-byte.
+The other 1,545 library files, configuration, original Lima and native
+implementation/CLI remain unchanged. Full native suite, whole-library inventory/
+boot and upstream-driver execution retain their preceding scope.
+Evidence: /tmp/lima-snoops-port-20261010.
+
+Next: commit command/daemon/README and adaptation notes, then audit native array
+subtraction's equality for stored dead object references before the next admin
+command. Keep that driver correction separate from this inspector adaptation.
+
 #### Lima administrator snoops audit
 
 Audited **10 October 2026** against dedicated lpc-rs-port **3a9409ee**, after
@@ -3187,9 +3229,10 @@ remain unchanged; the temporary test hook is restored. The preceding 49/49
 transitional inventory and full-suite/boot/upstream results retain their scope.
 Evidence: /tmp/lima-snoops-audit-20261010.
 
-Next: commit these audit notes, then adopt and verify the inspector dispatcher,
-correct daemon path and live-object filter. Audit stored-reference equality in
-native array subtraction separately before continuing to the next admin command.
+Audit notes are committed as native **e5dc858f**. The dispatcher, corrected
+daemon path and live-object filter are adopted and verified above. Commit that
+adaptation, then audit equality of stored references in native array subtraction
+separately before continuing to the next administrator command.
 
 #### Lima wizard unsnoop adaptation
 
