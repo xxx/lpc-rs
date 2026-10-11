@@ -3143,6 +3143,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator listeners audit
+
+Audited **10 October 2026**, after native array set matching was committed as
+**c73e0c37**. Dedicated Lima remains clean at **07a85de0** on lpc-rs-port, using
+distinct nil, preserved call-out players and 4,000 ms tasks. The [command]
+[lima-listeners-command] already has its listener formatting callback adapted
+to native map; three further compatibility edits are proposed.
+
+Add the usual protected dispatcher calling main(arg). Pass bare
+show_one_channel to map when listing all channels: the existing named-function
+closure returns a function value under native semantics, so dispatcher-only
+execution displays no channel rows. Replace subtraction of `({0})` with
+`({nil})`. With the committed native matching correction, this omits destroyed
+references and literal nil from the display without changing the stored daemon
+array. Integer zero is a different selector in Lima's distinct mode.
+
+The [command rule][lima-admin-command-rules] remains `listeners [str|obj]`.
+The parser supplies a nil slot when the optional argument is omitted, so the
+ordinary route needs no empty-array guard. Preserve the admin check, channel
+order, wiz/admin/permanent labels, linked and link-dead names, non-body object
+formatting, unknown-channel feedback and command stdout. Object arguments still
+produce the existing “NOT YET IMPLEMENTED” message; no new user-channel report
+is proposed.
+
+All **7 runtime cases / 32 registered inputs** pass, with no caught input errors:
+three current/dispatcher/callback controls and four proposal cases. Actual
+master/simuls/user/body/wish/CMD and channel daemon execute with in-memory
+connections, controlled roles/channel classes, two small listener fixtures,
+optional HELP_D data and inactive IMUD startup. Named, quoted, empty and all
+channel routes, flags, dead/nil pruning, pipelines, exact redirected bytes,
+admin feedback, object arguments and extra-argument rejection pass. The channel
+registry and checked input/context/modal state remain unchanged. Interactive
+output assertions allow existing screen wrapping; redirected bytes are exact.
+Full netdead and socket transport are outside this fixture.
+
+All **5 compile controls** match: current listeners retains its missing
+dispatch_main errors; dispatcher, callback and complete proposals compile, as
+does the unmodified full channel daemon. Workspace and fixture formatting pass.
+Initial fixture runs retained a forbidden direct native destruct call, screen
+wrapping expectation mismatches and an unexpanded shell-variable assumption;
+the final run uses the ordinary destruct wrapper and `me` object syntax.
+The temporary native hook is restored byte-for-byte. Native implementation/CLI,
+all 1,547 dedicated library files, README/config and original Lima remain
+unchanged. Full-suite, complete inventory/boot and upstream execution retain
+prior scope. This audit needs no native API/apply change.
+
+Public command/rule bytes at the pinned upstream revision match the clean
+original checkout. Evidence is source review and lpc-rs execution, with frozen
+controls and the three-edit proposal in /tmp/lima-listeners-audit-20261010.
+Next: commit audit notes, then adopt and verify the one-file listeners adaptation.
+
 #### Lima array set matching correction
 
 Implemented **10 October 2026**, following audit notes committed as native
@@ -3192,8 +3243,9 @@ README/config and original Lima remain unchanged; the temporary native fixture
 hook is restored byte-for-byte. No apply contract changed.
 Evidence: /tmp/lpc-rs-array-set-matching-20261010.
 
-Next: commit the native correction, then audit the unported administrator
-listeners inspector.
+The correction is committed as native **c73e0c37**. The
+[administrator listeners audit above](#lima-administrator-listeners-audit)
+records the next command-only adaptation.
 
 #### Lima array set matching audit
 
@@ -16928,3 +16980,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-dbxframe-efun]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/trace.cc#L5-L7
 
 [lima-snoops-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/snoops.c
+[lima-listeners-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/listeners.c
+[lima-admin-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/Cmd_rules
