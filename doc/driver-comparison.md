@@ -3143,12 +3143,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard quiet-command audit
+
+Reviewed **11 October 2026**, after visibility commands/README were committed
+as Lima **031c3e63** on lpc-rs-port and their adoption notes as native
+**4b068d80** on lima-support. [Quiet][lima-wizard-quiet] still fails first at
+dispatch_main. Recommend only the established protected varargs adapter calling
+main(arg), preserving its private handler and the earlier set_actions(100, nil)
+migration. The [object rule][lima-wizard-command-rules],
+[command daemon][lima-command-daemon] and [action module][lima-follow-actions]
+need no change.
+
+All **7 cases / 28 registered inputs** pass with the temporary proposal and
+unavailable-original control. Room, carried and explicit remote object lookup,
+body/non-action/nil refusals, empty and stopped action lists, repeats, invalid
+arguments, ignored stdin, files/pipes and ordinary-player exclusion with wizard
+retry retain checked shell state, rearmed input and pager/modal ownership.
+Quiet removes the native periodic timer, stores nil and sets delay 100. Queued
+responses and hooks remain: the fixture uses real respond, verifies cancellation,
+and fires the single idle callback scheduled after movement. That callback does
+nothing and does not reschedule. This preserves existing module policy.
+
+Status uses stdout without a newline, including exact file/pipe output. The one
+expected home-output refusal retains existing command privileges and the changed
+action state; there are no unexpected caught input errors. All **10 compile
+controls** match: one original failure, the proposed command, a complete
+OBJ/M_ACTIONS fixture and seven supporting successes. Formatting passes.
+
+Fifteen pinned original-Git-blob comparisons and active snapshots are recorded.
+Distinct nil, preserved call-out players, existing options and 4,000 ms tasks
+remain. All 1,547 library files, README/configuration, CLI, native implementation
+and original Lima stay unchanged; the native hook is restored and all 217 frozen
+visibility-adoption artifacts match. Evidence:
+/tmp/lima-wizard-quiet-audit-20261011, with in-memory lpc-rs execution and bounded
+compilation. No quiet source is adopted; previous broader checks retain scope,
+with no new upstream-driver/full boot/service/physical transport execution.
+
+Next: commit audit notes, adopt the exact quiet adapter and README note, then
+verify copied source and bounded command compilation. Separate Lima/client/snoop
+findings retain scope.
+
 #### Lima wizard visibility-command adaptation
 
 Reviewed **11 October 2026**, after visibility audit notes were committed as
 native **02140d19** on lima-support. The dedicated lpc-rs-port checkout over
-Lima **f19264c4** now contains the two audited dispatchers and README update,
-pending commit. [Vis][lima-wizard-vis] and [invis][lima-wizard-invis] match their
+Lima **f19264c4** contains the two audited dispatchers and README update,
+later committed as Lima **031c3e63**. [Vis][lima-wizard-vis] and [invis][lima-wizard-invis] match their
 frozen proposals exactly, calling zero-argument main() and retaining private
 handlers, rules, visibility/message modules and the existing daemon call.
 
@@ -3178,9 +3218,9 @@ compilation. The audit's nineteen pinned source comparisons and previous broader
 validation retain scope; no new upstream-driver, full boot/restart, service or
 physical transport execution is established.
 
-Next: commit commands/README and adoption notes, then audit
-[quiet][lima-wizard-quiet] through its object rule and M_ACTIONS, retaining its
-earlier nil adaptation. Separate Lima/client/snoop findings retain scope.
+Adoption notes are committed as native **4b068d80**. The [quiet audit](#lima-wizard-quiet-command-audit)
+continues through its object rule and M_ACTIONS, retaining its earlier nil
+adaptation. Separate Lima/client/snoop findings retain scope.
 
 #### Lima wizard visibility-command audit
 
