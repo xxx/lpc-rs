@@ -3143,12 +3143,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator objpurge-command audit
+
+Reviewed **10 October 2026**, after master/README were committed as Lima
+**42e4dfb3** and adoption notes as native **60fa114c**. The dedicated checkout
+is clean at baseline. Recommend only the protected `dispatch_main` adapter
+calling existing private `main(arg)` in [objpurge][lima-objpurge-command].
+Its existing `filter`/`map` changes remain. No source is adopted by this audit;
+no native API, rule or master-policy change is needed. Lima stays on distinct
+nil, preserved call-out players and 4,000 ms tasks.
+
+The proposal passes **12 cases / 40 registered inputs**, including the current
+unavailable-command control. Actual user/body/wish/CMD, master and simuls use
+in-memory connections, controlled roles, optional HELP_D data and inactive IMUD
+startup. Disposable objects cover prototypes, clones, surviving clones without
+a prototype, self-removal, absent `remove`, mixed cleanup and fallback destruction.
+Matching uses raw exact extensionless base names; relative paths, extensions,
+quoted text, clone suffixes, case changes and extra text do not match. Repeating
+a purge does not load the prototype. Unrelated objects and checked user/body/
+shell/room/directory/input/pager/modal state remain intact. Exact redirected
+bytes, pipes and ignored incoming stdin pass.
+
+Preserve the existing cleanup sequence: the command first calls `remove()` on
+all matches, then the [destruct simul][lima-overrides] calls it again for surviving
+objects before native destruction. Bare `destruct` callbacks work with the
+existing policy. Object order is unspecified. Five caught errors are expected:
+one ordinary role rejection, first- and second-cleanup failures, and two missing
+selector `%s` type errors. Cleanup writes before a caught exception remain, and
+retry succeeds; this is not an all-or-nothing purge. Missing-selector feedback
+remains a command limitation. The adopted destruct wrapper propagates explicit
+cleanup failures; upstream catches its cleanup error. That earlier adaptation
+is unchanged, and upstream runtime behavior is not newly tested.
+
+All **7 bounded compile controls** and workspace/fixture formatting pass. Three
+pinned public source responses match clean original Lima. The exploratory
+fixture's terminal-whitespace assertions were corrected; the proposal stayed
+unchanged. The native hook is restored; all 1,547 library files, README/config,
+native implementation/CLI, original Lima and 175 predecessor artifacts remain
+unchanged. Prior full-suite, complete inventory/boot, transport and upstream
+execution retain their scope. Frozen proposal/evidence:
+/tmp/lima-objpurge-audit-20261010.
+
+Next: commit audit notes, adopt the exact dispatcher proposal and update README,
+then verify adopted source and refresh bounded command/dependency compilation.
+Keep the deferred snoop findings separate.
+
 #### Lima administrator master-command adaptation
 
 Adopted and verified **10 October 2026**, after audit notes were committed as
-native **023f6de5**. Dedicated lpc-rs-port at **03b82556** now has the exact
-[master-command][lima-master-command] dispatcher/local-variable proposal and a
-README update, ready to commit. The earlier queued in-place update behavior,
+native **023f6de5**. The exact [master-command][lima-master-command]
+dispatcher/local-variable proposal and README are committed as Lima **42e4dfb3**;
+adoption notes are native **60fa114c**. The earlier queued in-place update behavior,
 status mapping keys, master policy and native APIs remain unchanged. Lima stays
 on distinct nil, preserved call-out players and 4,000 ms tasks.
 
@@ -3173,7 +3218,8 @@ all 80 frozen audit artifacts match. No native API or apply change is needed.
 Prior full-suite, complete inventory/boot, transport and upstream execution
 retain their scope. Adoption evidence: /tmp/lima-master-command-port-20261010.
 
-Next: commit master/README and adoption notes, then audit administrator objpurge.
+The [objpurge audit](#lima-administrator-objpurge-command-audit) records the next
+command's proposed dispatcher and verification.
 Keep the deferred snoop findings separate.
 
 #### Lima administrator master-command audit
@@ -17173,3 +17219,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-listeners-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/listeners.c
 [lima-admin-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/Cmd_rules
 [lima-master-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/master.c
+[lima-objpurge-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/objpurge.c
