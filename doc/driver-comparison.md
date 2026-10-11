@@ -3143,6 +3143,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard echo-command audit
+
+Reviewed **10 October 2026**, after inventory notes were committed as native
+**c50abc72**. Dedicated Lima remains clean on lpc-rs-port at **78f88c16**;
+original Lima is unchanged at eefaff66. Distinct nil, preserved call-out players
+and 4,000 ms tasks remain. Recommend protected variadic dispatchers for
+[echo][lima-wizard-echo], [echoall][lima-wizard-echoall],
+[echoto][lima-wizard-echoto] and [echom][lima-wizard-echom], preserving private
+handlers and [rules][lima-wizard-command-rules]. Echo/echom receive raw arguments;
+echoall receives original input plus parsed arguments, and echoto also receives
+flags. The four-file proposal applies cleanly; no source is adopted.
+
+All **11 cases / 61 registered inputs** pass: ten proposal cases and one
+unavailable-original control. The real user/body/wizard-shell/CMD/stdio/rule/
+message path checks raw versus normalized text, room/global/target delivery,
+bodyless global recipients, self-targeting, actor/target/onlooker views, carried
+and room object lookup, fallback, pipeline contents, output routes, ordinary
+player-shell exclusion and wizard retry. State, input rearming and pager/modal
+ownership remain intact. Two expected caught home write denials follow direct
+message delivery; there are no unexpected caught input errors.
+
+Echoall's no-redirection metadata prevents IO, but its parsed rule arguments
+omit operator suffixes: echoall notice > file broadcasts notice. The pinned
+[original shell][lima-wizard-shell] likewise strips redirection tokens before
+rule parsing; this is existing source behavior, not an established port regression.
+Echoto reads raw input and preserves suffixes literally. Its
+[rule resolver][lima-command-daemon] selects a body with a link, so query_name()
+is valid; users without bodies are rejected. Echoall's quote/spacing normalization
+also predates this adapter, despite its old prose describing exact text.
+
+Echo and echom deliver direct messages independently of stdout; permitted /open
+redirection writes an empty file. Existing [command privilege reduction][lima-access]
+and [default protection][lima-security] give /cmds/wiz commands Mudlib:wizcmds,
+which cannot write the fixture wizard's home. The observed refusal and message
+delivery are preserved. No handler, rule, pipeline, master, simul, native API,
+apply or privilege-policy change is recommended.
+
+All **15 compile controls**, two helper compilation checks and workspace/fixture
+formatting pass. Twenty original files match their pinned Git blobs; active-source
+snapshots and the port's pipeline are retained. This is source review and lpc-rs
+fixture execution using in-memory connections and a no-transport IMUD stub, with
+no new upstream-driver execution, full boot/restart, service or physical transport
+coverage. Initial fixture corrections remain evidence. The native hook is restored;
+all 1,547 library files, README/config, CLI, other native files and original Lima
+remain unchanged, along with all 1,208 frozen inventory artifacts.
+Evidence: /tmp/lima-echo-audit-20261010.
+
+Next: commit audit notes, adopt the four dispatchers and README, then verify
+copied adopted source and bounded command coverage. Existing Lima/client/snoop
+findings and preceding broader validation retain their separate scopes.
+
 #### Lima compile inventory after command migrations
 
 Reviewed **10 October 2026**, after telnet command/client/README were committed
@@ -3194,8 +3245,8 @@ inventory package match. Prior runtime/full-suite, boot/restart, saved-data,
 physical transport, service and upstream execution retain their scopes.
 Evidence: /tmp/lima-compile-inventory-20261010.
 
-Next: commit inventory notes, then audit the four wizard echo commands. Existing
-Lima source issues and deferred snoop findings remain separate.
+Inventory notes are committed as **c50abc72**; the four-command audit is above.
+Existing Lima source issues and deferred snoop findings remain separate.
 
 #### Lima administrator telnet command/client adaptation
 
