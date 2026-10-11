@@ -3143,12 +3143,62 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator telnet command/client audit
+
+Reviewed **10 October 2026**, after wall/README were committed as Lima
+**564d330d** and adoption notes as native **51801ff6**. The dedicated
+lpc-rs-port checkout is clean at baseline. Recommend the protected dispatcher
+for [telnet][lima-telnet-command] and the frozen
+[client][lima-telnet-client] adaptation: use the adopted `SOCKET` text wrapper,
+native bound read/close callbacks, dot field access, `classp`, distinct nil and
+explicit numeric output. The existing control-character fallback is compatible
+and remains unchanged. Existing rules, master policy, shared wrapper, simuls
+and native APIs need no change. No source is adopted by this audit.
+
+All **13 cases / 104 registered inputs** pass: eleven proposal cases,
+the current unavailable-command control and a dispatcher-only control exposing
+the client compile errors. Actual user/body/wish/CMD, master, security daemon
+and simuls use in-memory connections, controlled roles and optional HELP_D data.
+Ten proposal cases use an in-memory text transport with the existing outgoing
+privilege check. One uses the unchanged real socket-wrapper body with a temporary
+status getter: native admission, pre-ready queueing and cancellation pass while
+TCP workers remain stopped. No network connection or service is started.
+
+Modal entry/exit, default/custom controls, shell pass-through and `!`, exact
+sent lines, case-insensitive mud lookup, repeated names, job selection, inactive/
+hidden buffering, owner delivery without a callback player, cleanup and checked
+shell/input state pass. Denial stdout supports pipelines/redirection; incoming
+pipeline text does not open a session. The dispatcher-only control supplies
+the one expected caught input error; the other registered inputs have none.
+Seven simulated callbacks include one expected existing closed-slot error.
+
+Two source limitations remain separate: a failed open leaves a class record
+without a socket, and the receive loop accesses an earlier closed slot without
+a nil check, losing later received text. The proposal retains both. Callback
+feedback using ambient `write` has no player, while explicit owner delivery
+works. The selected text wrapper accepts UTF-8; Telnet option negotiation remains
+unimplemented upstream. This audit does not establish full Telnet interoperability.
+
+All **10 bounded compile controls**, workspace/fixture formatting and eight
+pinned public source comparisons pass. Upstream is source-reviewed rather than
+newly executed. Exploratory fixture assertions for paths, prompts, integer
+predicates, control settings and the resident recorder were corrected; logs
+remain evidence. The native test hook is restored; all 1,547 library files,
+README/config, native implementation/CLI, original Lima and 182 predecessor
+artifacts remain unchanged. Prior full-suite, complete inventory/boot, transport
+and upstream execution retain scope. Evidence: /tmp/lima-telnet-audit-20261010.
+
+Next: commit audit notes, adopt the exact command/client proposal and README,
+then verify copied adopted source and bounded command coverage. Existing client,
+other Lima and deferred snoop findings remain separate.
+
 #### Lima administrator wall-command adaptation
 
 Adopted and verified **10 October 2026**, after audit notes were committed as
-native **eac1cabd**. Dedicated lpc-rs-port at **f7a66cb3** has the exact
-[wall][lima-wall-command] dispatcher-only proposal and README entry, ready
-to commit. Existing rules, master policy, simuls and native APIs remain unchanged.
+native **eac1cabd**. The exact [wall][lima-wall-command] dispatcher-only proposal
+and README entry are committed as Lima **564d330d** on lpc-rs-port; adoption
+notes are native **51801ff6**. Existing rules, master policy, simuls and native
+APIs remain unchanged.
 Lima stays on distinct nil, preserved call-out players and 4,000 ms tasks.
 
 All **9 cases / 43 registered inputs** pass: eight use copied adopted command
@@ -3172,8 +3222,8 @@ artifacts match, retaining seven pinned source comparisons. Prior full-suite,
 complete inventory/boot, transport and upstream execution retain scope.
 Adoption evidence: /tmp/lima-wall-port-20261010.
 
-Next: commit wall/README and adoption notes, then audit administrator telnet
-command/client integration. Existing Lima and deferred snoop findings stay separate.
+Wall/README and adoption notes are committed; the telnet command/client audit
+is above. Existing Lima and deferred snoop findings stay separate.
 
 #### Lima administrator wall-command audit
 
@@ -17429,3 +17479,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-objpurge-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/objpurge.c
 [lima-shutdown-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/shutdown.c
 [lima-wall-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/wall.c
+
+[lima-telnet-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/admincmds/telnet.c
+[lima-telnet-client]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/trans/obj/telnet_ob.c
