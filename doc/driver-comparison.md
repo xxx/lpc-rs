@@ -3143,6 +3143,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard heal-command adaptation
+
+Reviewed **11 October 2026**, after audit notes were committed as native
+**ab07c4ce** on lima-support. The dedicated lpc-rs-port checkout over Lima
+**05d8d540** adopts the exact audited [heal][lima-wizard-heal] dispatcher and
+negated-assignment parentheses, plus a README note. The adapter calls main(arg);
+the remaining private handler, raw-string parsing, [connected-player lookup][lima-speaker-context],
+[limb health][lima-health-limbs] and action messages retain their implementations.
+The [selected health style][lima-combat-config] remains HEALTH_LIMBS with
+LIMB_SHIELDS undefined.
+
+All **7 cases / 35 registered inputs** pass again: six use copied adopted heal
+without replacing it, and one restores the unavailable original. All audited
+actions, assertions and LPC helpers remain. Self aliases and connected local/
+remote targets restore damaged and disabled limbs, clear drunkenness and refill
+reflex points while preserving limb metadata and abuse. Repeated actions, exact
+message recipients, raw-name refusals, detached lookup, direct messages with
+empty redirected output, ignored stdin and player-shell exclusion retain checked
+behavior. The sole expected home-output refusal preserves policy, delivered
+action and completed healing; no unexpected caught input errors occur.
+
+Fresh bounded compilation reaches **27/81 wizard**, retaining **49/49
+transitional**, **9/9 administrator** and eight supports across **147 targets**.
+Only heal newly succeeds; no regressions, timeouts or abnormal exits. All **15
+compile controls** match, including original and dispatch-only failures, adopted
+heal, eleven complete supports and the unchanged expected standalone limb-module
+failure. Workspace/fixture formatting passes. Other 1,546 library files,
+configuration, CLI, native implementation and original Lima remain unchanged;
+the native hook is restored and all 142 frozen audit artifacts match. Seventeen
+audit source comparisons and preceding broader checks retain scope.
+
+Evidence: /tmp/lima-wizard-heal-port-20261011, using copied-source in-memory
+lpc-rs execution and bounded compilation. Injury provisioning and private health
+access remain fixture helpers; complete combat/death/reincarnation, other health
+styles, upstream execution, full boot/services and physical transport were not
+rerun. Distinct nil, preserved call-out players and 4,000 ms tasks remain.
+Command/README are committed as Lima **47bf6de2**. Next: audit the small wizard
+print and null commands through text/stdin dispatch and command IO.
+
 #### Lima wizard heal-command audit
 
 Reviewed **11 October 2026**, after lightme/README were committed as Lima
@@ -3186,9 +3225,9 @@ and state access are fixture helpers; no complete combat/death/reincarnation,
 other-health-style, upstream-driver, boot/service or physical transport run is
 established. Previous 26/81 wizard and broader checks retain scope.
 
-Next: commit audit notes, adopt the tested heal proposal and README note, then
-verify copied source and bounded command compilation. Separate Lima/client/snoop
-findings retain scope.
+Audit notes are committed as native **ab07c4ce**; the copied-source adoption
+above verifies the tested proposal. Separate Lima/client/snoop findings retain
+scope.
 
 #### Lima wizard lightme-command adaptation
 
