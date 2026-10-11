@@ -3143,6 +3143,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard echo-command adaptation
+
+Reviewed **11 October 2026**, after the echo audit notes were committed as native
+**eedcbaaf** on lima-support. The dedicated checkout at
+/home/mpd/git-sources/lima-lpc-rs, on lpc-rs-port over **78f88c16**, now contains
+the four audited protected dispatchers and README update, committed as Lima
+**6bd520b7**.
+[Echo][lima-wizard-echo], [echoall][lima-wizard-echoall],
+[echoto][lima-wizard-echoto] and [echom][lima-wizard-echom] match the frozen
+proposals exactly; their private handlers, rules, message delivery and shared
+pipeline remain unchanged. Distinct nil, preserved call-out players, existing
+build options and 4,000 ms tasks remain.
+
+All **11 cases / 61 registered inputs** pass again: ten copy adopted command
+source directly from the dedicated checkout, and one restores all four originals
+as an unavailable-command control. The audit's actions and assertions are retained.
+Room/global/target delivery, raw and normalized text, action views and target
+lookup, pipeline/stdout routes, ordinary player-shell exclusion, wizard retry,
+state, rearmed input and pager/modal ownership pass. Two expected home-output
+denials retain the existing command privilege policy; no unexpected caught input
+errors occur. Echoall's original operator-suffix parsing and permitted empty
+direct-message output files remain as documented in the audit below.
+
+Fresh compilation across **146 distinct targets** reaches **19/81 wizard
+commands**, retaining **49/49 transitional commands**, **9/9 administrator
+commands** and seven complete supporting objects. Only the four echo commands
+newly succeed against the frozen 10 October inventory; no regressions, timeouts
+or abnormal exits occur. All **15 compile controls** and workspace/fixture
+formatting pass. Other 1,543 library files, configuration, compiler binary,
+native implementation and original Lima remain unchanged; the temporary native
+test hook is restored. All 172 frozen audit artifacts match.
+
+This is copied-source lpc-rs execution with in-memory connections and bounded
+compilation. The audit's twenty pinned source comparisons and preceding broader
+validation retain scope; no new upstream-driver, full boot/restart, service or
+physical transport execution is established. Evidence:
+/tmp/lima-echo-port-20261011. No native API or unrelated Lima bug fix is needed.
+
+Next: audit
+[emotem][lima-wizard-emotem], [msg][lima-wizard-msg] and
+[review][lima-wizard-review] through the existing message modules and
+[wizard rules][lima-wizard-command-rules]. Their unchanged sources match the
+pinned original Git blobs and still stop first at dispatch_main; later diagnostics
+remain unestablished until adapters are tested. Existing Lima/client/snoop findings
+retain their separate scopes.
+
 #### Lima wizard echo-command audit
 
 Reviewed **10 October 2026**, after inventory notes were committed as native
@@ -3190,9 +3236,9 @@ all 1,547 library files, README/config, CLI, other native files and original Lim
 remain unchanged, along with all 1,208 frozen inventory artifacts.
 Evidence: /tmp/lima-echo-audit-20261010.
 
-Next: commit audit notes, adopt the four dispatchers and README, then verify
-copied adopted source and bounded command coverage. Existing Lima/client/snoop
-findings and preceding broader validation retain their separate scopes.
+Audit notes are committed as native **eedcbaaf**; adoption and copied-source
+verification are recorded above. Existing Lima/client/snoop findings and
+preceding broader validation retain their separate scopes.
 
 #### Lima compile inventory after command migrations
 
@@ -17631,4 +17677,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-echoall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/echoall.c
 [lima-wizard-echoto]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/echoto.c
 [lima-wizard-echom]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/echom.c
+[lima-wizard-emotem]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/emotem.c
+[lima-wizard-msg]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/msg.c
+[lima-wizard-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/review.c
 [lima-wizard-command-rules]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
