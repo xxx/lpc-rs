@@ -3143,6 +3143,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima exec_code cleanup adaptation
+
+Reviewed **11 October 2026**, after cleanup audit notes were committed as
+native **75241b19** on lima-support. Dedicated Lima on lpc-rs-port over
+**053a39e3** adopts the audited [exec_code][lima-exec-code] change in misc.c:
+dispatch destruction through the existing simul wrapper, explicitly compile
+the replacement under the same exec.c name, then call its exec_foo(). Repeated
+wizard expressions now run, including two evaluations in one transaction.
+Source generation, optional headers, file removal, resident-object lifecycle
+and normal permission checks retain their behavior. The README's repeated-
+evaluation limitation is removed; no native implementation or API changes.
+
+All **15 cases / 78 registered inputs** pass together against copied checkout
+source: five cleanup cases and the ten existing print/null cases. Thirteen
+cases leave adopted source intact; two restore preceding source as failure
+controls. Old-object removal, arithmetic/player/zero/nil results, error recovery,
+optional headers, overwrite/append/pipe output and shell/input/modal ownership
+are checked. The print suite's second-expression and direct-reuse expectations
+now assert successful results. Bare print's missing-argument error and three
+home-output refusals are the four expected caught input errors; none unexpected.
+
+Refreshed compilation covers **147 targets**: **29/81 wizard**, **49/49
+transitional**, **9/9 administrator** and eight supporting targets, with no
+regressions, new compile successes, timeouts or abnormal exits. All **16 controls**
+pass for eight complete targets with preceding and adopted misc.c. Workspace and
+fixture formatting pass. The other 1,546 library files, configuration, CLI,
+native implementation and original Lima are unchanged; the native test hook is
+restored. Prior audit and print/null evidence remain frozen.
+
+Evidence: /tmp/lima-exec-code-cleanup-port-20261011, using in-memory lpc-rs
+shell execution and bounded compilation. Distinct nil, preserved call-out
+players and 4,000 ms tasks remain. Broader boot, service and transport checks
+retain their earlier scope. Misc.c/README are committed as Lima **44af9c40**.
+Next: audit eval(), whose separate bare destruct site and conversion fast paths
+were outside this change. Bare print's usage guard remains separate.
+
 #### Lima exec_code cleanup audit
 
 Reviewed **11 October 2026**, after print/null were committed as Lima
@@ -3192,6 +3228,7 @@ full boot/service/physical transport run. Proposal is not adopted. Next: commit
 audit notes, adopt the tested exec_code change and update the README's known
 repeat-evaluation limitation, then verify checkout source. Eval's separate bare
 destruct site and bare print's usage guard remain separate.
+The subsequent adoption and verification are recorded above.
 
 #### Lima wizard print/null-command adaptation
 
