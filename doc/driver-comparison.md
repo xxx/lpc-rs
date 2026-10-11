@@ -3143,6 +3143,40 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard lightme-command adaptation
+
+Reviewed **11 October 2026**, after audit notes were committed as native
+**1b1713ad** on lima-support. The dedicated lpc-rs-port checkout over Lima
+**13cf856f** contains the exact audited [lightme][lima-wizard-lightme] dispatcher
+and README note, pending commit. It calls main(arg), retaining the private handler,
+[numeric rule][lima-wizard-command-rules], [light setter][lima-object-light],
+[container][lima-container] and [room propagation][lima-base-room].
+
+All **8 cases / 38 registered inputs** pass again: seven copy adopted lightme
+without replacing it; one restores the unavailable original. All audited actions,
+assertions and LPC helpers remain. Absolute total-light changes, room messages
+and recipients, carried light, movement, integer-prefix parsing, refusals, ignored
+stdin, exact IO and shell-role retry retain checked state/input/modal ownership.
+The sole expected home-output refusal retains policy, direct messages and changed
+light; there are no unexpected caught input errors. The existing carried-light
+cache behavior characterized below is retained.
+
+Fresh bounded compilation reaches **26/81 wizard**, retaining **49/49
+transitional**, **9/9 administrator** and eight supports across **147 targets**.
+Only lightme newly succeeds; no regressions, timeouts or abnormal exits. All
+**13 compile controls** match, including the original failure, adopted command,
+OBJ emitter, container and base room. Workspace/fixture formatting passes.
+Other 1,546 library files, configuration, CLI, native implementation and original
+Lima remain unchanged; the native hook is restored and all 107 frozen audit
+artifacts match. Sixteen audit source comparisons and preceding broader checks
+retain scope. Evidence: /tmp/lima-wizard-lightme-port-20261011, using copied-source
+in-memory lpc-rs execution and bounded compilation.
+
+Next: commit lightme/README and adoption notes, then audit the wizard heal command
+through body lookup, healing and action messages. Separate Lima/client/snoop
+findings and previous upstream/full boot/service/physical transport evidence
+retain scope.
+
 #### Lima wizard lightme-command audit
 
 Reviewed **11 October 2026**, after quiet/README were committed as Lima
@@ -3183,9 +3217,8 @@ with in-memory lpc-rs execution and bounded compilation. No lightme source is
 adopted; previous broader checks retain scope, with no new upstream-driver,
 full boot/restart, service or physical transport run.
 
-Next: commit audit notes, adopt the exact lightme adapter and README note, then
-verify copied source and bounded command compilation. Separate Lima/client/snoop
-findings retain scope.
+Audit notes are committed as native **1b1713ad**; adopted-source verification is
+above. Separate Lima/client/snoop findings retain scope.
 
 #### Lima wizard quiet-command adaptation
 
