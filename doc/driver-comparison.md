@@ -3143,6 +3143,38 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator wall-command adaptation
+
+Adopted and verified **10 October 2026**, after audit notes were committed as
+native **eac1cabd**. Dedicated lpc-rs-port at **f7a66cb3** has the exact
+[wall][lima-wall-command] dispatcher-only proposal and README entry, ready
+to commit. Existing rules, master policy, simuls and native APIs remain unchanged.
+Lima stays on distinct nil, preserved call-out players and 4,000 ms tasks.
+
+All **9 cases / 43 registered inputs** pass: eight use copied adopted command
+source unchanged, and one restores the unavailable-command control. Eighteen
+broadcasts reach the sender and a second attached user, including ordinary and
+bodyless recipients. Exact raw logs, sender/timestamp, default rendering,
+recipient-specific wrapping, empty usage and checked shell/input state pass.
+Two caught role errors match the audit; denial leaves log/recipients untouched
+and administrator retry works. Raw quotes, spacing, punctuation and literal
+redirect/outgoing-pipe suffixes remain; files are untouched and incoming
+pipeline data is ignored.
+
+Fresh compilation reaches **8/9 administrator commands**, retains **49/49
+transitional commands** and passes **81 support checks** among **108 distinct
+targets**. Only wall newly succeeds. The remaining telnet diagnostic matches
+its fresh pre-adoption log byte-for-byte; no regressions or timeouts occur.
+All **9 compile controls** and workspace/fixture formatting pass. The native
+test hook is restored; the other 1,546 library files, configuration, native
+implementation/CLI and original Lima stay unchanged. All 71 frozen audit
+artifacts match, retaining seven pinned source comparisons. Prior full-suite,
+complete inventory/boot, transport and upstream execution retain scope.
+Adoption evidence: /tmp/lima-wall-port-20261010.
+
+Next: commit wall/README and adoption notes, then audit administrator telnet
+command/client integration. Existing Lima and deferred snoop findings stay separate.
+
 #### Lima administrator wall-command audit
 
 Reviewed **10 October 2026**, after shutdown/master/README were committed as
@@ -3185,10 +3217,9 @@ artifacts remain unchanged. Prior full-suite, complete inventory/boot,
 transport and upstream execution retain scope. Frozen proposal/evidence:
 /tmp/lima-wall-audit-20261010.
 
-Next: commit audit notes, adopt the exact wall dispatcher and README, and
-verify adopted source and bounded command coverage. Telnet command/client
-integration remains afterward; existing Lima and deferred snoop findings stay
-separate.
+Audit notes are committed as native **eac1cabd**; adopted-source verification
+is above. Telnet command/client integration remains afterward; existing Lima
+and deferred snoop findings stay separate.
 
 #### Lima administrator shutdown-command adaptation
 
