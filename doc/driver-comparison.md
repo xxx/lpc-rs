@@ -3143,6 +3143,43 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard quiet-command adaptation
+
+Reviewed **11 October 2026**, after quiet audit notes were committed as native
+**4c1f6177** on lima-support. The dedicated lpc-rs-port checkout over Lima
+**031c3e63** contains the exact audited [quiet][lima-wizard-quiet] dispatcher and
+README note, pending commit. The adapter calls main(arg); its private handler,
+[object rule][lima-wizard-command-rules] and [action module][lima-follow-actions]
+remain unchanged, including the earlier nil adaptation.
+
+All **7 cases / 28 registered inputs** pass again. Six copy adopted quiet directly
+from the checkout without replacing its body; one restores the unavailable
+original. Every audited action/assertion and LPC helper is retained. Native
+periodic-timer cancellation, nil/delay-100 state, preserved responses/hooks and
+callback firing after movement retain the audited behavior. Refusals, lookup,
+empty/stopped lists, repeats, rule diagnostics, ignored input, exact no-newline
+IO and player-shell exclusion with wizard retry retain checked shell state,
+rearmed input and pager/modal ownership. The one expected home-output refusal
+preserves existing policy and changed actions; no unexpected caught errors occur.
+
+Fresh compilation across **147 distinct targets** reaches **25/81 wizard**,
+retaining **49/49 transitional**, **9/9 administrator** and eight complete
+supporting successes. Quiet is the only new success; there are no regressions,
+timeouts or abnormal exits. All **10 compile controls** match: the restored
+original fails first at dispatch_main, while adopted quiet and eight supports
+compile. Workspace/fixture formatting passes.
+
+Other 1,546 library files, configuration, CLI, native implementation and original
+Lima remain unchanged; the temporary native hook is restored. All 122 frozen
+audit artifacts match, retaining their fifteen pinned source comparisons and
+previous broader validation. Evidence: /tmp/lima-wizard-quiet-port-20261011,
+with copied-source in-memory lpc-rs execution and bounded compilation. No new
+upstream-driver, full boot/restart, service or physical transport run is established.
+
+Next: commit command/README and adoption notes, then audit lightme through its
+numeric rule and body/room light propagation. Separate Lima/client/snoop findings
+retain scope.
+
 #### Lima wizard quiet-command audit
 
 Reviewed **11 October 2026**, after visibility commands/README were committed
@@ -3179,9 +3216,8 @@ visibility-adoption artifacts match. Evidence:
 compilation. No quiet source is adopted; previous broader checks retain scope,
 with no new upstream-driver/full boot/service/physical transport execution.
 
-Next: commit audit notes, adopt the exact quiet adapter and README note, then
-verify copied source and bounded command compilation. Separate Lima/client/snoop
-findings retain scope.
+Audit notes are committed as native **4c1f6177**; adoption and copied-source
+verification are recorded above. Separate Lima/client/snoop findings retain scope.
 
 #### Lima wizard visibility-command adaptation
 
