@@ -3143,6 +3143,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima administrator shutdown-command adaptation
+
+Adopted and verified **10 October 2026**, after audit notes were committed as
+native **e0c88ec8**. Dedicated lpc-rs-port at **a7fda68f** has the exact
+[shutdown][lima-shutdown-command] dispatcher/callback proposal, the
+`valid_shutdown` hook added to its master and README update, ready to commit.
+The existing privileged simul, Cmd_rules and native API/apply contracts stay unchanged.
+Lima stays on distinct nil, preserved call-out players and 4,000 ms tasks.
+
+All **10 cases / 34 registered inputs** pass: eight use the copied adopted
+command and master bodies, with only temporary observer functions appended;
+two restore the unavailable-command and missing-hook controls. The audit's
+actual user/body/wish/CMD, master, security daemon and simuls, in-memory
+connections, controlled roles, optional HELP_D data and inactive IMUD startup
+remain. Immediate, timed and zero-minute paths queue three native exit effects
+after actual user/body/shell cleanup. Five expedited timer firings confirm
+countdown, cancellation, preserved player identity and current-role checks.
+Automatic entry, logs, exact redirected bytes, pipes, ignored stdin and surviving
+shell/input state pass. The missing-hook control supplies the only expected
+caught input error; no unexpected input or timer errors occur. The existing
+duplicate-request cancellation-handle bug remains reproduced and unchanged.
+The fixture consumes VM exit requests; live-driver exit and real-minute timing
+are not tested.
+
+Fresh bounded compilation reaches **7/9 administrator commands** (before: 6/9),
+retains **49/49 transitional commands**, and passes **80 support checks** among
+**108 distinct targets**. Only shutdown newly succeeds; telnet and wall
+diagnostics match fresh pre-adoption logs byte-for-byte, without regressions or
+timeouts. All ten compile controls and workspace/fixture formatting pass.
+The native test hook is restored; the other 1,545 library files, configuration,
+native implementation/CLI and original Lima remain unchanged. All 96 frozen
+audit artifacts match. Prior full-suite, complete inventory/boot, transport and
+upstream execution retain scope. Adoption evidence:
+/tmp/lima-shutdown-port-20261010.
+
+Next: commit shutdown/master/README and adoption notes, then audit administrator
+wall. Telnet command/client integration remains afterward. Keep existing Lima
+and deferred snoop findings separate.
+
 #### Lima administrator shutdown-command audit
 
 Reviewed **10 October 2026**, after objpurge/README were committed as Lima
@@ -3195,9 +3234,9 @@ Prior full-suite, complete inventory/boot, transport and upstream execution
 retain their scope. Frozen proposal/evidence:
 /tmp/lima-shutdown-audit-20261010.
 
-Next: commit audit notes, adopt the exact command/master proposal and README,
-then verify adopted source and bounded command coverage. Keep existing Lima
-and deferred snoop findings separate.
+Audit notes are committed as **e0c88ec8**; the [shutdown
+adaptation](#lima-administrator-shutdown-command-adaptation) records adopted-source
+verification. Keep existing Lima and deferred snoop findings separate.
 
 #### Lima administrator objpurge-command adaptation
 
