@@ -61,6 +61,11 @@ A destructed object behaves as the selected null value for truth, equality,
 type predicates, casts, JSON, and save output. Transactional destruction is
 visible immediately within the attempt that performed it.
 
+Array set operations (`-`, `&`, `|`) also match a destroyed object as the selected
+null value on either side. They retain type-sensitive numeric matching, so float
+zero is a separate member even in zero mode. Matching does not rewrite stored
+array elements. See [collection matching](comparisons.md#collection-matching).
+
 ## Containers and efuns
 
 A missing mapping key yields nil in distinct mode. A present key can also hold

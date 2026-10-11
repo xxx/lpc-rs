@@ -218,7 +218,15 @@ type-sensitive matching used by mapping keys and array set operations.
     - [Array literal spreading](array_spreading.md) inserts another array's elements: `({ 1, xs..., 2 })`.
     - Arrays can be indexed with numeric or range indices.
     - Arrays can be concatenated with the `+` operator.
-    - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates kept; `a - b` removes every occurrence of `b`'s members; `a | b` is `a` as it is, then `b`'s members absent from `a` in `b`'s order, duplicates included. Members are compared by content for strings and `bytes` and by identity for objects and nested arrays or mappings.
+    - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates
+      kept; `a - b` removes every occurrence of `b`'s members; `a | b` is `a` as
+      it is, then `b`'s members absent from `a` in `b`'s order, duplicates included.
+      Members are compared by content for strings and `bytes` and by identity for
+      live objects, nested arrays, mappings, classes and functions. Destroyed
+      objects match the configured null value on either side; numeric matching
+      remains type-sensitive. Each operation makes a fresh outer array without
+      changing the operands or the selected members' stored values. See
+      [collection matching](comparisons.md#collection-matching).
     - `mixed *` indicates an array, where the values can be of any type, including other arrays.
     - `mixed *` is the only way to create a multidimensional array.
     - Arrays are mutable, and are reference types in LPC, meaning it is a pointer to the actual container, and

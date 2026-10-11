@@ -59,3 +59,22 @@ sizeof(m);                         // 2
 member_array(1, ({ 1.0 }));         // 0
 ({ 1 }) & ({ 1.0 });               // ({ })
 ```
+
+Array set operations treat a destroyed object as the configured null value on
+either side. Live objects keep their identity matching. In distinct mode, integer
+zero does not match a destroyed object; in zero mode it does. Float zero remains
+a separate set member in both modes because numeric set matching is type-sensitive.
+
+```c
+object o = clone_object("/target");
+mixed *items = ({ o });
+destruct(o);
+sizeof(items - ({ nil }));          // 0
+sizeof(items & ({ nil }));          // 1
+sizeof(items | ({ nil }));          // 1
+```
+
+Matching observes destruction in the current transaction and in later
+transactions after its commit. The operations create fresh outer arrays and keep
+the selected members' stored values; neither operand is rewritten or pruned in
+place. The [array type reference](types.md) describes ordering and duplicate rules.

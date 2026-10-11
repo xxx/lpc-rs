@@ -375,7 +375,7 @@ across all five drivers; the broader rows describe differences within each area.
 |---|---|---|---|---|---|
 | Execution | Parallel LPC tasks; snapshot reads, atomic commits and conflict retries. [Runtime](../README.md#how-execution-works); [monotonic elapsed VM uptime](efun/uptime.md). | Tasks evaluated serially by the [backend loop][cd-backend]. | Sequential [backend evaluation][ld-backend]; explicit [coroutines][ld-async]. | Event-driven LPC; [async functions and promises][fl-async], with worker-thread I/O in the async package. | Explicit [atomic functions][dgd-lpc] roll back on errors; multicore acceleration is a separate [Hydra offering][dgd-readme]. |
 | Saving and restarting | [Object and mapping save files, including class records](save-format.md), with [`nosave` globals](lpc/nosave.md); [`save_value`](efun/save_value.md) / [`restore_value`](efun/restore_value.md) serialize individual values as strings. Whole-world snapshot/restart is not implemented. | [Object variable saves][cd-save]. | [Object saves][ld-save] with selectable formats and a serialised-string form. | [Object saves][fl-save] with flags, optional compression and a serialised-string form; [`nosave` globals][fl-nosave-keywords] with `SENSIBLE_MODIFIERS`; individual values through [`save_variable`][fl-save-variable] / [`restore_variable`][fl-restore-variable]. | Object saves plus [whole-system snapshots][dgd-dump] and [restart from a snapshot][dgd-intro]. |
-| Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
+| Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [Type-sensitive array set matching with destroyed-object normalization](lpc/comparisons.md#collection-matching); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
 | Text file writes | [`write_file`](efun/write_file.md) stages append (0/default) or whole-file replacement (1), with pending reads and commit-time delivery. | **Not checked**. | **Not checked**. | Core `write_file` uses bit 1 for overwrite and bit 2 for compression. [Implementation][fluffos-file-write-flags]. | **Not checked**. |
 | File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`rm`](efun/rm.md) checks pending entry changes, and [`rmdir`](efun/rmdir.md) checks pending directory membership without reading file contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
 | Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
@@ -3143,6 +3143,58 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima array set matching correction
+
+Implemented **10 October 2026**, following audit notes committed as native
+**240f4fb4**. Array `-`, `&` and `|` now match stored destroyed-object references
+as the configured null value on either side. Different destroyed objects match
+each other. Integer zero remains separate from nil in Lima's distinct mode;
+float zero stays a separate set member in either native mode. Numeric matching
+remains type-sensitive, including the large-integer boundary.
+
+The operators build comparison keys once per operand while holding their existing
+transaction lock. Object liveness reads use that transaction directly and track
+concurrent removal. Keys borrow the array snapshot unless a destroyed reference
+requires a temporary buffer. Result members retain their original stored values;
+input order, duplicates, content/identity rules and fresh outer arrays remain.
+Raw Eq/Hash, mapping keys and unique_array grouping are unchanged. See
+[native collection matching](lpc/comparisons.md#collection-matching).
+
+Retain the inspector and ammunition objectp filters as explicit object-only
+rules. The core correction does not repair stale-target unsnoop: the daemon still
+uses the target after subtraction. That existing source issue and the separate
+converging-graph cycle issue remain deferred. No Lima source or configuration
+change accompanies this native correction.
+
+All **16 permanent native regressions** pass. They cover operand direction,
+identical/different/expired references, pending and committed destruction,
+aborted removal and old snapshots, original stored values, numeric boundaries,
+content/identity matching, order/duplicates and compound assignment. Each set
+operator independently verifies an object-cell read conflict on concurrent
+destruction. Generic native fixtures exercise the configurable null modes;
+Lima continues to use distinct nil exclusively.
+
+The locked full workspace suite passes **5,068 tests / 2 ignored**, including
+ulib and doctests. The first sandboxed run could not create sockets and also
+failed a command log-capture assertion; the permitted serial run passes all
+tests. Locked workspace build, warning-free Clippy across all targets/features,
+workspace formatting and warning-free workspace docs pass. No performance
+benchmark is claimed; matching retains its existing membership-search complexity
+with an additional linear normalization scan.
+
+The adopted inspector recheck passes **6 runtime cases / 37 registered inputs /
+5 native starts**, retaining three original controls and their one expected
+integer-zero-pruning formatting error. Sorted/shared rows, pipelines, redirection,
+removal, live filtering and checked input/context state retain their results.
+In-memory connections delimit this fixture; complete Lima inventory/boot and
+upstream execution retain earlier scope. All 1,547 dedicated library files,
+README/config and original Lima remain unchanged; the temporary native fixture
+hook is restored byte-for-byte. No apply contract changed.
+Evidence: /tmp/lpc-rs-array-set-matching-20261010.
+
+Next: commit the native correction, then audit the unported administrator
+listeners inspector.
+
 #### Lima array set matching audit
 
 Audited **10 October 2026** against native **ba9851fc**, after the inspector
@@ -3194,8 +3246,9 @@ inventory/boot results retain their prior scope; no upstream execution is claime
 Retain the adopted inspector and ammunition objectp filters. A native matching
 correction alone does not make stale-target unsnoop safe: the daemon still
 calls get_dummy_object on the target after subtraction. That cleanup remains
-separate mudlib work. Next: commit these audit notes, then implement and verify
-the bounded native array set matching correction.
+separate mudlib work. Audit notes are committed as native **240f4fb4**; the
+[correction above](#lima-array-set-matching-correction) records implementation
+and validation. The example and results in this audit describe native ba9851fc.
 
 #### Lima administrator snoops adaptation
 
@@ -3236,8 +3289,9 @@ boot and upstream-driver execution retain their preceding scope.
 Evidence: /tmp/lima-snoops-port-20261010.
 
 The adaptation is committed as Lima **07a85de0** and native notes **ba9851fc**.
-The separate native array set matching audit above records the next correction
-before continuing to administrator commands.
+The [native array set matching correction above](#lima-array-set-matching-correction)
+addresses the separate comparison defect before continuing to administrator
+commands.
 
 #### Lima administrator snoops audit
 
@@ -8729,13 +8783,13 @@ Supply `"and"` to `format_list` in the condition display, and pass bare
 `(: message_filter :)` returns a function value under native semantics, so its
 truthy result ignores the recipient's filtering decision.
 
-Use `readied = filter(readied, objectp)` for ammunition cleanup. Subtracting
-`({nil})` removes literal nil entries but leaves destroyed object references:
-array set operations use [collection matching](lpc/comparisons.md#collection-matching),
-while scalar equality treats a destroyed object as nil. The live-object filter
-also sees destruction in the current transaction. Preserve cleanup on addition,
-deduplication and ordering; `query_readied` returns an independent array whose
-objects remain shared.
+Use `readied = filter(readied, objectp)` for ammunition cleanup. The adaptation
+predates native destroyed-object normalization in array set matching; subtracting
+`({nil})` now also removes destroyed references. Retain the live-object filter
+as the ammunition list's explicit object-only rule. Both observe destruction in
+the current transaction. Preserve cleanup on addition, deduplication and ordering;
+`query_readied` returns an independent array whose objects remain shared.
+See [native collection matching](lpc/comparisons.md#collection-matching).
 
 Several existing behaviors remain separate mudlib work. The 50–79 drunkenness
 band reuses the 1.2 factor despite the header defining a separate factor of 2.

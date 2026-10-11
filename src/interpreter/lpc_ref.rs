@@ -1,5 +1,6 @@
 use lpc_rs_core::null_mode::NullMode;
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     fmt,
     fmt::{Debug, Display, Formatter},
@@ -28,7 +29,7 @@ use crate::{
         lpc_int::LpcInt,
         lpc_mapping::LpcMapping,
         process::Process,
-        stm::{SVar, TxnHandle},
+        stm::{SVar, Transaction, TxnHandle},
     },
 };
 
@@ -165,6 +166,23 @@ fn gone_error(kind: &str) -> LpcError {
     LpcError::runtime(format!(
         "invalid access. The {kind}'s contents are not in this transaction's world"
     ))
+}
+
+/// Comparison keys borrow the members unless destroyed references need the configured null value.
+fn array_set_keys<'a>(
+    members: &'a [LpcRef],
+    transaction: &mut Transaction,
+    mode: NullMode,
+) -> Cow<'a, [LpcRef]> {
+    let mut keys = Cow::Borrowed(members);
+    for (index, member) in members.iter().enumerate() {
+        if let LpcRef::Object(weak) = member
+            && weak.upgrade().is_none_or(|p| !p.is_live_in(transaction))
+        {
+            keys.to_mut()[index] = LpcRef::nil(mode);
+        }
+    }
+    keys
 }
 
 impl LpcRef {
@@ -572,8 +590,14 @@ impl LpcRef {
                     (Some(a), Some(b)) => (a, b),
                     _ => return Err(self.expected_array_error()),
                 };
-                let kept: Vec<LpcRef> =
-                    (*a).iter().filter(|x| !(*b).contains(x)).cloned().collect();
+                let a_keys = array_set_keys(&a, t, txn.null_mode());
+                let b_keys = array_set_keys(&b, t, txn.null_mode());
+                let kept: Vec<LpcRef> = a
+                    .iter()
+                    .zip(a_keys.iter())
+                    .filter(|(_, key)| !b_keys.contains(key))
+                    .map(|(member, _)| member.clone())
+                    .collect();
                 Ok(LpcRef::Array(t.mint_array(LpcArray::from_iter(kept))))
             }),
             _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
@@ -629,7 +653,14 @@ impl LpcRef {
                     (Some(a), Some(b)) => (a, b),
                     _ => return Err(self.expected_array_error()),
                 };
-                let kept: Vec<LpcRef> = (*a).iter().filter(|x| (*b).contains(x)).cloned().collect();
+                let a_keys = array_set_keys(&a, t, txn.null_mode());
+                let b_keys = array_set_keys(&b, t, txn.null_mode());
+                let kept: Vec<LpcRef> = a
+                    .iter()
+                    .zip(a_keys.iter())
+                    .filter(|(_, key)| b_keys.contains(key))
+                    .map(|(member, _)| member.clone())
+                    .collect();
                 Ok(LpcRef::Array(t.mint_array(LpcArray::from_iter(kept))))
             }),
             _ => self.int_binop(rhs, BinaryOperation::And, |x, y| x & y),
@@ -645,8 +676,15 @@ impl LpcRef {
                 let (Some(a), Some(b)) = (t.read_array(cell.id), t.read_array(rhs_cell.id)) else {
                     return Err(self.expected_array_error());
                 };
+                let a_keys = array_set_keys(&a, t, txn.null_mode());
+                let b_keys = array_set_keys(&b, t, txn.null_mode());
                 let mut joined: Vec<LpcRef> = (*a).iter().cloned().collect();
-                joined.extend((*b).iter().filter(|x| !(*a).contains(x)).cloned());
+                joined.extend(
+                    b.iter()
+                        .zip(b_keys.iter())
+                        .filter(|(_, key)| !a_keys.contains(key))
+                        .map(|(member, _)| member.clone()),
+                );
                 Ok(LpcRef::Array(t.mint_array(LpcArray::from_iter(joined))))
             }),
             _ => self.int_binop(rhs, BinaryOperation::Or, |x, y| x | y),
@@ -1417,6 +1455,453 @@ mod tests {
             let result = int.add(&array, &txn);
 
             assert!(result.is_err());
+        }
+    }
+
+    mod array_sets {
+        use std::sync::Arc;
+
+        use lpc_rs_core::{lpc_path::LpcPath, null_mode::NullMode};
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        use super::super::{LpcRef, test_array_ref};
+        use crate::{
+            interpreter::{
+                lpc_array::LpcArray,
+                object_space::ObjectSpace,
+                process::Process,
+                program::{Program, ProgramBuilder},
+                stm::{
+                    Changeset, Committer, Conflict, ObjectChange, Transaction, TxnHandle,
+                    txn_insert_process, txn_undo_insert,
+                },
+                task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+                vm::Vm,
+            },
+            test_support::{permissive_master, run_prog_with_config},
+        };
+
+        async fn observe(code: &str, mode: NullMode) -> String {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(code, config.into()).await;
+            task.result().unwrap().as_str().unwrap().to_owned()
+        }
+
+        fn counts(left: &LpcRef, right: &LpcRef, txn: &TxnHandle) -> [usize; 3] {
+            [
+                left.sub(right, txn),
+                left.bitand(right, txn),
+                left.bitor(right, txn),
+            ]
+            .map(|result| result.unwrap().with_array(txn, |a| a.len()).unwrap())
+        }
+
+        #[tokio::test]
+        async fn stored_destroyed_references_match_the_selected_null_in_both_operand_directions() {
+            let code = r#"
+                string create() {
+                    object o = clone_object("/clone_target");
+                    mixed *a = ({o, 42, o});
+                    mixed *b = ({nil});
+                    destruct(o);
+                    return sprintf("%d,%d;%d,%d,%d;%d,%d,%d;%d,%d",
+                        a[0] == nil, member_array(nil, a),
+                        sizeof(a - b), sizeof(a & b), sizeof(a | b),
+                        sizeof(b - a), sizeof(b & a), sizeof(b | a), sizeof(a), sizeof(b));
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let result = observe(code, mode).await;
+                assert_eq!(result, "1,0;1,2,3;0,1,2;3,1");
+            }
+        }
+
+        #[tokio::test]
+        async fn different_destroyed_objects_match_each_other_in_sets() {
+            let code = r#"
+                string create() {
+                    object x = clone_object("/clone_target");
+                    object y = clone_object("/clone_target");
+                    mixed *a = ({x, 42, x});
+                    mixed *b = ({y, y});
+                    destruct(({x, y}));
+                    return sprintf("%d,%d;%d,%d,%d;%d,%d,%d",
+                        a[0] == b[0], member_array(b[0], a),
+                        sizeof(a - b), sizeof(a & b), sizeof(a | b),
+                        sizeof(b - a), sizeof(b & a), sizeof(b | a));
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let result = observe(code, mode).await;
+                assert_eq!(result, "1,0;1,2,3;0,2,3");
+            }
+        }
+
+        #[tokio::test]
+        async fn references_inserted_after_destruction_match_the_selected_null() {
+            let code = r#"
+                string create() {
+                    object o = clone_object("/clone_target");
+                    destruct(o);
+                    mixed *a = ({o, 42, o});
+                    mixed *b = ({nil});
+                    return sprintf("%d,%d,%d;%d,%d,%d",
+                        sizeof(a - b), sizeof(a & b), sizeof(a | b),
+                        sizeof(b - a), sizeof(b & a), sizeof(b | a));
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let result = observe(code, mode).await;
+                assert_eq!(result, "1,2,3;0,1,2");
+            }
+        }
+
+        #[tokio::test]
+        async fn identical_stored_weak_references_still_match_before_and_after_destruction() {
+            let code = r#"
+                string create() {
+                    object o = clone_object("/clone_target");
+                    mixed *a = ({o, 42, o});
+                    mixed *b = ({o});
+                    string before = sprintf("%d,%d,%d", sizeof(a-b), sizeof(a&b), sizeof(a|b));
+                    destruct(o);
+                    return before + ";" + sprintf("%d,%d,%d", sizeof(a-b), sizeof(a&b), sizeof(a|b));
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                assert_eq!(observe(code, mode).await, "1,2,3;1,2,3");
+            }
+        }
+
+        #[tokio::test]
+        async fn numeric_set_matching_intentionally_remains_type_sensitive() {
+            let code = r#"
+                string create() {
+                    mixed *a = ({1, 1, 9007199254740993});
+                    mixed *b = ({1.0, 9007199254740992.0});
+                    return sprintf("%d,%d,%d,%d;%d,%d,%d",
+                        1 == 1.0, member_array(1.0, a),
+                        9007199254740993 == 9007199254740992.0, member_array(9007199254740992.0, a),
+                        sizeof(a-b), sizeof(a&b), sizeof(a|b));
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                assert_eq!(observe(code, mode).await, "1,0,0,-1;3,0,5");
+            }
+        }
+
+        #[tokio::test]
+        async fn content_and_identity_matching_preserve_collection_contracts() {
+            let code = r#"
+                class point { int x; }
+                string create() {
+                    mixed *inner = ({7});
+                    mapping m = ([1: 2]);
+                    class point c = new(class point, x: 7);
+                    function f = sizeof;
+                    mixed *a = ({"x", to_bytes("x", "UTF-8"), inner, m, c, f});
+                    mixed *b = ({"x", to_bytes("x", "UTF-8"), ({7}), ([1: 2]), new(class point, x: 7)});
+                    mixed *same = ({inner, m, c, f});
+                    return sprintf("%d,%d,%d;%d,%d,%d;%d,%d",
+                        sizeof(a-b), sizeof(a&b), sizeof(a|b),
+                        sizeof(a-same), sizeof(a&same), sizeof(a|same),
+                        sizeof(({}) - ({})), ({}) == ({}));
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                assert_eq!(observe(code, mode).await, "4,2,9;2,4,6;0,0");
+            }
+        }
+
+        #[tokio::test]
+        async fn order_duplicates_and_compound_assignment_preserve_original_arrays() {
+            let code = r#"
+                string create() {
+                    int *a = ({3, 1, 3, 2, 1});
+                    int *b = ({1, 4, 4});
+                    int *minus = a; int *both = a; int *either = a;
+                    minus -= b; both &= b; either |= b;
+                    return implode(map(minus, to_string), ",") + ";" +
+                        implode(map(both, to_string), ",") + ";" +
+                        implode(map(either, to_string), ",") + ";" +
+                        implode(map(a, to_string), ",") + ";" + implode(map(b, to_string), ",");
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                assert_eq!(
+                    observe(code, mode).await,
+                    "3,3,2;1,1;3,1,3,2,1,4,4;3,1,3,2,1;1,4,4"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn stored_global_array_matches_null_after_a_committed_destruct() {
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let vm = Vm::new(config);
+                permissive_master(&vm.global_state.object_space).await;
+                let owner = vm
+                    .initialize_process_from_code(
+                        "/probe.c",
+                        r#"
+                    mixed *a;
+                    void create() { object o = clone_object("/clone_target"); a = ({o,42,o}); }
+                    void retire() { destruct(a[0]); }
+                    string inspect() {
+                        mixed *b = ({nil});
+                        return sprintf("%d,%d;%d,%d,%d",
+                            a[0] == nil, member_array(nil,a), sizeof(a-b), sizeof(a&b), sizeof(a|b));
+                    }
+                "#,
+                    )
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                apply_function_by_name(
+                    "retire",
+                    &[],
+                    owner.clone(),
+                    TaskTemplate::from(vm.global_state.clone()),
+                    Some(4000),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                let result = apply_function_by_name(
+                    "inspect",
+                    &[],
+                    owner,
+                    TaskTemplate::from(vm.global_state.clone()),
+                    Some(4000),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                assert_eq!(result, LpcRef::from("1,0;1,2,3"));
+            }
+        }
+
+        #[test]
+        fn expired_weak_references_match_null_without_rewriting_stored_members() {
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let committer = Committer::with_null_mode(mode);
+                let txn = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                let process = Arc::new(Process::new(Program::default()));
+                let weak = LpcRef::from(Arc::downgrade(&process));
+                drop(process);
+                let a = test_array_ref(
+                    &txn,
+                    LpcArray::from_iter([weak.clone(), 42.into(), weak.clone()]),
+                );
+                let b = test_array_ref(&txn, LpcArray::from_iter([txn.nil()]));
+                assert!(weak.eq_in(&txn.nil(), &txn));
+                assert_eq!(counts(&a, &b, &txn), [1, 2, 3]);
+                a.with_array(&txn, |stored| {
+                    assert_eq!(stored[0], weak);
+                    assert!(matches!(stored[0], LpcRef::Object(_)));
+                })
+                .unwrap();
+                a.bitand(&b, &txn)
+                    .unwrap()
+                    .with_array(&txn, |kept| {
+                        assert_eq!(kept[0], weak);
+                        assert!(matches!(kept[0], LpcRef::Object(_)));
+                    })
+                    .unwrap();
+            }
+        }
+
+        #[test]
+        fn liveness_follows_pending_committed_aborted_and_old_snapshot_removal() {
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let mut committer = Committer::with_null_mode(mode);
+                let space = Arc::new(ObjectSpace::default());
+                let process = Arc::new(Process::new(
+                    ProgramBuilder::default()
+                        .filename(LpcPath::from("/victim.c"))
+                        .build()
+                        .unwrap(),
+                ));
+                ObjectSpace::insert_process_physical(&space, process.clone());
+                let mut placement = Changeset::new(committer.current_version());
+                placement
+                    .object_changes
+                    .push(ObjectChange::new(&process, true));
+                committer.commit(placement).unwrap();
+                let old = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                let weak = LpcRef::from(Arc::downgrade(&process));
+                assert!(!weak.eq_in(&old.nil(), &old));
+                let aborted = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                txn_undo_insert(&aborted, &space, &process);
+                assert!(weak.eq_in(&aborted.nil(), &aborted));
+                drop(aborted);
+                let removal = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                assert!(!weak.eq_in(&removal.nil(), &removal));
+                txn_undo_insert(&removal, &space, &process);
+                assert!(weak.eq_in(&removal.nil(), &removal));
+                committer
+                    .commit(removal.with(|t| t.take_changeset()))
+                    .unwrap();
+                let fresh = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                for flush in [false, true] {
+                    if flush {
+                        space.apply_remove("/victim", &process);
+                    }
+                    assert!(!weak.eq_in(&old.nil(), &old));
+                    assert!(weak.eq_in(&fresh.nil(), &fresh));
+                    let a = test_array_ref(&fresh, LpcArray::from_iter([weak.clone()]));
+                    let b = test_array_ref(&fresh, LpcArray::from_iter([fresh.nil()]));
+                    assert_eq!(counts(&a, &b, &fresh), [0, 1, 1]);
+                }
+                assert!(matches!(
+                    committer.commit(old.with(|t| t.take_changeset())),
+                    Err(Conflict::ReadInvalidated { .. })
+                ));
+            }
+        }
+
+        #[tokio::test]
+        async fn literal_null_values_follow_the_existing_set_rules() {
+            let code = r#"
+                string create() {
+                    mixed *a = ({nil, 42, nil}); mixed *b = ({nil});
+                    return sprintf("%d,%d,%d;%d,%d,%d",
+                        sizeof(a-b), sizeof(a&b), sizeof(a|b),
+                        sizeof(b-a), sizeof(b&a), sizeof(b|a));
+                }
+            "#;
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                assert_eq!(observe(code, mode).await, "1,2,3;0,1,2");
+            }
+        }
+
+        #[tokio::test]
+        async fn integer_zero_is_a_different_selector_in_distinct_mode() {
+            let code = r#"
+                string create() {
+                    object o = clone_object("/clone_target");
+                    mixed *a = ({o,42,o}); mixed *b = ({0});
+                    destruct(o);
+                    return sprintf("%d,%d;%d,%d,%d;%d,%d,%d",
+                        a[0] == 0, member_array(0,a),
+                        sizeof(a-b), sizeof(a&b), sizeof(a|b),
+                        sizeof(b-a), sizeof(b&a), sizeof(b|a));
+                }
+            "#;
+            assert_eq!(observe(code, NullMode::Distinct).await, "0,-1;3,0,4;1,0,4");
+        }
+
+        #[tokio::test]
+        async fn null_matching_preserves_distinct_zero_and_type_sensitive_float_zero() {
+            let code = r#"
+                string create() {
+                    object o = clone_object("/clone_target");
+                    mixed *a = ({o, 0, 0.0, nil});
+                    destruct(o);
+                    return sprintf("%d,%d;%d,%d,%d",
+                        sizeof(a-({nil})), sizeof(a-({0})),
+                        sizeof(a&({nil})), sizeof(a&({0})), sizeof(a&({0.0})));
+                }
+            "#;
+            assert_eq!(observe(code, NullMode::Distinct).await, "2,3;2,1,1");
+            assert_eq!(observe(code, NullMode::Zero).await, "1,1;3,3,1");
+        }
+
+        fn placed_object(mode: NullMode) -> (Committer, Arc<ObjectSpace>, Arc<Process>) {
+            let mut committer = Committer::with_null_mode(mode);
+            let space = Arc::new(ObjectSpace::default());
+            let process = Arc::new(Process::new(
+                ProgramBuilder::default()
+                    .filename(LpcPath::from("/victim.c"))
+                    .build()
+                    .unwrap(),
+            ));
+            let placement = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+            txn_insert_process(&placement, &space, &process);
+            committer
+                .commit(placement.with(|t| t.take_changeset()))
+                .unwrap();
+            (committer, space, process)
+        }
+
+        #[test]
+        fn subtraction_tracks_liveness_and_conflicts_with_concurrent_destruction() {
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let (mut committer, space, process) = placed_object(mode);
+                let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                let left = test_array_ref(
+                    &reader,
+                    LpcArray::from_iter([LpcRef::from(Arc::downgrade(&process))]),
+                );
+                let right = test_array_ref(&reader, LpcArray::from_iter([reader.nil()]));
+                let result = left.sub(&right, &reader).unwrap();
+                assert_eq!(result.with_array(&reader, |a| a.len()).unwrap(), 1);
+                let removal = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                txn_undo_insert(&removal, &space, &process);
+                committer
+                    .commit(removal.with(|t| t.take_changeset()))
+                    .unwrap();
+                assert!(
+                    matches!(committer.commit(reader.with(|t| t.take_changeset())),
+                    Err(Conflict::ReadInvalidated { cell, .. }) if cell == *process.cell.get().unwrap())
+                );
+            }
+        }
+
+        #[test]
+        fn intersection_tracks_liveness_and_conflicts_with_concurrent_destruction() {
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let (mut committer, space, process) = placed_object(mode);
+                let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                let left = test_array_ref(
+                    &reader,
+                    LpcArray::from_iter([LpcRef::from(Arc::downgrade(&process))]),
+                );
+                let right = test_array_ref(&reader, LpcArray::from_iter([reader.nil()]));
+                let result = left.bitand(&right, &reader).unwrap();
+                assert_eq!(result.with_array(&reader, |a| a.len()).unwrap(), 0);
+                let removal = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                txn_undo_insert(&removal, &space, &process);
+                committer
+                    .commit(removal.with(|t| t.take_changeset()))
+                    .unwrap();
+                assert!(
+                    matches!(committer.commit(reader.with(|t| t.take_changeset())),
+                    Err(Conflict::ReadInvalidated { cell, .. }) if cell == *process.cell.get().unwrap())
+                );
+            }
+        }
+
+        #[test]
+        fn union_tracks_liveness_and_conflicts_with_concurrent_destruction() {
+            for mode in [NullMode::Distinct, NullMode::Zero] {
+                let (mut committer, space, process) = placed_object(mode);
+                let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                let left = test_array_ref(
+                    &reader,
+                    LpcArray::from_iter([LpcRef::from(Arc::downgrade(&process))]),
+                );
+                let right = test_array_ref(&reader, LpcArray::from_iter([reader.nil()]));
+                let result = left.bitor(&right, &reader).unwrap();
+                assert_eq!(result.with_array(&reader, |a| a.len()).unwrap(), 2);
+                let removal = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+                txn_undo_insert(&removal, &space, &process);
+                committer
+                    .commit(removal.with(|t| t.take_changeset()))
+                    .unwrap();
+                assert!(
+                    matches!(committer.commit(reader.with(|t| t.take_changeset())),
+                    Err(Conflict::ReadInvalidated { cell, .. }) if cell == *process.cell.get().unwrap())
+                );
+            }
         }
     }
 
