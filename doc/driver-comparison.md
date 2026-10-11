@@ -3143,6 +3143,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard visibility-command adaptation
+
+Reviewed **11 October 2026**, after visibility audit notes were committed as
+native **02140d19** on lima-support. The dedicated lpc-rs-port checkout over
+Lima **f19264c4** now contains the two audited dispatchers and README update,
+pending commit. [Vis][lima-wizard-vis] and [invis][lima-wizard-invis] match their
+frozen proposals exactly, calling zero-argument main() and retaining private
+handlers, rules, visibility/message modules and the existing daemon call.
+
+All **7 cases / 34 registered inputs** pass again: six copy adopted commands
+directly from the checkout, and one restores the two unavailable originals.
+Every audited action/assertion and LPC helper is retained. Visibility flags and
+descriptions, named actor/room messages and ordering, repeated calls, custom
+Unicode templates, IO/ignored input, player-shell exclusion and wizard retry
+retain their audited behavior, checked state, rearmed input and modal ownership.
+Two expected home-output refusals preserve existing policy, delivered messages
+and visibility changes; there are no unexpected caught input errors. The
+already-visible vis branch still uses direct printf, and the absent finger-daemon
+method returns nil harmlessly. No native API, daemon or unrelated bug fix is needed.
+
+Fresh compilation across **147 distinct targets** reaches **24/81 wizard**,
+retaining **49/49 transitional**, **9/9 administrator** and eight complete
+supporting successes. This adds the finger daemon to the previous 146-target
+survey, using its passing audit check as the additional baseline. Only vis/invis
+newly succeed; there are no regressions, timeouts or abnormal exits. All
+**12 compile controls** and workspace/fixture formatting pass.
+
+Other 1,545 library files, configuration, CLI, native implementation and original
+Lima remain unchanged; the temporary native hook is restored. All 156 frozen
+audit artifacts match. Evidence: /tmp/lima-wizard-visibility-port-20261011,
+with copied-source lpc-rs execution using in-memory connections and bounded
+compilation. The audit's nineteen pinned source comparisons and previous broader
+validation retain scope; no new upstream-driver, full boot/restart, service or
+physical transport execution is established.
+
+Next: commit commands/README and adoption notes, then audit
+[quiet][lima-wizard-quiet] through its object rule and M_ACTIONS, retaining its
+earlier nil adaptation. Separate Lima/client/snoop findings retain scope.
+
 #### Lima wizard visibility-command audit
 
 Reviewed **11 October 2026**, after message commands/README were committed as
@@ -3181,10 +3220,8 @@ with in-memory lpc-rs execution and bounded compilation. No visibility source is
 previous broader checks retain scope, with no new upstream-driver/full boot or
 physical transport execution.
 
-Next: commit audit notes, adopt the two dispatchers/README, then verify copied
-source and bounded command coverage. [Quiet][lima-wizard-quiet] is the next audit
-after adoption; retain its earlier nil adaptation and inspect M_ACTIONS behavior.
-Separate Lima/client/snoop findings retain scope.
+Audit notes are committed as native **02140d19**; adoption and copied-source
+verification are recorded above. Separate Lima/client/snoop findings retain scope.
 
 #### Lima wizard message-command adaptation
 
