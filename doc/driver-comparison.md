@@ -3143,6 +3143,36 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard which adaptation
+
+Reviewed **11 October 2026**, after the command-lookup audit was committed as
+native **ad67b6fa**. Dedicated Lima on lpc-rs-port over **2f6d960e** adopts the
+exact [which][lima-wizard-which] dispatcher proposal. It forwards the parsed
+argument array to the private handler, preserving command rules, search order,
+lookup diagnostics and inherited command IO. The README describes name lookup
+and output routing. No native implementation, API or policy change.
+
+All **6 cases / 29 registered inputs** pass against copied checkout source:
+five adopted-source fixtures and one restored-source availability control. All
+output, lookup and shell/input/modal observations match the audited proposal.
+Found commands remain unexecuted; path ordering, missing/noncommand results,
+argument rules/quotes, pipes and redirected IO retain their behavior.
+
+Refreshed compilation covers **147 targets**: **30/81 wizard**, **49/49
+transitional**, **9/9 administrator** and eight supporting targets. Which is the
+only new compile success, with no regressions, timeouts or abnormal exits. All
+**18 compile controls** have their expected outcomes, and workspace/fixture
+formatting pass. The other 1,546 library files, configuration, CLI, native
+implementation and original Lima are unchanged; the native hook is restored
+and all 119 frozen audit artifacts match.
+
+Evidence: /tmp/lima-wizard-which-port-20261011, using in-memory lpc-rs shell input
+and bounded compilation. Distinct nil, preserved call-out players and 4,000 ms
+tasks remain; upstream execution and broader boot/service/transport checks keep
+their earlier scope. Which/README are committed as Lima **1e421d06**;
+these adoption notes await commit. Next: audit
+cmds/wiz/calls.c call-out display, including its existing query adaptation.
+
 #### Lima wizard which audit
 
 Reviewed **11 October 2026**, after eval/README were committed as Lima
@@ -3171,6 +3201,8 @@ using pinned source review, in-memory lpc-rs input and bounded compilation.
 Distinct nil, preserved players and 4,000 ms tasks remain; upstream execution
 and broader boot/service/transport checks retain their preceding scope.
 Next: commit these notes, adopt the dispatcher/README note, and verify checkout source.
+Audit notes are committed as native **ad67b6fa**; adopted-source verification
+is recorded above.
 
 #### Lima eval adaptation
 
