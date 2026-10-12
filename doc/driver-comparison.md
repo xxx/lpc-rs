@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard scan audit
+
+Reviewed **12 October 2026**, after uncd/README were committed as Lima **2096c59f**
+and adoption notes as native **cdd6cefc**. Pinned public [scan][lima-wizard-scan]
+matches current/original source. Recommend a protected variadic dispatch_main
+forwarding parsed arg and flags to private main. The optional object rule, -d,
+actual native inventories and filename/short formatting need no native API change.
+
+All **8 cases / 44 registered inputs** pass, including empty/default/explicit
+objects, nested shallow/deep traversal, reverse native order, clone names,
+filename shortening, Unicode, relative paths, argument refusals, exact files/
+pipes, incoming text/refusals and real paging/quit. Nil descriptions use [no short];
+empty strings remain quoted.
+Thirty-nine inventory snapshots, eight following pwd commands and identity/
+input/pager/modal checks pass, with one directory change and no unexpected errors
+or panics. Inventories/body and working-file state are preserved. No upstream
+ordering guarantee is claimed; filenames containing spaces remain unchecked.
+The existing terminal wrapper adds one leading space because it assumes explode
+drops a leading empty field. Exact redirected indentation passes; the shared
+wrapper difference is recorded for a separate follow-up, with no explode change.
+
+All **19 compile controls** have expected outcomes and formatting passes.
+All 1,547 library files, README/configuration, native source/CLI and original Lima
+remain unchanged; test include restored. All 250 frozen adoption artifacts match.
+Evidence: /tmp/lima-wizard-scan-audit-20261012, distinct nil, preserved call-out
+players, 4,000 ms tasks, real room/container APIs, in-memory input and an IMUD stub.
+Existing 44/81 wizard, 49/49 transitional, 9/9 administrator and broader
+boot/service/transport evidence retains scope. Source review/native execution
+does not establish upstream-driver behavior. Proposal unadopted; next adopt exact
+scan/README and verify unchanged assertions.
+
 #### Lima wizard uncd adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as native
@@ -19449,3 +19480,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-here]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/here.c
 [lima-wizard-showexits]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showexits.c
 [lima-wizard-uncd]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/uncd.c
+[lima-wizard-scan]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/scan.c
