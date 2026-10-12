@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard wheremobs audit
+
+Reviewed **12 October 2026**, after livings/README were committed as Lima
+**87af96a5** and adoption notes as native **1d140b94**. Retrieved pinned
+[wheremobs][lima-wizard-wheremobs] matches original Lima; current port differs
+only in its preceding filter rename. Recommend protected varargs dispatch_main
+forwarding arg to public main(string arg), preserving selection and write/printf.
+No native API change is needed.
+
+Filename lookup accepts relative/absolute paths and .c suffixes. Original Lima
+already normalizes IDs as paths before query_name comparison: at pwd /, rat
+seeks /rat and does not match a clone named rat. This existing source limitation
+is preserved and documented separately from compatibility. Existing source files
+take lookup precedence without loading objects. Matching is case-sensitive;
+short/Unicode arguments succeed through native clipped slice reads.
+
+Native [objects](efun/objects.md) and [filter](efun/filter.md) select matching
+clones excluding bodies/prototypes; printed rows require an environment.
+Attackability is not tested: placed ordinary clones and combat-forbidden-room
+adversaries may appear. Surviving clones remain after prototype removal.
+Reports stay on screen without paging; overwrite writes empty output, append
+keeps prior content and pipes get no report. Incoming text is ignored.
+
+All **9 cases / 58 registered inputs** pass, including current-command control,
+filename/ID behavior, real selection/environments, clone/prototype removal,
+exact file bytes, pipes, refusals and twelve-row unpaged reports. All nine
+following pwd checks and state/input/pager/modal checks pass, including two
+intentional directory changes. No unexpected errors or panics. All **15 compile
+controls**, five fixture checks and workspace/fixture formatting pass. All 1,547
+library files, README/configuration, CLI/native source and original Lima remain
+unchanged; the temporary include is restored. All 251 frozen livings-adoption
+artifacts match. Evidence: /tmp/lima-wizard-wheremobs-audit-20261012, distinct nil,
+preserved call-out players and 4,000 ms tasks, using real adversary/room classes,
+in-memory input and an IMUD stub. Existing **39/81 wizard**, **49/49 transitional**,
+**9/9 administrator** inventory and broader boot/service/transport results retain
+scope. Source review/native execution do not establish upstream-driver behavior.
+Proposal unadopted. Next adopt the dispatcher/README and verify copied source.
+
 #### Lima wizard livings adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -3175,7 +3213,8 @@ All 101 frozen livings-audit artifacts match. Evidence:
 and 4,000 ms tasks, using real adversary/room classes, in-memory input and an
 IMUD stub. Earlier full-library, boot/service, physical-transport and
 upstream-driver results retain scope. Source/README are committed as Lima
-**87af96a5**. Next audit cmds/wiz/wheremobs.c; only local source selection is recorded.
+**87af96a5**, with adoption notes committed as native **1d140b94**.
+The completed wheremobs audit is recorded above.
 
 #### Lima wizard livings audit
 
@@ -19134,3 +19173,4 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-wizard-users]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/users.c
 [lima-wizard-livings]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/livings.c
+[lima-wizard-wheremobs]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wheremobs.c
