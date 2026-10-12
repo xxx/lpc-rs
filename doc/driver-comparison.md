@@ -3143,6 +3143,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima eval audit
+
+Reviewed **11 October 2026**, after exec_code/README were committed as Lima
+**44af9c40** on lpc-rs-port and adoption notes as native **c184a037** on
+lima-support. [Eval][lima-eval] has no static shipped callers in this checkout;
+its body matches the pinned original source. It uses /tmp/eval.c, tries numeric
+and short-text shortcuts, then evaluates a generated foo(). Unlike exec_code,
+it retains the source file. The existing /tmp protection is open to ordinary
+wizards; no permission-policy change is needed.
+
+The audit identifies three port mismatches: bare destruction carries misc.c
+provenance, implicit loading cannot replace a name removed in the same transaction,
+and the float round-trip check uses float + string, which native typing rejects.
+Recommend the existing destruction wrapper, explicit compile_string of the
+generated contents, and to_string(tmp) for the float check. Keep numeric/short-text
+shortcuts, optional-header writes, source/object persistence and caught expression
+errors. Existing evaluated-string and false-result fallback rules remain. The
+object-name shortcut's assignment precedence is a separate original source bug.
+
+All **7 cases / 58 eval invocations** pass in nine fixtures using actual ordinary
+wizard users and native in-memory connections. Seventeen conversion/fallback inputs
+are compared with preceding source; four expected preceding-source float conversion
+errors and two cleanup refusals are asserted. The proposal handles repeat calls,
+same-transaction replacement, generated nil/zero/string fallback, player context,
+optional headers, compile/runtime errors and retries. All nine subsequent pwd
+inputs pass with unchanged shell/input/modal ownership; no unexpected errors.
+All **16 compile controls** and workspace/fixture formatting pass.
+
+Proposal remains unadopted. All 1,547 library files, README/configuration, CLI,
+native implementation and original Lima are unchanged; the native hook is restored.
+Evidence: /tmp/lima-eval-audit-20261011. This is pinned source review and direct
+lpc-rs API execution, without upstream execution or new boot/service/transport
+claims. Distinct nil, preserved players and 4,000 ms tasks remain; preceding
+29/81 wizard and broader results retain scope. Next: commit these notes, adopt
+the tested misc.c proposal with a README note, then verify checkout source.
+
 #### Lima exec_code cleanup adaptation
 
 Reviewed **11 October 2026**, after cleanup audit notes were committed as
@@ -18274,3 +18310,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-print]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/print.c
 [lima-wizard-null]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/null.c
 [lima-exec-code]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L253-L299
+
+[lima-eval]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L305-L352
