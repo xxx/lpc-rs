@@ -3145,6 +3145,35 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard here audit
+
+Reviewed **12 October 2026**, after where/README were committed as Lima
+**4bebf72b** and adoption notes as native **d55a3569**. Retrieved pinned
+[here][lima-wizard-here] matches original/current source. Recommend protected
+varargs dispatch_main calling private main() without forwarding unused arguments.
+No wizard rule is declared; the default raw arguments are ignored. Native API,
+visibility, actual body/room selection and CMD output buffers remain.
+
+The report uses actual room short/file_name, including clone suffixes. Real
+Unicode rooms, returning to Void and independence from shell cd are verified.
+Exact overwrite/append and pipe-to-file output, cat/wc -l, ignored incoming text,
+normal stdio refusals and multiline-brief paging/advance/quit work. Existing
+entered-body/placed-room expectations remain; no missing-environment policy is added.
+
+All **7 cases / 34 registered inputs** pass, including current control and six
+proposal cases, 29 actual location snapshots and seven following pwd checks.
+State/input/pager/modal checks pass, including one intentional directory change;
+no unexpected errors or panics. All **15 compile controls**, three fixture checks
+and workspace/fixture formatting pass. All 1,547 library files, README/configuration,
+CLI/native source and original Lima remain unchanged; the temporary include is
+restored. All 244 frozen adoption artifacts match. Evidence:
+/tmp/lima-wizard-here-audit-20261012, distinct nil, preserved call-out players and
+4,000 ms tasks, using real body/indoor-room classes, in-memory input and an IMUD
+stub. Existing **41/81 wizard**, **49/49 transitional**, **9/9 administrator** and
+broader boot/service/transport results retain scope. Source review/native execution
+do not establish upstream-driver behavior. Proposal unadopted. Next adopt exact
+here/README and verify copied source.
+
 #### Lima wizard where adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -3174,7 +3203,8 @@ artifacts match. Evidence: /tmp/lima-wizard-where-port-20261012, distinct nil,
 preserved call-out players and 4,000 ms tasks, using real account/body/room classes,
 in-memory input and an IMUD stub. Earlier full-library, boot/service, physical
 transport and upstream-driver results retain scope. Source/README are committed
-as Lima **4bebf72b**. Next audit cmds/wiz/here.c; only local source selection is recorded.
+as Lima **4bebf72b**, with adoption notes committed as native **d55a3569**.
+The completed here audit is recorded above.
 
 #### Lima wizard where audit
 
@@ -19271,3 +19301,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-wheremobs]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wheremobs.c
 [lima-wizard-where]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/where.c
 [lima-wizard-where-user-data]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/user_d.c
+[lima-wizard-here]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/here.c
