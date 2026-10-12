@@ -3143,6 +3143,35 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard which audit
+
+Reviewed **11 October 2026**, after eval/README were committed as Lima
+**2f6d960e** and adoption notes as native **e43d729e**. The unchanged
+[which command][lima-wizard-which] fails compilation at dispatch_main.
+Recommend only the established protected dispatcher forwarding arg to the
+private main(string *argv). The existing which str rule supplies its one-element
+argument array; no argument conversion or command-daemon change is needed.
+
+All **6 cases / 29 registered inputs** pass through the real wizard shell:
+one preceding-source availability control and five proposal fixtures. Checks
+cover default/custom search paths and their order, quoted arguments, required
+argument counts, missing names, explicit-path/.c misses, pipes, input redirection,
+and overwrite/append output. Lookup loads commands without running their main.
+The first matching noncommand file retains the existing diagnostic and stops the
+search. Shell/input/modal ownership and subsequent commands remain usable;
+no unexpected errors.
+
+All **18 compile checks** have their expected outcome: preceding which fails
+at dispatch_main; the proposal and eight supporting targets under both sources
+compile. Workspace/fixture formatting pass. The proposal remains unadopted;
+all 1,547 library files, README/configuration, CLI, native implementation and
+original Lima are unchanged, and the native test hook is restored. The preceding
+223 frozen eval-adoption artifacts match. Evidence: /tmp/lima-wizard-which-audit-20261011,
+using pinned source review, in-memory lpc-rs input and bounded compilation.
+Distinct nil, preserved players and 4,000 ms tasks remain; upstream execution
+and broader boot/service/transport checks retain their preceding scope.
+Next: commit these notes, adopt the dispatcher/README note, and verify checkout source.
+
 #### Lima eval adaptation
 
 Reviewed **11 October 2026**, after the eval audit was committed as native
@@ -3173,7 +3202,7 @@ Evidence: /tmp/lima-eval-port-20261011, using direct lpc-rs API calls, in-memory
 shell inputs and bounded compilation. Distinct nil, preserved call-out players
 and 4,000 ms tasks remain. Earlier boot, service, physical transport and upstream
 execution evidence retains its scope. Misc.c/README are committed as Lima
-**2f6d960e**; these adoption notes await commit.
+**2f6d960e**, with adoption notes committed as native **e43d729e**.
 Next: audit cmds/wiz/which.c command lookup. The original eval object-name bug
 and bare print's usage guard remain separate from compatibility work.
 
@@ -18348,3 +18377,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-exec-code]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L253-L299
 
 [lima-eval]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L305-L352
+[lima-wizard-which]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/which.c
