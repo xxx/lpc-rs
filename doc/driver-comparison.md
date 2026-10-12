@@ -3143,6 +3143,40 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima eval adaptation
+
+Reviewed **11 October 2026**, after the eval audit was committed as native
+**e160117e**. Dedicated Lima on lpc-rs-port over **44af9c40** adopts the exact
+[eval][lima-eval] proposal in misc.c: use the existing destruction wrapper,
+explicitly compile the generated replacement, and use to_string for the float
+round-trip check. Numeric and short-text shortcuts, optional-header writes,
+source/object persistence and caught-expression fallbacks retain their behavior.
+The README explains these rules and the existing object-name shortcut limitation.
+No native implementation, API or permission-policy change is needed.
+
+All **7 cases / 58 eval invocations** pass against copied adopted source in
+nine ordinary-wizard fixtures. Six fixtures retain adopted source and three
+restore preceding source as controls. The complete value, source/object-state,
+callback and output observations match the audited proposal, including repeated
+calls, same-transaction replacement, headers, error recovery and player context.
+All nine following pwd inputs pass; the six preceding-source errors are expected
+and no errors are unexpected.
+
+Compilation retains **29/81 wizard**, **49/49 transitional**, **9/9 administrator**
+and all eight supporting targets across **147 checks**, without regressions,
+new successes, timeouts or abnormal exits. All **16 compile controls** and
+workspace/fixture formatting pass. The other 1,546 library files, configuration,
+CLI, native implementation and original Lima are unchanged; the native hook is
+restored and all 146 frozen audit artifacts match.
+
+Evidence: /tmp/lima-eval-port-20261011, using direct lpc-rs API calls, in-memory
+shell inputs and bounded compilation. Distinct nil, preserved call-out players
+and 4,000 ms tasks remain. Earlier boot, service, physical transport and upstream
+execution evidence retains its scope. Misc.c/README are committed as Lima
+**2f6d960e**; these adoption notes await commit.
+Next: audit cmds/wiz/which.c command lookup. The original eval object-name bug
+and bare print's usage guard remain separate from compatibility work.
+
 #### Lima eval audit
 
 Reviewed **11 October 2026**, after exec_code/README were committed as Lima
@@ -3178,6 +3212,8 @@ lpc-rs API execution, without upstream execution or new boot/service/transport
 claims. Distinct nil, preserved players and 4,000 ms tasks remain; preceding
 29/81 wizard and broader results retain scope. Next: commit these notes, adopt
 the tested misc.c proposal with a README note, then verify checkout source.
+Audit notes are committed as native **e160117e**; adopted-source verification
+is recorded above.
 
 #### Lima exec_code cleanup adaptation
 
