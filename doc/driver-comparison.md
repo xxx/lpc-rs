@@ -3145,6 +3145,50 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard status resource audit
+
+Reviewed **11 October 2026**, after CPU/README were committed as Lima
+**2f2bbdca** and adoption notes as native **7a523049**. Recommend only the
+protected varargs dispatcher calling the existing main() in
+[status][lima-wizard-resource-status]. Its earlier committed delimiter adapter
+uses native string multiplication in place of repeat_string. The remaining
+formatting and native resource API work without changes.
+
+The table prints raw resource integers: CPU milliseconds, peak RSS in KiB and
+the OS's other counters/integral-memory units. Keep existing labels, column
+padding and 70-character delimiters. The two fields absent from the label map,
+ixrss and isrss, use capitalized key names; other unknown fields do likewise.
+An empty sample prints the header and delimiters, while a complete zero-valued
+sample prints all 16 rows. See the native [resource units](efun/rusage.md).
+
+Lima's write/printf simuls send this table directly to the player. It stays on
+screen under redirection: overwrite leaves an empty file, append preserves its
+contents and the next pipeline command receives empty output. Arguments and
+incoming file/pipe input are ignored. Retain this existing routing rather than
+changing command behavior as part of the dispatcher port.
+
+All **7 cases / 24 registered inputs** pass through copied-source wizard shells,
+with **6 controlled snapshots**: current availability, full/zero/empty samples,
+fallback labels, signed/wide integers, direct output, file/pipe routes and
+ignored input/arguments. Two cases use the native provider unchanged: **5 actual
+tables / 10 surrounding resource samples** verify all displayed counters.
+Following pwd and player/directory/shell/input/modal state remain intact; no
+unexpected errors or panics. All **13 compile controls** and workspace/fixture
+formatting pass. The unchanged command alone fails at dispatch_main; the proposed
+dispatcher compiles with native or controlled resources, and CPU plus eight
+support targets remain green.
+
+All 1,547 library files, README, configuration, CLI/native implementation and
+original Lima are unchanged; the temporary native test include is restored.
+All 225 frozen CPU-adoption artifacts match. The prior 33/81 wizard, 49/49
+transitional and 9/9 administrator inventory retains its scope. Evidence:
+/tmp/lima-wizard-status-audit-20261011, distinct nil, preserved call-out players
+and 4,000 ms tasks, with in-memory registered input and Linux resource sampling.
+Pinned Lima source review uses **eefaff66adcae9b01e16059574c925b0d63e70a1**;
+no upstream-driver, new full boot/service or physical-transport run is claimed.
+Proposal remains unadopted. Next adopt the dispatcher and README unit/routing
+notes, then verify copied adopted source with the same assertions.
+
 #### Lima wizard CPU adaptation
 
 Reviewed **11 October 2026**, after the native resource API was committed as
@@ -3175,10 +3219,9 @@ All 184 CPU-audit and 46 resource-API artifacts still match. Evidence:
 checks execute on Linux without a fixture resource provider; prior upstream,
 full boot/service and physical-transport results retain their scope.
 
-CPU/README committed as Lima **2f2bbdca**. Next audit
-[status][lima-wizard-resource-status] against the now-available native
-resource API, including its formatting, units and output routing. Earlier
-original-source issues remain separate from compatibility changes.
+CPU/README committed as Lima **2f2bbdca**; adoption notes as native **7a523049**.
+The status resource audit is recorded above. Earlier original-source issues
+remain separate from compatibility changes.
 
 #### Native process resource usage
 
