@@ -3145,9 +3145,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard CPU adaptation
+
+Reviewed **11 October 2026**, after the native resource API was committed as
+**82be256d**. Dedicated Lima on lpc-rs-port over **c0e8c318** adopts the exact
+[CPU][lima-wizard-cpu] proposal: a protected varargs dispatcher, a floating
+1000.0 divisor, one uptime read and an unavailable-data guard. README explains
+average process CPU use over driver uptime, values above 100%, unavailable
+samples, normal stdout/file/pipe routing and ignored input and arguments.
+
+All **8 cases / 39 registered inputs** pass against copied checkout source.
+The six controlled cases retain the audit's assertions and matching observations,
+including fractional/multicore/zero results, missing counters, zero uptime and
+two expected unguarded errors. Two additional cases leave the adopted command
+and native providers unchanged: eight actual CPU displays are bounded by
+16 surrounding native resource/uptime samples, allowing for elapsed time and
+two-decimal rounding. Console, pipes, overwrite/append, ignored input/arguments
+and following pwd work; shell/player/directory/input/modal state is preserved.
+
+Fresh checks of **147 command/support targets** advance wizard compilation to
+**33/81**, retaining **49/49 transitional**, **9/9 administrator** and eight
+support successes. CPU is the only new success; no regressions, timeouts or
+abnormal exits. All **18 compile controls** and workspace/fixture formatting
+pass. Other 1,546 library files, configuration, CLI/native implementation and
+original Lima remain unchanged; the temporary native test hook is restored.
+All 184 CPU-audit and 46 resource-API artifacts still match. Evidence:
+/tmp/lima-wizard-cpu-port-20261011, distinct nil, preserved call-out players and
+4,000 ms tasks, with in-memory registered wizard input. The actual-resource
+checks execute on Linux without a fixture resource provider; prior upstream,
+full boot/service and physical-transport results retain their scope.
+
+CPU/README committed as Lima **2f2bbdca**. Next audit
+[status][lima-wizard-resource-status] against the now-available native
+resource API, including its formatting, units and output routing. Earlier
+original-source issues remain separate from compatibility changes.
+
 #### Native process resource usage
 
-Reviewed **11 October 2026**, following CPU audit commit **ffedc2a2**.
+Reviewed **11 October 2026**, following CPU audit commit **ffedc2a2**;
+the resource API is committed as **82be256d**.
 [`rusage()`](efun/rusage.md) now exposes the full 16-field process resource
 mapping through Nix 0.31.3's safe `getrusage(RUSAGE_SELF)` wrapper. CPU times
 truncate to integer milliseconds; peak RSS is normalized to KiB, including
@@ -3181,10 +3217,9 @@ The FluffOS comparison remains source-reviewed at
 its raw platform maxrss differs from the native normalized unit.
 [Implementation][fl-rusage-audit-source]. The native backend is unavailable
 on non-Unix targets or Redox, Fuchsia, Solaris and Haiku. Dedicated Lima source
-and configuration are unchanged by this native addition. CPU adoption follows:
-use its audited dispatcher, floating divisor and unavailable-data guard, then
-verify the copied command with actual native resource samples. Status's output
-remains a separate command audit.
+and configuration are unchanged by this native addition. CPU adoption and its
+actual-resource verification are recorded above. Status's output remains a
+separate command audit.
 
 #### Lima wizard CPU resource audit
 
@@ -3232,9 +3267,8 @@ Evidence: /tmp/lima-wizard-cpu-audit-20261011, controlled in-memory wizard input
 distinct nil, preserved call-out players and 4,000 ms tasks. No native resource
 API or mudlib proposal is adopted by this audit.
 
-Audit committed as native **ffedc2a2**; the native resource API is described
-above. Next adopt and verify the CPU dispatcher, floating divisor and
-unavailable-data guard.
+Audit committed as native **ffedc2a2**; native resource implementation and CPU
+adoption are recorded above.
 
 #### Lima wizard date adaptation
 
