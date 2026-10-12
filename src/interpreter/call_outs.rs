@@ -215,7 +215,7 @@ impl CallOuts {
             })
         } else {
             tokio::spawn(async move {
-                tokio::time::sleep(delay.to_std().unwrap()).await;
+                tokio::time::sleep(delay.to_std().unwrap_or_default()).await;
                 let _ = tx.send(VmOp::PrioritizeCallOut(id)).await;
             })
         };
@@ -235,6 +235,42 @@ impl CallOuts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn nonpositive_delays_fire_immediately_and_preserve_repetition() {
+        for delay in [
+            Duration::seconds(-1),
+            Duration::zero(),
+            Duration::seconds(2),
+        ] {
+            for repeat in [None, Some(Duration::seconds(1))] {
+                let (tx, mut rx) = tokio::sync::mpsc::channel(16);
+                let mut calls = CallOuts::new(tx);
+                calls.materialize(CallOutSchedule {
+                    id: 17,
+                    process: Weak::new(),
+                    player: None,
+                    func_ref: 0.into(),
+                    delay,
+                    repeat,
+                });
+                tokio::task::yield_now().await;
+                if delay > Duration::zero() {
+                    assert!(rx.try_recv().is_err(), "positive delay fired early");
+                    tokio::time::advance(std::time::Duration::from_secs(2)).await;
+                    tokio::task::yield_now().await;
+                }
+                assert_eq!(rx.try_recv().unwrap(), VmOp::PrioritizeCallOut(17));
+                assert!(rx.try_recv().is_err(), "timer fired twice initially");
+                tokio::time::advance(std::time::Duration::from_secs(1)).await;
+                tokio::task::yield_now().await;
+                if repeat.is_some() {
+                    assert_eq!(rx.try_recv().unwrap(), VmOp::PrioritizeCallOut(17));
+                }
+                assert!(rx.try_recv().is_err(), "unexpected extra timer firing");
+            }
+        }
+    }
 
     #[tokio::test(start_paused = true)]
     async fn removing_or_clearing_call_outs_stops_their_timers() {

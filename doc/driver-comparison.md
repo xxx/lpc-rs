@@ -382,7 +382,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), [deferred failure diagnostics](apply/master/parser_error_message.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md) and [structured parser registration inspection](efun/query_parser_registry.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. [`error_handler`](apply/master/error_handler.md) receives text diagnostics and bounded, rendered frame snapshots for uncaught evaluation failures. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
 | Call origin | [`origin`](efun/origin.md) identifies eight dispatch mechanisms independently of caller identity; named simul-efun calls report `"simul_efun"`, scheduled callbacks `"call_out"`, and explicit named pointers `"function_pointer"`. | **Not checked**. | **Not checked**. | Eight [origin categories][fl-origin]; named local pointers report `"local"` in the reviewed [implementation][fl-pointer-dispatch]. | **Not checked**. |
-| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer or [NPC action queues](#lima-action-queues) with one-shot timers. Lima [spell casting](#lima-spell-casting), [companion following](#lima-dancing-lights) and [fluid evaporation](#lima-conjure-ale-and-fluids) adapters also use native function callbacks. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
+| Timer scheduling | [`call_out`](efun/call_out.md) takes a function, delay and optional repeat interval; bind callback data into the function. Nonpositive initial delays schedule immediately. Mudlibs can build a [combat pulse](#lima-combat-pulse) with an owned repeating timer or [NPC action queues](#lima-action-queues) with one-shot timers. Lima [spell casting](#lima-spell-casting), [companion following](#lima-dancing-lights) and [fluid evaporation](#lima-conjure-ale-and-fluids) adapters also use native function callbacks. | **Not checked**. | **Not checked**. | [`call_out`][fl-callout-reference] accepts a string or function callback followed by delay and callback arguments. | **Not checked**. |
 | Timer player context | [`call_out`](efun/call_out.md) clears `this_player()` by default; `CALL_OUT_PRESERVE_PLAYER=true` captures it at scheduling and restores it for each firing. `this_interactive()` stays nil. | **Not checked**. | Preserves the scheduling user. [Reference][ld-callout-context]. | Configurable; enabled by default, with a listener-owner fallback when the captured player is unavailable. [Implementation][fl-callouts], [default][fl-runtime-settings]. | `this_user()` is nil for delayed tasks. [Reference][dgd-callout-user]. |
 | Timer inspection | [`query_call_outs()`](efun/query_call_outs.md) lists the current owner's timers; an object selects that owner and `-1` selects all owners. Rows include the function pointer, milliseconds remaining, repeat interval and ID. | **Not checked**. | **Not checked**. | [`call_out_info()`][fl-callouts] lists all live owners' timers with callback labels and seconds remaining. | **Not checked**. |
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
@@ -3143,6 +3143,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard calls audit
+
+Reviewed **11 October 2026**, after which/README were committed as Lima
+**1e421d06** and adoption notes as native **9fac08d4**. Unchanged
+[calls][lima-wizard-calls] fails compilation at dispatch_main. Recommend only
+the established protected dispatcher calling its private main() without
+arguments. Calls has no command rule; extra text and redirected input remain
+ignored. Its earlier query_call_outs(-1), function_name and millisecond-to-second
+adapter needs no further change, and [state-daemon output][lima-state-daemon]
+works through the existing API.
+
+All **6 cases / 21 registered inputs** pass: one current-source availability
+control and five proposal fixtures, with **15 timer snapshots**. Checks cover
+empty output, simplify, owner/name grouping, bare/partial/closure callbacks,
+repeat metadata, millisecond delays, cancellation, elapsed-delay clamping,
+state-queue grouping/shortened paths, pipes and overwrite/append/input redirection.
+Listing does not run callbacks or change timer identity/repeat metadata;
+shell/input/modal state remains intact and subsequent commands work. An elapsed
+timer retains Lima's blank delay, since time_to_string(0, 1) returns an empty
+string. Row order and real-clock remaining delays are not compared byte-for-byte.
+
+The negative-delay fixture exposed a native one-shot timer panic when converting
+a signed duration to std::time::Duration. Normalize nonpositive delays to zero,
+matching the documented immediate-scheduling contract and the existing repeating
+path. The new paused-clock regression covers negative/zero/positive delays for
+one-shot and repeating timers, including first and subsequent timer messages.
+All **69 native timer/configuration tests** pass, including the new regression,
+with no background panics; no scheduling API change is needed.
+
+All **22 compile controls** have expected outcomes: current calls alone fails
+at dispatch_main; proposed calls and ten supporting targets under both sources
+compile. Workspace build, warning-free Clippy and workspace/fixture formatting
+pass. The calls dispatcher proposal remains unadopted; all 1,547 library files,
+README/configuration and original Lima are unchanged. The CLI is rebuilt with
+the native timer fix; the temporary native test hook is restored. The preceding
+205 frozen which-adoption artifacts match.
+
+Evidence: /tmp/lima-wizard-calls-audit-20261011, using pinned source review,
+in-memory wizard-shell input and bounded compilation. Timers use real native
+queue entries, without the fixture servicing scheduler messages; this audits
+display rather than timer firing. Distinct nil, preserved players and 4,000 ms
+tasks remain. Upstream execution and broader boot/service/transport checks retain
+their previous scope. Next: commit these notes, adopt the dispatcher/README note,
+and verify copied checkout source.
+
 #### Lima wizard which adaptation
 
 Reviewed **11 October 2026**, after the command-lookup audit was committed as
@@ -3170,8 +3215,8 @@ Evidence: /tmp/lima-wizard-which-port-20261011, using in-memory lpc-rs shell inp
 and bounded compilation. Distinct nil, preserved call-out players and 4,000 ms
 tasks remain; upstream execution and broader boot/service/transport checks keep
 their earlier scope. Which/README are committed as Lima **1e421d06**;
-these adoption notes await commit. Next: audit
-cmds/wiz/calls.c call-out display, including its existing query adaptation.
+adoption notes are committed as native **9fac08d4**. The calls audit is
+recorded above.
 
 #### Lima wizard which audit
 
@@ -18410,3 +18455,5 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-eval]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/simul_efun/misc.c#L305-L352
 [lima-wizard-which]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/which.c
+
+[lima-wizard-calls]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/calls.c
