@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima terminal wrapping audit
+
+Reviewed **12 October 2026**, after scan/README were committed as Lima **9cf10e43**
+and adoption notes as native **caf510aa**. The pinned public
+[wrapping daemon][lima-xterm] retains a repair that prepends an empty field to
+indented strings.
+Native explode already preserves that field. Recommend deleting the five-line
+repair block; retain native explode and the remaining wrapping policy.
+
+All **11 cases** pass: **66 direct wrapper observations**, **26 actual-user
+display observations** and seven scan regression cases. Four leading spaces
+stay four; width-seven `"    x"` no longer wraps early. Recognized colour/style/
+Pinkfish markers obey the corrected boundary. Repeated spaces, Unicode, tabs,
+newlines, right trimming, default width and continuation indentation pass.
+No-wrap, no-ANSI/no-wrap, negative width, blob, prompt and simplified delivery
+retain their behavior. Existing word-boundary quirks remain reproduced in both
+variants, including a first long word beginning on a new line.
+
+All **44 registered inputs**, 37 inventory snapshots, nine following pwd checks
+and identity/input/pager/modal checks pass, including exact files/pipes and real
+paging/quit, with no unexpected errors or panics. All **15 compile controls**
+and formatting pass. All 1,547 library files, README/configuration, native
+implementation/CLI and original Lima remain unchanged; test include restored.
+All 251 frozen scan-adoption artifacts match. Evidence:
+/tmp/lima-terminal-wrap-audit-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks, real daemon/user/command APIs, plain-mode in-memory delivery and
+an IMUD stub. Prior 45/81 wizard, 49/49 transitional, 9/9 administrator and
+broader port evidence retains scope; no inventory sweep is repeated. Public
+source review and lpc-rs execution do not establish upstream/client behavior.
+Proposal unadopted; next adopt exact wrapper/README and verify the same assertions.
+
 #### Lima wizard scan adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as native
