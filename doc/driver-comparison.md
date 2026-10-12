@@ -374,6 +374,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Area | lpc-rs | CD | LDMud | FluffOS | DGD |
 |---|---|---|---|---|---|
 | Execution | Parallel LPC tasks; snapshot reads, atomic commits and conflict retries. [Runtime](../README.md#how-execution-works); [monotonic elapsed VM uptime](efun/uptime.md). | Tasks evaluated serially by the [backend loop][cd-backend]. | Sequential [backend evaluation][ld-backend]; explicit [coroutines][ld-async]. | Event-driven LPC; [async functions and promises][fl-async], with worker-thread I/O in the async package. | Explicit [atomic functions][dgd-lpc] roll back on errors; multicore acceleration is a separate [Hydra offering][dgd-readme]. |
+| Process resource usage | [`rusage()`](efun/rusage.md) returns 16 OS process statistics, with CPU times in milliseconds and peak RSS in KiB; failed or unsupported sampling returns an empty mapping. | **Not checked**. | **Not checked**. | Core `rusage()` returns 16 resource fields, with CPU times in milliseconds and other fields in platform units. [Pinned implementation][fl-rusage-audit-source]. | **Not checked**. |
 | Saving and restarting | [Object and mapping save files, including class records](save-format.md), with [`nosave` globals](lpc/nosave.md); [`save_value`](efun/save_value.md) / [`restore_value`](efun/restore_value.md) serialize individual values as strings. Whole-world snapshot/restart is not implemented. | [Object variable saves][cd-save]. | [Object saves][ld-save] with selectable formats and a serialised-string form. | [Object saves][fl-save] with flags, optional compression and a serialised-string form; [`nosave` globals][fl-nosave-keywords] with `SENSIBLE_MODIFIERS`; individual values through [`save_variable`][fl-save-variable] / [`restore_variable`][fl-restore-variable]. | Object saves plus [whole-system snapshots][dgd-dump] and [restart from a snapshot][dgd-intro]. |
 | Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [Type-sensitive array set matching with destroyed-object normalization](lpc/comparisons.md#collection-matching); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
 | Text file writes | [`write_file`](efun/write_file.md) stages append (0/default) or whole-file replacement (1), with pending reads and commit-time delivery. | **Not checked**. | **Not checked**. | Core `write_file` uses bit 1 for overwrite and bit 2 for compression. [Implementation][fluffos-file-write-flags]. | **Not checked**. |
@@ -596,6 +597,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Function inspection | `functions(ob, 1)` returns name, declared argument count, return type and saved parameter types for inherited and local functions, including nonpublic declarations. Flag 2 excludes inherited definitions; flag 3 combines both choices. Unsaved argument types are zero. [Reference][fl-function-declarations], [implementation][fl-function-declarations-source]. | [`functions(ob, 1)`](efun/functions.md) returns local names; the default includes inherited names. Both hide foreign nonpublic functions. [`function_exists`](efun/function_exists.md) supplies the defining program. [`function_info`](efun/function_info.md) describes pointer bindings rather than declaration types or arity. Use [`function_signature(name, ob)`](efun/function_signature.md) alongside name enumeration for fresh declaration records, including fixed/default counts, parameter types, reference flags and modifiers. Counts exclude variadic collectors; program paths retain source extensions. See the [Lima dbxfuncs port](#lima-wizard-dbxfuncs-port). |
 | Program disassembly | `dump_prog(ob, flags, file)` writes program details to a file; flag 1 includes disassembly and flag 2 line information. Requires `PACKAGE_DEVELOP` and write permission. [Implementation][fl-program-dump], [declaration][fl-program-dump-spec], [format][fl-program-dump-format]. | Use [`disassemble(ob)`](efun/disassemble.md) for a fresh array of native instruction lines, including nonpublic code and initializers. Print lines individually when the complete listing exceeds one string's limit; no output file or heading split is needed. The diagnostic format differs and is not stable. For source compilation without LPC execution use [CLI assembly output](../lpc-rs-lpcc/README.md#usage); [`compile_string`](efun/compile_string.md) initializes its object normally. There is no native `dump_prog` file API. |
 | Structured frame inspection | Core `dump_trace()` returns root-to-current frame mappings with source details and current argument/local values where available; the runtime error handler uses the same builder. Container values retain shared references. [Builder][fl-dbxframe-trace], [efun][fl-dbxframe-efun]. | [`error_handler`](apply/master/error_handler.md) optionally receives root-to-leaf `frames` with source details and named, rendered argument/local values captured before rollback. Mutable containers use summaries. Limits retain inner frames and expose omission/truncation counts. Caught failures retain a string; there is no live-frame inspection efun. See the [Lima adaptation](#lima-saved-error-frame-support). |
+| Process resource usage | Core `rusage()` samples `RUSAGE_SELF`, returning 16 integer fields or an empty mapping on syscall failure; CPU times are in milliseconds, while maxrss retains the platform unit. [Implementation][fl-rusage-audit-source], [fallback][fl-rusage-audit-fallback]. | [`rusage()`](efun/rusage.md) uses the same keys and process scope, but normalizes peak RSS to KiB, including on Apple targets. Check any assumptions about maxrss units. Unsupported backends return an empty mapping. OS samples repeat on transaction retry; [`uptime()`](efun/uptime.md) measures VM lifetime, which can differ from process lifetime in embedded use. |
 | Stack inspection | `call_stack(0/1/2)` returns defining programs, executing objects, or function names, starting with the current frame. `all_previous_objects()` aliases `previous_object(-1)`. [Reference][fl-call-stack], [declaration][fl-core-spec]. | [`calling_program(-1)`](efun/calling_program.md), [`calling_object(-1)`](efun/calling_object.md), and [`calling_function(-1)`](efun/calling_function.md) provide aligned caller arrays, excluding the inspecting function. A local helper can include the requesting function as row zero. Use direct no-argument queries for immediate-caller checks. Replace `all_previous_objects()` with [`previous_object(-1)`](efun/previous_object.md) at the call site; a simul wrapper adds its own caller entry. Frame counts and synthetic labels need not match FluffOS. |
 | Privileged callback owner chains | Function-pointer dispatch installs a synthetic owner frame before invoking the target, including efun and simul-efun pointers. [Implementation][fl-pointer-dispatch]. | Dynamic pointers, bound `call_other`, and simul-efun pointers can reach the target without an executing owner frame. For Lima-style `unguarded` checks, an inherited helper can wrap those same-owner pointers in `(: $(code)() :)`, using [`function_info`](efun/function_info.md) to select them. Leave foreign-owned callbacks on their existing path. Named callbacks, closures and ordinary efun pointers already provide the needed context; wrapping them all can introduce extra owner entries and reject valid calls. Preserve source, handle, privilege and protection checks, and evaluate bound arguments before entering the privileged callback. |
 | Snooping | `snoop` replaces occupied relationships. With `receive snoop` enabled, it calls `receive_snoop(text)` synchronously; otherwise it forwards text prefixed with `%`. The reviewed native setter does not call a master authorization hook. [Source][fl-snoop]. | [`snoop`](efun/snoop.md) errors on occupied endpoints; stop explicitly before changing partners. Start, stop and live queries require [`valid_snoop`](apply/master/valid_snoop.md). Adapt relays to [`receive_snoop(text, target, direction)`](apply/object/receive_snoop.md), delivered in a fresh transaction without player context. Noninteractive relays work without a runtime switch. Hidden input is excluded; errors and overflow retire the registration. Connection transfers terminate observation. Mudlib relays must handle asynchronous delivery and their own subscriber policy. |
@@ -3143,6 +3145,47 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Native process resource usage
+
+Reviewed **11 October 2026**, following CPU audit commit **ffedc2a2**.
+[`rusage()`](efun/rusage.md) now exposes the full 16-field process resource
+mapping through Nix 0.31.3's safe `getrusage(RUSAGE_SELF)` wrapper. CPU times
+truncate to integer milliseconds; peak RSS is normalized to KiB, including
+Apple's byte-valued result. Other counters retain the OS's reported values and
+integral-memory units. Values saturate at LPC integer bounds. Failure or an
+unsupported backend returns a fresh empty mapping, while unsupported individual
+counters remain present in successful samples, typically with zero values.
+[Backend source and units][nix-rusage-source].
+
+Readings cover all driver-process threads and exclude children. Each call reads
+the OS again, including transaction retries; only the returned mapping belongs
+to the transaction. Compilation and other process work are included, and multiple
+VMs share these counters. The efun takes no arguments, supports bare function
+pointers, and is appended to the catalog without shifting existing efun indices.
+No apply, master policy, nil mode or uptime semantics change.
+
+Nine new inline tests and the existing efun-order test pass: resource-field
+conversion and units, millisecond truncation, saturation, failed sampling,
+actual process readings, CPU consumed by another thread, fresh mappings and
+ordinary direct/pointer argument rules. Locked workspace build, warning-free
+Clippy across all targets, formatting and warning-free workspace docs pass.
+Twelve copied-Lima compile controls have their expected outcomes: CPU and status
+compile with their proposed dispatchers and the native provider, while unchanged
+commands still fail at the dispatcher; eight support targets remain green. One
+actual CLI sample returns all 16 integer fields. Execution checks ran on Linux
+x86_64; Apple unit conversion and other upstream behavior are source-reviewed,
+with no Apple or cross-driver execution claimed.
+
+The FluffOS comparison remains source-reviewed at
+**44532e0228f34be2184c701a361df4079371b8b0**, core `F_RUSAGE` enabled;
+its raw platform maxrss differs from the native normalized unit.
+[Implementation][fl-rusage-audit-source]. The native backend is unavailable
+on non-Unix targets or Redox, Fuchsia, Solaris and Haiku. Dedicated Lima source
+and configuration are unchanged by this native addition. CPU adoption follows:
+use its audited dispatcher, floating divisor and unavailable-data guard, then
+verify the copied command with actual native resource samples. Status's output
+remains a separate command audit.
+
 #### Lima wizard CPU resource audit
 
 Reviewed **11 October 2026**, after date/README were committed as Lima
@@ -3189,9 +3232,9 @@ Evidence: /tmp/lima-wizard-cpu-audit-20261011, controlled in-memory wizard input
 distinct nil, preserved call-out players and 4,000 ms tasks. No native resource
 API or mudlib proposal is adopted by this audit.
 
-Next: implement a general native `rusage()` API with the full resource schema,
-document platform units/availability and test actual process sampling; then adopt
-and verify the CPU dispatcher, floating divisor and unavailable-data guard.
+Audit committed as native **ffedc2a2**; the native resource API is described
+above. Next adopt and verify the CPU dispatcher, floating divisor and
+unavailable-data guard.
 
 #### Lima wizard date adaptation
 
@@ -18616,3 +18659,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-rusage-audit-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L277
 [fl-rusage-audit-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L3362-L3397
 [fl-rusage-audit-fallback]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/base/internal/rusage.cc
+[nix-rusage-source]: https://github.com/nix-rust/nix/blob/v0.31.3/src/sys/resource.rs

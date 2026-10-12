@@ -84,6 +84,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 jemallocator = "0.5.4"
 jemalloc-ctl = "0.5.4"
 
+[target.'cfg(all(unix, not(any(target_os = "redox", target_os = "fuchsia", target_os = "solaris", target_os = "haiku"))))'.dependencies]
+nix = { version = "0.31.3", default-features = false, features = ["resource"] }
+
 [features]
 default = ["max_level_trace", "release_max_level_debug"]
 

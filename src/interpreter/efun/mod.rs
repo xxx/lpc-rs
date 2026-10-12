@@ -117,6 +117,7 @@ pub(crate) mod restore_object;
 pub(crate) mod restore_value;
 pub(crate) mod rm;
 pub(crate) mod rmdir;
+pub(crate) mod rusage;
 pub(crate) mod save_map;
 pub(crate) mod save_object;
 pub(crate) mod save_value;
@@ -1369,6 +1370,9 @@ efuns! {
         arity: 2,
         args: [LpcType::String(false), LpcType::Object(false)],
     },
+    rusage => {
+        returns: LpcType::Mapping(false),
+    },
 
 }
 
@@ -1756,6 +1760,7 @@ mod tests {
                 "query_sockets",
                 "disassemble",
                 "function_signature",
+                "rusage",
             ]
         );
     }

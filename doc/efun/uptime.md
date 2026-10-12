@@ -17,4 +17,4 @@ int hours = uptime() / 3600;
 
 ### See also
 
-[time](time.md), [object_time](object_time.md)
+[time](time.md), [object_time](object_time.md), [rusage](rusage.md)
