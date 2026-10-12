@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard flist audit
+
+Reviewed **12 October 2026**, after apropos/README were committed as Lima
+**4eac7f65** and adoption notes as native **f1a42c08**. Recommend only protected
+varargs dispatch_main forwarding arg/flags to [flist][lima-wizard-flist]'s private
+main. Its preceding map_array-to-map adaptation and bound callback remain.
+Plain reports sort resolved names into a fixed 79-column table; -i sorts complete
+rows by defining program/name. Inherited functions name their defining program,
+local overrides the target program; clones retain shared program origins.
+Foreign hidden methods are omitted under native [functions](efun/functions.md)
+visibility; self-inspection includes private main/protected dispatch_main.
+No native API or visibility change is needed.
+
+All **8 cases / 43 registered inputs** pass: current-command control and seven
+proposal cases covering paths/aliases/rules, public/inherited/overridden/clone/
+self/hidden-only listings, target rebinding, raw files/append/pipes, ignored input
+and both pager formats. Controlled target methods are not invoked. All eight
+following pwd checks, state and pager/input recovery pass. One expected
+flist me overflow reproduces the **8,192-byte string-concatenation limit**;
+a following bounded flist works. Overwrite redirection removes the previous
+file before report construction fails; [catch](efun/catch.md) preserves that
+preceding effect. Keep this report limitation explicit in README guidance,
+without attributing it to original Lima or widening the native limit.
+
+All **17 compile controls** match expectations: current flist/abstract standalone
+CMD fail at missing dispatch_main, the proposal and fourteen supports compile.
+Workspace/fixture formatting passes. All 1,547 library files, README/configuration/
+CLI/native production source and original Lima remain unchanged; the temporary
+native include is restored. All 214 frozen apropos-adoption artifacts match.
+Evidence: /tmp/lima-wizard-flist-audit-20261012, distinct nil, preserved call-out
+players and 4,000 ms tasks, using in-memory registered input and an IMUD stub.
+Existing 36/81 wizard, 49/49 transitional, 9/9 administrator inventory and earlier
+full-library/boot/service/transport results retain scope. Public original source
+pins **eefaff66adcae9b01e16059574c925b0d63e70a1** and matches retrieved bytes;
+upstream-driver execution was not performed. Proposal unadopted. Next adopt the
+flist dispatcher/README guidance, then verify copied source with the same
+assertions and observations.
+
 #### Lima wizard apropos adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -3170,8 +3208,9 @@ apropos-audit artifacts match. Evidence: /tmp/lima-wizard-apropos-port-20261012,
 distinct nil, preserved call-out players and 4,000 ms tasks, using controlled
 help-index data, in-memory registered input and an IMUD stub. Earlier full-library,
 boot/service, physical-transport and upstream-driver results retain scope.
-Source/README are committed as Lima **4eac7f65**. Next audit flist;
-original-source issues remain separate from compatibility work.
+Source/README are committed as Lima **4eac7f65** and adoption notes as native
+**f1a42c08**. The flist audit is recorded above; original-source issues remain
+separate from compatibility work.
 
 #### Lima wizard apropos audit
 
@@ -18912,6 +18951,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-rusage-audit-fallback]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/base/internal/rusage.cc
 [nix-rusage-source]: https://github.com/nix-rust/nix/blob/v0.31.3/src/sys/resource.rs
 
+[lima-wizard-flist]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/flist.c
 [lima-wizard-apropos]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/apropos.c
 [lima-wizard-wc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wc.c
 [fl-explode-runtime-config]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/rc.cc
