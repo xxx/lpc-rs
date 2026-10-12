@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard where adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **3b2ee094**. Dedicated Lima on lpc-rs-port over **e3a66271** adopts the
+exact [where][lima-wizard-where] dispatcher, canonical account-name guard and
+audited README guidance. The guard adapts the earlier ported user-data contract;
+case matching, account/body selection, visibility and CMD buffers remain.
+No native API change.
+
+All **10 cases / 47 registered inputs** pass against copied adopted source with
+unchanged assertions. All 47 input contexts and 39 query/body snapshots match
+the audit, allowing native body-row permutations. All ten following pwd checks
+and state/input/pager/modal checks pass, including pager advance and quit.
+The three dispatcher-only lookup errors remain expected; no unexpected errors
+or panics. One raw output differs only in row order; unchanged assertions
+preserve explicit target order, follow actual native body order and check exact
+redirected bytes. Account/character, connected/offline/login distinctions,
+Unicode descriptions, case matching and stdio routes/refusals remain verified.
+
+Fresh **147 command/support checks** advance wizard compilation to **41/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Where is the sole new success over wheremobs, with no regressions, timeouts or
+abnormal exits. All **18 compile controls** and workspace/fixture formatting pass.
+Other 1,546 library files, configuration, CLI/native source and original Lima
+remain unchanged; the temporary include is restored. All 113 frozen audit
+artifacts match. Evidence: /tmp/lima-wizard-where-port-20261012, distinct nil,
+preserved call-out players and 4,000 ms tasks, using real account/body/room classes,
+in-memory input and an IMUD stub. Earlier full-library, boot/service, physical
+transport and upstream-driver results retain scope. Source/README are committed
+as Lima **4bebf72b**. Next audit cmds/wiz/here.c; only local source selection is recorded.
+
 #### Lima wizard where audit
 
 Reviewed **12 October 2026**, after wheremobs/README were committed as Lima
@@ -3177,7 +3208,8 @@ preserved call-out players and 4,000 ms tasks, using real account/body/room clas
 in-memory input and an IMUD stub. Existing **40/81 wizard**, **49/49 transitional**,
 **9/9 administrator** inventory and broader boot/service/transport results retain
 scope. Source review/native execution do not establish upstream-driver behavior.
-Proposal unadopted. Next adopt exact where/README and verify copied source.
+At audit verification the proposal was unadopted. Audit notes are committed as
+native **3b2ee094**; verified adoption with unchanged assertions is recorded above.
 
 #### Lima wizard wheremobs adaptation
 
