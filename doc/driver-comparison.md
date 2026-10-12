@@ -3145,6 +3145,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard here adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **ebe8f0e0**. Dedicated Lima on lpc-rs-port over **4bebf72b** adopts the
+exact [here][lima-wizard-here] dispatcher and audited README guidance. Private
+main() receives no arguments; actual body/room selection, short/file_name, raw
+argument handling and CMD output buffers remain. No native API change.
+
+All **7 cases / 34 registered inputs** pass against copied adopted source with
+unchanged assertions. All 34 input observations/raw outputs and 29 room-location
+snapshots match the audit exactly. All seven following pwd checks and state/input/
+pager/modal checks pass, including one directory change and pager advance/quit.
+No unexpected errors or panics. Real Unicode rooms/clone filenames, return to
+Void, working-directory independence, exact files/pipes, ignored arguments/input
+and normal stdio refusals remain verified.
+
+Fresh **147 command/support checks** advance wizard compilation to **42/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Here is the sole new success over where, with no regressions, timeouts or abnormal
+exits. All **18 compile controls** and workspace/fixture formatting pass. Other
+1,546 library files, configuration, CLI/native source and original Lima remain
+unchanged; the temporary include is restored. All 115 frozen audit artifacts
+match. Evidence: /tmp/lima-wizard-here-port-20261012, distinct nil, preserved
+call-out players and 4,000 ms tasks, using real body/indoor-room classes, in-memory
+input and an IMUD stub. Earlier full-library, boot/service, physical transport and
+upstream-driver results retain scope. Source/README are committed as Lima
+**260c90f4**. Next audit cmds/wiz/showexits.c; only local source selection is recorded.
+
 #### Lima wizard here audit
 
 Reviewed **12 October 2026**, after where/README were committed as Lima
@@ -3171,8 +3199,9 @@ restored. All 244 frozen adoption artifacts match. Evidence:
 4,000 ms tasks, using real body/indoor-room classes, in-memory input and an IMUD
 stub. Existing **41/81 wizard**, **49/49 transitional**, **9/9 administrator** and
 broader boot/service/transport results retain scope. Source review/native execution
-do not establish upstream-driver behavior. Proposal unadopted. Next adopt exact
-here/README and verify copied source.
+do not establish upstream-driver behavior. At audit verification the proposal was
+unadopted. Audit notes are committed as native **ebe8f0e0**; verified adoption with
+unchanged assertions is recorded above.
 
 #### Lima wizard where adaptation
 
