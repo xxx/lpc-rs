@@ -3145,6 +3145,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard apropos audit
+
+Reviewed **11 October 2026**, after wc/README were committed as Lima **d0b65554**
+and adoption notes as native **0d403a57**. Recommend protected varargs dispatch_main
+forwarding the raw search string to [apropos][lima-wizard-apropos]'s existing
+private main, plus removal of one initial empty split field in generate_category.
+The dispatcher-only control labels /help/wizard/bin/alpha.rst as help/wizard/bin;
+the complete proposal restores wizard/bin while retaining interior empty fields.
+This matches the reviewed [FluffOS split implementation][fl-explode] and
+[defaults][fl-explode-runtime-config] at **2c27287500daf48a87a1f89d69a97d8b9603028d**:
+sane explode string = 1, reversible explode string = 0. Keep native
+[explode](efun/explode.md) unchanged; upstream behavior is source-reviewed only.
+
+Searches remain case-sensitive literal substrings of topic names. Categories
+are sorted; duplicate matching paths retain duplicate names. Quotes remain
+literal; the shell trims outer command whitespace, while direct search calls
+retain it. Reports use CMD stdout/file/append/pipe routing.
+Direct usage/short-search/no-match messages stay on screen; no-match also emits
+one newline through stdout. Incoming input is ignored. Preserve these source
+semantics and add README guidance on adoption.
+
+All **8 cases / 37 registered inputs** and **7 category checks** pass: current and
+dispatcher controls plus six proposal cases covering search text, category
+labels/sorting, duplicates, Unicode, empty results, routing, ignored input and
+refusals. Help topics and following pwd/player/directory/shell/input/modal state
+remain intact; no unexpected errors/panics. All **15 compile controls** and
+workspace/fixture formatting pass, including adopted wc/docs and the actual
+[help daemon][lima-help-timers].
+
+All 1,547 library files, README/configuration/CLI/native production code and
+original Lima remain unchanged; the temporary native test include is restored.
+All 208 frozen wc-adoption artifacts match. Evidence:
+/tmp/lima-wizard-apropos-audit-20261011, distinct nil, preserved call-out players
+and 4,000 ms tasks, using controlled help-index data, in-memory registered input
+and an IMUD stub. Existing 35/81 wizard, 49/49 transitional, 9/9 administrator
+inventory and earlier full-library/boot/service/transport results retain scope.
+Proposal unadopted. Next adopt apropos/README, then verify copied source with the
+same assertions and observations. Original source pins
+**eefaff66adcae9b01e16059574c925b0d63e70a1**; apropos still matches it.
+
 #### Lima wizard word and line count adaptation
 
 Adopted and verified **11 October 2026**, following audit notes committed as
@@ -3168,8 +3208,9 @@ remain unchanged; the temporary native test include is restored. All 132 frozen
 wc-audit artifacts match. Evidence: /tmp/lima-wizard-wc-port-20261011, distinct
 nil, preserved call-out players and 4,000 ms tasks, using in-memory registered
 input and an IMUD stub. Earlier full-library, boot/service, physical-transport
-and upstream-driver results retain scope. Wc/README are committed as Lima **d0b65554**. Next audit wizard apropos help-topic search; original-source issues
-remain separate from compatibility work.
+and upstream-driver results retain scope. Wc/README are committed as Lima
+**d0b65554** and adoption notes as native **0d403a57**. The apropos audit is
+recorded above; original-source issues remain separate from compatibility work.
 
 #### Lima wizard word and line count audit
 
@@ -18842,5 +18883,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-rusage-audit-fallback]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/base/internal/rusage.cc
 [nix-rusage-source]: https://github.com/nix-rust/nix/blob/v0.31.3/src/sys/resource.rs
 
+[lima-wizard-apropos]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/apropos.c
 [lima-wizard-wc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wc.c
 [fl-explode-runtime-config]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/rc.cc
