@@ -3143,6 +3143,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard date adaptation
+
+Reviewed **11 October 2026**, after the date audit was committed as native
+**499a8a80**. Dedicated Lima on lpc-rs-port over **c1554ac8** adopts the exact
+[date][lima-wizard-date] proposal: append protected varargs dispatch_main forwarding
+the raw argument to private main(string). README documents local time, -s stamps,
+literal quotes/spacing, direct output under redirection and ignored incoming input.
+No native implementation, API, configuration or policy changes.
+
+All **6 cases / 27 registered inputs** pass against copied checkout source: five
+adopted fixtures and one restored preceding-source control, with the audit's
+unchanged assertions. Observations match by case, allowing real-clock date/stamp
+prefixes and random joke selection to vary; assertions independently check those
+outputs. Defaults, unknown arguments, stamps/body name/text, legacy joke/fallthrough,
+file/pipe behavior and shell/player/directory/input/modal state remain intact.
+
+Refreshed compilation covers **147 targets**: **32/81 wizard**, **49/49
+transitional**, **9/9 administrator** and eight supports. Date is the only new
+compile success, with no regressions, timeouts or abnormal exits. All **18 compile
+controls** have expected outcomes; workspace/fixture formatting pass. Other 1,546
+library files, configuration, CLI/native implementation and original Lima remain
+unchanged; the native test hook is restored and all 98 frozen audit artifacts match.
+
+Evidence: /tmp/lima-wizard-date-port-20261011, in-memory wizard-shell input and
+bounded compilation, with distinct nil, preserved call-out players and 4,000 ms
+tasks. Broader inventory, upstream execution and boot/service/transport findings
+retain their earlier scope. Date/README are committed as Lima **c0e8c318**.
+Next: audit cmds/wiz/cpu.c resource reporting, numeric arithmetic and uptime.
+Only its source, command rules and native availability were read to select it;
+no new runtime or upstream audit result is claimed for cpu.
+
 #### Lima wizard date audit
 
 Reviewed **11 October 2026**, after calls/README were committed as Lima
@@ -3176,9 +3207,8 @@ library files, README, configuration, CLI/native implementation and original Lim
 remain unchanged; the temporary native test hook is restored. Evidence:
 /tmp/lima-wizard-date-audit-20261011, pinned source review and in-memory wizard
 shell input, with distinct nil, preserved call-out players and 4,000 ms tasks.
-No upstream execution or new boot/service/transport claim. Proposal remains
-unadopted. Next: commit the audit, then adopt the dispatcher/README note and verify
-copied checkout source.
+No upstream execution or new boot/service/transport claim. Audit committed as
+native **499a8a80**; adopted-source verification is recorded above.
 
 #### Lima wizard calls adaptation
 
