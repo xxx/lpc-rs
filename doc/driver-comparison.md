@@ -3145,6 +3145,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard uncd audit
+
+Reviewed **12 October 2026**, after showexits/README were committed as Lima
+**11e045d5** and adaptation notes as native **0e632962**. Pinned public
+[uncd][lima-wizard-uncd] matches current/original source. Recommend a protected
+variadic dispatch_main calling private main() with no arguments. The explicit
+zero-argument rule already rejects arguments. Actual wizard-shell swap_pwd and
+the existing nil-to-NONE report work without native API or state-policy changes.
+
+All **8 cases / 44 registered inputs** pass, covering missing/deleted previous
+directories, repeated swaps, relative cd, Unicode names, argument rejection,
+exact files/pipes and incoming text/refusals. Relative output resolves before
+the swap. Nine following pwd commands and identity/input/pager/modal checks pass;
+working file/body remain unchanged. No unexpected errors or panics. The source
+does not revalidate the previous directory; first uncd with no lastpwd selects
+nil and reports NONE, and the second restores the former directory.
+
+All **17 compile controls** have expected outcomes and formatting passes.
+The shellvars mixin requires inherited contracts; complete wish compiles.
+All 1,547 library files, README/configuration, native source/CLI and original Lima
+remain unchanged; test include restored. All 253 frozen adoption artifacts match.
+Evidence: /tmp/lima-wizard-uncd-audit-20261012, distinct nil, preserved call-out
+players, 4,000 ms tasks, real shell APIs, in-memory input and an IMUD stub.
+Existing 43/81 wizard, 49/49 transitional, 9/9 administrator and broader
+boot/service/transport evidence retains scope. Upstream execution and shell
+restart behavior are unchecked. Proposal unadopted; next adopt exact uncd/README
+and verify unchanged assertions.
+
 #### Lima wizard showexits adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19393,3 +19421,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-where-user-data]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/user_d.c
 [lima-wizard-here]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/here.c
 [lima-wizard-showexits]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showexits.c
+[lima-wizard-uncd]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/uncd.c
