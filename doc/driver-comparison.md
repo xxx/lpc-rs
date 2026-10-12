@@ -3145,6 +3145,33 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard wheremobs adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **f049f4de**. Dedicated Lima on lpc-rs-port over **87af96a5** adopts the
+exact [wheremobs][lima-wizard-wheremobs] dispatcher and audited README guidance.
+Selection, path normalization and direct screen output remain, including the
+existing ID limitation recorded below. No native API change.
+
+All **9 cases / 58 registered inputs** pass against copied adopted source with
+unchanged assertions. All 58 input contexts, 29 fixture-object observations and
+one player body match the audit. All nine following pwd checks and state/input/
+pager/modal checks pass, including two directory changes. No unexpected errors
+or panics. 12 raw outputs differ in object-row permutations; unchanged assertions
+check membership without imposing enumeration order and exact redirected bytes.
+
+Fresh **147 command/support checks** advance wizard compilation to **40/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Wheremobs is the sole new success over livings, with no regressions, timeouts or
+abnormal exits. All **18 compile controls** and workspace/fixture formatting pass.
+Other 1,546 library files, configuration, CLI/native source and original Lima
+remain unchanged; the temporary include is restored. All 133 frozen audit
+artifacts match. Evidence: /tmp/lima-wizard-wheremobs-port-20261012, distinct nil,
+preserved call-out players and 4,000 ms tasks, using real adversary/room classes,
+in-memory input and an IMUD stub. Earlier full-library, boot/service, physical
+transport and upstream-driver results retain scope. Source/README are committed
+as Lima **e3a66271**. Next audit cmds/wiz/where.c; only source selection is recorded.
+
 #### Lima wizard wheremobs audit
 
 Reviewed **12 October 2026**, after livings/README were committed as Lima
@@ -3181,7 +3208,8 @@ preserved call-out players and 4,000 ms tasks, using real adversary/room classes
 in-memory input and an IMUD stub. Existing **39/81 wizard**, **49/49 transitional**,
 **9/9 administrator** inventory and broader boot/service/transport results retain
 scope. Source review/native execution do not establish upstream-driver behavior.
-Proposal unadopted. Next adopt the dispatcher/README and verify copied source.
+At audit verification the proposal was unadopted. Audit notes are committed as
+native **f049f4de**; verified adoption with unchanged assertions is recorded above.
 
 #### Lima wizard livings adaptation
 
