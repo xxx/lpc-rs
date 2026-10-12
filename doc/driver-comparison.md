@@ -3145,6 +3145,33 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard uncd adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as native
+**2ef8854c**. Dedicated Lima on lpc-rs-port over **11e045d5** adopts the exact
+[uncd][lima-wizard-uncd] dispatcher and README guidance. Private main() receives no
+arguments; the rule, real shell swap and nil-to-NONE report remain. No native API
+or state-policy change.
+
+All **8 cases / 44 registered inputs** pass with unchanged assertions. All 44
+input observations and raw outputs match the audit exactly. Nine following pwd
+commands and identity/input/pager/modal checks pass, with no unexpected errors or
+panics. Missing/deleted previous directories, repeated swaps, relative cd,
+Unicode names, argument rejection, exact files/pipes and input/refusals remain
+verified. Working file/body are preserved.
+
+Fresh **147 command/support checks** advance wizard compilation to **44/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Uncd is the sole new success over showexits, with no regressions, timeouts or
+abnormal exits. All **18 compile controls** and formatting pass. Other 1,546
+library files, configuration, native source/CLI and original Lima remain
+unchanged; test include restored. All 125 frozen audit artifacts match.
+Evidence: /tmp/lima-wizard-uncd-port-20261012, distinct nil, preserved call-out
+players and 4,000 ms tasks, real shell APIs, in-memory input and an IMUD stub.
+Earlier full-library, boot/service, physical transport and upstream-driver
+results retain scope. Source/README committed as Lima **2096c59f**.
+Next audit cmds/wiz/scan.c; only local source selection is recorded.
+
 #### Lima wizard uncd audit
 
 Reviewed **12 October 2026**, after showexits/README were committed as Lima
@@ -3170,8 +3197,8 @@ Evidence: /tmp/lima-wizard-uncd-audit-20261012, distinct nil, preserved call-out
 players, 4,000 ms tasks, real shell APIs, in-memory input and an IMUD stub.
 Existing 43/81 wizard, 49/49 transitional, 9/9 administrator and broader
 boot/service/transport evidence retains scope. Upstream execution and shell
-restart behavior are unchecked. Proposal unadopted; next adopt exact uncd/README
-and verify unchanged assertions.
+restart behavior are unchecked. At audit verification the proposal was unadopted;
+notes are committed as native **2ef8854c**. Verified adoption is recorded above.
 
 #### Lima wizard showexits adaptation
 
