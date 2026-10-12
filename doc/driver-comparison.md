@@ -3145,6 +3145,35 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard showexits adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **a654bc21**. Dedicated Lima on lpc-rs-port over **260c90f4** adopts the
+exact [showexits][lima-wizard-showexits] dispatcher, dest || "0" formatting and
+README guidance. Native sprintf type checks and distinct nil remain; private
+main() receives no arguments. No native API change.
+
+All **10 cases / 44 registered inputs** pass against copied adopted source with
+unchanged assertions. All 44 input observations/raw outputs and 39 room/exit
+snapshots match the audit exactly. Ten following pwd commands and state/input/
+pager/modal checks pass, including one directory change and pager advance/quit.
+The dispatcher-only control retains one expected nil formatting error; there are
+no unexpected errors or panics. Real hidden/dynamic exits, relative destinations,
+initialization/reuse, nil/empty short descriptions, failed loads, special text,
+exact files/pipes, ignored input and stdio refusals remain verified.
+
+Fresh **147 command/support checks** advance wizard compilation to **43/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Showexits is the sole new success over here, with no regressions, timeouts or
+abnormal exits. All **18 compile controls** and formatting pass. Other 1,546
+library files, configuration, native source/CLI and original Lima remain unchanged;
+the temporary test include is restored. All 217 frozen audit artifacts match.
+Evidence: /tmp/lima-wizard-showexits-port-20261012, distinct nil, preserved call-out
+players and 4,000 ms tasks, using real indoor-room/M_EXIT APIs, in-memory input and
+an IMUD stub. Earlier full-library, boot/service, physical transport and upstream-
+driver results retain scope. Source/README committed as Lima **11e045d5**.
+Next audit cmds/wiz/uncd.c; only local source selection is recorded.
+
 #### Lima wizard showexits audit
 
 Reviewed **12 October 2026**, after here/README were committed as Lima
@@ -3173,8 +3202,9 @@ Evidence: /tmp/lima-wizard-showexits-audit-20261012, distinct nil, preserved cal
 players and 4,000 ms tasks, with real indoor-room/M_EXIT APIs, in-memory input and
 an IMUD stub. Existing 42/81 wizard, 49/49 transitional, 9/9 administrator and
 broader boot/service/transport results retain scope. Source review/native
-execution do not establish upstream-driver behavior. Proposal unadopted; next
-adopt exact showexits/README and verify unchanged assertions.
+execution do not establish upstream-driver behavior. At audit verification the
+proposal was unadopted. Audit notes are committed as native **a654bc21**; verified
+adoption with unchanged assertions is recorded above.
 
 #### Lima wizard here adaptation
 
