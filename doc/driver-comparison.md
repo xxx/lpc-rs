@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard livings audit
+
+Reviewed **12 October 2026**, after users/README were committed as Lima
+**03211dcf** and adoption notes as native **a00e75ea**. Retrieved pinned
+[livings][lima-wizard-livings] matches original Lima; the port differs only in
+its preceding filter_array-to-native-filter rename. Recommend protected varargs
+dispatch_main forwarding arg to private main(string arg). Preserve selection,
+counter initialization, grouping and direct write/printf; no native API change.
+
+Native [objects](efun/objects.md) and [filter](efun/filter.md) select attackable
+clones excluding bodies and prototypes. Real adversaries require an environment
+allowing combat. Counts group by both short description and base program path,
+with unspecified mapping row order. Surviving clones count after prototype
+removal. Reports go directly to the user, including under file/pipe routes:
+overwrite writes empty output, append preserves existing text and downstream
+stages receive no report. Large reports do not page. Arguments and incoming
+text are ignored; missing input and invalid output directories refuse normally.
+The proposed dispatcher preserves these source behaviors.
+
+All **8 cases / 34 registered inputs** pass: current-command control and seven
+dispatcher-only cases cover exclusions, real combat policy, description/program
+groups and counts, clone/prototype removal, exact empty/preserved files, pipes,
+ignored input, refusals and twelve-row reports with MORE=3. All eight following
+pwd commands and state/pager/modal/input recovery pass; no unexpected errors or
+panics. Real adversary/room classes run in temporary subclasses; selection APIs
+are not replaced. Background NPC behavior and physical transport are unchecked.
+
+All **15 production compile controls**, **5 fixture checks** and workspace/fixture
+formatting pass. All 1,547 library files, README/configuration/CLI/native
+production source and original Lima remain unchanged; the temporary native
+include is restored. All 227 frozen users-adoption artifacts match. Evidence:
+/tmp/lima-wizard-livings-audit-20261012, distinct nil, preserved call-out players
+and 4,000 ms tasks, using in-memory input and an IMUD stub. Existing 38/81 wizard,
+49/49 transitional, 9/9 administrator inventory and broader full-library/boot/
+service/transport results retain scope. Public source review and native execution
+do not establish upstream-driver behavior. Proposal unadopted. Next adopt the
+exact dispatcher/README guidance and verify copied source with these assertions.
+
 #### Lima wizard users adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -3174,8 +3212,8 @@ All 125 frozen users-audit artifacts match. Evidence:
 /tmp/lima-wizard-users-port-20261012, distinct nil, preserved call-out players
 and 4,000 ms tasks, using in-memory input and an IMUD stub. Earlier full-library,
 boot/service, physical-transport and upstream-driver results retain scope.
-Source/README are committed as Lima **03211dcf**. Next audit cmds/wiz/livings.c;
-only local source selection and its dispatch compile blocker are recorded.
+Source/README are committed as Lima **03211dcf**, adoption notes as native
+**a00e75ea**. The livings audit is recorded above.
 
 #### Lima wizard users audit
 
@@ -19062,3 +19100,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-explode-runtime-config]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/rc.cc
 
 [lima-wizard-users]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/users.c
+[lima-wizard-livings]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/livings.c
