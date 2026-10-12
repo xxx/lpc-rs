@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard showexits audit
+
+Reviewed **12 October 2026**, after here/README were committed as Lima
+**260c90f4** and native adoption notes as **305fdb0a**. Pinned public
+[showexits][lima-wizard-showexits] matches current/original source. The proposal
+adds protected variadic dispatch_main calling private main() with no args and
+passes dest || "0" to the final %s, keeping a missing destination as None (0).
+A dispatcher-only control exposes the nil formatting error. The proposal supplies
+explicit string text while native sprintf type checks and distinct nil remain.
+The existing short() || "" and failed-load branches need no rewrite or native API.
+
+All **10 cases / 44 registered inputs** pass, including empty rooms, ignored raw
+arguments, hidden exits, relative paths, a function-valued exit, destination
+initialization/reuse, nil/empty short descriptions and missing/failed loads.
+Special # text keeps its exact line endings, including running into the next
+line when no newline is supplied. Exact files/pipes, incoming text/refusals and
+real paging/quit pass. Ten following pwd commands, 39 room/exit snapshots and
+state/input/pager/modal checks pass, with one intentional directory change and
+one expected dispatcher-only formatting error and no unexpected errors or panics.
+
+All **16 production controls**, **7 fixture checks** and formatting pass.
+All 1,547 library files, README/configuration, native source/CLI and original Lima
+remain unchanged; temporary test include restored. All 242 frozen here-adoption
+artifacts match.
+Evidence: /tmp/lima-wizard-showexits-audit-20261012, distinct nil, preserved call-out
+players and 4,000 ms tasks, with real indoor-room/M_EXIT APIs, in-memory input and
+an IMUD stub. Existing 42/81 wizard, 49/49 transitional, 9/9 administrator and
+broader boot/service/transport results retain scope. Source review/native
+execution do not establish upstream-driver behavior. Proposal unadopted; next
+adopt exact showexits/README and verify unchanged assertions.
+
 #### Lima wizard here adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19331,3 +19362,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-where]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/where.c
 [lima-wizard-where-user-data]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/user_d.c
 [lima-wizard-here]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/here.c
+[lima-wizard-showexits]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showexits.c
