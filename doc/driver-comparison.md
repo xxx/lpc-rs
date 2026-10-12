@@ -3145,6 +3145,38 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard users adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **0be7bfff**. Dedicated Lima on lpc-rs-port over **34f7cc1b** adopts the
+exact [users][lima-wizard-users] dispatcher/local map-and-join proposal. README
+documents connected/login names, special messages and output routing. Native
+[users](efun/users.md) enumeration and [implode](efun/implode.md) remain unchanged.
+Nil IDs display (login); empty names remain empty. Reports keep actual returned
+order, using spaces for final/file output and newlines for nonfinal pipelines.
+
+All **8 cases / 37 registered inputs** and **6 direct report checks** pass against
+copied adopted source with unchanged assertions. Controls, named/Unicode/login/
+empty users, unconnected exclusion, special messages, exact raw files/append/
+pipeline output, ignored input, refusals and paging pass. All 37 input contexts
+and six direct reports match the audit; all eight following pwd checks and state
+recover. No unexpected errors or panics. Fresh VMs need not return the same user
+permutation: seven raw outputs differ, while each matches its native enumeration.
+Zero/sole-foreign checks use fixture bindings rather than physical transport.
+
+Fresh **147 command/support checks** advance wizard compilation to **38/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Users is the sole new success over flist, with no regressions, timeouts or
+abnormal exits. All **19 compile controls** and workspace/fixture formatting
+pass. Other 1,546 library files, configuration, CLI/native production source and
+original Lima remain unchanged; the temporary native include is restored.
+All 125 frozen users-audit artifacts match. Evidence:
+/tmp/lima-wizard-users-port-20261012, distinct nil, preserved call-out players
+and 4,000 ms tasks, using in-memory input and an IMUD stub. Earlier full-library,
+boot/service, physical-transport and upstream-driver results retain scope.
+Source/README are committed as Lima **03211dcf**. Next audit cmds/wiz/livings.c;
+only local source selection and its dispatch compile blocker are recorded.
+
 #### Lima wizard users audit
 
 Reviewed **12 October 2026**, after flist/README were committed as Lima
@@ -3184,8 +3216,9 @@ artifacts match. Evidence: /tmp/lima-wizard-users-audit-20261012, distinct nil,
 preserved call-out players and 4,000 ms tasks, with in-memory registered input
 and an IMUD stub. Existing 37/81 wizard, 49/49 transitional, 9/9 administrator
 inventory and broader full-library/boot/service/transport results retain scope.
-Proposal unadopted. Next adopt users/README and verify copied source with these
-same assertions, including returned order and raw pipeline output.
+At audit verification the proposal was unadopted. Audit notes are committed
+as native **0be7bfff**; verified adoption with unchanged returned-order/raw-output
+assertions is recorded above.
 
 #### Lima wizard flist adaptation
 
