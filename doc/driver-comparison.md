@@ -3145,6 +3145,32 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima terminal wrapping adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as native
+**41d3e01e**. The dedicated daemon removes the exact audited five-line leading-field
+repair. Native explode preserves that field already, so indentation and the
+associated early-wrap boundary are corrected. Remaining word wrapping, trimming,
+colour-width accounting and message flags retain their existing policy; the
+README records the adapted behavior.
+
+All **nine cases** pass against actual adopted source: **33 direct wrapper** and
+**13 real-user display observations**, plus seven scan regressions. Every audited
+proposal expectation is retained. The two old-source controls were completed in
+the audit. All **43 registered inputs**, 37 inventory snapshots, eight following
+pwd checks and shell/input/pager/modal checks pass, including exact files/pipes
+and real paging/quit, with no unexpected errors or panics. All **14 adopted compile
+controls** and formatting pass. All 103 frozen audit artifacts match.
+
+Only daemon/README change; all other 1,546 library files, configuration, native
+implementation/CLI and original Lima remain unchanged. Evidence:
+/tmp/lima-terminal-wrap-port-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks, real daemon/user/command APIs, plain-mode in-memory delivery and
+an IMUD stub. Prior 45/81 wizard, 49/49 transitional, 9/9 administrator and
+broader evidence retain scope. Daemon/README committed as Lima **1dc8dd3f**;
+next audit cmds/wiz/showtree.c, selected by source and wizard-rule review only.
+No functional command audit has started.
+
 #### Lima terminal wrapping audit
 
 Reviewed **12 October 2026**, after scan/README were committed as Lima **9cf10e43**
