@@ -3145,6 +3145,40 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard where audit
+
+Reviewed **12 October 2026**, after wheremobs/README were committed as Lima
+**e3a66271** and adoption notes as native **9d4ded8e**. Retrieved pinned
+[where][lima-wizard-where] matches original/current source. Recommend protected
+varargs dispatch_main forwarding arg to private main(mixed *arg), preserving
+where [str*] structured arguments, plus a canonical account-name guard before
+user_exists. Original [lookup][lima-wizard-where-user-data] checks account files;
+the earlier ported user-data contract rejects noncanonical names. Dispatcher-only
+controls confirm errors for Porter, 123 and a-b; the guard preserves absent-name
+rows and case-sensitive queries. This is a port adaptation, with no native API change.
+
+Default enumeration follows connected bodies in native user order. Explicit
+names retain order/duplicates and accept spaces/commas. Accounts resolve their
+current body's actual room; character names do not substitute for account IDs.
+Saved accounts without an active connected body get the existing offline row;
+unknown/noncanonical names get the absent row. CMD buffers support exact overwrite,
+append and pipe output, normal paging and ignored incoming text.
+
+All **10 cases / 47 registered inputs** pass, including current/dispatcher-only
+controls, account/character and connected/offline/login distinctions, Unicode
+room descriptions, case matching, exact files/pipes, refusals and pager advance/
+quit. The three dispatcher-only lookup errors are expected; no unexpected errors
+or panics. All ten following pwd checks and state/input/pager/modal checks pass.
+All **16 compile controls**, three fixture checks and workspace/fixture formatting
+pass. All 1,547 library files, README/configuration, CLI/native source and original
+Lima remain unchanged; the temporary include is restored. All 246 frozen adoption
+artifacts match. Evidence: /tmp/lima-wizard-where-audit-20261012, distinct nil,
+preserved call-out players and 4,000 ms tasks, using real account/body/room classes,
+in-memory input and an IMUD stub. Existing **40/81 wizard**, **49/49 transitional**,
+**9/9 administrator** inventory and broader boot/service/transport results retain
+scope. Source review/native execution do not establish upstream-driver behavior.
+Proposal unadopted. Next adopt exact where/README and verify copied source.
+
 #### Lima wizard wheremobs adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -3170,7 +3204,8 @@ artifacts match. Evidence: /tmp/lima-wizard-wheremobs-port-20261012, distinct ni
 preserved call-out players and 4,000 ms tasks, using real adversary/room classes,
 in-memory input and an IMUD stub. Earlier full-library, boot/service, physical
 transport and upstream-driver results retain scope. Source/README are committed
-as Lima **e3a66271**. Next audit cmds/wiz/where.c; only source selection is recorded.
+as Lima **e3a66271**, with adoption notes committed as native **9d4ded8e**.
+The completed where audit is recorded above.
 
 #### Lima wizard wheremobs audit
 
@@ -19202,3 +19237,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-users]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/users.c
 [lima-wizard-livings]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/livings.c
 [lima-wizard-wheremobs]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wheremobs.c
+[lima-wizard-where]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/where.c
+[lima-wizard-where-user-data]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/daemons/user_d.c
