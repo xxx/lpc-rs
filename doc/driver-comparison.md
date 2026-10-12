@@ -3145,6 +3145,48 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard users audit
+
+Reviewed **12 October 2026**, after flist/README were committed as Lima
+**34f7cc1b** and adoption notes as native **ff2843be**. Current
+[users][lima-wizard-users] matches retrieved pinned original bytes. Its missing
+dispatcher hides callback/initial-value implode calls: dispatch alone exposes
+argument-count and function-versus-string errors. Recommend protected varargs
+dispatch_main calling private main(), and a local map of display names followed
+by native [implode](efun/implode.md). Nil IDs become (login); empty names remain.
+Preserve special zero/sole-current-user messages before mapping, native returned
+user order, spaces for final output and newlines for nonfinal pipelines.
+No native API change is needed. Pinned FluffOS [callback documentation][fl-entry-implode]
+and [fold implementation][fl-entry-fold] consume every element in order with a
+starting accumulator; this core form needs no PACKAGE_CONTRIB option. This is
+source comparison without upstream-driver execution.
+
+All **8 cases / 37 registered inputs** and **6 direct report checks** pass:
+current/dispatch-only controls and six proposal cases cover live named/Unicode/
+login/empty-name users, unconnected exclusion, returned order, exact raw files/
+append/pipeline output, ignored arguments/input, refusals, paging and recovery.
+Zero and sole-foreign reports use actual fixture bindings under both final/
+pipeline settings; zero users cannot occur in ordinary connected-user input.
+Rebinding preserves state and subsequent users/pwd. These are fixture checks,
+without new physical login/disconnect transport execution. All eight following
+pwd commands, state and pager/modal/input recovery pass; no unexpected errors or
+panics. Native enumeration has no promised fixed ordering between VMs; assertions
+use the actual fixture enumeration, with raw order observations retained.
+
+All **16 compile controls** match: current and dispatch-only fail as expected,
+the proposal and thirteen supports compile. Workspace/fixture formatting passes.
+An initial support-path error and the initial passing runtime remain recorded;
+a fragile empty-name wc count was replaced by exact raw pipeline output before
+the final passing run. Proposal/helpers remain unchanged. All 1,547 library
+files, README/configuration/CLI/native production source and original Lima remain
+unchanged; the temporary native include is restored. All 226 frozen flist-adoption
+artifacts match. Evidence: /tmp/lima-wizard-users-audit-20261012, distinct nil,
+preserved call-out players and 4,000 ms tasks, with in-memory registered input
+and an IMUD stub. Existing 37/81 wizard, 49/49 transitional, 9/9 administrator
+inventory and broader full-library/boot/service/transport results retain scope.
+Proposal unadopted. Next adopt users/README and verify copied source with these
+same assertions, including returned order and raw pipeline output.
+
 #### Lima wizard flist adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -3172,9 +3214,8 @@ All 144 frozen flist-audit artifacts match. Evidence:
 /tmp/lima-wizard-flist-port-20261012, distinct nil, preserved call-out players
 and 4,000 ms tasks, using in-memory registered input and an IMUD stub. Earlier
 full-library, boot/service, physical-transport and upstream-driver results retain
-scope. Source/README and adoption notes await commit. Next audit users: its
-existing callback/initial-value implode calls need review alongside dispatch,
-starting with a local map/join adaptation. This selection is source review only.
+scope. Flist/README are committed as Lima **34f7cc1b**, adoption notes as native
+**ff2843be**. The users audit is recorded above.
 
 #### Lima wizard flist audit
 
@@ -18986,3 +19027,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-apropos]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/apropos.c
 [lima-wizard-wc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wc.c
 [fl-explode-runtime-config]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/rc.cc
+
+[lima-wizard-users]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/users.c
