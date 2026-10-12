@@ -3145,6 +3145,32 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard word and line count adaptation
+
+Adopted and verified **11 October 2026**, following audit notes committed as
+native **90667087**. Dedicated Lima on lpc-rs-port over **b2b0d4d6** adopts the
+exact [wc][lima-wizard-wc] dispatcher/local line-count proposal. README documents
+input precedence, counts and routing described in the audit below. Native
+[explode](efun/explode.md) and existing word-gap counting remain unchanged.
+
+All **7 cases / 54 registered inputs** pass against copied adopted source with
+unchanged assertions and all 54 audited observations matching exactly. Controls,
+flags/files/globs/quotes, empty/Unicode/boundary text, input precedence, stdout/
+file/pipe routes and refusals pass. Following pwd and player/directory/shell/
+input/modal state remain intact; no unexpected errors or panics.
+
+Fresh **147 command/support checks** advance wizard compilation to **35/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports. Wc
+is the sole new success over status, with no regressions, timeouts or abnormal
+exits. All **18 compile controls** and workspace/fixture formatting pass. Other
+1,546 library files, configuration, CLI/native production code and original Lima
+remain unchanged; the temporary native test include is restored. All 132 frozen
+wc-audit artifacts match. Evidence: /tmp/lima-wizard-wc-port-20261011, distinct
+nil, preserved call-out players and 4,000 ms tasks, using in-memory registered
+input and an IMUD stub. Earlier full-library, boot/service, physical-transport
+and upstream-driver results retain scope. Wc/README are committed as Lima **d0b65554**. Next audit wizard apropos help-topic search; original-source issues
+remain separate from compatibility work.
+
 #### Lima wizard word and line count audit
 
 Reviewed **11 October 2026**, after status/README were committed as Lima
@@ -3189,8 +3215,9 @@ it. Evidence: /tmp/lima-wizard-wc-audit-20261011, distinct nil, preserved call-o
 players and 4,000 ms tasks, using in-memory registered input and an IMUD stub.
 Original Lima source review pins **eefaff66adcae9b01e16059574c925b0d63e70a1**;
 wc and M_REGEX still match it. Earlier boot/service/physical-transport and full
-inventory results retain scope. Proposal unadopted. Next adopt wc/README, then
-verify copied source with the same assertions and observations.
+inventory results retain scope. At audit verification the proposal was
+unadopted. Audit notes are committed as native **90667087**; verified wc/README
+adoption is recorded above.
 
 #### Lima wizard status adaptation
 
