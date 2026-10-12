@@ -3143,6 +3143,43 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard date audit
+
+Reviewed **11 October 2026**, after calls/README were committed as Lima
+**c1554ac8** and adoption notes as native **e8aa6736**. The unchanged
+[date][lima-wizard-date] command fails compilation at dispatch_main. Recommend
+only protected varargs dispatch_main forwarding the raw argument to private
+main(string). There is no date rule in Cmd_rules; absent arguments arrive as nil.
+The existing sscanf split, ctime/time calls, local variable named time, stamp
+format and random branch work without native changes.
+
+All **6 cases / 27 registered inputs** pass with one current-source control and
+five proposal fixtures. Defaults and unknown arguments show local time; -s prints
+a day/month/two-digit-year stamp, body name and Created or supplied text. Quotes
+and extra spaces in supplied text remain literal. Exact a babe prints one of the
+six legacy responses followed by the date; added words or quoted babe do not
+trigger it. Real-clock output is checked against the timestamps bracketing each
+input. Shell/player/directory/input/modal state remains usable and unchanged.
+
+Write/printf use Lima's direct user-message path, including its extra newline.
+Date output therefore stays on screen when redirected or piped; overwrite creates
+an empty file, append preserves existing contents, and pipes receive an empty
+buffer. Incoming file/pipe contents are ignored. Preserve this existing behavior.
+The first runtime attempt missed the message-path newline in its assertions;
+corrected assertions pass without a command or native implementation change.
+
+All **18 compile controls** have expected outcomes: current date alone fails;
+the proposal and eight supporting targets pass. Workspace/fixture formatting
+pass. The prior 31/81 wizard, 49/49 transitional and 9/9 administrator inventory
+retains its scope; this audit does not refresh the full inventory. All 1,547
+library files, README, configuration, CLI/native implementation and original Lima
+remain unchanged; the temporary native test hook is restored. Evidence:
+/tmp/lima-wizard-date-audit-20261011, pinned source review and in-memory wizard
+shell input, with distinct nil, preserved call-out players and 4,000 ms tasks.
+No upstream execution or new boot/service/transport claim. Proposal remains
+unadopted. Next: commit the audit, then adopt the dispatcher/README note and verify
+copied checkout source.
+
 #### Lima wizard calls adaptation
 
 Reviewed **11 October 2026**, after the calls audit and negative-delay timer fix
@@ -18495,3 +18532,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-which]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/which.c
 
 [lima-wizard-calls]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/calls.c
+[lima-wizard-date]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/date.c
