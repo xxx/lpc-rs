@@ -3145,6 +3145,36 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard scan adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as native
+**026ca4a8**. Dedicated Lima on lpc-rs-port over **2096c59f** adopts the exact
+[scan][lima-wizard-scan] dispatcher and README guidance. Private main receives
+parsed arg and flags; the rule, -d, real inventories and formatting remain.
+Nil descriptions use [no short]; empty strings are quoted. No native API change.
+
+All **8 cases / 44 registered inputs** pass with unchanged assertions. All 44
+input observations/raw outputs and 39 inventory snapshots match the audit.
+Eight following pwd commands and identity/input/pager/modal checks pass, with
+no unexpected errors or panics. Empty/default/explicit objects, nested shallow/
+deep traversal, clone names, filename shortening, Unicode, relative paths,
+argument refusals, exact files/pipes, incoming text/refusals and real paging/quit
+remain verified. Inventories/body and working-file state are preserved.
+The shared terminal wrapper's extra leading space remains a separate follow-up;
+exact redirected indentation passes and native explode semantics are retained.
+
+Fresh **147 command/support checks** advance wizard compilation to **45/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Scan is the sole new success over uncd, with no regressions, timeouts or abnormal
+exits. All **18 compile controls** and formatting pass. Other 1,546 library files,
+configuration, native implementation/CLI and original Lima remain unchanged;
+test include restored. All 141 frozen audit artifacts match.
+Evidence: /tmp/lima-wizard-scan-port-20261012, distinct nil, preserved call-out
+players, 4,000 ms tasks, real room/container APIs, in-memory input and an IMUD stub.
+Earlier full-library, boot/service, physical transport and upstream-driver
+results retain scope. Source/README committed as Lima **9cf10e43**.
+Next audit shared xterm256_wrap; only local source selection is recorded.
+
 #### Lima wizard scan audit
 
 Reviewed **12 October 2026**, after uncd/README were committed as Lima **2096c59f**
@@ -3173,8 +3203,9 @@ Evidence: /tmp/lima-wizard-scan-audit-20261012, distinct nil, preserved call-out
 players, 4,000 ms tasks, real room/container APIs, in-memory input and an IMUD stub.
 Existing 44/81 wizard, 49/49 transitional, 9/9 administrator and broader
 boot/service/transport evidence retains scope. Source review/native execution
-does not establish upstream-driver behavior. Proposal unadopted; next adopt exact
-scan/README and verify unchanged assertions.
+does not establish upstream-driver behavior. At audit verification the proposal
+was unadopted; notes are committed as native **026ca4a8**. Verified adoption
+is recorded above.
 
 #### Lima wizard uncd adaptation
 
