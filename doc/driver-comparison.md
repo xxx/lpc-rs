@@ -3143,6 +3143,56 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard CPU resource audit
+
+Reviewed **11 October 2026**, after date/README were committed as Lima
+**c0e8c318** and adoption notes as native **9d363ace**. Unchanged
+[cpu][lima-wizard-cpu] needs the command dispatcher and a missing native
+`rusage()` API, also consumed by [status][lima-wizard-resource-status]. Its numeric
+expressions already compile when a resource provider is supplied; no arithmetic
+type change is required.
+
+The reviewed FluffOS core implementation at
+**44532e0228f34be2184c701a361df4079371b8b0**, with `F_RUSAGE` enabled, reads
+`RUSAGE_SELF` and returns 16 integer fields on success, or an empty mapping on
+syscall failure. User/system CPU times are truncated to milliseconds; the other
+resource fields, including maxrss, are forwarded from the platform. The fallback
+zeroes unsupported counters but still returns the full mapping on success.
+[Declaration][fl-rusage-audit-spec], [implementation][fl-rusage-audit-source],
+[fallback][fl-rusage-audit-fallback]. This is pinned source review, without
+FluffOS execution or OS resource sampling in lpc-rs.
+
+The existing division by integer 1000 loses subsecond CPU time before assignment
+to float. With controlled 250 ms user plus 250 ms system time over ten seconds,
+the original expression prints 0.00%; changing only the divisor to 1000.0 prints
+5.00%. Preserve that precision, cache uptime once, and report unavailable data
+when uptime is zero or either CPU counter is absent. Native
+[uptime](efun/uptime.md) counts whole monotonic seconds since VM creation;
+process CPU counters have a different lifetime in embedded/multiple-VM use.
+This calculation is an average over uptime, can exceed 100% with multiple cores,
+and is not an instantaneous load measurement.
+
+All **6 cases / 29 registered inputs / 11 controlled snapshots** pass: current
+availability, original truncation, two expected unguarded arithmetic errors,
+fractional/multicore/zero results, unavailable-data recovery and output routing.
+The proposal uses CMD stdout for overwrite/append/pipes and ignores incoming
+input and extra arguments. Shell/player/directory/input/modal state is preserved.
+The first fixtures used an explicit uptime bypass forbidden by Lima's master;
+ordinary uptime through a test helper resolves that without changing policy.
+
+All **16 compile controls**, two CLI arithmetic controls and workspace/fixture
+formatting pass. Status has only a provider/dispatcher compile control here.
+The prior 32/81 wizard, 49/49 transitional and 9/9 administrator inventory keeps
+its scope. All 1,547 library files, README, configuration, CLI/native implementation
+and original Lima remain unchanged; the temporary native test hook is restored.
+Evidence: /tmp/lima-wizard-cpu-audit-20261011, controlled in-memory wizard input,
+distinct nil, preserved call-out players and 4,000 ms tasks. No native resource
+API or mudlib proposal is adopted by this audit.
+
+Next: implement a general native `rusage()` API with the full resource schema,
+document platform units/availability and test actual process sampling; then adopt
+and verify the CPU dispatcher, floating divisor and unavailable-data guard.
+
 #### Lima wizard date adaptation
 
 Reviewed **11 October 2026**, after the date audit was committed as native
@@ -3170,9 +3220,7 @@ Evidence: /tmp/lima-wizard-date-port-20261011, in-memory wizard-shell input and
 bounded compilation, with distinct nil, preserved call-out players and 4,000 ms
 tasks. Broader inventory, upstream execution and boot/service/transport findings
 retain their earlier scope. Date/README are committed as Lima **c0e8c318**.
-Next: audit cmds/wiz/cpu.c resource reporting, numeric arithmetic and uptime.
-Only its source, command rules and native availability were read to select it;
-no new runtime or upstream audit result is claimed for cpu.
+The subsequent CPU resource audit is recorded above.
 
 #### Lima wizard date audit
 
@@ -18563,3 +18611,8 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-wizard-calls]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/calls.c
 [lima-wizard-date]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/date.c
+[lima-wizard-cpu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/cpu.c
+[lima-wizard-resource-status]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/status.c
+[fl-rusage-audit-spec]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/core.spec#L277
+[fl-rusage-audit-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L3362-L3397
+[fl-rusage-audit-fallback]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/base/internal/rusage.cc
