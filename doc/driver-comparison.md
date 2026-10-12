@@ -3145,6 +3145,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard apropos adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **d02dd828**. Dedicated Lima on lpc-rs-port over **d0b65554** adopts the
+exact [apropos][lima-wizard-apropos] dispatcher/local category proposal. README
+documents searching and routing described in the audit below. Native
+[explode](efun/explode.md) and the help daemon remain unchanged.
+
+All **8 cases / 37 registered inputs** and **7 category checks** pass against
+copied adopted source with unchanged assertions and all 37 input/seven category
+observations matching exactly. Controls, literal/case-sensitive/Unicode searches,
+category labels/sorting, duplicates, empty results, stdout/file/append/pipe routes,
+ignored incoming input and refusals pass. Following pwd, help topics and player/
+directory/shell/input/modal state remain intact; no unexpected errors or panics.
+
+Fresh **147 command/support checks** advance wizard compilation to **36/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Apropos is the sole new success over wc, with no regressions, timeouts or abnormal
+exits. All **18 compile controls** and workspace/fixture formatting pass. Other
+1,546 library files, configuration, CLI/native production code and original Lima
+remain unchanged; the temporary native test include is restored. All 104 frozen
+apropos-audit artifacts match. Evidence: /tmp/lima-wizard-apropos-port-20261012,
+distinct nil, preserved call-out players and 4,000 ms tasks, using controlled
+help-index data, in-memory registered input and an IMUD stub. Earlier full-library,
+boot/service, physical-transport and upstream-driver results retain scope.
+Source/README are committed as Lima **4eac7f65**. Next audit flist;
+original-source issues remain separate from compatibility work.
+
 #### Lima wizard apropos audit
 
 Reviewed **11 October 2026**, after wc/README were committed as Lima **d0b65554**
@@ -3181,9 +3209,10 @@ All 208 frozen wc-adoption artifacts match. Evidence:
 and 4,000 ms tasks, using controlled help-index data, in-memory registered input
 and an IMUD stub. Existing 35/81 wizard, 49/49 transitional, 9/9 administrator
 inventory and earlier full-library/boot/service/transport results retain scope.
-Proposal unadopted. Next adopt apropos/README, then verify copied source with the
-same assertions and observations. Original source pins
-**eefaff66adcae9b01e16059574c925b0d63e70a1**; apropos still matches it.
+At audit verification the proposal was unadopted and apropos matched original
+source **eefaff66adcae9b01e16059574c925b0d63e70a1**. Audit notes are committed as
+native **d02dd828**; the verified adoption with unchanged assertions and matching
+observations is recorded above.
 
 #### Lima wizard word and line count adaptation
 
