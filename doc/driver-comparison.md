@@ -3145,6 +3145,53 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard word and line count audit
+
+Reviewed **11 October 2026**, after status/README were committed as Lima
+**b2b0d4d6** and adoption notes as native **3f486b5b**. Recommend protected
+varargs dispatch_main forwarding to the existing private main(arg, flags, input)
+in [wc][lima-wizard-wc], preserving declared types and absent stdin as nil.
+Empty LPC strings are true: supplying empty text would select stdin rather than
+filename arguments. Actual supplied input, including empty text, takes precedence.
+
+Line counts need local normalization for the reviewed
+[FluffOS implementation][fl-explode] and [defaults][fl-explode-runtime-config]:
+sane explode string = 1, reversible explode string = 0. Empty/newline-only input
+yields zero line fields; otherwise remove one empty boundary field at each end
+while retaining interior empties. A dispatcher-only control counts `"a\n"` as
+2 lines, `"\n\n"` as 3 and
+empty text as 1; the proposal returns 1, 0 and 0. Keep native
+[explode](efun/explode.md) unchanged. Upstream behavior is source-reviewed at
+**2c27287500daf48a87a1f89d69a97d8b9603028d**, without upstream execution.
+
+Words still count [M_REGEX][lima-regex-module]'s unmatched gaps, including empty
+boundary gaps: an empty file gives 1 word and `"a\n"` gives 2. CR and nonbreaking
+space remain within a gap. These existing source quirks are separate from the
+line-splitting compatibility edit; preserve the counting definition for this port.
+Counts use CMD stdout/file/append/pipe routing. Usage uses direct write and stays
+on screen, leaving redirected output empty or unchanged on append. Keep flag,
+filename/glob ordering, quoting and parser-refusal behavior; add README guidance
+on adoption.
+
+All **7 cases / 54 registered inputs** pass: current availability, dispatcher-only
+line counts and five complete-proposal cases covering counts, flags, filenames,
+multiple files/globs/quotes, empty/Unicode/boundary text, input precedence and
+output routes/refusals. Following pwd and player/directory/shell/input/modal state
+remain intact; no unexpected errors or panics. All **14 compile controls** and
+workspace/fixture formatting pass. Current wc fails at dispatch_main; both
+proposals compile, and status, CPU, M_REGEX plus eight support targets stay green.
+
+All 1,547 library files, README, configuration, CLI/native implementation and
+original Lima remain unchanged; the temporary native test include is restored.
+All 211 frozen status-adoption artifacts match. Existing 34/81 wizard, 49/49
+transitional and 9/9 administrator inventory keeps scope; controls do not refresh
+it. Evidence: /tmp/lima-wizard-wc-audit-20261011, distinct nil, preserved call-out
+players and 4,000 ms tasks, using in-memory registered input and an IMUD stub.
+Original Lima source review pins **eefaff66adcae9b01e16059574c925b0d63e70a1**;
+wc and M_REGEX still match it. Earlier boot/service/physical-transport and full
+inventory results retain scope. Proposal unadopted. Next adopt wc/README, then
+verify copied source with the same assertions and observations.
+
 #### Lima wizard status adaptation
 
 Reviewed **11 October 2026**, after status audit notes were committed as native
@@ -3171,9 +3218,9 @@ All 81 frozen status-audit artifacts match. Evidence:
 /tmp/lima-wizard-status-port-20261011, distinct nil, preserved call-out players
 and 4,000 ms tasks, using in-memory registered input and Linux resource sampling.
 Earlier full-library, boot/service, physical-transport and upstream-driver results
-retain their scope. Source/README and adoption notes await commit. Next audit
-wizard wc's counting, flags and file/pipe routes; original-source issues remain
-separate from dispatcher compatibility work.
+retain their scope. Status/README committed as Lima **b2b0d4d6**; adoption
+notes as native **3f486b5b**. The wc audit is recorded above; original-source
+issues remain separate from dispatcher compatibility work.
 
 #### Lima wizard status resource audit
 
@@ -18767,3 +18814,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-rusage-audit-source]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/core/efuns_main.cc#L3362-L3397
 [fl-rusage-audit-fallback]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/base/internal/rusage.cc
 [nix-rusage-source]: https://github.com/nix-rust/nix/blob/v0.31.3/src/sys/resource.rs
+
+[lima-wizard-wc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wc.c
+[fl-explode-runtime-config]: https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/base/internal/rc.cc
