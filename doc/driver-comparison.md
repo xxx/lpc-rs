@@ -3143,6 +3143,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard calls adaptation
+
+Reviewed **11 October 2026**, after the calls audit and negative-delay timer fix
+were committed as native **a4290387**. Dedicated Lima on lpc-rs-port over
+**1e421d06** adopts the exact [calls][lima-wizard-calls] dispatcher proposal,
+calling the private main() without arguments. The existing global timer query,
+callback-name conversion, millisecond-to-second projection and state-daemon output
+remain unchanged. README describes grouping, delays and normal command IO.
+No further native implementation, API, configuration or policy change.
+
+All **6 cases / 21 registered inputs / 15 timer snapshots** pass against copied
+checkout source: five adopted-source fixtures and one restored-source control.
+The assertions are unchanged from the audit. Stable input/output, timer metadata
+and shell/input/modal observations match the proposal/control. Comparisons allow
+real-clock delays, mapping row order, generated closure names and cross-run timer
+IDs to vary; explicit assertions still check delay conversion, callback grouping,
+repeat milliseconds and unchanged timer identity within each run. Listing leaves
+callbacks unexecuted. Empty/simplified tables, cancellation/elapsed delays, state
+queue grouping/path shortening, pipes and redirected IO retain their behavior.
+
+Refreshed compilation covers **147 targets**: **31/81 wizard**, **49/49
+transitional**, **9/9 administrator** and eight supports. Calls is the only new
+compile success, with no regressions, timeouts or abnormal exits. All **22 compile
+controls** have expected outcomes, and workspace/fixture formatting pass. The
+other 1,546 library files, configuration, CLI/native implementation and original
+Lima are unchanged; the native test hook is restored and all 186 frozen audit
+artifacts match. The committed timer fix retains its earlier build, Clippy and
+69 native timer/configuration-test evidence; those checks were not repeated.
+
+Evidence: /tmp/lima-wizard-calls-port-20261011, using in-memory lpc-rs shell input
+and bounded compilation. Distinct nil, preserved call-out players and 4,000 ms
+tasks remain. The fixture's timer queue is real, with scheduler messages left
+unserviced for display tests; upstream execution and broader boot/service/transport
+checks keep their earlier scope. Calls/README are committed as Lima **c1554ac8**.
+Next: audit cmds/wiz/date.c through the wizard shell, including raw arguments,
+default date output, -s stamps and output routing. Only source was read to select
+that next item; its audit has not started.
+
 #### Lima wizard calls audit
 
 Reviewed **11 October 2026**, after which/README were committed as Lima
@@ -3185,8 +3223,8 @@ in-memory wizard-shell input and bounded compilation. Timers use real native
 queue entries, without the fixture servicing scheduler messages; this audits
 display rather than timer firing. Distinct nil, preserved players and 4,000 ms
 tasks remain. Upstream execution and broader boot/service/transport checks retain
-their previous scope. Next: commit these notes, adopt the dispatcher/README note,
-and verify copied checkout source.
+their previous scope. Audit and timer fix are committed as native **a4290387**;
+adopted-source verification is recorded above.
 
 #### Lima wizard which adaptation
 
