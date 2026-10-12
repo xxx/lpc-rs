@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard flist adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **756e9042**. Dedicated Lima on lpc-rs-port over **4eac7f65** adopts the
+exact [flist][lima-wizard-flist] dispatcher proposal. README documents listing,
+routing and the existing report limit described below. Native
+[functions](efun/functions.md), [function_exists](efun/function_exists.md),
+visibility and report construction remain unchanged.
+
+All **8 cases / 43 registered inputs** pass against copied adopted source with
+unchanged assertions and all 43 observations matching exactly. Controls, object
+paths/rules/aliases, public/inherited/overridden/clone/self/hidden-only listings,
+callback binding, raw files/append/pipes, ignored input and both pager formats
+pass. One expected flist me report overflow retains overwrite removal; following
+bounded flist/pwd, state and pager/input recovery pass. No unexpected errors or
+panics; controlled target methods are not invoked.
+
+Fresh **147 command/support checks** advance wizard compilation to **37/81**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports.
+Flist is the sole new success over apropos, with no regressions, timeouts or
+abnormal exits. All **18 compile controls** and workspace/fixture formatting
+pass. Other 1,546 library files, configuration, CLI/native production code and
+original Lima remain unchanged; the temporary native include is restored.
+All 144 frozen flist-audit artifacts match. Evidence:
+/tmp/lima-wizard-flist-port-20261012, distinct nil, preserved call-out players
+and 4,000 ms tasks, using in-memory registered input and an IMUD stub. Earlier
+full-library, boot/service, physical-transport and upstream-driver results retain
+scope. Source/README and adoption notes await commit. Next audit users: its
+existing callback/initial-value implode calls need review alongside dispatch,
+starting with a local map/join adaptation. This selection is source review only.
+
 #### Lima wizard flist audit
 
 Reviewed **12 October 2026**, after apropos/README were committed as Lima
@@ -3179,9 +3210,9 @@ players and 4,000 ms tasks, using in-memory registered input and an IMUD stub.
 Existing 36/81 wizard, 49/49 transitional, 9/9 administrator inventory and earlier
 full-library/boot/service/transport results retain scope. Public original source
 pins **eefaff66adcae9b01e16059574c925b0d63e70a1** and matches retrieved bytes;
-upstream-driver execution was not performed. Proposal unadopted. Next adopt the
-flist dispatcher/README guidance, then verify copied source with the same
-assertions and observations.
+upstream-driver execution was not performed. At audit verification the proposal
+was unadopted. Audit notes are committed as **756e9042**; exact adoption with
+unchanged assertions and observations is verified above.
 
 #### Lima wizard apropos adaptation
 
