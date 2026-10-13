@@ -3145,6 +3145,30 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard whoip adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **00320bde**. The dedicated [whoip command][lima-wizard-whoip] and README
+match the verified proposal: protected dispatch forwards the raw argument to
+private main. The history daemon and native APIs need no changes. Live users
+including login connections, shared-address groups, account/address history,
+case-sensitive handling, numeric/hostname branches and report wording remain.
+
+All **seven cases** pass across **33 registered inputs** with the audit's
+successful assertions retained. Exact files/pipes, ignored input, refusals,
+real paging/quit, history registration/save/restore and shell/input/modal/pager
+checks pass, with no errors or panics. All **14 adopted compile controls** and
+formatting pass. Fresh **147** command/support checks reach **49/81 wizard**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports;
+whoip is the sole new success and no earlier success regresses. All 108 frozen
+audit artifacts match. The other 1546 library files, configuration, native
+implementation/CLI and original Lima stay unchanged; temporary include restored.
+Evidence: /tmp/lima-wizard-whoip-port-20261012, distinct nil, preserved call-out
+players, 4,000 ms tasks and registered in-memory input with test-only setup/
+accessors, empty help index and IMUD stub. Broader library/startup evidence
+retains scope. Command/README committed as Lima **11d4166d**; next audit
+goto/home movement, selected by local source and registration review only.
+
 #### Lima wizard whoip audit
 
 Reviewed **12 October 2026**, following people command/README committed as
