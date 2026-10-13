@@ -3145,6 +3145,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard transfer adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **cf7e5067**. The dedicated [trans][lima-wizard-trans] and README match the
+verified proposal: protected argument dispatch only. Existing target movement,
+self/same-room name checks, generic refusals, recipient exclusions and earlier
+catch/restore/rethrow around target force_look remain. No native API, shared
+movement/context or master-policy change is required.
+
+All **ten cases** pass across **37 registered inputs** with successful audit
+assertions retained. Linked/unlinked/nonbody targets, movement/refusals/recovery,
+observer broadcasts/Someone suppression, exact files/pipes, ignored input and
+stdio refusals pass. **75** in-command context records include **12** player
+restorations. The deliberate forced-look error is caught after restoration and
+leaves the completed move intact; recovery and ten following pwd/state checks
+pass, with no unexpected errors or panics. All **17 positive compile controls**
+and formatting pass. Fresh **147** command/support checks reach **52/81 wizard**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports; trans
+is the only new success, with no regressions. All 234 frozen audit artifacts
+match. Other library files, configuration, native implementation/CLI and original
+Lima remain unchanged; temporary include restored. Evidence:
+/tmp/lima-wizard-transfer-port-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks and registered in-memory input with real body movement/look,
+test-only context/accessor instrumentation, delegating room subclass, empty help
+index and IMUD stub. Broader library/startup evidence retains scope. Command/
+README committed as Lima **7f24dea6**; next audit wizz, selected by local source
+and registration review only.
+
 #### Lima wizard transfer audit
 
 Reviewed **12 October 2026**, following movement commands/README committed as
