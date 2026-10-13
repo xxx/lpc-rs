@@ -3145,6 +3145,39 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard lounge audit
+
+Reviewed **12 October 2026**, following transfer command/README committed as
+Lima **7f24dea6** and adoption notes as native **1a241374**. Pinned
+[wizz][lima-wizard-wizz] and [Wizroom][lima-wizard-lounge] match original/dedicated
+source. The verified proposal adds only protected raw-argument dispatch. Quotes
+and flag-looking mount text remain literal; omitted text keeps random selection.
+Movement/refusals, already-there twitch, look and observer broadcasts retain
+existing behavior without native API, shared movement or room changes.
+
+All **ten cases** pass across **38 registered inputs**: current unavailable
+control plus nine proposal cases. Exact files/pipes, ignored input, stdio
+refusals, observer exclusions/Someone suppression and ten following pwd/state
+checks pass. One expected forced-look failure preserves the completed move,
+stops later confirmation/broadcasts and permits recovery; no unexpected errors
+or panics. The real lounge initializes all seven configured objects after eight
+separate dependency bootstrap operations, with lounge source unchanged and still
+unloaded before command entry. A preceding cold run exceeded the unchanged
+4,000 ms limit in nested elevator/Church compilation (3,933 ms compilation);
+that first-use limit remains explicit rather than claimed as a successful entry.
+Other refusal cases use the delegating fixture room. Public source review and
+native execution are distinguished from upstream-driver execution.
+
+All **25 compile controls** have expected results; formatting passes. Evidence:
+/tmp/lima-wizard-lounge-audit-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks, registered in-memory input, real body movement/look, test-only
+setup/accessors, empty help index and IMUD stub. All 252 prior frozen artifacts
+match. Dedicated source/README/configuration, native implementation/CLI and
+original Lima remain unchanged; include restored. Prior **52/81 wizard**,
+**49/49 transitional**, **9/9 administrator**, eight supports and broader library/
+startup scope retain coverage without an inventory refresh. Proposal unadopted;
+next commit audit notes and adopt the exact command/README with this timing scope.
+
 #### Lima wizard transfer adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19908,3 +19941,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-home]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/home.c
 
 [lima-wizard-trans]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/trans.c
+
+[lima-wizard-wizz]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wizz.c
+
+[lima-wizard-lounge]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Wizroom.c
