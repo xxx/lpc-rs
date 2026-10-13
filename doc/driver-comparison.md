@@ -3145,6 +3145,41 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard clone audit
+
+Verified **13 October 2026**, following Move command/README committed as Lima
+**2d28bb91** and adoption notes as native **9bcdb4c8**. Public pinned
+[clone][lima-wizard-clone-command] and [Cmd_rules][lima-wizard-object-rules] were
+reviewed **12 October 2026** against original Lima. Dedicated clone retains its
+earlier new(string)-to-clone_object adaptation. The verified proposal adds protected
+dispatch and replaces the unavailable inherits predicate with membership in
+[deep_inherit_list](efun/deep_inherit_list.md), which excludes the object's own
+program. No new native API, shim, shared creation/movement or policy change is needed.
+
+All **fourteen cases** pass across **49 registered inputs**: current unavailable
+control plus thirteen proposal cases. Absolute/relative/extensionless/single-match
+files, current-file fallback, plain-copy cleanup, fresh create/setup state,
+inventory/room/unplaced placement and post-placement on_clone pass. **17** lifecycle
+snapshots include two unplaced callbacks and preserve caller/body/interactive
+context. Five expected errors cover unset current file, no_clone, constructor
+failure, callback failure and denied base-object cleanup. Initialization rollback
+removes the failed copy; callback error retains completed placement but prevents
+flushing status. Base-object cleanup refusal leaves an unplaced copy under the
+unchanged master policy. Recovery and fourteen following pwd/state checks pass,
+with no unexpected errors or panics. Exact files/pipes, ignored input and ordinary
+caller/observer messages pass. Upstream-driver execution is not claimed.
+
+All **25 compile controls** have expected results; formatting passes. Evidence:
+/tmp/lima-wizard-clone-audit-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks, registered in-memory input with real standard-object/gettable/
+container creation and body placement, test-only lifecycle/refusal/setup accessors,
+empty help index and IMUD stub. All 242 prior frozen artifacts match. Dedicated
+source/README/configuration, native implementation/CLI and original Lima remain
+unchanged; include restored. Prior **54/81 wizard**, **49/49 transitional**,
+**9/9 administrator**, eight supports and broader library/startup scope retain
+coverage without an inventory refresh. Proposal unadopted; next commit notes and
+adopt the exact command/README with the recorded errors retained.
+
 #### Lima wizard object movement adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -20040,3 +20075,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-object-move]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Move.c
 
 [lima-wizard-object-rules]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
+
+[lima-wizard-clone-command]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/clone.c
