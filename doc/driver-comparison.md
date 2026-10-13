@@ -3145,6 +3145,43 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard clean audit
+
+Reviewed and tested **13 October 2026** against [clean][lima-wizard-clean-command]
+and its optional object [registration][lima-wizard-command-rules], using native
+**aa5c179c** and dedicated Lima **664955bf**. Original compilation fails on CMD's
+missing dispatch_main; registered input reaches the unknown-verb fallback because
+load_object returns nil after failure. Dispatch-only compilation then exposes
+first_inventory. The tested proposal adds protected dispatch to private main and
+replaces the inventory emptiness check with sizeof(all_inventory(...)), matching
+prior container/drop port adaptations. No native API or upstream defect is claimed.
+
+All **eight focused checks** pass: original failure/recovery plus seven proposal
+checks, including **thirteen complete compile controls**. The proposal runs
+**26 registered inputs**, **four expected caught errors**, and **six following pwd**
+checks. Default room cleanup, held/remote/absolute/relative/body targets, recursive
+child-before-parent removal, living/real add_item exclusions, zero remove returns,
+callback context, errors/retries, messages, files/pipes and shell/input state pass.
+Clean does not call do_remove, and explicit target objects remain. Earlier removals
+survive caught cleanup errors; message errors follow removal. Player messages
+bypass command buffers; overwritten/pipe output is empty, append preserves existing
+text and incoming text is ignored. Invalid arguments do not enter cleanup.
+
+Existing wrapper behavior remains: a skipped living child and its inventory can
+move out before an attached SIMPLE_OB's relation-less move is refused. Recursive
+native removal then hits existing permission policy, leaving parent/attached child
+alive with earlier movement committed and no clean message. This is a reproduced
+port-wrapper limitation, not upstream-driver execution evidence; the proposal
+retains it and adds no command-specific cleanup or policy bypass.
+
+Evidence: /tmp/lima-clean-audit-20261013; real master/simuls/body/user/shell/CMD/stdio,
+test-only setup/flags/event observation, empty help index, IMUD stub and in-memory
+connections. Distinct nil, preserved call-out players and **4,000 ms** tasks remain.
+Native/dedicated/original source guards match and the temporary native include is
+restored. No new full-library inventory, native suite or optimized performance run
+is included. The proposal is not adopted; next apply the two command changes and
+README behavior notes when selected, then validate actual source.
+
 #### Lima raw-parser cache
 
 Verified **13 October 2026**, following the source-preparation audit. A shared
@@ -20384,3 +20421,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-clone-command]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/clone.c
 
 [lima-wizard-dest-command]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/dest.c
+
+[lima-wizard-clean-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/clean.c
