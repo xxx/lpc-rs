@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard last audit
+
+Reviewed **12 October 2026**, following showtree/README committed as Lima
+**40cf5942** and adoption notes as native **6143958a**.
+Pinned [last][lima-wizard-last] is unchanged in the dedicated checkout; its
+[history daemon][lima-startup-last-login] retains the earlier mapping-delete
+adaptation. The verified proposal adds protected dispatch, supplies zero before
+converting an omitted count, tests user presence by truthiness and sorts history
+records with an explicit timestamp comparator. Native conversion, distinct nil,
+user inspection and sorting rules stay unchanged. Source review and local tests
+do not establish upstream-driver behavior.
+
+All **ten cases** pass across **53 registered inputs**. Controls isolate unavailable
+dispatch, nil conversion, unsupported natural array-record sorting and incorrect
+offline status. Seven proposal cases cover names/status, ordering/count/date
+filters, empty history, exact files/pipes, ignored input, rule/stdio refusals,
+real paging/quit and daemon registration/save/restore. Ten following pwd checks
+and shell/input/pager/modal checks pass; two caught input errors and one direct
+sort error are expected controls, with no unexpected errors or panics. All **20
+compile controls** and formatting have expected results. Source/README/config,
+native implementation/CLI and original Lima remain unchanged, the test include
+is restored and all 268 frozen showtree-adoption artifacts match.
+
+Existing numeric coercion, negative-count output, inclusive day bounds, named
+filter bypass, account-name lookup and saved record format retain their behavior.
+Evidence: /tmp/lima-wizard-last-audit-20261012, distinct nil, preserved
+call-out players, 4,000 ms tasks and registered in-memory wizard input with real
+command/history APIs, test-only data and an IMUD stub. Prior 46/81 wizard,
+49/49 transitional, 9/9 administrator and broader evidence retain scope.
+Proposal unadopted; next adopt exact command/daemon/README with the same assertions.
+
 #### Lima wizard showtree adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19626,3 +19657,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-scan]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/scan.c
 
 [lima-showtree]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showtree.c
+
+[lima-wizard-last]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/last.c
