@@ -3179,8 +3179,18 @@ test-only setup/flags/event observation, empty help index, IMUD stub and in-memo
 connections. Distinct nil, preserved call-out players and **4,000 ms** tasks remain.
 Native/dedicated/original source guards match and the temporary native include is
 restored. No new full-library inventory, native suite or optimized performance run
-is included. The proposal is not adopted; next apply the two command changes and
-README behavior notes when selected, then validate actual source.
+is included. The original-source failure control remains frozen in the audit.
+
+The exact command/README proposal is now adopted in the dedicated checkout,
+following audit commit **7d3c4a2c**. All **seven adopted-source checks** pass with
+unchanged command actions/assertions: **thirteen complete compile controls**,
+**26 registered inputs**, **four expected caught errors**, and **six following pwd**
+checks. The fixture copies the actual checkout command, verifies its bytes and
+does not replace it. The protected attached-child refusal remains documented.
+Evidence: /tmp/lima-clean-adoption-20261013. Other tracked library/configuration
+and native implementation bytes remain unchanged; the temporary include is
+restored and all frozen audit artifacts match. The command/README are committed
+as Lima **a4f1ddd6**. Broader inventory/startup and upstream-execution scope is unchanged.
 
 #### Lima raw-parser cache
 
