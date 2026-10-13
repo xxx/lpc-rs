@@ -27,7 +27,20 @@ pub(crate) struct TransactionSourceReader(pub(crate) TxnHandle);
 #[async_trait]
 impl SourceReader for TransactionSourceReader {
     async fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
-        read_through(&self.0, path).await?.into_bytes()
+        // Classify read failures instead of probing every successful source read.
+        let seen = match DiskSourceReader.read(path).await {
+            Ok(bytes) => Seen::File(bytes),
+            Err(e) if e.kind() == ErrorKind::NotFound => Seen::Missing,
+            Err(e) if e.kind() == ErrorKind::IsADirectory => Seen::Dir,
+            Err(e) => {
+                if DiskSourceReader.kind(path).await.ok() == Some(SourceKind::Directory) {
+                    Seen::Dir
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+        merge_pending(&self.0, path, seen).await?.into_bytes()
     }
 
     async fn kind(&self, path: &Path) -> std::io::Result<SourceKind> {
@@ -82,7 +95,10 @@ async fn on_disk(server: &Path) -> std::io::Result<Seen> {
 /// pending changes to the path applied. A rename's source is read as it is
 /// on disk.
 pub(crate) async fn read_through(txn: &TxnHandle, server: &Path) -> std::io::Result<Seen> {
-    let mut seen = on_disk(server).await?;
+    merge_pending(txn, server, on_disk(server).await?).await
+}
+
+async fn merge_pending(txn: &TxnHandle, server: &Path, mut seen: Seen) -> std::io::Result<Seen> {
     for op in txn.with(|t| t.pending_file_ops(server)) {
         seen = match op {
             PendingFileOp::Replace(contents) => Seen::File(contents.into_bytes()),
@@ -156,6 +172,70 @@ mod tests {
         .await
         .unwrap();
         vm
+    }
+
+    async fn header_editing_vm(root: &TempLib, edit: &str) -> Vm {
+        std::fs::write(root.join("value.h"), "#define VALUE 1\n").unwrap();
+        std::fs::write(
+            root.join("child.c"),
+            "#include \"value.h\"\nint value() { return VALUE; }",
+        )
+        .unwrap();
+        let vm = Vm::new(temp_lib_config(root));
+        vm.create_process_from_code(
+            "/secure/master.c",
+            format!(
+                r#"
+                int valid_load(string path, string func, object caller, string program) {{ return 1; }}
+                int valid_write() {{ return 1; }}
+                int valid_read(string path, string func, object caller, string program) {{
+                    if (func == "include" && path == "/value.h") {{ {edit} }}
+                    return func == "include";
+                }}
+                "#,
+            ),
+        )
+        .await
+        .unwrap();
+        vm
+    }
+
+    #[tokio::test]
+    async fn include_reads_see_header_writes_by_the_permission_apply() {
+        let root = TempLib::new("compile-header-permission-write");
+        let vm = header_editing_vm(
+            &root,
+            r##"rm(path); write_file(path, "#define VALUE 42\n");"##,
+        )
+        .await;
+        let task = vm
+            .initialize_process_from_code(
+                "/caller.c",
+                "int create() { return \"/child\"->value(); }",
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(42)));
+    }
+
+    #[tokio::test]
+    async fn include_reads_see_directories_created_by_the_permission_apply() {
+        let root = TempLib::new("compile-header-permission-directory");
+        let vm = header_editing_vm(&root, "mkdir(path);").await;
+        std::fs::remove_file(root.join("value.h")).unwrap();
+        let error = vm
+            .initialize_process_from_code(
+                "/caller.c",
+                "int create() { return \"/child\"->value(); }",
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("attempt to include a directory: `/value.h`"),
+            "{error}"
+        );
     }
 
     #[tokio::test]

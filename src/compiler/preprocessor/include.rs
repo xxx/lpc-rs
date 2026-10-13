@@ -3,6 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    io::ErrorKind,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -166,17 +167,18 @@ impl IncludeWalk {
         let (file_id, content) = match self.memo.get(&canon) {
             Some((file_id, content)) => (*file_id, content.clone()),
             None => {
-                let is_dir = reader.kind(&canon).await.ok() == Some(SourceKind::Directory);
-                if is_dir {
-                    return Err(lpc_error!(
-                        span,
-                        "attempt to include a directory: `{}`",
-                        path
-                    ));
-                }
                 let source = match reader.read(&canon).await.map(LpcSource::from_bytes) {
                     Ok(source) => source,
                     Err(e) => {
+                        if e.kind() == ErrorKind::IsADirectory
+                            || reader.kind(&canon).await.ok() == Some(SourceKind::Directory)
+                        {
+                            return Err(lpc_error!(
+                                span,
+                                "attempt to include a directory: `{}`",
+                                path
+                            ));
+                        }
                         return Err(lpc_error!(
                             span,
                             "unable to read include file `{}`: {}",
@@ -300,7 +302,12 @@ impl IncludeWalk {
 #[cfg(test)]
 mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
-    use std::path::Path;
+    use std::{
+        path::Path,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    use async_trait::async_trait;
 
     use super::*;
     use crate::compiler::source_reader::DiskSourceReader;
@@ -323,6 +330,99 @@ mod tests {
             "int x;\n",
         );
         walk
+    }
+
+    #[derive(Debug, Default)]
+    struct CountingReader {
+        probes: AtomicUsize,
+        reads: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl SourceReader for CountingReader {
+        async fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            DiskSourceReader.read(path).await
+        }
+
+        async fn kind(&self, path: &Path) -> std::io::Result<SourceKind> {
+            self.probes.fetch_add(1, Ordering::Relaxed);
+            DiskSourceReader.kind(path).await
+        }
+    }
+
+    #[tokio::test]
+    async fn successful_headers_are_probed_only_for_resolution() {
+        let root = TempLib::new("include-probes");
+        std::fs::write(root.join("a.h"), "1\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/"])
+            .build()
+            .unwrap();
+        let configured = LpcPath::new_server(root.join("a.h"));
+        for (source, probes) in [
+            (IncludeSource::Local { path: "a.h" }, 1),
+            (IncludeSource::System { path: "a.h" }, 1),
+            (IncludeSource::Configured(&configured), 0),
+        ] {
+            let reader = CountingReader::default();
+            let opened = rooted(&config)
+                .open(
+                    source,
+                    None,
+                    &config,
+                    None,
+                    &reader,
+                    &mut Diagnostics::default(),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                (
+                    opened.content.as_ref(),
+                    reader.probes.load(Ordering::Relaxed),
+                    reader.reads.load(Ordering::Relaxed),
+                ),
+                ("1\n", probes, 1),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn directory_diagnostics_do_not_depend_on_the_readers_error_kind() {
+        #[derive(Debug)]
+        struct DirectoryReader;
+
+        #[async_trait]
+        impl SourceReader for DirectoryReader {
+            async fn read(&self, _: &Path) -> std::io::Result<Vec<u8>> {
+                Err(std::io::Error::from(ErrorKind::PermissionDenied))
+            }
+
+            async fn kind(&self, _: &Path) -> std::io::Result<SourceKind> {
+                Ok(SourceKind::Directory)
+            }
+        }
+
+        let root = TempLib::new("include-directory-read-error");
+        let config = config_at(&root);
+        let error = rooted(&config)
+            .open(
+                IncludeSource::Local { path: "directory" },
+                None,
+                &config,
+                None,
+                &DirectoryReader,
+                &mut Diagnostics::default(),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.message(),
+            "attempt to include a directory: `/directory`"
+        );
     }
 
     #[tokio::test]

@@ -3145,6 +3145,41 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima compiler source-read optimization
+
+Verified **13 October 2026**, following the macro-definition cache. Successful
+include reads no longer repeat a directory probe after path resolution, and
+transaction-backed source reads classify read failures instead of probing every
+successful read. Pending file effects still merge after disk IO; explicit
+includes still ask permission before reading. Directory diagnostics and source
+changes made by permission callbacks retain their behavior. This adds no cache,
+configuration setting, apply or efun.
+
+Three paired optimized runs use the same executable, with a test-only control
+restoring the previous probes and reader. Macro caching is enabled in both paths.
+
+| Cold operation | Previous probes, median | Reduced probes, median |
+|---|---:|---:|
+| Guest default-room entry | 708 ms | 588 ms |
+| First weapon creation | 984 ms | 811 ms |
+
+Explicit metadata calls fall from **14,825 to 4,702** for guest entry and
+**23,270 to 7,396** for weapon creation, about **68%**. File-read counts remain
+5,231/8,224 and include permission calls 4,683/7,348 respectively. Every optimized
+cold/warm case finishes within the unchanged **4,000 ms** allowance. These are
+small samples from focused dependency chains on one host, not full driver startup
+or upstream execution comparisons; the counters do not measure every OS syscall.
+
+Three paired debug diagnostics use a 30-second allowance. Weapon creation falls
+from a **5.99-second** median to **5.52 seconds**; guest entry remains about
+**4.01 seconds**. The change does not resolve debug cold-load limits. Four new
+regression tests cover successful-path probe counts, directory diagnostics,
+permission-callback header writes and pending directory creation. The full
+workspace passes **5,087 tests**, including ten doctests, with two existing
+ignored cases; warning-free workspace Clippy/docs and formatting also pass.
+Evidence: /tmp/lima-include-reads-20261013. Temporary controls and
+counters are removed; dedicated port source/configuration are unchanged.
+
 #### Lima repeated macro preparation optimization
 
 Verified **13 October 2026**. The native compiler now shares prepared macro
