@@ -3145,6 +3145,32 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard whoip audit
+
+Reviewed **12 October 2026**, following people command/README committed as
+Lima **6aeae2b2** and adaptation notes as native **e94d5e03**. Pinned
+[whoip][lima-wizard-whoip] matches original and dedicated source. The verified
+proposal adds only protected raw-argument dispatch; the existing
+[history daemon][lima-startup-last-login] and native APIs need no changes.
+Current case-sensitive lookups, numeric/hostname branches, login connections,
+array-valued history results and report wording are retained. Public source
+review and native execution are distinguished from upstream-driver execution.
+
+All **eight cases** pass across **35 registered inputs**: current unavailable
+command control plus seven proposal cases. Live users and account/address
+history, exact files/pipes, ignored input, refusals, real paging/quit and history
+registration/save/restore pass. Eight following pwd and shell/input/modal/pager
+checks pass, with no caught errors or panics. All **15 compile controls** have
+expected results and formatting passes. Evidence:
+/tmp/lima-wizard-whoip-audit-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks and registered in-memory input with test-only setup/accessors,
+empty help index and IMUD stub. All 226 prior frozen artifacts match. All 1547
+library files, README/configuration and native implementation/CLI stay unchanged;
+temporary include is restored. Prior **48/81 wizard**, **49/49 transitional**,
+**9/9 administrator**, eight supports and broader library/startup scope are
+retained without an inventory refresh. Proposal unadopted; next commit the audit
+notes and adopt the exact command/README with the successful assertions retained.
+
 #### Lima wizard people adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19742,3 +19768,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-last]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/last.c
 
 [lima-wizard-people]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/people.c
+
+[lima-wizard-whoip]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/whoip.c
