@@ -3145,6 +3145,31 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard last adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **87c09430**. The dedicated [last command][lima-wizard-last],
+[history daemon][lima-startup-last-login] and README match the verified proposal:
+protected dispatch, zero before converting omitted counts, truthy user presence
+and an explicit timestamp comparator. Named lookups, count/date selection,
+account-name lookup, registration and saved records retain the audit's behavior.
+Native null, conversion, inspection and sorting policies remain unchanged.
+
+All **seven cases** pass across **45 registered inputs**, with complete/tail/name
+reports, empty history, exact files/pipes, ignored input, refusals, real paging/
+quit and registration/save/restore. Seven following pwd and shell/input/pager/
+modal checks pass, with no errors or panics. All **16 adopted compile controls**
+and formatting pass. Fresh **147** command/support checks reach **47/81 wizard**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports; last is
+the sole new success with no regressions. All 132 frozen audit artifacts match;
+other 1545 library files, configuration, native implementation/CLI and original
+Lima stay unchanged and the temporary test include is restored. Evidence:
+/tmp/lima-wizard-last-port-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks and real command/history APIs with registered in-memory input,
+test-only history data and an IMUD stub. Broader library/startup evidence retains
+scope. Command/daemon/README committed as Lima **a4dc72ad**; next audit
+cmds/wiz/people.c, selected by source and registration review only.
+
 #### Lima wizard last audit
 
 Reviewed **12 October 2026**, following showtree/README committed as Lima
