@@ -3145,6 +3145,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard clone adaptation
+
+Adopted and verified **13 October 2026**, following audit notes committed as
+native **f5f0fdd7**. Dedicated [clone][lima-wizard-clone-command] and README match
+the verified proposal: protected dispatch and /std/object.c membership in
+[deep_inherit_list](efun/deep_inherit_list.md), retaining the earlier clone_object
+adaptation and optional cfile rule. No new native API, shim, shared creation/
+movement or policy change. Recorded current-file argument and base-object cleanup
+errors remain; the latter leaves an unplaced copy under existing policy.
+
+All **thirteen adopted-source cases** pass across **47 registered inputs**, with
+successful audit assertions and all five expected errors retained. File/current-
+file resolution, fresh initialization, inventory/room/unplaced placement, refusal
+and constructor recovery, post-placement callback errors, exact files/pipes and
+ordinary caller/observer messages pass. **17** lifecycle records include two
+unplaced callbacks; thirteen following pwd/state checks pass, with no unexpected
+errors or panics. All **24 positive compile controls** and formatting pass.
+Fresh **147** command/support checks reach **55/81 wizard**, retaining
+**49/49 transitional**, **9/9 administrator** and eight supports; clone is the
+only new success, with no regressions. All 244 frozen audit artifacts match.
+Other library files, configuration, native implementation/CLI and original Lima
+remain unchanged; include restored. Evidence: /tmp/lima-wizard-clone-port-20261013,
+distinct nil, preserved call-out players, 4,000 ms tasks, registered in-memory
+input with real standard-object/gettable/container creation and body placement,
+test-only setup/lifecycle/refusal helpers, empty help index and IMUD stub.
+Broader library/startup evidence retains scope. Command/README committed as Lima **c22e7096**;
+next audit dest, selected by local source/registration/compile review only. Upstream-driver execution is not claimed.
+
 #### Lima wizard clone audit
 
 Verified **13 October 2026**, following Move command/README committed as Lima
