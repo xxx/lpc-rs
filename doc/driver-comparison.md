@@ -3145,6 +3145,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard movement audit
+
+Reviewed **12 October 2026**, following whoip command/README committed as
+Lima **11d4166d** and adoption notes as native **ba626195**. Pinned
+[goto][lima-wizard-goto] matches original and dedicated source;
+[home][lima-wizard-home] retains the earlier clone_object adaptation. Both
+verified proposals add only protected argument dispatch. Existing object/path
+resolution, real body movement, string refusals, workroom creation/reuse and
+brief mode need no native API or shared-module change. Existing home behavior
+continues messages and conditional look after a failed move; the port preserves
+that Lima issue. Public source review and native execution are distinguished
+from upstream-driver execution.
+
+All **ten cases** pass across **56 registered inputs**: current unavailable
+command control plus nine proposal cases. Real movement, refusals/rollback,
+permanent/named/temporary homes, exact files/pipes, ignored input and stdio
+refusals pass. Ten following pwd and shell/input/modal/pager checks pass, with
+no caught errors or panics. All **19 compile controls** have expected results
+and formatting passes. Evidence: /tmp/lima-wizard-movement-audit-20261012,
+distinct nil, preserved call-out players, 4,000 ms tasks and registered in-memory
+input with test-only setup/accessors, room subclass, empty help index and IMUD
+stub. All 226 prior frozen artifacts match. All 1547 library files, README/
+configuration and native implementation/CLI stay unchanged; include restored.
+Prior **49/81 wizard**, **49/49 transitional**, **9/9 administrator**, eight
+supports and broader library/startup scope retain their earlier coverage without
+an inventory refresh. Proposals unadopted; next commit audit notes and adopt the
+exact commands/README with successful assertions retained.
+
 #### Lima wizard whoip adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19794,3 +19822,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-people]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/people.c
 
 [lima-wizard-whoip]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/whoip.c
+
+[lima-wizard-goto]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/goto.c
+[lima-wizard-home]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/home.c
