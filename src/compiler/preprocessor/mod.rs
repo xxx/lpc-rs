@@ -34,6 +34,7 @@ use predefined::Predefined;
 
 mod conditional;
 pub mod define;
+pub mod definition_cache;
 pub mod directive;
 mod expand;
 mod include;
@@ -328,6 +329,17 @@ impl Preprocessor {
             }
         }
 
+        if let Some(definition) = self
+            .context
+            .definition_cache
+            .get(token.0, &self.context.diagnostic_sources)
+        {
+            return self.install_define(
+                token.0,
+                definition.name.clone(),
+                definition.replacement.clone(),
+            );
+        }
         let directive = directive::parse(&token.1, token.0)?;
 
         match directive {
@@ -456,6 +468,17 @@ impl Preprocessor {
             Define::new_object(tokens, expr)
         };
 
+        self.context.definition_cache.insert(
+            span,
+            span.r() - span.l(),
+            &name,
+            &define,
+            &self.context.diagnostic_sources,
+        );
+        self.install_define(span, name, define)
+    }
+
+    fn install_define(&mut self, span: Span, name: String, define: Define) -> Result<()> {
         if let Some(existing) = self.defines.get(&name) {
             if existing.same_as(&define, &self.context.diagnostic_sources.read()) {
                 return Ok(());

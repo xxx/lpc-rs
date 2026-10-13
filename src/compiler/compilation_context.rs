@@ -39,6 +39,8 @@ use crate::{
 pub struct CompilationContext {
     /// Completed code shared by this compilation and its recursive parent compilers.
     pub code_pool: Arc<CodePool>,
+    /// Pure macro preparation shared across preprocessing walks.
+    pub definition_cache: Arc<super::preprocessor::definition_cache::DefinitionCache>,
     pub class_scope: Arc<ClassScope>,
     /// The identity of the main file being compiled.
     #[builder(setter(into))]
@@ -377,6 +379,7 @@ impl Default for CompilationContext {
         let config = Arc::new(Config::default());
         Self {
             code_pool: Arc::default(),
+            definition_cache: Arc::default(),
             class_scope: Arc::default(),
             source: Arc::new(CompilerSource::new(LpcPath::default(), &config)),
             config,

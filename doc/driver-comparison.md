@@ -3145,6 +3145,31 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima repeated macro preparation optimization
+
+Verified **13 October 2026**. The native compiler now shares prepared macro
+definitions across recursive compiles and object loads, keyed by immutable source
+version, directive span and diagnostic storage. The cache retains at most 4,096
+definitions with an eight-MiB estimated payload budget. Each preprocessor still
+builds its own macro environment, evaluates conditionals, checks redefinitions
+and asks include permissions; source reads and receiver checking remain fresh.
+
+Three paired optimized runs using the same executable, with caching enabled or
+disabled by a test-only control, improve median guest default-room entry from
+**604 ms to 553 ms** and first weapon creation from **950 ms to 846 ms**. All
+cold/warm cases finish within the unchanged 4,000 ms limit. The synthetic
+512-definition benchmark measures **445 µs** with fresh preparation and **145 µs**
+with reuse. These measurements cover the focused dependency chains and macro
+preparation, not complete driver startup or a cross-driver execution comparison.
+
+Five new regression tests cover environments/conditionals, edits/diagnostics,
+scoped source IDs, permissions and eviction. The full workspace suite passes
+**5,083 tests**, with two existing ignored cases; ten explicit doctests,
+warning-free Clippy/docs, formatting and the benchmark pass. Evidence:
+/tmp/lima-preprocessing-20261013. Dedicated port source/configuration are unchanged;
+temporary runtime include restored. Override-signature rules are a separate,
+deferred design review.
+
 #### Lima cold-loading timing audit
 
 Reviewed **13 October 2026** using the dedicated port, distinct nil, preserved

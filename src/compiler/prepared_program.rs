@@ -63,6 +63,7 @@ impl PreparedProgram {
                 let parent_compiler = CompilerBuilder::default()
                     .config(context.config.clone())
                     .code_pool(context.code_pool.clone())
+                    .definition_cache(context.definition_cache.clone())
                     .inherit_depth(context.inherit_depth + 1)
                     .gate(context.gate.clone())
                     .source_reader(context.source_reader.clone())

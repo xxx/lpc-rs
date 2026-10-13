@@ -49,6 +49,9 @@ pub struct Compiler {
     /// Completed code shared by this compiler and its recursive parents.
     #[builder(default)]
     code_pool: Arc<crate::interpreter::program::code_pool::CodePool>,
+    /// Prepared macro definitions shared with recursive compiles.
+    #[builder(default)]
+    definition_cache: Arc<preprocessor::definition_cache::DefinitionCache>,
     /// The configuration to be used for this instance of the compiler
     #[builder(setter(into))]
     config: Arc<Config>,
@@ -231,6 +234,7 @@ impl Compiler {
             .source(source.clone())
             .config(self.config.clone())
             .code_pool(self.code_pool.clone())
+            .definition_cache(self.definition_cache.clone())
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
             .gate(self.gate.clone())

@@ -13,7 +13,7 @@ pub(super) fn identifier_name(token: &Token) -> Option<&str> {
 }
 
 /// An object macro, e.g. `#define FOO 123`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectMacro {
     /// The vector of Tokens being defined
     pub tokens: Vec<Token>,
@@ -23,7 +23,7 @@ pub struct ObjectMacro {
 }
 
 /// A function macro, e.g. `#define FOO(a, b) (a * b)`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionMacro {
     /// Replacement tokens, including single-`#` directive tokens for stringification.
     pub tokens: Vec<Token>,
@@ -33,7 +33,7 @@ pub struct FunctionMacro {
 }
 
 /// Enumeration of `#define` types
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Define {
     Object(ObjectMacro),
     Function(FunctionMacro),
