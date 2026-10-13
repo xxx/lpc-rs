@@ -3145,6 +3145,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard discuss audit
+
+Reviewed and tested **13 October 2026** against [discuss][lima-wizard-discuss],
+its [object rule][lima-wizard-command-rules], the [annotation menu][lima-annotation-menu]
+and [daemon][lima-annotation-daemon], using native **adea99ac** and dedicated
+Lima **a4f1ddd6**. Original dispatch is unavailable. Adding protected dispatch to
+private main exposes the missing userp predicate. The tested proposal replaces
+it with arg[0]->is_user(), matching the existing [account role][lima-container-user]
+adaptation described in the [container comparison](#lima-containers). It also
+replaces nine named expression closures in the annotation menu with bare function
+names. Without that callback change, a and q leave the menu active without doing
+their actions. The captured index callbacks for viewing/removing entries remain.
+
+The role check deliberately protects an unconnected Lima account and permits an
+interactive ordinary object without that role; both differences are exercised.
+The existing bodies() exclusion still rejects the connected actor's body.
+These are port adaptations, not demonstrated upstream Lima defects; no new native
+predicate or change to shared menu/editor/pager, daemon or permission policy is needed.
+
+All **eleven focused checks** pass: three staged failure/behavior controls and
+**eight proposal checks**, including **eighteen complete compile controls**.
+The proposal runs **109 registered inputs**, **twelve menu entries**, and **twelve
+following pwd** checks, without caught errors. Add/view/remove, two distinct
+captured indices, author/admin removal and foreign readonly refusal, cancellation,
+invalid choices, yes/no retry, target resolution, editor flags and nested pager
+ownership pass. Stored text remains exact; the existing pager's display blank
+lines remain. Deep-copy mutation leaves stored classes unchanged, and actual
+saved bytes restore in a fresh VM through the real annotation daemon.
+
+Interactive menus bypass command buffers: files/pipes remain empty, append keeps
+previous text and incoming text does not supply editor input. Quit destroys the
+menu and restores the ordinary shell; editor/pager clones retire and shell,
+current-file, location and input state remain. The menu's existing source warning
+about concurrent index changes is retained and not addressed by this port audit.
+
+Evidence: /tmp/lima-discuss-audit-20261013. Fixtures retain actual master/simuls/
+user/body/shell/CMD/menu/editor/pager/daemon methods, with test-only setup and
+observation, empty help index, stubbed IMUD and in-memory connections. Distinct
+nil, preserved call-out players and **4,000 ms** remain. Workspace test libraries
+are built with locked dependencies; focused tests run serially, and workspace/
+fixture formatting passes. Source guards match and the native test include is
+restored. No fresh full-library inventory, native suite, startup, optimized timing
+or upstream execution is claimed. The command/menu/README proposal is prepared
+but not adopted; next apply it in the dedicated checkout and validate actual source.
+
 #### Lima wizard clean audit
 
 Reviewed and tested **13 October 2026** against [clean][lima-wizard-clean-command]
@@ -20433,3 +20478,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-dest-command]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/dest.c
 
 [lima-wizard-clean-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/clean.c
+
+[lima-wizard-discuss]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/discuss.c
+[lima-annotation-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/annotationmenu.c
+[lima-annotation-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/annotation_d.c
