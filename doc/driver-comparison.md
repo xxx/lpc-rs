@@ -3145,6 +3145,36 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard people audit
+
+Reviewed **12 October 2026**, following last command/history/README committed
+as Lima **a4dc72ad** and adaptation notes as native **efba3d13**. Pinned
+[people][lima-wizard-people] retains only the earlier filter rename in the port.
+The verified command proposal adds protected dispatch, uses nil for absent
+string arguments, removes redundant zero/reset operations and passes an
+explicit environment filename to filename_ellipsis. Existing bodies() and the
+already adapted [frame module][lima-frame] need no change; body query_body()
+returns the body itself. These are native type/dispatch adaptations, without
+upstream-driver execution or new upstream type-behavior claims.
+
+All **eight cases** pass across **42 registered inputs**: current unavailable
+command control plus seven proposal cases. Default/stored/raw flags, W/A/P
+precedence, debug/warnings, all eleven columns, real body/link inspection,
+direct nonwizard menu entry, visibility/column gates, exact files/pipes,
+ignored input, paging/quit and Unicode/colour frames pass. Existing unused
+H text and retained footer state are exercised and preserved as Lima behavior.
+Eight following pwd and shell/input/modal/pager checks pass, with no caught
+errors or panics. All **14 compile controls** and formatting have expected
+results. Evidence: /tmp/lima-wizard-people-audit-20261012, distinct nil,
+preserved call-out players, 4,000 ms tasks and registered in-memory input,
+test-only setup/accessors, empty help index and IMUD stub. Public pinned source
+bytes match original Lima; all 234 prior frozen artifacts match. All 1547
+library files, README/configuration and native implementation/CLI stay unchanged;
+temporary include is restored. Prior **47/81 wizard**, **49/49 transitional**,
+**9/9 administrator** and broader library/startup scope are retained without
+an inventory refresh. Proposal unadopted; next commit the audit notes and adopt
+the exact command/README with the successful assertions retained.
+
 #### Lima wizard last adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19684,3 +19714,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-showtree]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showtree.c
 
 [lima-wizard-last]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/last.c
+
+[lima-wizard-people]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/people.c
