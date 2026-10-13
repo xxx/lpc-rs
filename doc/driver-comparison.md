@@ -3145,6 +3145,32 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard people adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **a983d773**. The dedicated [people command][lima-wizard-people] and README
+match the verified proposal: protected raw-argument dispatch, nil string
+arguments, removal of redundant zero/reset operations and an explicit
+environment filename. Existing defaults/stored flags, W/A/P precedence,
+body/link inspection, nonwizard entry, frame layout and H/footer behavior stay.
+No native API, shared frame, body, user, rule or mode change is required.
+
+All **seven cases** pass across **40 registered inputs** with the audit's
+successful assertions retained. All eleven columns, exact files/pipes,
+ignored input, real paging/quit, Unicode/colour frames and shell/input/modal/
+pager checks pass, with no errors or panics. All **12 adopted compile controls**
+and formatting pass. Fresh **147** command/support checks reach **48/81 wizard**,
+retaining **49/49 transitional**, **9/9 administrator** and eight supports;
+people is the sole new success and no earlier success regresses. All 110
+frozen audit artifacts match. The other 1546 library files, configuration,
+native implementation/CLI and original Lima stay unchanged; temporary include
+is restored. Evidence: /tmp/lima-wizard-people-port-20261012, distinct nil,
+preserved call-out players, 4,000 ms tasks, real command/body/frame APIs and
+registered in-memory input with test-only setup/accessors and an IMUD stub.
+Broader library/startup evidence retains scope. Command/README committed as
+Lima **6aeae2b2**; next audit cmds/wiz/whoip.c, selected by local source and
+registration review only.
+
 #### Lima wizard people audit
 
 Reviewed **12 October 2026**, following last command/history/README committed
