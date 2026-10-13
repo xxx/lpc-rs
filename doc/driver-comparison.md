@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dest dispatch adaptation
+
+Adopted and verified **13 October 2026**, following audit notes committed as
+native **07eec9bd**. Dedicated [dest][lima-wizard-dest-command] and README match
+the dispatch-only proposal. The existing object rule, callbacks, ordinary messages
+and destruction wrapper remain. No native API, shared destruction/context,
+body/user, rule or policy change is included. Linked-user cleanup still fails
+after its message and before removal; user/body/shell/connection remain intact.
+
+All **fourteen adopted-source cases** pass across **50 registered inputs**,
+retaining audit assertions and six expected errors, including the linked-user
+refusal. Object resolution, optional callbacks, wielded-weapon cleanup, contents
+relocation, callback returns/movement, errors/recovery and files/pipes pass.
+Ten callback/context records and fourteen following pwd/state checks pass;
+no unexpected errors or panics. All **23 positive compile controls** and formatting
+pass. Fresh **147** command/support checks reach **56/81 wizard**, retaining
+**49/49 transitional**, **9/9 administrator** and eight supports; dest is the only
+new success, with no regressions. Stock weapon removal retains separate bootstrap
+of 21 recipe programs and crafting_d; cold loading remains unresolved under the
+unchanged 4,000 ms limit. Evidence: /tmp/lima-wizard-dest-port-20261013, distinct
+nil, preserved call-out players, registered in-memory input with real container/
+equipment paths, test-only setup/callback/message/look records, empty help index
+and IMUD stub. All 217 frozen audit artifacts match. Other library files,
+configuration, native implementation/CLI and original Lima remain unchanged;
+include restored. Broader library/startup evidence retains scope. Command/README
+committed as Lima **da53ba53**. Local source review identifies the existing
+linked-user remove method as the next route to test, already used by the
+dedicated body's teardown path. A separate draft leaves master and generic
+destruction policy unchanged; it is not applied, compiled or executed and does
+not yet resolve the linked-user gap. Upstream-driver execution is not claimed.
+
 #### Lima wizard dest audit
 
 Verified **13 October 2026**, following clone command/README committed as Lima
