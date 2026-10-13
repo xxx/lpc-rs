@@ -3145,6 +3145,39 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard object movement audit
+
+Reviewed **12 October 2026**, following lounge command/README committed as Lima
+**9d249921** and adoption notes as native **d537a975**. Pinned
+[Move][lima-wizard-object-move] and [Cmd_rules][lima-wizard-object-rules] match
+original/dedicated source. The verified proposal adds only protected dispatch
+for the existing two-object rule. Nearby/held objects, linked players and remote/
+relative paths use the general resolver. Real movement and ordinary container
+message propagation require no native API or shared-module change.
+
+All **eleven cases** pass across **42 registered inputs**: current unavailable
+control plus ten proposal cases. Body movement adds no look; separate observers
+verify destination arrival, moved-body exclusion and no origin departure message.
+Five drop/release/receive refusals and an ancestor refusal retain the command's
+existing transport messages after failed movement. Failed receives restore
+membership and recovery succeeds. Redirection produces empty command-buffer
+output while ordinary messages retain their recipients; file/pipe input is ignored.
+One expected target-message error leaves the completed move intact, stops the
+later broadcast and permits recovery. Eleven following pwd/state checks pass,
+with no unexpected errors or panics. Public source review and native execution
+are distinguished from upstream-driver execution.
+
+All **18 compile controls** have expected results; formatting passes. Evidence:
+/tmp/lima-wizard-object-movement-audit-20261012, distinct nil, preserved call-out
+players, 4,000 ms tasks, registered in-memory input with real body/container/
+room movement, test-only setup/accessors/message capture, empty help index and
+IMUD stub. All 249 prior frozen artifacts match. Dedicated source/README/config,
+native implementation/CLI and original Lima remain unchanged; include restored.
+Prior **53/81 wizard**, **49/49 transitional**, **9/9 administrator**, eight supports
+and broader library/startup scope retain coverage without an inventory refresh.
+Proposal unadopted; next commit audit notes and adopt the exact command/README,
+retaining the documented refusal behavior rather than changing native movement.
+
 #### Lima wizard lounge adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19974,3 +20007,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-wizz]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/wizz.c
 
 [lima-wizard-lounge]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Wizroom.c
+
+[lima-wizard-object-move]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Move.c
+
+[lima-wizard-object-rules]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
