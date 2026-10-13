@@ -3145,6 +3145,73 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima cold-loading timing audit
+
+Reviewed **13 October 2026** using the dedicated port, distinct nil, preserved
+call-out players and the same session fixtures. The four-second cold-load
+timeouts occurred in unoptimized Rust builds. With a diagnostic 30-second
+allowance, first weapon creation completed in **7.75 seconds** and guest entry
+into the default room in **5.10 seconds**. Two optimized runs under the unchanged
+**4,000 ms** limit completed weapon creation in **925–937 ms** and guest entry
+in **677–690 ms**; warm operations performed no compilation.
+
+Weapon loading compiled 24 root programs and processed **530 source occurrences
+across 69 files**, rebuilding common object modules 22 times. Guest loading
+compiled 15 roots and processed **337 occurrences across 70 files**. Repeated
+preprocessing dominates both wall-time measurements and optimized CPU samples.
+The code pool shares completed functions without skipping compilation; inherited
+bodies are checked against the final receiver, so filename-only compiled-program
+caching would not preserve those checks. The shared
+[execution allowance](transaction-diagnostics.md#execution-allowance) is unchanged.
+
+Evidence: /tmp/lima-cold-load-investigation-20261013, temporary compiler phase
+timing, CPU samples and two focused cases run serially with locked workspace
+library commands. Fixtures use real loading/initialization, an IMUD stub and
+in-memory connections. Cold means the measured operation's prototypes are absent
+after fixture setup; this is not a complete cold driver startup or upstream
+execution comparison. All native instrumentation was restored exactly and port
+sources/configuration remain unchanged. These operations have optimized-build
+headroom on this host; debug-build cold loading still exceeds four seconds.
+
+#### Lima linked-player removal adaptation
+
+Adopted and verified **13 October 2026**, following dest dispatch/README committed
+as Lima **da53ba53** and notes as native **cfc33c43**. The linked-body branch of
+[dest][lima-wizard-dest-command] now delegates to its user's existing remove method,
+resolving the port's protected-user refusal. Ordinary objects retain the generic
+destruct wrapper; callbacks/messages still precede cleanup. No native API,
+master, shared destruction/context, user/body/shell method or policy change.
+This is a port integration adaptation; upstream-driver execution is not claimed.
+
+All **eighteen cases** pass across **62 registered inputs**: thirteen ordinary
+cases retain their actions/assertions, and five new session cases cover teardown,
+contents, timers, errors/recovery and redirection. Seven sessions lose user/body/
+shell, clear their connection binding and queue Close. User/body/shell timers
+retire while a caller timer remains. A held object survives in the former room.
+The actor context and following input remain usable for administrator/wizard
+callers. Seven expected errors retain the five ordinary cases and two injected
+cleanup failures: user failure precedes changes; body failure follows input
+clearing and shell destruction, retaining user/body and a user timer until retry.
+Eighteen following pwd/state checks pass, with no unexpected errors or panics.
+
+All **26 positive compile controls** and formatting pass. Fresh **147** command/
+support checks retain **56/81 wizard**, **49/49 transitional**, **9/9 administrator**
+and eight supports with identical outcomes and no regressions. The bare shell
+module requires host methods; full pshell and the extended fixture host pass.
+Evidence: /tmp/lima-linked-player-removal-20261013, distinct nil, preserved call-out
+players, 4,000 ms tasks, real session/container/equipment methods, test-only
+setup/timers/error flags and callback observation, empty help index, IMUD stub
+and in-memory connections. SIMPLE_OB initializes separately; the weapon case
+retains 21-recipe/crafting_d bootstrap. Unsaved guest-prefixed names triggered
+cold default-room limits; redirected cases use ordinary saved characters.
+The cold-loading audit above distinguishes debug and optimized builds;
+physical socket-loop shutdown is outside this proof. Other library files,
+configuration, native
+implementation/CLI and original Lima remain unchanged; temporary include restored,
+all 259 frozen prior artifacts match. Broader library/startup evidence retains
+scope. Command/README committed as Lima **664955bf**; next audit clean,
+selected by local source and registration only.
+
 #### Lima wizard dest dispatch adaptation
 
 Adopted and verified **13 October 2026**, following audit notes committed as
