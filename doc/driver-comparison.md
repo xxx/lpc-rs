@@ -3187,8 +3187,21 @@ nil, preserved call-out players and **4,000 ms** remain. Workspace test librarie
 are built with locked dependencies; focused tests run serially, and workspace/
 fixture formatting passes. Source guards match and the native test include is
 restored. No fresh full-library inventory, native suite, startup, optimized timing
-or upstream execution is claimed. The command/menu/README proposal is prepared
-but not adopted; next apply it in the dedicated checkout and validate actual source.
+or upstream execution is claimed. The three failure/behavior controls remain
+frozen in the audit.
+
+The exact command/menu/README proposal is now adopted in the dedicated checkout,
+following audit commit **31fd8e51**. All **eight adopted-source checks** pass with
+unchanged audit actions/assertions: **eighteen complete compile controls**, **109
+registered inputs**, **twelve menu entries**, **twelve following pwd** checks and
+no caught errors. Both command and menu are copied from the actual checkout and
+verified before test-only observation helpers; neither is replaced by the fixture.
+Role differences, callback/index behavior, editor/pager ownership, readonly rules,
+deep-copy isolation and fresh saved-file restoration retain their audit results.
+Evidence: /tmp/lima-discuss-adoption-20261013. Other tracked library/configuration
+and native implementation bytes remain unchanged, the temporary include is
+restored and all frozen audit artifacts match. The source/README are committed
+as Lima **90a4708d**; broader inventory/startup and upstream-execution scope is unchanged.
 
 #### Lima wizard clean audit
 
