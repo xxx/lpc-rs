@@ -3145,6 +3145,30 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard showtree adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **fffe71c3**. The dedicated command and README match the
+verified proposal for [showtree][lima-showtree]: protected dispatch, a nil string
+selector and canonical defining/program-name comparison. Missing functions are
+safe; loaded diamond order, repeated ancestors and visible definitions retain
+the audit's behavior. Find-only traversal retains partial reports for unloaded
+parents, as documented in the README.
+
+All **seven cases** pass across **42 registered inputs** and seven direct helper
+observations, with exact files/pipes, aliases, paths, refusals, real paging/quit,
+seven following pwd checks and shell/input/pager/modal state checks. No errors
+or panics. All **35 adopted compile controls** and formatting pass. Fresh **147**
+command/support checks reach **46/81 wizard**, retaining **49/49 transitional**,
+**9/9 administrator** and eight supports; showtree is the sole new success with
+no regressions. All 181 frozen audit artifacts match; other 1546 library files,
+configuration, native implementation/CLI and original Lima stay unchanged and
+the temporary test include is restored. Evidence: /tmp/lima-wizard-showtree-port-20261012,
+distinct nil, preserved call-out players, 4,000 ms tasks and real command/user APIs
+with registered in-memory input and an IMUD stub. Broader port/startup evidence
+retains scope. Source/README committed as Lima **40cf5942**; next audit
+cmds/wiz/last.c, selected by source/rule review only.
+
 #### Lima wizard showtree audit
 
 Reviewed **12 October 2026**, following wrapping/README committed as Lima
