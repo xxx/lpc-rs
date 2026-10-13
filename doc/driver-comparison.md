@@ -3145,6 +3145,53 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard dest audit
+
+Verified **13 October 2026**, following clone command/README committed as Lima
+**c22e7096** and adoption notes as native **6e1baf2c**. Public pinned
+[dest][lima-wizard-dest-command] and [Cmd_rules][lima-wizard-object-rules] were
+reviewed that day against original Lima; dedicated dest matches the original.
+The verified proposal adds protected dispatch only. The existing object rule,
+do_remove callback, player-message/filename output and destruction wrapper remain.
+Body targets redirect destruction to their linked user, but this route is
+refused by the current port policy before removal begins. No native API or
+shared destruction/context change is needed for ordinary objects. No policy
+change is proposed here. Upstream execution is not claimed.
+
+All **fifteen cases** pass across **52 registered inputs**: current unavailable
+control plus fourteen proposal cases, including a characterized linked-user
+refusal. Nearby/held objects and absolute/relative clone paths resolve; nested
+contents are selected by exact clone path, not colon references. Optional absent callbacks, real wielded-weapon
+cleanup, contents relocation, ignored callback return values and moved targets
+pass. Ten callback/context records verify ordering and caller/player/body/
+interactive identity. Ordinary caller/observer and nil-short filename output
+bypass command buffers; empty overwrite/pipe files, append preservation, ignored
+input and argument/stdio refusals pass. Even under a fresh administrator shell,
+linked-user cleanup is refused after the message, before user->remove begins.
+User, body, shell and connection remain intact: the command privilege
+Mudlib:wizcmds cannot satisfy /secure/user protection 1 through the existing
+caller-chain check. This port policy gap needs a scoped mudlib teardown route.
+
+Six expected errors cover action, short, message, remove, self-removal and
+linked-user refusal. A remove error retains the message/object; earlier errors stop cleanup.
+Self-removal leaves the object gone and a later nil filename-status concatenation
+raises a type error. Recovery and fifteen following pwd/state checks pass, with
+no unexpected errors or panics. All **24 compile controls** have expected results;
+formatting passes. Stock weapon removal passes after 21 recipe programs and
+crafting_d are initialized in separate tasks; archived cold creation exceeded
+the unchanged 4,000 ms budget. Cold first-use loading remains unresolved. Evidence:
+/tmp/lima-wizard-dest-audit-20261013, distinct nil,
+preserved call-out players, 4,000 ms tasks, registered in-memory input with real
+container/equipment and linked-user entry paths, test-only setup/callback/
+message/look records,
+empty help index and IMUD stub. All 261 frozen prior artifacts match. Dedicated
+source/README/configuration, native implementation/CLI and original Lima remain
+unchanged; include restored. Prior **55/81 wizard**, **49/49 transitional**,
+**9/9 administrator**, eight supports and broader library/startup scope retain
+coverage without an inventory refresh. Proposal unadopted; next commit notes and
+adopt the exact command/README with recorded assertions/errors retained, then
+address linked-user teardown before moving to clean.
+
 #### Lima wizard clone adaptation
 
 Adopted and verified **13 October 2026**, following audit notes committed as
@@ -20105,3 +20152,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-object-rules]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/Cmd_rules
 
 [lima-wizard-clone-command]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/clone.c
+
+[lima-wizard-dest-command]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/dest.c
