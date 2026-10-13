@@ -3145,6 +3145,34 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard transfer audit
+
+Reviewed **12 October 2026**, following movement commands/README committed as
+Lima **9a6e9750** and adoption notes as native **8fffe82c**. Pinned
+[trans][lima-wizard-trans] differs from dedicated source by the earlier
+catch/restore/rethrow around target force_look. The verified proposal adds only protected argument dispatch.
+Object resolution, movement/refusals, recipient exclusions and linked/unlinked
+player contexts need no native API or shared-module change. Public source review
+and native execution are distinguished from upstream-driver execution.
+
+All **eleven cases** pass across **39 registered inputs**: current unavailable
+control plus ten proposal cases. Real movement, no-environment/nonbody targets,
+observer broadcasts/Someone suppression, exact files/pipes, ignored input and
+stdio refusals pass. **75** in-command context records include **12** player
+restorations. One deliberately forced look error is caught after restoration;
+no unexpected errors or panics. Eleven following pwd/state checks and all
+**18 compile controls** have expected results; formatting passes. Fixture reads
+use the existing this_user shim under Lima's unchanged master policy.
+Evidence: /tmp/lima-wizard-transfer-audit-20261012, distinct nil, preserved
+call-out players, 4,000 ms tasks, registered in-memory input and test-only
+context/accessor instrumentation, delegating room subclass, empty help index
+and IMUD stub. All 233 prior frozen artifacts match. All 1547 library files,
+README/configuration and native implementation/CLI stay unchanged; include
+restored. Prior **51/81 wizard**, **49/49 transitional**, **9/9 administrator**,
+eight supports and broader library/startup scope retain their earlier coverage
+without an inventory refresh. Proposal unadopted; next commit audit notes and
+adopt the exact command/README with the expected look error retained.
+
 #### Lima wizard movement adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as
@@ -19850,3 +19878,5 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-wizard-goto]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/goto.c
 [lima-wizard-home]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/home.c
+
+[lima-wizard-trans]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/trans.c
