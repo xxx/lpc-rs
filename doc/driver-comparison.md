@@ -3145,6 +3145,35 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard lounge adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **4f99191a**. Dedicated [wizz][lima-wizard-wizz] and README match the verified
+proposal: protected raw-argument dispatch only. Literal quotes/flag-looking text,
+random defaults, movement/refusals, same-room twitch, forced look and observer
+exclusions/Someone suppression remain. No native API, shared movement/context,
+room or configuration change is required.
+
+All **nine cases** pass across **36 registered inputs** with successful audit
+assertions retained. Files/pipes, ignored input, stdio refusals and nine following
+pwd/state checks pass. One expected forced-look failure leaves the completed move
+intact, prevents later confirmation/broadcasts and permits recovery; no unexpected
+errors or panics. Actual [Wizroom][lima-wizard-lounge] creates all seven configured
+objects after eight separate dependency bootstrap operations, with room source
+unchanged and still unloaded before entry. The audit's cold first-use compilation
+limit retains its explicit scope; the unchanged 4,000 ms budget is not raised.
+Other refusal cases retain the delegating fixture room. All **24 positive compile
+controls** and formatting pass. Fresh **147** command/support checks reach
+**53/81 wizard**, retaining **49/49 transitional**, **9/9 administrator** and eight
+supports; wizz is the only new success, with no regressions. All 140 frozen audit
+artifacts match. Other library files, configuration, native implementation/CLI and
+original Lima remain unchanged; temporary include restored. Evidence:
+/tmp/lima-wizard-lounge-port-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks, registered in-memory input with real body movement/look, test-only
+setup/accessors, empty help index and IMUD stub. Broader library/startup evidence
+retains scope. Command/README committed as Lima **9d249921**; next audit Move,
+selected by local source and registration review only.
+
 #### Lima wizard lounge audit
 
 Reviewed **12 October 2026**, following transfer command/README committed as
