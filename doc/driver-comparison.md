@@ -3145,6 +3145,37 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard showtree audit
+
+Reviewed **12 October 2026**, following wrapping/README committed as Lima
+**1dc8dd3f** and adoption notes as native **b33a8f3e**. The pinned
+[showtree source][lima-showtree] retains an integer-zero string selector and
+unguarded defining-name concatenation; the dedicated file already replaces three
+repeat_string calls with native multiplication. The verified proposal adds protected
+dispatch, uses nil for the selector and compares canonical defining/program names.
+No native API changes. Source review does not establish upstream-driver behavior.
+
+All **ten cases** pass across **48 registered inputs** and seven direct helper
+observations. Three controls isolate unavailable dispatch, typed-zero compilation
+and the expected absent-function nil-arithmetic error. Loaded diamond order,
+repeated ancestors, visible definition markers, overrides, missing/hidden functions,
+Unicode/relative names, clone prototype aliases, exact files/pipes, ignored input,
+rule/stdio refusals and real paging/quit pass. Ten following pwd checks and shell/
+input/pager/modal checks pass with no unexpected errors or panics. All **38 compile
+controls** and formatting have expected outcomes. All 80 frozen wrapping-adoption
+artifacts match; source/README/configuration, native implementation/CLI and original
+Lima remain unchanged and the temporary test include is restored.
+
+Traversal retains find_object and missing-object diagnostics for unloaded parents.
+Inheritance compiles programs without creating parent objects, so these reports
+remain partial. The proposal does not run parent initializers or introduce a
+compiled-program graph API; its README explains the limitation. Evidence:
+/tmp/lima-wizard-showtree-audit-20261012, distinct nil, preserved call-out players,
+4,000 ms tasks, real wizard/user/command APIs, normally compiled toy inheritance
+programs and registered in-memory input with an IMUD stub. Prior 45/81 wizard,
+49/49 transitional, 9/9 administrator and broader evidence retain scope.
+Proposal unadopted; next adopt exact source/README and verify the same assertions.
+
 #### Lima terminal wrapping adaptation
 
 Adopted and verified **12 October 2026**, following audit notes committed as native
@@ -19569,3 +19600,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-showexits]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showexits.c
 [lima-wizard-uncd]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/uncd.c
 [lima-wizard-scan]: https://raw.githubusercontent.com/limalib/lima/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/scan.c
+
+[lima-showtree]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/showtree.c
