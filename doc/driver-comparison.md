@@ -3145,6 +3145,35 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard object movement adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **7f7694f2**. Dedicated [Move][lima-wizard-object-move] and README match the
+verified proposal: protected argument dispatch only. The existing two-object
+resolver, real movement, ordinary source/destination messages and refusal-message
+behavior remain. No native API, shared movement/context or container change is
+required. Body movement adds no look; messages bypass command output buffers.
+
+All **ten cases** pass across **40 registered inputs** with successful audit
+assertions retained. Paths/held objects/players, destination contents and observer
+delivery, moved-body exclusion, five drop/release/receive refusals, ancestor
+refusal, membership rollback and recovery pass. Empty overwrite/pipe output,
+append preservation, ignored input, argument/stdio refusals and ten following
+pwd/state checks pass. One expected target-message error preserves the completed
+move, prevents the destination broadcast and permits recovery; no unexpected
+errors or panics. All **17 positive compile controls** and formatting pass.
+Fresh **147** command/support checks reach **54/81 wizard**, retaining
+**49/49 transitional**, **9/9 administrator** and eight supports; Move is the only
+new success, with no regressions. All 104 frozen audit artifacts match. Other
+library files, configuration, native implementation/CLI and original Lima remain
+unchanged; temporary include restored. Evidence:
+/tmp/lima-wizard-object-movement-port-20261012, distinct nil, preserved call-out
+players, 4,000 ms tasks, registered in-memory input with real body/container/
+room movement, test-only setup/accessors/message capture, empty help index and
+IMUD stub. Broader library/startup evidence retains scope. Command/README
+committed as Lima **2d28bb91**; next audit clone, selected by local source and
+registration review only.
+
 #### Lima wizard object movement audit
 
 Reviewed **12 October 2026**, following lounge command/README committed as Lima
