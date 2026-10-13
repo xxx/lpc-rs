@@ -3145,6 +3145,31 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard movement adaptation
+
+Adopted and verified **12 October 2026**, following audit notes committed as
+native **c4106121**. The dedicated [goto][lima-wizard-goto],
+[home][lima-wizard-home] and README match the verified proposal: protected
+argument dispatch only. Existing object/path resolution, real body movement,
+string refusals, workroom creation/reuse, brief mode and post-refusal home
+behavior remain. No native API or shared movement-module change is required.
+
+All **nine cases** pass across **53 registered inputs** with the audit's
+successful assertions retained. Movement/refusals/rollback, permanent/named/
+temporary workrooms, exact files/pipes, ignored input, stdio refusals and shell/
+input/modal/pager checks pass, with no errors or panics. All **17 adopted compile
+controls** and formatting pass. Fresh **147** command/support checks reach
+**51/81 wizard**, retaining **49/49 transitional**, **9/9 administrator** and
+eight supports; goto/home are the only new successes, with no regressions.
+All 183 frozen audit artifacts match. The other 1545 library files, configuration,
+native implementation/CLI and original Lima stay unchanged; include restored.
+Evidence: /tmp/lima-wizard-movement-port-20261012, distinct nil, preserved
+call-out players, 4,000 ms tasks and registered in-memory input with real body
+movement, look verb, test-only setup/accessors, room subclass, empty help index
+and IMUD stub. Broader library/startup evidence retains scope. Commands/README
+committed as Lima **9a6e9750**; next audit trans and its player-context path,
+selected by local source and registration review only.
+
 #### Lima wizard movement audit
 
 Reviewed **12 October 2026**, following whoip command/README committed as
