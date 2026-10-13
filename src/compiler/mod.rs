@@ -9,13 +9,9 @@ use compilation_context::CompilationContext;
 use compile_gate::CompileGate;
 use derive_builder::Builder;
 use educe::Educe;
-use lexer::{Token, TokenTriples};
+use lexer::Token;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{
-    self, LpcError, Result, lpc_error,
-    source_map::DiagnosticSources,
-    span::{HasSpan, Span},
-};
+use lpc_rs_errors::{self, LpcError, Result, lpc_error, source_map::DiagnosticSources, span::Span};
 use lpc_rs_utils::{LpcSource, config::Config};
 use preprocessor::Preprocessor;
 use source::CompilerSource;
@@ -24,7 +20,6 @@ use tracing::instrument;
 
 use crate::{
     compiler::compilation_context::CompilationContextBuilder, interpreter::program::Program,
-    lpc_parser,
 };
 
 pub mod ast;
@@ -35,6 +30,7 @@ pub mod compile_gate;
 pub mod diagnostics;
 pub mod lexer;
 pub mod parser;
+pub mod parser_cache;
 mod prepared_program;
 pub mod preprocessor;
 mod program_interface;
@@ -52,6 +48,9 @@ pub struct Compiler {
     /// Prepared macro definitions shared with recursive compiles.
     #[builder(default)]
     definition_cache: Arc<preprocessor::definition_cache::DefinitionCache>,
+    /// Raw syntax shared with recursive compiles.
+    #[builder(default)]
+    parser_cache: Arc<parser_cache::ParserCache>,
     /// The configuration to be used for this instance of the compiler
     #[builder(setter(into))]
     config: Arc<Config>,
@@ -235,6 +234,7 @@ impl Compiler {
             .config(self.config.clone())
             .code_pool(self.code_pool.clone())
             .definition_cache(self.definition_cache.clone())
+            .parser_cache(self.parser_cache.clone())
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
             .gate(self.gate.clone())
@@ -377,20 +377,9 @@ impl Compiler {
     ) -> Result<(ProgramNode, CompilationContext)> {
         let (tokens, preprocessor) = self.preprocess_source(source, code, warning).await?;
 
-        let wrapper = TokenTriples::new(&tokens);
         let mut context = preprocessor.into_context();
-
-        lpc_parser::ProgramParser::new()
-            .parse(&mut context, wrapper)
-            .map(|p| (p, context))
-            .map_err(|e| {
-                // lalrpop's bare-usize locations carry no file id, so the
-                // EOF/InvalidToken arms arrive span-less; every other arm
-                // — `ParseError::User`'s grammar-action errors included —
-                // already carries one.
-                let last = tokens.last().map(|t| t.span());
-                LpcError::from(e).or_span(last)
-            })
+        let node = self.parser_cache.parse(tokens, &mut context)?;
+        Ok((node, context))
     }
 }
 

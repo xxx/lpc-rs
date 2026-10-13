@@ -3145,6 +3145,78 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima raw-parser cache
+
+Verified **13 October 2026**, following the source-preparation audit. A shared
+cache retains successful raw syntax after fresh preprocessing, before auto-inherit
+insertion or any tree walkers. Each hit clones pristine syntax, restores only
+parser-generated closure/capture counters and appends parser warnings. Source
+reads, preprocessing warnings/pragmas, include/inherit/explicit-efun permissions,
+parent discovery, class/receiver checks and code generation remain per use.
+
+Lookup fingerprints are checked against complete expanded tokens/spans, strict
+type policy, initial naming counters and diagnostic storage identity. Failed
+parses are not retained. The LRU limit is **256 entries / 64 MiB estimated payload**;
+oversized entries are skipped and tree cloning occurs outside the bookkeeping
+lock. Cold weapon/guest operations retain 69/70 entries with 37.4/50.8 MiB of
+conservative token/node accounting, retaining all 461/267 repeated parser inputs.
+This accounting is not an allocator or resident-memory measurement.
+
+Three alternating same-executable pairs compare the enabled and test-only disabled
+cache; entries are cleared before each measured operation, including after fixture
+bootstrap. Macro preparation remains enabled in both paths. Median cold times:
+
+| Build | Operation | Disabled | Enabled | Reduction |
+|---|---|---:|---:|---:|
+| Debug | Weapon creation | 5454ms | 4867ms | 10.8% |
+| Debug | Guest entry | 3755ms | 3494ms | 7.0% |
+| Optimized | Weapon creation | 679ms | 614ms | 9.6% |
+| Optimized | Guest entry | 502ms | 458ms | 8.8% |
+
+All optimized cold/warm cases pass under the ordinary **4,000 ms** allowance.
+Debug uses a diagnostic 30,000 ms allowance; weapon creation still exceeds four
+seconds. Warm weapon creation has zero parser visits; its sub-millisecond
+optimized timing variation is not evidence of a parser speedup. Eleven new
+regressions cover pristine trees, warnings/counters, source storage, strict policy,
+receiver/class changes, edited headers, current permissions/denials, failures,
+collisions and bounded eviction. Evidence: /tmp/lima-parser-cache-20261013.
+Full serial workspace tests pass (**5,088 unit/integration + 10 doctests**, two
+existing ignored), along with warning-free Clippy/docs and formatting. Parallel
+runs expose the existing timeout test's warning-capture failure; an exact committed
+compiler-source control at dd8e48e8 reproduces it (4693 pass, one fails). The
+unchanged test passes alone and in the serial suite. The cache implementation is
+restored by hashes afterward; no logging behavior or assertion is changed.
+Dedicated Lima source/configuration remains unchanged; compiled-parent reuse and
+signature-rule design remain separate work.
+
+#### Lima source-preparation reuse audit
+
+Audited **13 October 2026** after the source-read optimization. An observing-only
+experiment finds identical parser inputs on **461 of 530** weapon-source visits
+and **267 of 337** guest-source visits. Every parser and later compiler pass still
+runs; matching pristine syntax-tree clones equal the fresh parser results. The
+receiver witness accepts one supplier and rejects a differently typed supplier
+using identical parent syntax, confirming that later checks remain necessary.
+
+Raw syntax can be retained after fresh preprocessing and before parent discovery
+or tree transformations. Reuse must include strict-type policy, diagnostic source
+namespace, generated closure/capture counters and parser warnings. Parent
+authorization, explicit-efun policy, class/prototype collection, scope/receiver
+checking and code generation remain per use. Skipping whole preprocessing would
+also need to preserve include search results and ordered permission callbacks
+that can change source files; a changed-input fallback must not duplicate their
+side effects. A bounded raw-parser cache is the recommended first change.
+
+Measured repeated-input parsing minus observed comparison/cloning costs suggests
+**606 ms / 378 ms** of debug weapon/guest work, or **53 ms / 37 ms** optimized.
+These are opportunity estimates, excluding production cache overhead, not
+implemented speedups or a fix for debug cold-load deadlines. Three debug and four
+optimized focused tests pass, including receiver, scoped-ID, strict-policy and
+parser-state witnesses; the optimized Lima operations run within **4,000 ms**.
+Evidence: /tmp/lima-source-preparation-audit-20261013. Native instrumentation is
+restored and dedicated source/configuration unchanged. No cache implementation,
+signature-rule change or upstream execution comparison is included.
+
 #### Lima compiler source-read optimization
 
 Verified **13 October 2026**, following the macro-definition cache. Successful

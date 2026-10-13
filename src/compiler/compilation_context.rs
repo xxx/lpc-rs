@@ -41,6 +41,8 @@ pub struct CompilationContext {
     pub code_pool: Arc<CodePool>,
     /// Pure macro preparation shared across preprocessing walks.
     pub definition_cache: Arc<super::preprocessor::definition_cache::DefinitionCache>,
+    /// Pristine parsed syntax shared across compiler visits.
+    pub parser_cache: Arc<super::parser_cache::ParserCache>,
     pub class_scope: Arc<ClassScope>,
     /// The identity of the main file being compiled.
     #[builder(setter(into))]
@@ -380,6 +382,7 @@ impl Default for CompilationContext {
         Self {
             code_pool: Arc::default(),
             definition_cache: Arc::default(),
+            parser_cache: Arc::default(),
             class_scope: Arc::default(),
             source: Arc::new(CompilerSource::new(LpcPath::default(), &config)),
             config,

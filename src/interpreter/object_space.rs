@@ -33,6 +33,7 @@ pub struct ObjectSpace {
     pub(crate) code_pool: Arc<crate::interpreter::program::code_pool::CodePool>,
     pub(crate) definition_cache:
         Arc<crate::compiler::preprocessor::definition_cache::DefinitionCache>,
+    pub(crate) parser_cache: Arc<crate::compiler::parser_cache::ParserCache>,
     /// The actual mapping of "paths" to processes. This is the *committed*
     /// object space: the physical state, read directly by non-transactional
     /// consumers (GC, the committed reader, function-pointer lookup) and kept
@@ -295,6 +296,7 @@ impl Default for ObjectSpace {
         Self {
             code_pool: Arc::default(),
             definition_cache: Arc::default(),
+            parser_cache: Arc::default(),
             processes,
             cell_ids: DashMap::new(),
             clone_count: AtomicUsize::new(0),

@@ -225,6 +225,7 @@ impl TreeWalker for InheritanceWalker {
             .config(self.context.config.clone())
             .code_pool(self.context.code_pool.clone())
             .definition_cache(self.context.definition_cache.clone())
+            .parser_cache(self.context.parser_cache.clone())
             .inherit_depth(self.context.inherit_depth + 1)
             .gate(self.context.gate.clone())
             .source_reader(self.context.source_reader.clone())

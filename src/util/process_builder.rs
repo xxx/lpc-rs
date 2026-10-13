@@ -37,6 +37,7 @@ where
         .config(config.clone())
         .code_pool(object_space.code_pool.clone())
         .definition_cache(object_space.definition_cache.clone())
+        .parser_cache(object_space.parser_cache.clone())
         .simul_efuns(simul_efuns)
         .gate(gate)
         .source_reader(source_reader)
