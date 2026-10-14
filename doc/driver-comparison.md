@@ -3145,6 +3145,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard scripts and NPC-script status audit
+
+Audited **14 October 2026**, using native **97c8e9cf** and dedicated Lima
+**880853bd**, after committing killmobs and its adoption notes. Current
+[scripts][lima-wizard-scripts] only differs from pinned upstream **eefaff66** by
+the prior string-repetition adaptation (**41613f07**). It lacks protected dispatch.
+Its real [NPC-script module][lima-npc-script] also needs compatibility fixes before
+active status can be inspected. The tested three-file command/module/README
+proposal is unadopted; both LPC files retain CRLF endings.
+
+The command adds dispatch to existing private main and keeps its output policy.
+The module uses bare function call-out callbacks, nil for absent string/array/object
+values, explicit integer returns from state_update and explicit object formatting
+in debug text. Reference absence includes inactive status results. Integer step
+and timestamp resets remain zero; the API, class layout and script-step logic stay.
+
+Actual script creation/start, wait/description/action progression, completion and
+recovery run through the module and state daemon. Actions execute through real
+function pointers and debug output works. The inspector preserves script state,
+counter values and scheduled timer IDs. Empty and prototype-only activity report
+no scripts; active clones in the current room, another room and without an
+environment appear. Inactive clones and active prototypes are excluded.
+
+Exact headers, field padding/truncation, step/count text, simplified progress and
+ASCII progress bars through [M_WIDGETS][lima-widgets] pass. Raw arguments are
+ignored. Direct printf reports bypass CMD buffers: overwrite/pipe destinations
+remain empty, append retains prior bytes and incoming text is ignored. The active
+table and no-running message retain their existing formatting.
+
+All **six focused checks** pass: one original control, four proposal runtime
+groups and **seventeen complete positive compile checks**, including a full
+Robert NPC host and state daemon. **27 registered inputs** include **five following
+pwd checks**, with zero caught errors. Proposal inputs total twenty-five with four
+pwd checks. Two original compile failures cover missing dispatch and unadapted
+NPC-script types/callbacks. Initial simplified-mode tests misidentified its prompt;
+correcting only prompt extraction makes the same report/state assertions pass.
+
+Evidence: /tmp/lima-scripts-audit-20261014. Actual master/simuls/user/body/wizard
+shell/CMD/object enumeration/NPC-script/state/widget/colour methods execute with
+fixture NPC hosts, setup/observation, one in-memory connection, empty help index
+and stubbed IMUD. Locked workspace library-test build and workspace/Rust 2024
+fixture formatting pass under distinct nil, preserved call-out players and
+**4,000 ms** tasks. Dedicated/original source and other native files remain
+unchanged; include restored and all 40 frozen killmobs adoption artifacts remain.
+Explicit callback advancement qualifies the observed state transitions rather
+than timed delivery. Full file-script parsing, triggers, NPC-action routing,
+inventories, native suites, startup and cold timing remain unqualified. Next
+adopt the proposal and repeat five successful checks against actual source, then
+audit the module's file-script parser and remaining step routes.
+
+
 #### Lima wizard killmobs adaptation
 
 Adopted and tested **14 October 2026** after audit notes **3193a1bc**, using native
@@ -21767,3 +21818,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-killmobs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/killmobs.c
 [lima-example-flea]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/flea.c
 [lima-example-test-dummy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/test_dummy.c
+[lima-wizard-scripts]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/scripts.c
+[lima-npc-script]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_npcscript.c
