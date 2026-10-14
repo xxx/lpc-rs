@@ -3145,6 +3145,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard timer adaptation
+
+Adopted and tested **13 October 2026** after audit notes **250342fd**, using
+native **250342fd** and dedicated Lima **2fec5f73**. The actual checkout's
+[timer command][lima-wizard-timer], [daemon][lima-timer-daemon] and README match
+the frozen proposal. The command adds protected dispatch, an integer repeat
+boolean and zero for omitted notification periods. The daemon binds callback
+owners and retains one native cancellation handle. Class layout, scheduling
+calculations, public methods, messages, registration and shared policies remain.
+
+All **six adopted-source checks** pass: **thirteen complete compile controls**,
+**23 registered inputs**, **five following pwd checks** and **16 callback firings**,
+with zero caught input errors. One firing waits for a real one-second VM timer;
+**15 others** prioritize scheduled entries through the production callback path.
+Successful audit actions/assertions are unchanged. The fixture verifies copied
+command/daemon bytes before observation helpers and never replaces either source.
+
+One-shot expiration, replacement handles, repeat cycles, periodic notices and
+real two-listener channel delivery pass. Public/internal channel names and an
+explicit owner different from the captured player retain their audited behavior.
+Callback owner/caller/player/body/origin and nil interactive context pass.
+Confirmations buffer to files/pipes; later notices go directly to owners/channels.
+Incoming text is ignored, message blank lines remain and shell/input/modal/pager
+state stays intact. The daemon still shares one pending callback across owners;
+replacement retains both records, expired records remain and timer 0 refuses
+without cancelling a pending timer. These existing source limitations are retained.
+
+Evidence: /tmp/lima-timer-adoption-20261013, retaining real master/simuls/user/body/
+shell/CMD/timer/channel methods, setup/observation helpers, an empty help index,
+stubbed IMUD and in-memory connections. Locked workspace library-test build,
+serial focused execution and workspace/Rust 2024 fixture formatting pass under
+unchanged distinct nil, preserved call-out players and **4,000 ms** tasks.
+Other tracked source/configuration and original Lima match, native include is
+restored and all 62 frozen audit artifacts remain unchanged. No native API change
+is needed. Full inventories, native suites, startup, upstream execution and the
+separate cold Wizroom finding retain their preceding scope. Next commit this
+adaptation and audit cmds/wiz/ilocate.c, selected from local source and its
+ilocate str registration. Its forwarding can be checked in an isolated fixture;
+no external intermud query is part of this adoption.
+
 #### Lima wizard timer audit
 
 Reviewed and tested **13 October 2026** against [timer][lima-wizard-timer], its
