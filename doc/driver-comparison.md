@@ -3145,6 +3145,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard objfind audit
+
+Reviewed and tested **14 October 2026** against [objfind][lima-wizard-objfind],
+using native **4d1e1151** and dedicated Lima **d97b6969**. The earlier port already
+supplies protected dispatch, filter(objects(), predicate) and map callbacks.
+The actual command passes without further code changes. No Cmd_rules prototype
+exists for objfind, so its private handler receives raw text or nil; it compares
+that argument with base_name exactly. Native APIs and shared policies remain.
+
+All **five focused checks** pass: four runtime groups and **twelve complete
+positive compile checks**, **30 registered inputs** and **four following pwd
+checks**, with zero caught input errors. The fixture checks actual command/rule
+bytes before appending a read-only result observer; handler and dispatch bodies
+are unchanged. Printed mappings match independently expected instance/location
+maps and the command's stored envs mapping.
+
+Exact base names select the loaded prototype and all live clones; unplaced
+objects report nil. Unicode filenames pass. Missing/nil and quoted-empty input,
+literal quotes, relative names, .c and clone suffixes, globs, extra words,
+flag-looking text and unknown names return empty mappings under the tested raw
+inputs. They do not produce usage diagnostics or resolve paths. Each query
+replaces the stored mapping, including no-match queries. These source policies
+are retained.
+
+Moving an instance changes its reported environment; retiring a clone or prototype
+removes only that instance. Surviving clones remain discoverable without their
+prototype, and reloading it adds the new prototype to the next report. Exact
+overwrite/append/pipe bytes, ignored incoming file/pipe text and real pager return
+pass. Reports preserve live fixture identities/locations, shell/current-file/body/
+room/modal state, echo and input rearming; intentional movement/retirement/reload
+alone changes the fixture world. Mapping row order is not promised.
+
+Evidence: /tmp/lima-objfind-audit-20261014. Actual master/simuls/user/human-body/
+wizard-shell/CMD/command-parser methods run with small local object/container
+fixtures, setup and context/result observations, an empty help index, stubbed
+IMUD and in-memory connections. Locked workspace library-test build, serial
+focused runs and workspace/Rust 2024 fixture formatting pass under unchanged
+distinct nil, preserved call-out players and **4,000 ms** tasks. Source guards
+match, native include is restored and all 38 frozen objcount audit artifacts
+remain. Only README and these port notes are updated; no code patch or further
+adoption test run is required. Inventories, native suites, startup, upstream
+execution and cold timing retain earlier scope. Next commit documentation and
+audit idfind.c's ID matching, environment reports and output routes. Selection
+uses local source only; no idfind compilation or execution is part of this audit.
+
+
 #### Lima wizard objcount audit
 
 Reviewed and tested **13 October 2026** against [objcount][lima-wizard-objcount]
@@ -21186,3 +21232,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-release-history]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/lima/daemons/did.o
 
 [lima-wizard-objcount]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/objcount.c
+
+[lima-wizard-objfind]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/objfind.c
