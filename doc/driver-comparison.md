@@ -3145,6 +3145,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard objcount audit
+
+Reviewed and tested **13 October 2026** against [objcount][lima-wizard-objcount]
+and its [optional-number rule][lima-wizard-command-rules], using native **dfe9cd3e**
+and dedicated Lima **f215b7a8**. The earlier port already supplies protected
+dispatch and replaces callback object enumeration with foreach and explicit
+integer initialization. The actual command and rule now pass without further
+code changes; native APIs and shared policies remain unchanged.
+
+All **six focused checks** pass: five runtime groups and **twelve complete
+positive compile checks**, **30 registered inputs** and **five following pwd
+checks**, with zero caught input errors. The fixture checks actual command/rule
+bytes without replacing them. Real prototypes and clones exercise enumeration,
+clone retirement, surviving clones after prototype destruction and prototype
+reload; only setup and user/context observations are appended to temporary source.
+
+Omitted and zero minima become one. The command reports total instance counts
+strictly greater than the effective minimum. With a prototype present, two clones
+qualify for objcount 2 and display three, contrary to the source comment's example
+claiming three non-prototype instances. Without a prototype, the same total-count
+test remains: two surviving clones do not qualify at two, and a lone surviving
+clone is absent from the default report. These existing source behaviors are
+retained. Retirement and prototype reload affect the next report; a high minimum
+produces an empty mapping and negative minima include prototype-only groups.
+
+The numeric rule accepts signed integers, quoted numbers and integer prefixes;
+2junk and 2.5 both select two. Nonnumeric/quoted-empty arguments and excess
+arguments retain usage diagnostics. Overwrite, append and pipe bytes, ignored
+incoming file/pipe text and real pager return pass. Reporting preserves live
+fixture identities, shell/current-file/body/room/modal state, echo and input
+rearming; intentional retirement/reload alone changes the fixture population.
+
+Evidence: /tmp/lima-objcount-audit-20261013. Actual master/simuls/user/human-body/
+wizard-shell/CMD/command-parser methods run with small local object fixtures,
+an empty help index, stubbed IMUD and in-memory connections. Locked workspace
+library-test build, serial focused runs and workspace/Rust 2024 fixture formatting
+pass under unchanged distinct nil, preserved call-out players and **4,000 ms**
+tasks. Source guards match, native include is restored and all 36 frozen
+release-history adoption artifacts remain. Only README and these port notes are
+updated; no code patch or further adoption test run is required. Inventories,
+native suites, startup, upstream execution and cold timing retain earlier scope.
+Next commit the documentation and audit objfind.c's exact filename selection,
+environment mapping and output routes. That selection uses local source only;
+no objfind compilation or execution is part of this audit.
+
+
 #### Lima wizard lima adaptation
 
 Adopted and tested **13 October 2026** after audit notes **80ab0f8e**, using
@@ -21138,3 +21184,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-lima]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/lima.c
 [lima-release-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/lima_d.c
 [lima-release-history]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/lima/daemons/did.o
+
+[lima-wizard-objcount]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/objcount.c
