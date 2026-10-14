@@ -3145,6 +3145,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard halt audit
+
+Audited **14 October 2026**, using native **be881683** and dedicated Lima
+**9c13602a**, after committing the privs adaptation and its notes. The current
+[halt command][lima-wizard-halt] matches pinned upstream **eefaff66** and has no
+typed command rule. Its private handler fails compilation because CMD needs
+protected dispatch. The tested two-file command/README proposal adds only
+`dispatch_main` calling the existing zero-argument `main`; it is not yet adopted.
+
+The existing handler broadcasts `stop_fight()` to every direct room occupant,
+including the actor, then calls the actor's [simple_action][lima-messages]. Actual
+[target methods][lima-combat-targets] clear primary and secondary opponents, and
+the port's heartbeat combat module cancels its repeating call outs. An ordinary
+room object without `stop_fight` is harmless. Independent fights in another room
+and inside the actor's inventory retain their targets and timers. This does not
+promise that every outside opponent is unaffected: `stop_fight` also removes
+reciprocal target references through `stop_hitting_me`.
+
+The actor receives "You halt combat in the room."; room observers and carried
+bodies receive "Porter halts combat in the room." in the fixture. Remote bodies
+receive nothing. Repeating halt, restarting combat, having no active fight and
+supplying unused raw arguments work. Body messages bypass CMD output buffers:
+overwrite/pipe destinations stay empty, append retains prior bytes and incoming
+file/pipe text is ignored. These existing source policies remain unchanged.
+
+All **five focused checks** pass: one original control, three proposal runtime
+groups and **fourteen complete positive compile checks**. **17 registered inputs**
+include **four following pwd checks**, with zero caught input errors. Proposal
+inputs total fifteen with three following pwd checks. Shell/current-file/body/
+room/modal state, line mode, echo and input rearming remain intact.
+
+Evidence: /tmp/lima-halt-audit-20261014. Actual master/simuls/user/human bodies/
+wizard shell/CMD/combat/message methods run with fixture setup and observation
+helpers, an empty help index, stubbed IMUD and in-memory connections. The first
+run exposed incorrect fixture placement; correcting it to checked Lima `move()`
+calls makes the same compiled Rust checks pass. No production fix was required
+for that failure. Locked workspace library-test compilation and workspace/Rust
+2024 fixture formatting pass under distinct nil, preserved call-out players and
+**4,000 ms** tasks. Dedicated/original source and other native files stay unchanged;
+the temporary native include is restored and all 35 frozen privs adoption artifacts
+remain. Timed pulse delivery, inventory/startup/native-suite qualification and
+cold Wizroom timing are not repeated. Next adopt this dispatcher and repeat the
+four successful proposal checks against actual source; then audit resurrect.c.
+
+
 #### Lima wizard privs adaptation
 
 Adopted and tested **14 October 2026** after audit notes **a4f6d09e**, using native
@@ -21496,3 +21541,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-parse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/parse.c
 
 [lima-wizard-privs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/privs.c
+[lima-wizard-halt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/halt.c
