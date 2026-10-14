@@ -3145,6 +3145,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard ilocate adaptation
+
+Adopted and tested **13 October 2026** after audit notes **4aa3a690**, using
+native **4aa3a690** and dedicated Lima **1cbf08de**. The actual checkout's
+[ilocate command][lima-wizard-ilocate] and README match the frozen proposal.
+Only protected varargs dispatch_main is added to the command, forwarding parsed
+arguments to private main. The single-string rule, handler, confirmation and
+[IMUD locate module][lima-imud-locate] remain unchanged.
+
+All **four adopted-source checks** pass: **thirteen complete positive compile
+checks**, **21 registered inputs**, **three following pwd checks** and **15
+captured outgoing requests**. The complete actual IMUD daemon compiles without
+initialization. One synthetic sender exception is expected; no unexpected caught
+input errors occur. Successful audit actions/assertions are unchanged; the fixture
+checks actual command bytes and never replaces the command.
+
+The real locate module lowercases the supplied name and creates locate-req with
+one string. User/player/body context, Unicode, quoted spaces/empty strings,
+numeric-looking and flag-looking names, and name@mud retain their audited behavior.
+Missing/excess arguments are refused before forwarding. Overwrite/append/pipeline
+confirmation bytes, ignored incoming text and shell/input/modal/pager state pass.
+A synthetic sender exception prevents confirmation, and a later command works.
+The command's confirmation still does not establish remote delivery.
+
+Evidence: /tmp/lima-ilocate-adoption-20261013, retaining real master/simuls/user/body/
+shell/CMD/locate methods, setup/observation helpers, an in-memory IMUD sender and
+in-memory connections. Locked workspace library-test build, serial focused runs
+and workspace/Rust 2024 fixture formatting pass under unchanged distinct nil,
+preserved call-out players and **4,000 ms** tasks. Other tracked source/configuration
+and original Lima match, native include is restored and all 39 frozen audit
+artifacts remain unchanged. No native API or daemon change is needed. Prior router
+and reply checks, full inventories, native suites, startup, upstream execution and
+cold timing retain their scope. Next commit this adaptation and audit cmds/wiz/mudinfo.c,
+which formats cached IMUD metadata. Selection uses local source only; no new
+mudinfo compilation or execution is part of this adoption.
+
 #### Lima wizard ilocate audit
 
 Reviewed and tested **13 October 2026** against [ilocate][lima-wizard-ilocate],
