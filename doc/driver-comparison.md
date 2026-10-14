@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard mudinfo adaptation
+
+Adopted and tested **13 October 2026** after audit notes **cb891d0e**, using
+native **cb891d0e** and dedicated Lima **85446706**. The actual checkout's
+[mudinfo command][lima-wizard-mudinfo] and README match the frozen proposal.
+Only protected varargs dispatch_main is added to the command, forwarding its
+raw argument to private main. Command rules, name default, pattern handling,
+record formatting and [mudlist methods][lima-imud-cache] remain unchanged.
+
+All **five adopted-source checks** pass: **fifteen complete positive compile
+checks**, **29 registered inputs** and **four following pwd checks**, with zero
+caught input errors. The full actual IMUD daemon compiles without initialization.
+Successful audit actions/assertions are unchanged; the fixture checks actual
+command bytes and never replaces the command. Cached records remain unchanged
+after reads through the actual mudlist module.
+
+Default names, ASCII case-insensitive glob prefixes/classes, sorted records,
+raw spaces/quotes/flag-looking patterns and Unicode names retain their audited
+behavior. Status calculations, addresses, mudlib/driver fields, ports, sorted
+services and empty versus zero other data pass. Matching reports support exact
+overwrite/append/pipeline bytes; incoming text is ignored. The no-match printf
+diagnostic still goes directly to the user and leaves output destinations empty.
+The real pager returns to the wizard shell, preserving shell/current-file/body/
+room/modal state and echoed, armed input callbacks.
+
+Evidence: /tmp/lima-mudinfo-adoption-20261013, using real master/simuls/user/body/
+shell/CMD/mudlist methods, unchanged setup/observation helpers, locally seeded
+metadata, an empty help index and in-memory connections. Locked workspace
+library-test build, serial focused runs and workspace/Rust 2024 fixture formatting
+pass under unchanged distinct nil, preserved call-out players and **4,000 ms**
+tasks. Other tracked source/configuration and original Lima match, native include
+is restored and all 57 frozen audit artifacts remain unchanged. No native API,
+daemon or shared policy change is needed. Prior inventories, native suites,
+startup, upstream execution, router/reply checks and cold timing retain scope.
+Next commit this adaptation and audit cmds/wiz/cmd.c with its cmd obj str* rule,
+target resolution, player-body refusal and command forwarding. Selection uses
+local source/registration only; no new cmd compilation or execution is included.
+
 #### Lima wizard mudinfo audit
 
 Reviewed and tested **13 October 2026** against [mudinfo][lima-wizard-mudinfo],
