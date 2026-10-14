@@ -3145,6 +3145,43 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard parse diagnostic adaptation
+
+Adopted and tested **14 October 2026** after audit notes **16f8ecd8**, using native
+**16f8ecd8** and dedicated Lima **504ae77a**. The actual [parse command][lima-wizard-parse]
+and README match the frozen two-file proposal. Protected dispatch retains "Parse
+what?" for missing input and reports parser debugging as unavailable for supplied
+text without invoking the body. Native parsing and the body module remain unchanged;
+parser tracing and debug dry-run behavior are not implemented by this adaptation.
+
+All **three adopted-source checks** pass: **twelve complete positive compile
+checks**, **13 registered inputs** and **two following pwd checks**, with zero
+caught input errors and zero fixture verb actions. Successful audit actions/
+assertions are unchanged. The fixture checks actual command/body/rule bytes;
+the command is never replaced, and verb/setup/context helpers remain identical.
+Original and dispatcher-only controls stay frozen in the audit.
+
+Missing input, ordinary/-v/unknown/quoted-empty text, exact overwrite/append/pipe
+diagnostic bytes and ignored incoming file/pipe text pass. Shell/current-file/
+body/room/modal state, line mode, echo and input rearming remain intact. The
+command no longer forwards a diagnostic request through the legacy debug slot
+that native parse_sentence currently ignores. Enabled parser tracing remains
+separate work requiring an explicit handler/action-execution contract.
+
+Evidence: /tmp/lima-parse-adoption-20261014, retaining actual master/simuls/user/
+human-body/wizard-shell/CMD/body/parser methods, unchanged setup/observations,
+a local counter verb, an empty help index, stubbed IMUD and in-memory connections.
+Locked workspace library-test build, serial focused runs and workspace/Rust 2024
+fixture formatting pass under unchanged distinct nil, preserved call-out players
+and **4,000 ms** tasks. Other tracked source/configuration and original Lima match,
+native include is restored and all 42 frozen audit artifacts remain unchanged.
+No native API or shared policy change. Inventories, native suites, startup,
+upstream execution and cold timing retain their earlier scope. Next commit this
+adaptation and audit privs.c's ordinary path resolution and configured read/write
+access reports. Selection uses local source only; no privs compilation or
+execution is part of this adoption.
+
+
 #### Lima wizard parse debug-route audit
 
 Reviewed and tested **14 October 2026** against [parse][lima-wizard-parse] and
