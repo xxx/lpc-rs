@@ -3145,6 +3145,61 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard lima audit
+
+Reviewed and tested **13 October 2026** against the [lima command][lima-wizard-lima],
+[release daemon][lima-release-daemon] and [shipped history][lima-release-history],
+using native **e4cbb3ca** and dedicated Lima **ace3c352**. The daemon matches the
+pinned upstream source; the command already carries the earlier string-multiplication
+adaptation. Original compilation fails on missing CMD dispatch and integer zero
+returned from the daemon's string-array method. The command has no Cmd_rules
+prototype and retains raw version/pattern parsing.
+
+The tested proposal adds protected dispatch, uses nil for absent array results
+and the unused continuation, and initializes the history mapping for missing saves.
+Explicitly bound file_size/restore_object callbacks load the saved history; a
+legacy-callback control leaves an existing file unloaded. Filtering passes a
+one-element array to native regexp and tests its match count. A scalar-regexp
+control reproduces the native array-contract error. Permissions, history layout,
+ordering and cutoff calculations remain unchanged; no native API is added.
+
+All **nine focused checks** pass: four controls and **five proposal checks**,
+including **twelve complete positive compile checks**. There are **39 registered
+inputs** (30 proposal, nine control) and **nine following pwd checks**. Two expected
+control input errors reproduce scalar regexp and oversized report construction;
+proposal input errors and unexpected caught errors are zero. The two original
+compile failures are expected and separate from the positive compile checks.
+
+Restoration, sorted versions excluding the numeric-zero sentinel, help, unknown/
+quoted/flag-looking versions, empty and missing histories, chronological multiline
+and Unicode entries, case-sensitive glob/anchor filtering and the direct daemon
+cutoff pass. Empty versions report "No recent changes."; patterns matching no
+entries retain the report header. Exact overwrite/append/pipe bytes, ignored
+incoming text and real pager return pass. Reads preserve the restored cache;
+shell/current-file/body/room/modal state, echo and input rearming remain intact.
+
+The actual **36,560-byte** shipped save restores. Its full **1.1a2** report exceeds
+the existing **8,192 UTF-8 byte** string-concatenation limit. An uncaught control
+reproduces "overflow in string concatenation"; the proposal reports it through
+CMD output buffers without partial history, then accepts narrower queries and
+ordinary shell commands. Invalid patterns also report through the command buffer.
+The bound, history data and daemon's separate changelog export method are unchanged;
+the export method is outside this qualification.
+
+Evidence: /tmp/lima-release-audit-20261013. Actual master/simuls/user/human-body/
+wizard-shell/CMD/glob/access/daemon methods run with setup and context observations,
+small and shipped saved histories, an empty help index, stubbed IMUD and in-memory
+connections. Locked workspace library-test builds, serial focused runs and
+workspace/Rust 2024 fixture formatting pass under unchanged distinct nil,
+preserved call-out players and **4,000 ms** tasks. Dedicated and original source
+remain unchanged, the native include is restored and all 36 frozen cmd adoption
+artifacts match. Exploratory restore/control-expectation failures remain outside
+the final counts. Native suites, inventories, startup, upstream execution and cold
+timing retain their earlier scope. The command/daemon/README proposal is unadopted;
+next commit these notes, apply the patch and repeat the five successful proposal
+checks against actual dedicated source.
+
+
 #### Lima wizard cmd adaptation
 
 Adopted and tested **13 October 2026** after audit notes **3d2a19db**, using
@@ -21033,3 +21088,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-imud-locate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/locate.c
 [lima-wizard-mudinfo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/mudinfo.c
 [lima-wizard-cmd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/cmd.c
+
+[lima-wizard-lima]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/lima.c
+[lima-release-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/lima_d.c
+[lima-release-history]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/lima/daemons/did.o
