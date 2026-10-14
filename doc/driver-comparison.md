@@ -3145,6 +3145,61 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard fix audit
+
+Reviewed and tested **13 October 2026** against [fix][lima-wizard-fix], its
+[object rule][lima-wizard-command-rules], [body][lima-body], [limb health][lima-health-limbs],
+[body definitions][lima-body-definitions] and [stats][lima-stats], using native
+**d4ce84dd** and dedicated Lima **90a4708d**. The existing port's class-identity
+check is retained. Dedicated baseline fails on missing CMD dispatch; dispatch
+alone exposes object user being cleared with integer zero in distinct-nil mode.
+After that reset becomes nil, compilation exposes the array-to-object cast and
+string call-out name. Native call_out also interprets its third argument as a
+repeat interval, so simply substituting a bare callback leaves the old arguments
+in the wrong positions.
+
+The tested proposal adds protected dispatch to private main, keeps arg[0] in an
+object target rather than reassigning the argument array, clears user with nil,
+and schedules call_out(&fix_body(body, ++step), FIX_PAUSE). This uses the native
+[partial application](lpc/function_type.md) and [call_out](efun/call_out.md)
+APIs. The two-second interval, diagnostic/repair sequence, busy guard, messages,
+class check, real body methods and shared permissions remain. These are port
+adaptations, not demonstrated upstream Lima defects; no native API change is needed.
+
+All **nine focused checks** pass: two unavailable-source controls and **seven
+proposal checks**, including **fifteen complete compile controls**. The proposal
+runs **25 registered inputs**, **49 call-out firings** and **six following pwd**
+checks. One healthy run lets all four callbacks arrive through their actual
+two-second timers; **45 other firings** prioritize recorded callbacks through the
+same driver execution path. Tasks retain **4,000 ms**, distinct nil and preserved
+call-out players. Scheduled player identity, caller/player/body and local/call_out
+origin pass; this_interactive is nil during callbacks, consistent with native
+call-out context. The shell/input handler stays armed throughout.
+
+Healthy bodies retain stats and body structure. Missing styles fall back to
+humanoid; nil, wrong-type and foreign-class torsos rebuild through real body
+methods; zero stats reroll. Another connected body's start/end notifications,
+argument rejection, nonbody no-op, caller output and ordinary shell state pass.
+Diagnostics bypass command buffers: files/pipes remain empty, append retains
+prior text and incoming command text is ignored. Delayed output remains direct.
+
+An injected uncaught body-query error is recorded by the actual master, removes
+that pending firing and stops the chain while retaining the earlier busy state.
+Clearing the fault alone leaves later requests busy; test-only clearing of that
+state permits normal completion. This existing command limitation is retained,
+without automatic recovery or shared callback/policy changes.
+
+Evidence: /tmp/lima-fix-audit-20261013. Actual master/simuls/user/body/shell/CMD,
+widgets, body definitions, health/stats and in-memory connections are used, with
+test-only setup/error flags/observation, empty help index and stubbed IMUD.
+Health/stat inheritance modules are qualified through complete body receivers;
+standalone partial-module compilation is not a success requirement. Locked
+workspace test-library builds, serial focused execution and workspace/fixture
+formatting pass. Source guards match and the native include is restored. No fresh
+full-library inventory, full native suite, startup or upstream execution is claimed.
+The command/README proposal is prepared but unadopted; next apply it and validate
+actual source after committing the audit.
+
 #### Lima wizard discuss audit
 
 Reviewed and tested **13 October 2026** against [discuss][lima-wizard-discuss],
@@ -20495,3 +20550,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-discuss]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/discuss.c
 [lima-annotation-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/annotationmenu.c
 [lima-annotation-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/annotation_d.c
+
+[lima-wizard-fix]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/fix.c
