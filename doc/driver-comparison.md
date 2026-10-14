@@ -3145,6 +3145,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard privs adaptation
+
+Adopted and tested **14 October 2026** after audit notes **a4f6d09e**, using native
+**a4f6d09e** and dedicated Lima **7b5690c0**. Actual [privs][lima-wizard-privs] and
+README match the frozen two-file proposal. Protected dispatch forwards the raw
+argument to the existing public handler; path resolution, first-entry selection,
+direct printf output, daemon methods and shared policies remain unchanged.
+
+All **five adopted-source checks** pass: **twelve complete positive compile
+checks**, **27 registered inputs** and **four following pwd checks**, with zero
+caught input errors. Successful audit actions/assertions are unchanged. Actual
+command/rule/daemon bytes are checked, the command is never replaced and setup/
+context/metadata observations remain identical. The original control stays frozen.
+
+Configured/inherited directory/file reports, missing/default/relative/dot paths,
+raw quotes/flags/globs/extra words and direct output routing retain their audited
+behavior. Root reports still display the first returned children rather than
+effective root privileges. Under initial configuration, Read -1 and Write
+Mudlib:help remain distinct from effective root zero/one. Overwrite/pipe files
+stay empty, append retains prior bytes and incoming text is ignored. Tested
+trees and shell/current-file/body/room/modal/input state remain; cd alone changes
+the expected directory state. No daemon, native API or access-policy change.
+
+Evidence: /tmp/lima-privs-adoption-20261014, retaining actual master/simuls/user/
+human-body/wizard-shell/CMD/path/access-tree methods, unchanged setup/observations,
+an empty help index, stubbed IMUD and in-memory connections. Locked workspace
+library-test build, serial focused runs and workspace/Rust 2024 fixture formatting
+pass under unchanged distinct nil, preserved call-out players and **4,000 ms**
+tasks. Other tracked source/configuration and original Lima match, native include
+is restored and all 39 frozen audit artifacts remain unchanged. Inventories,
+native suites, startup, upstream execution and cold timing retain earlier scope.
+Next commit this adaptation and audit halt.c's room combat-stop broadcast and
+message behavior. Selection uses local source only; no halt compilation or
+execution is part of this adoption.
+
+
 #### Lima wizard privs audit
 
 Reviewed and tested **14 October 2026** against [privs][lima-wizard-privs], the
