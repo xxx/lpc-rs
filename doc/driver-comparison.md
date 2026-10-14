@@ -3145,6 +3145,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard lima adaptation
+
+Adopted and tested **13 October 2026** after audit notes **80ab0f8e**, using
+native **80ab0f8e** and dedicated Lima **ace3c352**. The actual checkout's
+[lima command][lima-wizard-lima], [release daemon][lima-release-daemon] and README
+match the frozen three-file proposal. Protected dispatch, explicit restore
+callbacks, an empty initial mapping, typed nil values and array-regexp match
+counting adapt the existing command and daemon. Report errors use CMD buffers.
+Raw parsing, history layout, version sentinel, ordering, cutoff and permissions
+retain their audited behavior; no native API or shared policy change is needed.
+
+All **five adopted-source checks** pass: **twelve complete positive compile
+checks**, **30 registered inputs** and **five following pwd checks**, with zero
+caught input errors. Successful audit actions/assertions are unchanged. The fixture
+checks actual command/daemon bytes without replacing either source; the same
+daemon observations are appended only to the temporary copy.
+
+Saved-history restoration, sorted versions, help, invalid version selection,
+empty/missing data, chronological multiline/Unicode entries and case-sensitive
+glob/anchor filtering pass. The direct daemon cutoff retains its behavior.
+Exact overwrite/append/pipe bytes, ignored incoming text and real pager return
+pass. Reads preserve cache; shell/current-file/body/room/modal state, echo and
+input rearming remain intact. Empty versions report "No recent changes." and
+no-match patterns retain the header.
+
+The actual **36,560-byte** shipped save restores. Its full **1.1a2** report retains
+the existing **8,192 UTF-8 byte** string-concatenation limit and reports "overflow
+in string concatenation" through the command buffer without partial history.
+Narrower queries and following shell commands remain usable. Invalid patterns
+also report through the command. Saved data and the separate changelog export
+method remain unchanged; export behavior is outside these checks.
+
+Evidence: /tmp/lima-release-adoption-20261013, retaining real master/simuls/user/
+human-body/wizard-shell/CMD/glob/access/daemon methods, unchanged setup and
+observations, small/shipped saves, an empty help index, stubbed IMUD and in-memory
+connections. Locked workspace library-test build, serial focused runs and
+workspace/Rust 2024 fixture formatting pass under unchanged distinct nil,
+preserved call-out players and **4,000 ms** tasks. Other tracked source/configuration
+and original Lima match, native include is restored and all 66 frozen audit
+artifacts remain unchanged. Prior inventories, native suites, startup, upstream
+execution and cold timing retain their scope. Next commit this adaptation and
+audit objcount.c with its optional-number rule, defaults and prototype/clone
+counts. That selection uses local source only; no objcount compilation or
+execution is part of this adoption.
+
+
 #### Lima wizard lima audit
 
 Reviewed and tested **13 October 2026** against the [lima command][lima-wizard-lima],
