@@ -3145,6 +3145,47 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard scripts and NPC-script status adaptation
+
+Adopted and tested **14 October 2026** after audit notes **599db90e**, using native
+**599db90e** and dedicated Lima **880853bd**. Actual [scripts][lima-wizard-scripts],
+[NPC-script module][lima-npc-script] and README match the frozen three-file proposal.
+Dispatch, typed callbacks, nil references/status, explicit integer returns and
+debug formatting retain the audited API, step logic and report behavior. Both LPC
+files preserve their CRLF bytes.
+
+All **five adopted-source checks** pass: four runtime groups and **seventeen
+complete positive compile checks**, with **25 registered inputs**, **four following
+pwd checks** and zero caught errors. Successful audit actions/assertions, exact
+input sequence, exact report rows, script/counter state and timer IDs match, allowing
+unspecified row order and independent start timestamps. Actual command/module/
+widget/rule bytes are checked; neither command nor module is replaced. NPC host,
+setup, prompt extraction and observation helpers remain identical. Original
+compile controls, CLI triage and the initial prompt-extraction failure stay frozen.
+
+Real creation/start, wait/description/function-action progress, callback execution,
+debug output, completion and recovery pass through the module and state daemon.
+Inspection leaves state and timers unchanged. Current-room, remote and unplaced
+active clones appear; inactive clones and active prototypes do not. Empty and
+prototype-only messages, exact columns/truncation, current type/count, simplified
+and ASCII bars through real widgets/colour routines match. Arguments are ignored.
+Direct printf bypasses CMD buffers: overwrite/pipe files stay empty, append keeps
+prior bytes and incoming text is ignored. Shell/current-file/body/room/modal/input
+state remains intact.
+
+Evidence: /tmp/lima-scripts-adoption-20261014, retaining actual master/simuls/user/
+body/wizard shell/CMD/objects/NPC-script/state/widget/colour methods, unchanged
+setup/observations, one in-memory connection, empty help index and stubbed IMUD.
+Locked workspace library-test build, serial focused runs and workspace/Rust 2024
+fixture formatting pass under distinct nil, preserved call-out players and
+**4,000 ms** tasks. Other tracked source/configuration and original Lima match,
+native include is restored and all 56 frozen audit artifacts remain unchanged.
+Callbacks are advanced explicitly; timed delivery, full file-script parsing,
+triggers, NPC-action routing, inventories, native suites, startup and cold timing
+retain earlier scope. Next commit this adaptation, then audit the module's
+file-script parser and remaining step routes before qualifying the full engine.
+
+
 #### Lima wizard scripts and NPC-script status audit
 
 Audited **14 October 2026**, using native **97c8e9cf** and dedicated Lima
