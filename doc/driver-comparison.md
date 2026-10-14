@@ -3145,6 +3145,56 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard start audit
+
+Reviewed and tested **13 October 2026** against [start][lima-wizard-start], its
+[optional-object registration][lima-wizard-command-rules] and the
+[body start module][lima-body-start], using native **d4cf0020** and dedicated
+Lima **f8d4c2d8**. Baseline compilation fails on missing CMD dispatch, and the
+registered command returns unknown verb without changing body/shell state.
+The tested proposal only adds protected varargs dispatch_main to private main.
+The handler, registration, start-location methods, permissions and configuration
+remain. No additional native API or upstream defect fix is needed.
+
+All **seven focused checks** pass: one original-source failure/recovery control
+and **six proposal checks**, including **fourteen complete compile controls**.
+The proposal runs **24 registered inputs** and **five following pwd checks**,
+with zero caught input errors. Bare query, here, absolute paths, .c paths,
+relative paths after cd, living refusal and invalid/excess arguments pass.
+Setting changes the stored filename without relocating the body or altering
+shell/current file/input/modal/pager state. The input callback remains armed.
+
+Existing start policy accepts nonliving containers and live room clones;
+it does not require a room or durable source filename. An unavailable stored
+path falls back without clearing the raw string. Nil/unloadable setter arguments
+return zero and leave prior storage unchanged. Both wizard and player fallback
+branches retain their configured result; START and WIZARD_START name the same
+room in this configuration, so different role-specific paths are not demonstrated.
+
+The command does not save immediately. Actual later body save and the constructor
+of a fresh body in the same VM restore the changed start-location field. The real
+move_to_start moves to the stored room, then falls back to the configured room
+when the stored room refuses arrival. Querying still reports a loadable stored
+path even when that room refuses movement. These existing library policies remain.
+Output uses ordinary command buffers: overwrite/append/pipeline bytes pass and
+redirected incoming text does not change the selected target.
+
+A preceding run hit the 4,000 ms evaluation limit while cold-loading Wizroom's
+objects during fallback: 3,954 ms were spent compiling in that attempt. The
+unchanged serial repeat passes with the same budget. This is a retained cold-load
+performance limitation, separate from the dispatch adapter; fallback is not
+qualified as reliably meeting the cold task limit by this audit.
+
+Evidence: /tmp/lima-start-audit-20261013, retaining actual master/simuls/user/body/
+shell/CMD/start methods and in-memory connections, with setup/observation helpers,
+empty help index and stubbed IMUD. Locked workspace library-test build, serial
+focused execution and workspace/fixture formatting pass under unchanged distinct
+nil, preserved call-out players and **4,000 ms** tasks. Source guards match,
+native include is restored and all 36 frozen fix adoption artifacts remain.
+Full inventory, native suites, startup and upstream execution were not repeated.
+The command/README proposal is prepared but unadopted; next commit audit notes,
+apply it in the dedicated checkout and validate actual source without replacement.
+
 #### Lima wizard fix adaptation
 
 Adopted and tested **13 October 2026** after audit notes **ad25b930**, using
@@ -20588,3 +20638,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-annotation-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/annotation_d.c
 
 [lima-wizard-fix]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/fix.c
+[lima-wizard-start]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/start.c
