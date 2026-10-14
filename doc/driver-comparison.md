@@ -3145,6 +3145,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard privs audit
+
+Reviewed and tested **14 October 2026** against [privs][lima-wizard-privs], the
+[path resolver][lima-simul-path] and [configured access-tree methods][lima-security],
+using native **10715c14** and dedicated Lima **7b5690c0**. Original command bytes
+match pinned upstream and compilation fails on missing CMD dispatch. The tested
+command/README proposal only adds protected dispatch forwarding its raw argument
+to the existing public main. No command-rule prototype, daemon, native API or
+shared policy change is needed.
+
+All **six focused checks** pass: one original control and **five proposal checks**,
+including **twelve complete positive compile checks**, **29 registered inputs**
+and **five following pwd checks**, with zero caught input errors. Proposal inputs
+total 27 with four following pwd checks. The original compile failure is expected
+and separate from positive checks. Actual command/rule/daemon bytes are checked;
+the proposal replaces only the temporary command, while real metadata methods run.
+
+Configured and inherited directory/file values, missing paths, current-directory
+defaults and relative/dot paths pass. No rule unquotes or expands raw text: quoted
+paths, flag-looking words, globs and extra words keep literal path meaning. Read/
+write metadata is obtained from the configured tree, independent of filesystem
+entry existence. Tested queries preserve those trees and shell/current-file/body/
+room/modal state, line mode, echo and input rearming; cd alone changes directory
+state in the relative-path group.
+
+The handler's root-path behavior is retained: query_access_tree returns the whole
+tree for /, and main displays the first returned child entry. Under the initial
+configuration it reports Read: -1 and Write: Mudlib:help, while query_protection
+reports effective root values zero/one. These are distinct meanings; the port
+does not correct that existing entry-selection policy or promise arbitrary tree
+ordering. printf output remains direct and bypasses CMD buffers. Overwrite/pipe
+files stay empty, append preserves prior bytes and incoming file/pipe text is
+ignored. The two-line direct report does not open a pager.
+
+Evidence: /tmp/lima-privs-audit-20261014. Actual master/simuls/user/human-body/
+wizard-shell/CMD/path/access-tree methods run with setup and context/read-only
+metadata observations, an empty help index, stubbed IMUD and in-memory connections.
+Locked workspace library-test build, serial focused runs and workspace/Rust 2024
+fixture formatting pass under unchanged distinct nil, preserved call-out players
+and **4,000 ms** tasks. Source guards match, native include is restored and all
+35 frozen parse adoption artifacts remain. Dedicated and original source are
+unchanged. Inventories, native suites, startup, upstream execution and cold timing
+retain earlier scope. The two-file proposal is unadopted; next commit these notes,
+apply it and repeat the five successful proposal checks against actual source.
+
+
 #### Lima wizard parse diagnostic adaptation
 
 Adopted and tested **14 October 2026** after audit notes **16f8ecd8**, using native
@@ -21412,3 +21458,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-profile]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/profile.c
 
 [lima-wizard-parse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/parse.c
+
+[lima-wizard-privs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/privs.c
