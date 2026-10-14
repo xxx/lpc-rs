@@ -3145,6 +3145,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard fix adaptation
+
+Adopted and tested **13 October 2026** after audit notes **ad25b930**, using
+native **ad25b930** and dedicated Lima **90a4708d**. The actual checkout's
+[fix command][lima-wizard-fix] and README match the frozen proposal: protected
+dispatch to private main, an object target local, nil busy reset and bound
+call-out arguments. Registration, two-second delay, diagnostic sequence, busy
+guard, real body repairs and the earlier class-identity check remain. No native
+API, shared policy or configuration change is needed.
+
+All **seven adopted-source checks** pass, including **fifteen complete compile
+controls**, **25 registered inputs**, **six following pwd checks** and **49
+callback firings**. Four use actual two-second timers; the other 45 prioritize
+recorded callbacks through the same production path. Audit actions/assertions
+are unchanged, and the fixture verifies actual command bytes before observation
+helpers without replacing the command. Distinct nil, preserved call-out players
+and **4,000 ms** tasks remain.
+
+Real style, torso and zero-stat repairs, healthy-state preservation, target
+notifications, busy rejection, argument handling, direct diagnostics and shell/
+input recovery pass. Callback player/body identity and call_out origin pass;
+this_interactive is nil. Files/pipes remain empty, append keeps prior text and
+incoming command text is ignored. The expected body-query error reaches the
+actual master and retains the documented busy-state limitation; clearing the
+fault alone does not restart the command. Test-only lock clearing is not adopted.
+
+Evidence: /tmp/lima-fix-adoption-20261013, with actual master/simuls/user/body/
+shell/CMD and the audit's unchanged setup/observation helpers, in-memory
+connections, empty help index and stubbed IMUD. Locked workspace library-test
+builds, serial focused execution and workspace/fixture formatting pass. All
+other tracked source/configuration and original Lima match, native include is
+restored and all 68 frozen audit artifacts remain unchanged. Broader inventories,
+native suites, startup and upstream execution retain their earlier scope.
+Next commit this adaptation and audit cmds/wiz/start.c, selected by local source
+and its optional-object registration without new compile or runtime validation.
+
 #### Lima wizard fix audit
 
 Reviewed and tested **13 October 2026** against [fix][lima-wizard-fix], its
