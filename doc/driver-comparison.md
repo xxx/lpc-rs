@@ -3145,6 +3145,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard resurrect adaptation
+
+Adopted and tested **14 October 2026** after audit notes **ba0f3f3e**, using native
+**ba0f3f3e** and dedicated Lima **398b06e0**. Actual
+[resurrect][lima-wizard-resurrect] and README match the frozen two-file proposal.
+Protected dispatch forwards raw input to the existing private handler; lookup,
+reincarnation and action messages retain their audited behavior.
+
+All **five adopted-source checks** pass: four runtime groups and **fourteen
+complete positive compile checks**, with **30 registered inputs**, **four following
+pwd checks** and zero caught input errors. Successful audit actions/assertions,
+inputs and exact actor/target/observer messages match. Actual command/body/health/
+lookup/rule bytes are checked; the command is never replaced. Connected-peer,
+checked placement and health/message helpers remain identical. Per-run health
+assertions retain limb maxima/flags while checking dead-to-live transitions and
+zero-to-one limb restoration; rolled statistics need not match across runs.
+The original control and initial wrong ghost-label expectations stay frozen.
+
+Bare/me/myself self branches, living/dead named bodies and remote named targets
+work. Named self retains duplicate actor messages and existing reflexive wording;
+body action names stay ordinary when dead. Missing/case/quotes/flags/extra-word
+names retain literal lookup behavior. Direct diagnostics and body messages bypass
+CMD output buffers: overwrite/pipe files stay empty, append retains prior bytes
+and incoming text is ignored. Shell/current-file/body/room/modal/input state stays.
+Reincarnation restores disabled limbs to one point rather than fully healing.
+
+Evidence: /tmp/lima-resurrect-adoption-20261014, retaining actual master/simuls/two
+users/human bodies/wizard shell/CMD/lookup/health/message methods, unchanged setup
+and observation helpers, two in-memory connections, a real room observer, empty
+help index and stubbed IMUD. Locked workspace library-test build, serial focused
+runs and workspace/Rust 2024 fixture formatting pass under distinct nil, preserved
+call-out players and **4,000 ms** tasks. Other tracked source/configuration and
+original Lima match, native include is restored and all 50 frozen audit artifacts
+remain unchanged. Full death/corpse lifecycle, inventories, native suites, startup
+and cold timing retain earlier scope. Next commit this adaptation and audit
+killmobs.c's local object selection and remove calls. Its prior native filter
+spelling migration remains; no killmobs compilation/execution is included here.
+
+
 #### Lima wizard resurrect audit
 
 Audited **14 October 2026**, using native **3bbefdf6** and dedicated Lima
