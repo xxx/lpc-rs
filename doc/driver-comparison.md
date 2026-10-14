@@ -3145,6 +3145,54 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard resurrect audit
+
+Audited **14 October 2026**, using native **3bbefdf6** and dedicated Lima
+**398b06e0**, after committing halt and its adoption notes. The current
+[resurrect command][lima-wizard-resurrect] matches pinned upstream **eefaff66** and
+has no typed command rule. Its private handler fails compilation because CMD
+needs protected dispatch. The tested two-file command/README proposal adds only
+dispatch forwarding the raw argument to existing `main`; it is not yet adopted.
+
+Bare input, `me` and `myself` select the current body. Living bodies retain the
+"You're not dead yet!" diagnostic. Dead bodies receive the return-to-life action
+and run actual [reincarnate][lima-health-limbs]: the dead flag clears and disabled
+limbs become functional at one health point, without full healing. Limb maxima
+and flags remain. Named lookup uses actual connected users through
+[find_body][lima-speaker-context]; a dead named player can be revived in another room.
+Living named players receive the existing doesn't-need-help action.
+
+Action messages use ordinary body names even when dead; the ghost label belongs
+to room descriptions. Naming yourself takes the named-target branch and delivers
+the actor message twice because actor and target are the same object. Its existing
+reflexive wording, including "yourself doesn't", is retained. Missing, differently
+cased, quoted, flag-looking and extra-word names remain literal lookup failures.
+Direct write diagnostics and body actions bypass CMD output buffers: overwrite/
+pipe files stay empty, append retains prior bytes and incoming text is ignored.
+
+All **six focused checks** pass: one original control, four proposal runtime
+groups and **fourteen complete positive compile checks**. **32 registered inputs**
+include **five following pwd checks**, with zero caught input errors. Proposal
+inputs total thirty with four following pwd checks. Actual health transitions,
+message recipients/bytes and unchanged shell/current-file/body/room/modal/input
+state are asserted. The initial expectations wrongly used ghost labels; correcting
+only those expected names makes the same actions and health assertions pass.
+
+Evidence: /tmp/lima-resurrect-audit-20261014. Actual master/simuls/users/human bodies/
+wizard shell/CMD/lookup/health/message methods run with two in-memory connections,
+a real room observer, fixture setup/observation, an empty help index and stubbed
+IMUD. Dead and disabled-limb state is seeded directly; this qualifies command
+reincarnation, not the full death/corpse lifecycle. Locked workspace library-test
+build and workspace/Rust 2024 fixture formatting pass under distinct nil, preserved
+call-out players and **4,000 ms** tasks. Dedicated/original source and other native
+files remain unchanged; the temporary include is restored and all 38 frozen halt
+adoption artifacts remain. Full inventories, native suites, startup and cold timing
+are not repeated. Next adopt this dispatcher and repeat the five successful
+proposal checks against actual source; then audit killmobs.c's local object
+selection and remove calls. That command already has the prior native filter
+spelling migration; its handler lacks dispatch and is only source-selected here.
+
+
 #### Lima wizard halt adaptation
 
 Adopted and tested **14 October 2026** after audit notes **8ee685df**, using native
@@ -21580,3 +21628,4 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-wizard-privs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/privs.c
 [lima-wizard-halt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/halt.c
+[lima-wizard-resurrect]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/resurrect.c
