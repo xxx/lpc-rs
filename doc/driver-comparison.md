@@ -3145,6 +3145,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard ilocate audit
+
+Reviewed and tested **13 October 2026** against [ilocate][lima-wizard-ilocate],
+its [single-string rule][lima-wizard-command-rules] and the
+[IMUD locate module][lima-imud-locate], using native **4ea0f0e9** and dedicated
+Lima **1cbf08de**. Original compilation fails on missing CMD dispatch;
+registered ilocate falls back to unknown verb without forwarding a request.
+The tested proposal only adds protected varargs dispatch_main to the existing
+private handler. Command rule, name handling, confirmation and daemon remain.
+
+All **five focused checks** pass: one original-source failure/recovery control
+and **four proposal checks**, including **thirteen complete positive compile
+checks**. The complete actual IMUD daemon compiles without initialization.
+There are **23 registered inputs** (21 proposal, two baseline), **four following
+pwd checks** and **15 outgoing requests captured** at the in-memory sender.
+One synthetic sender exception is expected; there are no unexpected caught
+input errors. That exception suppresses confirmation and a later command works.
+
+The real inherited locate module produces locate-req with a lowercased single
+name. Originating user/player/body context passes. ASCII/Unicode, quoted spaces,
+empty strings, numeric-looking names, flag-looking names and a name containing
+@ retain their audited behavior; no additional name validation is introduced.
+Missing/excess arguments are refused before forwarding. Confirmations support
+overwrite/append and pipelines; incoming file/pipe text is ignored. Shell/current-
+file/location/input/modal/pager state remains and input stays armed.
+
+Runtime uses the actual master/simuls/user/body/shell/CMD/locate methods with
+setup/observation helpers and an in-memory send_to_all implementation. It does
+not exercise the daemon's router or reply handlers. Source review of the
+[actual sender][lima-imud-daemon] shows that an absent router returns without
+sending; the command's confirmation therefore does not establish delivery.
+Earlier IMUD transport qualification retains its preceding scope.
+
+Evidence: /tmp/lima-ilocate-audit-20261013. Locked workspace library-test builds,
+serial focused execution and workspace/Rust 2024 fixture formatting pass under
+unchanged distinct nil, preserved call-out players and **4,000 ms** tasks.
+Source guards match, native include is restored and all 29 frozen timer adoption
+artifacts remain unchanged. An initial observer bypassed the permitted context
+wrapper and the baseline assertion used different unknown-verb wording; both
+fixture issues are corrected, with failed evidence retained outside final counts.
+No native API, permission or configuration change is needed. Full inventories,
+native suites, startup, upstream execution and cold timing were not repeated.
+The command/README proposal remains unadopted; next commit audit notes, apply it
+and repeat the four successful proposal tests against actual command source.
+
 #### Lima wizard timer adaptation
 
 Adopted and tested **13 October 2026** after audit notes **250342fd**, using
@@ -20776,3 +20821,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-start]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/start.c
 [lima-wizard-timer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/timer.c
 [lima-timer-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/timer_d.c
+[lima-wizard-ilocate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/ilocate.c
+[lima-imud-locate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/locate.c
