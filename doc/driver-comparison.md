@@ -3145,6 +3145,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard mudinfo audit
+
+Reviewed and tested **13 October 2026** against [mudinfo][lima-wizard-mudinfo],
+the [wizard command rules][lima-wizard-command-rules] and the
+[IMUD mudlist module][lima-imud-cache], using native **26509c07** and dedicated
+Lima **85446706**. Original compilation fails on missing CMD dispatch; a
+registered invocation returns unknown verb and leaves the cache and shell intact.
+The tested proposal only adds protected varargs dispatch_main to private main.
+There is no mudinfo rule prototype, so keep the existing raw string argument,
+local-name default, pattern handling, record formatting and daemon methods.
+
+All **six focused checks** pass: one original-source failure/recovery control
+and **five proposal checks**, including **fifteen complete positive compile
+checks**. The full actual IMUD daemon compiles without initialization. There are
+**31 registered inputs** (29 proposal, two baseline) and **five following pwd
+checks**, with zero caught input errors. Runtime uses the real mudlist receiver
+and query methods with locally seeded records; reads leave cached rows unchanged.
+
+Local-name defaults, ASCII case-insensitive glob prefixes, character classes,
+sorted multiple matches, raw spaces/quotes/flag-looking patterns and Unicode
+names retain their audited behavior. The source helper does not fold non-ASCII
+case. Up/down/expected-return status calculations, addresses, library/driver
+fields, ports, sorted services and other-data keys pass. An empty other-data
+mapping prints an empty Other data line; numeric protocol zero omits it.
+
+Matching reports support exact overwrite/append/pipeline bytes; incoming file/
+pipe text is ignored. The no-match printf diagnostic remains direct, bypassing
+file/pipe output; those destinations receive empty output. The real pager enters
+and returns to the wizard shell. Shell/current-file/location/modal/input state
+remains, and line-mode input callbacks stay echoed and armed. These source
+behaviors are retained; no native API, daemon or shared policy change is needed.
+
+Evidence: /tmp/lima-mudinfo-audit-20261013. Actual master/simuls/user/body/shell/
+CMD/mudlist methods run with setup/observation helpers, an empty help index,
+cached metadata and in-memory connections. Locked workspace library-test builds,
+serial focused runs and workspace/Rust 2024 fixture formatting pass under unchanged
+distinct nil, preserved call-out players and **4,000 ms** tasks. Current source
+guards match, native include is restored and original Lima remains untouched.
+Initial expected output omitted the empty other-data line and terminal whitespace
+handling; corrected expectations retain exact file-byte checks. Failed runs remain
+outside final counts. Full inventories, native suites, startup, upstream execution,
+router/reply tests and cold timing retain their preceding scope. The command/README
+proposal is unadopted; next commit notes, apply it and repeat the five successful
+proposal checks against actual command source without replacement.
+
 #### Lima wizard ilocate adaptation
 
 Adopted and tested **13 October 2026** after audit notes **4aa3a690**, using
@@ -20859,3 +20904,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-timer-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/timer_d.c
 [lima-wizard-ilocate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/ilocate.c
 [lima-imud-locate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/locate.c
+[lima-wizard-mudinfo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/mudinfo.c
