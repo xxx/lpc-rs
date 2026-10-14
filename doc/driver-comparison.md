@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard halt adaptation
+
+Adopted and tested **14 October 2026** after audit notes **8ee685df**, using native
+**8ee685df** and dedicated Lima **9c13602a**. Actual [halt][lima-wizard-halt] and
+README match the frozen two-file proposal. Protected dispatch calls the existing
+private zero-argument handler; room inventory selection, combat methods and body
+messages retain their audited behavior.
+
+All **four adopted-source checks** pass: three runtime groups and **fourteen
+complete positive compile checks**, with **15 registered inputs**, **three following
+pwd checks** and zero caught input errors. Successful audit actions/assertions,
+inputs, target/timer observations and exact message bytes match. Actual command,
+body and rule bytes are checked; the command is never replaced. Checked Lima
+movement, combat seeding and observation helpers remain identical. The original
+missing-dispatch control and initial fixture-placement failure stay frozen.
+
+Direct room occupants' primary/secondary targets and repeating combat timers
+clear. An ordinary object without stop_fight is harmless; independent other-room
+and nested fights retain their targets and timer IDs. Actor, room-observer and
+carried-body messages match; remote bodies receive none. Repeated/restarted/idle
+fights, unused raw arguments, direct output routing and ignored incoming text work.
+Overwrite/pipe files stay empty and append preserves prior bytes. Shell/current-
+file/body/room/modal/input state remains intact. Existing reciprocal target
+removal through stop_hitting_me is retained.
+
+Evidence: /tmp/lima-halt-adoption-20261014, retaining actual master/simuls/user/human
+bodies/wizard shell/CMD/combat/message methods, unchanged fixture setup and
+observations, an empty help index, stubbed IMUD and an in-memory connection. Locked
+workspace library-test build, serial focused runs and workspace/Rust 2024 fixture
+formatting pass under distinct nil, preserved call-out players and **4,000 ms**
+tasks. Other tracked source/configuration and original Lima match, native include
+is restored and all 45 frozen audit artifacts remain unchanged. Scheduled/cancelled
+timers are observed; timed pulse delivery, inventories, native suites, startup and
+cold timing retain their earlier scope. Next commit this adaptation and audit
+resurrect.c's self/named-body branches, reincarnation and messages. That command
+is only source-selected here; no resurrect compilation or execution is included.
+
+
 #### Lima wizard halt audit
 
 Audited **14 October 2026**, using native **be881683** and dedicated Lima
