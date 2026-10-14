@@ -3145,6 +3145,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard parse debug-route audit
+
+Reviewed and tested **14 October 2026** against [parse][lima-wizard-parse] and
+the [body command route][lima-body-cmd], using native **006b5bef** and dedicated
+Lima **504ae77a**. The command matches pinned upstream and fails compilation on
+missing CMD dispatch. A dispatcher-only control exposes the compatibility gap:
+native [parse_sentence](efun/parse_sentence.md) accepts but ignores debug flags.
+Both parse and parse -v execute a matching local verb action and print the body's
+numeric result, 1, without a parser debug trace.
+
+Six direct controls confirm native and actual body routes behave identically at
+debug levels zero, one and two: every call returns 1 and increments the local
+action counter once. The body module is unchanged. Its string-result debug path
+does not provide a native trace API; changing its return annotation alone would
+not supply one.
+
+The tested command/README proposal adds protected dispatch, retains "Parse what?"
+for missing input and reports "Parser debugging is not available on this driver."
+for supplied text. It never invokes the body debug route. This explicitly leaves
+parser debugging unavailable while avoiding ordinary action execution from a
+diagnostic command. No native API, parser behavior or shared policy changes.
+Full parser tracing remains separate work requiring its own behavior contract.
+
+All **six focused checks** pass: three controls and **three proposal checks**, with
+**twelve complete positive compile checks**, **18 registered inputs**, **four
+following pwd checks** and **six direct native/body controls**. The original
+missing-dispatch compile failure is expected; caught input errors are zero.
+Proposal inputs total thirteen with two following pwd checks. Original/direct/
+dispatcher controls use real parser/body methods and a local verb whose only
+action increments a fixture counter. Every proposal query leaves that counter zero.
+
+Missing input, ordinary/-v/unknown/quoted-empty text, exact overwrite/append/pipe
+diagnostic bytes and ignored incoming file/pipe text pass. Shell/current-file/
+body/room/modal state, line mode, echo and input rearming remain intact. Evidence:
+/tmp/lima-parse-audit-20261014, retaining actual master/simuls/user/human-body/
+wizard-shell/CMD/body/parser methods, setup/context observations, a small local
+verb, an empty help index, stubbed IMUD and in-memory connections. Locked workspace
+library-test build, serial focused runs and workspace/Rust 2024 fixture formatting
+pass under unchanged distinct nil, preserved call-out players and **4,000 ms**
+tasks. Source guards match, native include is restored and all 44 frozen profile
+audit artifacts remain. Dedicated and original source remain unchanged. Inventories,
+native suites, startup, upstream execution and cold timing retain earlier scope.
+The two-file proposal is unadopted; next commit these notes, apply it and repeat
+the three successful proposal checks against actual dedicated source.
+
+
 #### Lima wizard profile audit
 
 Reviewed and tested **14 October 2026** against [profile][lima-wizard-profile],
@@ -21327,3 +21373,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-idfind]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/idfind.c
 
 [lima-wizard-profile]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/profile.c
+
+[lima-wizard-parse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/parse.c
