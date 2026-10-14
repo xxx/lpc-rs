@@ -3145,6 +3145,61 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard killmobs audit
+
+Audited **14 October 2026**, using native **2a8f7fba** and dedicated Lima
+**192c9e18**, after committing resurrect and its adoption notes. Current
+[killmobs][lima-wizard-killmobs] differs from pinned upstream **eefaff66** only by
+the prior filter_array-to-filter migration (**14b0af35**). It has no typed rule and
+fails compilation without protected dispatch. The tested two-file command/README
+proposal adds only dispatch forwarding raw input to existing public `main`; it
+is not yet adopted.
+
+Filename selection uses the normalized path, strips an optional `.c` suffix and
+selects non-body clones with matching base names from native
+[`objects()`](efun/objects.md). Actual [flea NPCs][lima-example-flea] in the current
+room, another room and carried inventory are removed. Prototypes and bodies stay;
+ordinary nonliving clones also qualify. Actual remove hooks run exactly once,
+objects leave the live object space and their inventory entries disappear through
+Lima's existing cleanup/destruction path. The command removes objects rather than
+running combat death, corpse creation or experience awards.
+
+Name selection retains its existing path normalization: ordinary `flea` becomes
+`/flea` and does not match the NPC's plain name. Fixture objects explicitly named
+`/auditmob` match normalized `auditmob`; the ordinary name `auditmob` does not.
+This is an existing source behavior, not a new native filter difference. Raw
+quotes, flags, extra words and globs remain literal; missing matches report zero.
+Absolute, relative, dot and source-suffix paths work. Usage/count messages use
+direct write and bypass CMD buffers: overwrite/pipe files remain empty, append
+retains prior bytes and incoming file/pipe text does not choose the objects.
+
+All **six focused checks** pass: one original control, four proposal runtime
+groups and **sixteen complete positive compile checks**. **31 registered inputs**
+include **five following pwd checks**, with zero caught input errors. Proposal
+inputs total twenty-nine with four following pwd checks. Selected/surviving objects,
+hook counts, inventory membership and unchanged shell/current-file/body/room/modal/
+input state are asserted; real cd alone changes expected directory state.
+
+The first host, [test_dummy][lima-example-test-dummy], cannot compile under the
+current inherited-signature rule: its zero-argument indirect_give_obj_to_liv
+redefines the two-argument parent method. That dependency failure remains recorded;
+using the existing flea NPC allows the command audit without modifying the dummy
+or the deferred inheritance policy.
+
+Evidence: /tmp/lima-killmobs-audit-20261014, using actual master/simuls/user/body/
+wizard shell/CMD/path/object enumeration/NPC/object/remove/hook methods, fixture
+setup/observations, one in-memory connection, empty help index and stubbed IMUD.
+Locked workspace library-test build and workspace/Rust 2024 fixture formatting
+pass under distinct nil, preserved call-out players and **4,000 ms** tasks.
+Dedicated/original source and other native files remain unchanged, the temporary
+include is restored and all 42 frozen resurrect adoption artifacts remain.
+Full inventories, native suites, startup, combat death and cold timing are not
+repeated. Next adopt the dispatcher and repeat five successful proposal checks
+against actual source, then audit scripts.c's NPC-script inspection and output.
+Its prior string-multiplication adaptation and CRLF endings remain; scripts is
+only source-selected here, without compilation or execution.
+
+
 #### Lima wizard resurrect adaptation
 
 Adopted and tested **14 October 2026** after audit notes **ba0f3f3e**, using native
@@ -21668,3 +21723,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-privs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/privs.c
 [lima-wizard-halt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/halt.c
 [lima-wizard-resurrect]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/resurrect.c
+[lima-wizard-killmobs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/killmobs.c
+[lima-example-flea]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/flea.c
+[lima-example-test-dummy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/test_dummy.c
