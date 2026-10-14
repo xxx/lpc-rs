@@ -3145,6 +3145,57 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard cmd audit
+
+Reviewed and tested **13 October 2026** against [cmd][lima-wizard-cmd], its
+[object/word-list rule][lima-wizard-command-rules] and
+[M_ACTIONS][lima-follow-actions], using native **18d5b4d9** and dedicated Lima
+**504f183e**. Original command compilation fails on missing CMD dispatch;
+registered cmd returns unknown verb without affecting targets or shell state.
+The command proposal only adds protected varargs dispatch_main to private main.
+
+A dispatch-only control exposes the action module's legacy empty-string route
+placeholders: the real NPC version command reports invalid output route without
+running its handler. The tested M_ACTIONS adjustment passes its raw argument,
+an empty flags mapping and nil unused input/output routes to CMD.call_main.
+Player-command directory lookup, parser fallback, context restoration, action
+timers and hooks remain. The NPC path retains raw command handling; typed command
+rules and nested pipelines are not added. No native API or shared policy change.
+
+All **seven focused checks** pass: two controls and **five proposal checks**,
+including **nineteen complete positive compile checks** through actual hosts.
+There are **33 registered inputs** (29 proposal, four control) and **seven
+following pwd checks**. Two deliberately injected target errors are expected;
+there are no unexpected caught input errors. Abstract M_ACTIONS requires host
+hooks, so compilation is checked through complete living/action, moving-monster,
+adversary and body classes.
+
+Target IDs, aliases and clone filenames, word joining, quoted internal spacing,
+empty/flag-looking/numeric/Unicode words and missing/invalid inputs pass. Player
+bodies are refused; nonliving objects with a handler remain accepted, while an
+object lacking the method still silently does nothing. The real action module
+runs say through the actual parser/verb and emote/version through player commands.
+Observed NPC user/body context and entry/restoration caller/origin pass; errors
+restore the initiating player before rethrowing. Following shell commands work.
+
+Incoming file/pipe text is ignored. Target messages and player-refusal diagnostics
+remain direct, bypassing wizard command buffers; overwrite/pipeline files stay
+empty and append preserves prior bytes. Shell/current-file/body/room/modal state,
+echo and input rearming pass. These audited source policies are retained.
+
+Evidence: /tmp/lima-cmd-audit-20261013. Actual master/simuls/user/body/shell/CMD/
+action/living/parser/verb methods execute with setup/context observations, local
+object fixtures, an empty help index, stubbed IMUD and in-memory connections.
+Locked workspace library-test builds, serial focused runs and workspace/Rust 2024
+fixture formatting pass under unchanged distinct nil, preserved call-out players
+and **4,000 ms** tasks. Source guards match, native include is restored and all
+34 frozen mudinfo adoption artifacts remain. Initial fixture setup used an absent
+setter and a compile check lacked the abstract module's host; both fixture issues
+are corrected, with failed evidence excluded from final counts. Full inventories,
+native suites, startup, upstream execution and cold timing retain earlier scope.
+The command/action-module/README proposal is unadopted; next commit audit notes,
+apply it and repeat the five successful proposal tests against actual source.
+
 #### Lima wizard mudinfo adaptation
 
 Adopted and tested **13 October 2026** after audit notes **cb891d0e**, using
@@ -20943,3 +20994,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-ilocate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/ilocate.c
 [lima-imud-locate]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/imud/locate.c
 [lima-wizard-mudinfo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/mudinfo.c
+[lima-wizard-cmd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/cmd.c
