@@ -3145,6 +3145,47 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard killmobs adaptation
+
+Adopted and tested **14 October 2026** after audit notes **3193a1bc**, using native
+**3193a1bc** and dedicated Lima **192c9e18**. Actual [killmobs][lima-wizard-killmobs]
+and README match the frozen two-file proposal. Protected dispatch forwards raw
+input to the existing public handler; path resolution, object selection and
+removal retain their audited behavior.
+
+All **five adopted-source checks** pass: four runtime groups and **sixteen
+complete positive compile checks**, with **29 registered inputs**, **four following
+pwd checks** and zero caught input errors. Successful audit actions/assertions,
+inputs and object/hook/inventory observations match, allowing unspecified list
+order. Actual command/rule/path/remove/NPC bytes are checked; the command is never
+replaced. Flea, adversary, body, object, checked placement, individual prototype
+bootstrap and hook-observation helpers remain identical. The original control
+and blocked test-dummy host stay frozen.
+
+Global filename selection removes matching non-body clones in room, remote and
+carried inventories. Prototypes and bodies stay; ordinary nonliving clones qualify.
+Real remove hooks run once and objects leave the live object space and inventories.
+Absolute/relative/dot/.c paths and repeated/missing matches work. Existing name
+normalization is retained: plain flea misses /flea, while an explicitly path-shaped
+name can match. Quotes/flags/extra words/globs remain literal. Direct usage/count
+writes bypass CMD buffers: overwrite/pipe files stay empty, append preserves prior
+bytes and incoming text does not choose objects. Shell/current-file/body/room/
+modal/input state remains; real cd alone changes expected directory state.
+
+Evidence: /tmp/lima-killmobs-adoption-20261014, retaining actual master/simuls/user/
+body/wizard shell/CMD/path/objects/NPC/object/remove/hook methods, unchanged setup
+and observation, one in-memory connection, empty help index and stubbed IMUD.
+Locked workspace library-test build, serial focused runs and workspace/Rust 2024
+fixture formatting pass under distinct nil, preserved call-out players and
+**4,000 ms** tasks. Other tracked source/configuration and original Lima match,
+native include is restored and all 52 frozen audit artifacts remain unchanged.
+The existing test-dummy inherited-arity blocker and deferred signature policy stay.
+Combat death, full inventories, native suites, startup and cold timing retain
+earlier scope. Next commit this adaptation and audit scripts.c's NPC-script
+inspection/output, preserving its prior string multiplication and CRLF endings.
+That command is only source-selected here, without compilation or execution.
+
+
 #### Lima wizard killmobs audit
 
 Audited **14 October 2026**, using native **2a8f7fba** and dedicated Lima
