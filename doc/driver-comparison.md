@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard start adaptation
+
+Adopted and tested **13 October 2026** after audit notes **22a14de8**, using
+native **22a14de8** and dedicated Lima **f8d4c2d8**. The actual checkout's
+[start command][lima-wizard-start] and README match the frozen proposal. Only
+protected varargs dispatch_main is added to the command, forwarding parsed
+arguments to private main. The optional-object registration, handler,
+[body start methods][lima-body-start], shared policies and configuration remain.
+
+All **six adopted-source checks** pass, including **fourteen complete compile
+controls**, **24 registered inputs** and **five following pwd checks**, with
+zero caught input errors. Successful audit actions/assertions are unchanged;
+the fixture verifies copied command bytes before helpers and never replaces
+the command. Query, here/absolute/.c/relative paths, living refusal, argument
+rejection, nonliving targets and live clones retain their audited behavior.
+
+Setting does not move the body or save immediately. Actual later body save and
+the constructor of a fresh body in the same VM restore the new location. Real
+movement reaches the stored room and falls back after arrival refusal. Invalid
+stored paths preserve their raw string while queries use the configured fallback;
+START and WIZARD_START still name the same room. Output buffers support overwrite,
+append and pipes, incoming text is ignored and shell/input/modal/pager state stays.
+
+The audit's cold Wizroom fallback timeout remains documented. This adopted-source
+run passes at the unchanged **4,000 ms** budget; it does not establish reliable
+cold timing or resolve that performance finding. Distinct nil and preserved
+call-out players remain. No native API, body method or permission change is added.
+
+Evidence: /tmp/lima-start-adoption-20261013, retaining real master/simuls/user/body/
+shell/CMD and unchanged setup/observation helpers, empty help index, stubbed IMUD
+and in-memory connections. Locked workspace library-test build, serial focused
+execution and workspace/fixture formatting pass. Other tracked source/configuration
+and original Lima match, native include is restored and all 50 frozen audit
+artifacts remain unchanged. Full inventories, native suites, startup and upstream
+execution retain their preceding scope. Next commit this adaptation and audit
+cmds/wiz/timer.c with daemons/timer_d.c, selected by local source and its wizard
+registration without new compilation or execution in this adoption.
+
 #### Lima wizard start audit
 
 Reviewed and tested **13 October 2026** against [start][lima-wizard-start], its
