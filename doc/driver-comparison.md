@@ -3145,6 +3145,56 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard idfind audit
+
+Reviewed and tested **14 October 2026** against [idfind][lima-wizard-idfind] and
+the [existing ID methods][lima-names], using native **090c9f39** and dedicated
+Lima **0ed68eb1**. The earlier port already supplies protected dispatch,
+filter(objects(), predicate) and map callbacks. The actual command passes
+without further code changes. It has no Cmd_rules prototype and delegates
+matching of raw text to each loaded object's id() method; missing methods do
+not match. Native APIs and shared policies remain unchanged.
+
+All **seven focused checks** pass: six runtime groups and **fifteen complete
+positive compile checks**, including a real ID fixture host, **39 registered
+inputs** and **six following pwd checks**. One deliberately throwing local ID
+method produces an expected input error; unexpected caught errors are zero.
+Actual command/rule bytes are checked before appending a read-only observer;
+handler and dispatch bodies remain unchanged. Printed mappings match independent
+expected maps and the command's stored result.
+
+The ID method inherited by std/object supports exact case-sensitive aliases,
+multiword and Unicode names and explicitly registered quoted IDs. Raw quotes are retained;
+quoted names, plural-looking text, extra words and flag-looking text do not gain
+special interpretation. Matching prototypes and clones are included, unplaced
+objects map to nil, and instances remain discoverable after prototype removal.
+Reloaded standard-object prototypes have no matching IDs until configured.
+Movement, retirement and subsequent ID configuration update the next report.
+
+Matched reports use command buffers: exact overwrite/append/pipe bytes, ignored
+incoming file/pipe text and real pager return pass. Missing input writes
+"Idfind what?" directly and retains the previous query/results; overwrite/pipe
+destinations remain empty and append preserves prior bytes. An id() exception
+aborts before rebuilding results: the new query string remains with the old
+mapping, and a subsequent query and shell command work. These existing source
+policies are retained. Live fixture identities/locations and shell/current-file/
+body/room/modal state, echo and input rearming pass, including error recovery.
+
+Evidence: /tmp/lima-idfind-audit-20261014. Actual master/simuls/user/human-body/
+wizard-shell/CMD/command-parser/standard-object ID methods run with local object/
+container fixtures, one local failing ID method, setup/context/result observations,
+an empty help index, stubbed IMUD and in-memory connections. Locked workspace
+library-test build, serial focused runs and workspace/Rust 2024 fixture formatting
+pass under unchanged distinct nil, preserved call-out players and **4,000 ms**
+tasks. Source guards match, native include is restored and all 39 frozen objfind
+audit artifacts remain. Only README and these port notes are updated; no code
+patch or further adoption test run is required. Inventories, native suites,
+startup, upstream execution and cold timing retain earlier scope. Next commit
+documentation and audit profile.c's configured conditional branch and output
+routes. Selection uses local source only; profiling support is not qualified by
+this audit, and no profile command compilation or execution is included.
+
+
 #### Lima wizard objfind audit
 
 Reviewed and tested **14 October 2026** against [objfind][lima-wizard-objfind],
@@ -21234,3 +21284,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-objcount]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/objcount.c
 
 [lima-wizard-objfind]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/objfind.c
+
+[lima-wizard-idfind]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/idfind.c
