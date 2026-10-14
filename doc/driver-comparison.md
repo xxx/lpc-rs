@@ -3145,6 +3145,45 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard profile audit
+
+Reviewed and tested **14 October 2026** against [profile][lima-wizard-profile],
+using native **58f22e84** and dedicated Lima **ccba3a09**. Its existing protected
+dispatcher passes under the actual port configuration. __PROFILE_FUNCTIONS__
+is undefined: a read-only conditional observer returns zero, and the compiled
+program excludes profile_all, total and top_ten. The command prints "Function
+profiling not enabled.". This verifies the configured fallback; per-function
+timings, function_profile and the enabled branch remain unsupported/unqualified.
+
+All **three focused checks** pass: two runtime groups and **nine complete
+positive compile checks**, **twelve registered inputs** and **two following
+pwd checks**, with zero caught input errors. Actual command/rule bytes are
+checked before appending the conditional observer; handler and dispatcher are
+unchanged. Bare, all, filename, -total filename and missing-path inputs produce
+the same diagnostic. There is no Cmd_rules prototype for profile.
+
+The diagnostic uses CMD buffers. Exact overwrite/append/pipe bytes, ignored
+incoming file/pipe text and following shell commands pass. Shell/current-file/
+body/room/modal state, line mode, echo and input rearming remain intact. No
+profiling flag is forced and no profiling efun or data source is substituted.
+No command, native API or shared policy change is needed for this branch.
+
+Evidence: /tmp/lima-profile-audit-20261014. Actual master/simuls/user/human-body/
+wizard-shell/CMD/command-parser methods run with setup/context observations,
+an empty help index, stubbed IMUD and in-memory connections. Locked workspace
+library-test build, serial focused runs and workspace/Rust 2024 fixture formatting
+pass under unchanged distinct nil, preserved call-out players and **4,000 ms**
+tasks. Source guards match, native include is restored and all 43 frozen idfind
+audit artifacts remain. An initial fixture build queried the compiler result
+wrapper instead of its program; that corrected build error is retained separately
+and excluded from final counts. Only README and these port notes are updated;
+no code patch or further adoption run is required. Inventories, native suites,
+startup, upstream execution and cold timing retain earlier scope. Next commit
+documentation and audit parse.c with the body's do_game_command debug route.
+Selection uses local source only; no parse command compilation or execution
+is part of this audit, and no new parser/debug API is assumed.
+
+
 #### Lima wizard idfind audit
 
 Reviewed and tested **14 October 2026** against [idfind][lima-wizard-idfind] and
@@ -21286,3 +21325,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-objfind]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/objfind.c
 
 [lima-wizard-idfind]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/idfind.c
+
+[lima-wizard-profile]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/profile.c
