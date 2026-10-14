@@ -3145,6 +3145,63 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard timer audit
+
+Reviewed and tested **13 October 2026** against [timer][lima-wizard-timer], its
+[wizard rule][lima-wizard-command-rules], [timer daemon][lima-timer-daemon] and
+[channel daemon][lima-channel-daemon], using native **9fb06139** and dedicated
+Lima **2fec5f73**. Original command compilation fails on missing CMD dispatch;
+the daemon fails on string callback/cancellation arguments. Registered timer
+falls back to unknown verb without damaging shell/input state.
+
+The tested proposal adds protected dispatch to private main, uses !!flags["r"]
+for an integer repeat value and args[2] || 0 for an omitted notification period.
+Lima's flag value is a string; supplying zero only when absent leaves -r as a
+string and fails the class's integer field check. A control with boolean flags
+but unadapted optional notification values fails on nil notify_period. Keep
+strict native class fields and adapt these caller values.
+
+The daemon binds the owner with call_out(&process_timer(owner), t) and stores
+one private nosave integer handle for replacement/rescheduling through
+[call_out](efun/call_out.md) and [remove_call_out](efun/remove_call_out.md).
+The timer_info class layout, calculations, public methods, messages, wizard rule,
+channel translation and shared policies remain. No additional native API is needed.
+
+All **nine focused checks** pass: three controls and **six proposal checks**,
+including **thirteen complete proposal compile controls** and four successful
+control compiles. There are two expected original-source compile failures and
+three expected class-field input errors in the controls. The proposal runs **23
+registered inputs**, **five following pwd checks** and **16 timer callback firings**,
+with zero caught input errors. One firing arrives through the real one-second
+VM timer; **15 others** prioritize recorded callbacks through the production path.
+Unrelated due VM operations are handled normally while waiting for the real timer.
+
+One-shot expiration, replacement IDs, repeat cycles, periodic notices, external/
+internal channel names and real two-listener channel delivery pass. Callback
+caller/player/body and bound owner identities pass, including a recipient different
+from the captured player; origin is call_out and this_interactive is nil. Immediate
+confirmations use command buffers: overwrite/append/pipeline bytes pass. Later
+owner/channel notices remain direct, incoming text is ignored and existing message
+blank lines remain. Shell/current-file/location/input/modal/pager state stays.
+
+Existing library limitations are retained: setting another owner's timer replaces
+the daemon's pending callback although both owner records remain; expired records
+also remain. timer 0 returns Bad parameters. without cancelling the pending timer,
+despite the command's stop example. Invalid/excess arguments and notify > delay
+leave the existing schedule/state unchanged. These source behaviors are documented,
+not fixed as part of the port or demonstrated through upstream-driver execution.
+
+Evidence: /tmp/lima-timer-audit-20261013. Actual master/simuls/user/body/shell/CMD/
+timer/channel methods execute with setup/observation helpers, empty help index,
+stubbed IMUD and in-memory connections. Locked workspace library-test builds,
+serial focused runs and workspace/Rust 2024 fixture formatting pass under unchanged
+distinct nil, preserved call-out players and **4,000 ms** tasks. Source guards
+match, native include is restored and all 32 frozen start adoption artifacts remain.
+Full inventories, native suites, startup and upstream execution were not repeated;
+the preceding cold Wizroom performance finding retains its earlier scope.
+The three-file command/daemon/README proposal is prepared but unadopted; next
+commit audit notes, apply it and validate actual source without replacement.
+
 #### Lima wizard start adaptation
 
 Adopted and tested **13 October 2026** after audit notes **22a14de8**, using
@@ -20677,3 +20734,5 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-wizard-fix]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/fix.c
 [lima-wizard-start]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/start.c
+[lima-wizard-timer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/timer.c
+[lima-timer-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/timer_d.c
