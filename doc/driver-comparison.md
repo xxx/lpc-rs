@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard cmd adaptation
+
+Adopted and tested **13 October 2026** after audit notes **3d2a19db**, using
+native **3d2a19db** and dedicated Lima **504f183e**. The actual checkout's
+[cmd command][lima-wizard-cmd], [M_ACTIONS][lima-follow-actions] and README match
+the frozen proposal. The command adds protected dispatch; the action module
+passes its raw argument, an empty flags mapping and nil unused CMD routes.
+Target policy, player-command lookup, parser fallback, context restoration,
+action timers/hooks and shared policies remain unchanged.
+
+All **five adopted-source checks** pass: **nineteen complete positive compile
+checks**, **29 registered inputs** and **five following pwd checks**. Two injected
+target errors are expected; no unexpected caught input errors occur. Successful
+audit actions/assertions are unchanged. The fixture checks actual command/module
+bytes and applies only context observations to the copied action module.
+
+Object IDs/aliases/clone filenames, joining words and invalid inputs retain their
+audited behavior. Player bodies are refused; nonliving handlers remain accepted
+and missing methods remain silent. The actual NPC action module runs real say
+parser/verb, emote and version paths. NPC user/body and initiating-player restoration
+pass on success, unknown verbs and rethrow. Incoming file/pipe text is ignored;
+target/refusal output stays direct, overwrite/pipe files stay empty and append
+preserves prior bytes. Shell/current-file/body/room/modal state, echo and input
+rearming pass. Raw NPC command policy remains; typed rules/pipelines are not added.
+
+Evidence: /tmp/lima-cmd-adoption-20261013, retaining real master/simuls/user/body/
+shell/CMD/action/living/parser/verb methods, unchanged setup/observations, local
+object fixtures, an empty help index, stubbed IMUD and in-memory connections.
+Locked workspace library-test build, serial focused runs and workspace/Rust 2024
+fixture formatting pass under unchanged distinct nil, preserved call-out players
+and **4,000 ms** tasks. Other tracked source/configuration and original Lima match,
+native include is restored and all 58 frozen audit artifacts remain unchanged.
+No native API or shared policy change is needed. Prior inventories, native suites,
+startup, upstream execution, network checks and cold timing retain their scope.
+Next commit this adaptation and audit cmds/wiz/lima.c with daemons/lima_d.c for
+release-history listing/filtering. Selection uses local source only; no new lima
+command compilation or execution is part of this adoption.
+
 #### Lima wizard cmd audit
 
 Reviewed and tested **13 October 2026** against [cmd][lima-wizard-cmd], its
