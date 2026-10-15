@@ -3145,6 +3145,55 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima admtool game category
+
+Adapted and tested **15 October 2026**, after daemon-category commits Lima
+**b91a3d53** and native notes **162d700b**. Nine game controllers and their actual
+configuration editor, quest predicate and money comparator change. Seventy-four
+controller callbacks use bare or bound function values; the money comparator uses
+its bare function. Limb fields use native dot access and the skill mapper uses a
+typed native closure. Formatting supplies explicit nil separators,
+and blank limb parents and typed absence/default paths use distinct nil.
+
+The concrete controller contracts also need source corrections: mission removal
+uses its daemon's integer status, guild list updates spread their elements and use
+the actual suspend-level methods, and quest existence checks supply the domain and
+return an integer predicate. Invalid exchange rates are rejected before invoking
+the daemon setter, whose zero rate removes a currency. Configuration generation
+returns a string and skips filename metadata before reading a class. Abort clears
+staged settings; advancing a setting handles the omitted selection explicitly.
+These are Lima source adaptations/corrections; no native API or master policy changes.
+
+Real registered input opens all nine menus, renders help and returns to the category.
+Selected edits/reports cover root limbs and validation retries, currency rates and
+fractional denominations, damage types, guild titles/lists/levels/flags, message
+statistics/prompting, mission registration/removal, domain-qualified quest records
+and names, configuration boolean/integer/string edits and abort/save, and hierarchical
+skills including duplicate/missing results. Seven actual daemon saves and the saved
+configuration survive a fresh driver restart; restored limb/mission menu reports
+verify field values. Mission file checks use an existing local file; mission gameplay
+and combat-message execution are not qualified.
+
+The batch adds **152 first-session inputs and 9 restart inputs**, retaining all
+previous registered checks and both **151-preload, zero-failure boots**. Driver
+exits are normal, with no runtime/apply/transaction/panic errors or remaining admtool
+clones. The same fixed loopback mud/channel metadata fixture is retained, without
+external contact or live service actions. The configured mode remains distinct nil,
+preserved call-out players and 4000ms tasks.
+
+Admtool's 34-target set now compiles **30/34**; all nine game controllers compile.
+The bounded refresh checks **158 targets**: **79/81 wizard entries**, **4/4 guild**
+and **73/73 supporting objects**, with five formerly failing controllers and the
+config editor newly passing, no regression/timeout/crash. The whole-library total
+remains historical. Evidence: /tmp/lima-admtool-game-20261015.
+
+Admtool remains open: six controllers in its user and access management and mudinfo
+categories, plus administrative actions not exercised here, retain their own scope.
+The four compile leads are per-object memory inspection, frame-string absence,
+a functional report reducer and the user module's value-restoration API. Other
+configuration headers, editor-object lifetime, the existing quest milestone index
+and wizard shorthand parsing of dot fields are recorded separately.
+
 #### Lima admtool daemon category
 
 Adapted and tested **15 October 2026**, after root commits Lima **6573c610** and
