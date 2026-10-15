@@ -3147,6 +3147,41 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima socketinfo command
+
+Adopted and tested **15 October 2026**, after native memory commit **8218a50f**
+and Lima mudinfo commit **50360e3a**. The command uses the existing
+[query_sockets(-1)](efun/query_sockets.md) mappings and protected CMD dispatch.
+Its columns describe native handles, states and stream/listener kinds rather
+than OS descriptors or FluffOS socket modes. Numeric addresses and ports are
+separated by a space; unknown endpoints display `-`. Rows are written separately
+within the driver's string-size limit. Results cover raw TCP registrations;
+player Telnet connections use the separate connection APIs.
+
+Lima's master grants only the loaded canonical socketinfo command's all-owner
+query with the exact query metadata. The socket wrapper's existing operations
+and ownership rules retain their preceding policy. No native API or socket
+implementation changes. Inspection grants no write, close or ownership rights.
+
+Six new ordinary shell inputs and two saved-login inputs pass. Both boots report
+one open loopback stream and one listening socket; first-session handles and
+endpoints also match the real wrappers' metadata. Arguments and incoming text remain ignored. Direct output
+still reaches the player when redirected, leaving an empty destination, as in
+the original command. Following shell input works. All 465 preceding first-session
+inputs and 30 lifecycle checkpoints remain, with two clean 151-preload boots and
+normal exits. The same six fixtures and fixed loopback router packets are reused.
+Empty registries, IPv6 and transient lifecycle states are source-reviewed rather
+than separately runtime-qualified here.
+
+Bounded compilation checks **178 targets**: **80/81 wizard entries**, **4/4 guild
+entries** and **93/93 supporting targets**, with socketinfo the only new success
+and no regression, timeout or crash. The shared CMD base requires its child-supplied
+dispatch_main and is checked through actual commands. The historical 753/1180
+whole-library sweep is unchanged. Evidence: /tmp/lima-socketinfo-20261015.
+Native Rust/build gates are unchanged from the committed memory feature; they are
+not rerun for this LPC/documentation batch. Next: treefor's generated __TREE__
+diagnostic decision, the final wizard entry in this inventory.
+
 #### Lima object-memory diagnostics and mudinfo menus
 
 Implemented and tested **15 October 2026**, after audit commit **ca61bebe**;
