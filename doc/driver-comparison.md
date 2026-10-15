@@ -3145,6 +3145,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima iftp command and modal client
+
+Adopted and tested **15 October 2026**, after unittest commits Lima **3748021a**
+and native notes **bc209952**. Two LPC files change: the command adds protected
+CMD entry and uses nil to end an exact match among multiple completions; the
+client registers its actual input handler as a bare function value. Command
+matching, local/remote directory policy, file request construction and timing
+remain otherwise unchanged. No native API or shared IMUD/modal source changes.
+
+The production-driver test uses the existing loopback endpoint with one added,
+fixed mud-list response per boot. Its three synthetic names allow real completion
+and canonical-name lookup through the actual socket/IMUD path. The endpoint
+receives only startup packets from the driver and sends only that directory
+packet. This is a focused client fixture, not a live I3 router session or file
+transfer qualification; no daemon, resolver or client handler is stubbed.
+
+Thirty added first-session inputs cover usage, no match, ambiguous completion,
+unique completion and case-insensitive exact selection among multiple matches.
+Four client instances exercise help/unknown/blank input, pwd/cd/lcd, independent
+local/remote paths, get/put usage, all four exit aliases and return to the shell.
+The local directory is restored and clone enumeration confirms no clients remain.
+The initial test mistakenly counted the prototype through `children`; that failed
+control is retained, and the accepted test counts actual clones. Four more inputs
+after saved-account restart verify selection, modal input, reset directories and
+client removal again.
+
+All preceding login/gameplay, guild, SPECIAL, unittest, todo/netstat and RST checks
+remain passing, including all 30 lifecycle checkpoints and two **151-preload,
+zero-failure boots**. Distinct nil, preserved players and 4000ms remain. No file
+request or payload is sent by these client checks; live get/put/list operations
+and optional I3 configurations retain their separate scope.
+
+Actual bounded compilation checks **114 targets**: **77/81 wizard commands**,
+**4/4 guild commands** and **29/29 complete supporting objects**, with iftp the
+only new success and no regression, timeout or crash. The client and complete
+IMUD daemon remain successful. The full-library measurement stays historical.
+Evidence: /tmp/lima-iftp-port-20261015. Four wizard entries remain: admtool,
+socketinfo, tasktool and treefor; completed equipment, guild and framework work
+stays closed.
+
 #### Lima unittest command and suite framework
 
 Adopted and tested **15 October 2026**, after SPECIAL commits Lima **ee739038**
