@@ -3145,6 +3145,53 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima tasktool menus and task persistence
+
+Adopted and tested **15 October 2026**, after iftp commits Lima **23a7ae6c** and
+native notes **d1cd24bb**. Four LPC sources adapt the command, tasktool menu, its
+own internal base and the task daemon. Other admin-menu compositions stay separate.
+
+The command adds protected CMD entry. Fourteen callbacks use bare functions or
+bound pointers; prompt keys are collected explicitly instead of using a reducer
+form of `implode`. The base supplies concrete module defaults, returns nil for a
+missing parent path and accepts the same task-id constructor parameter as its
+child. The child forwards that parameter, uses nil for its root marker and retains
+the daemon's integer-or-message completion result. Task getters use twelve typed
+nil returns. The creation-time getter declares the integer timestamp it actually
+stores; its existing numeric-zero missing result remains zero. Other mixed and
+numeric zero values retain their meaning.
+
+Two task-data operations need explicit corrections. Removal uses native slice
+assignment, avoiding an empty-prefix expression whose negative bound selects the
+whole array. The old parent-ID helper retained only the penultimate component;
+it now preserves the complete parent path for tasks deeper than two levels.
+These are source adaptations/corrections, not new native task or menu features.
+
+Real registered menu input covers root/title/description prompts, inline titles,
+help and invalid options, three-level navigation, parent completion refusal while
+children remain open, child-then-parent completion, and first/middle/last removal
+at both root and deeper levels. Blank input returns to a parent or quits the root;
+recursive quit removes all menu clones and returns to a usable shell. The actual
+daemon creates and saves two retained root tasks with one completed child, owner,
+description and integer creation time. A fresh driver restores that state and
+renders it through the real menu. No task/menu implementation or data is stubbed.
+
+The first runtime control completed the task operations but its long state-summary
+assertion did not allow terminal line wrapping. The accepted assertion normalizes
+whitespace; the port sources are unchanged between those runs. The failed control
+is retained. Both **151-preload boots pass without failures or runtime errors**,
+retaining all preceding lifecycle, guild, SPECIAL, unittest, iftp and RST checks.
+The fixed loopback mud-list fixture and distinct nil/preserved players/4000ms
+configuration remain unchanged; no new service case or native implementation runs.
+
+Actual bounded compilation checks **117 targets**: **78/81 wizard commands**,
+**4/4 guild commands** and **32/32 supporting objects**, with four new successes
+and no regression, timeout or crash. The old full-library measurement remains
+historical. Evidence: /tmp/lima-tasktool-port-20261015. Three wizard entries remain:
+admtool, socketinfo and treefor. Existing optional data APIs and malformed task-ID
+policies are not broadened by this menu check; completed equipment and unrelated
+mudlib work stays closed.
+
 #### Lima iftp command and modal client
 
 Adopted and tested **15 October 2026**, after unittest commits Lima **3748021a**
