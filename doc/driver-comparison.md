@@ -3145,6 +3145,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima guild special command exits
+
+Adopted and tested **15 October 2026**, after guild/catalog/governance commits
+Lima **526a4bb3** and native notes **b85f2c53**. Two LPC files change: shared
+SPECIAL and roundhouse. No native API or generic `defer` feature is introduced.
+
+SPECIAL adds protected CMD dispatch, nil object cleanup/assignment and an explicit
+void helper declaration. Its one function-exit callback becomes a bound local
+function value. The remaining action runs in a private helper: when cleanup is
+registered, a catch runs that action, cleanup executes synchronously, then a caught
+error is rethrown. This preserves combat starting after the action, after reflex
+spending refuses, and during an error exit. Cleanup errors propagate; a rethrown
+action error retains its message with the wrapper as its new throw location.
+Automatic-target and object-target branches retain their existing policy of not
+registering this callback. The prechecks, target selection, costs, messages and
+special implementations retain their original behavior.
+
+The prior pinned FluffOS source review establishes function-exit and error-unwind
+execution, rather than a zero-delay timer; it was source review, not cross-driver
+execution. This local adaptation covers SPECIAL's one site and current overrides.
+Roundhouse's separate two-second jab uses a bound function pointer with the same
+arguments and delay.
+
+Eighteen controlled command-pipeline cases exercise success, spend refusal,
+spend/action/cleanup errors, error precedence, precheck/reflex/target rejections,
+nil target removal, automatic targeting, absent cleanup and nested invocations.
+They inherit the actual adapted SPECIAL/CMD and use explicit fixture actors and
+targets. A real roundhouse command runs against those fixtures; its jab occurs
+after the synchronous action/cleanup and retains player context. Registered shell
+inputs reach all four real guild commands' existing gates from a fresh character.
+No test hook, actor replacement or access tail is added to shipped source.
+
+The accepted production-driver workflow retains all 30 login/gameplay checkpoints,
+guild catalog/governance persistence, todo/netstat and RST cleanup checks. Both
+boots load **151 preloads with zero failures**. Fresh bounded compilation checks
+**105 targets**: **75/81 wizard**, **4/4 guild** and **20/20 complete supporting
+objects**, with five new successes and no regression, timeout or crash. The old
+full-library measurement remains historical. Evidence:
+/tmp/lima-special-port-20261015. Distinct nil, preserved players and 4000ms remain.
+
+This closes the shared SPECIAL entry/defer blocker and the four guild command
+compile entries. Full combat balance, hit/reward effects, guild rooms/NPCs and
+existing source-policy bugs remain outside these checks. Six wizard commands
+remain; completed wear/wield and catalog/governance work stays closed.
+
 #### Lima guild catalog and governance
 
 Adopted and tested **15 October 2026**, after todo/netstat commits Lima **d128fe22**
