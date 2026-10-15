@@ -3145,6 +3145,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima behavior-tree dependency adaptation
+
+Adopted and tested **14 October 2026** after audit notes **3723d7b0**, using dedicated
+Lima at **5c71d766**. The five LPC files and README match the reviewed six-file
+proposal; all LPC CRLF bytes remain. Reference absence, callbacks, separators,
+navigation syntax/results, evaluator calls and bandage inheritance/conversion
+are adapted without adding a native API or redesigning the existing AI rules.
+
+All **five adopted-source checks** pass: four runtime groups and **seventeen
+complete positive compile checks**. **Thirteen registered inputs** include four
+following pwd checks, with zero caught errors. Nine populated smartmobs reports
+use actual local, remote and orphan Goblin clones, with an active prototype
+excluded. All five clusters initialize. Nil readers, explicit root/no-exit
+results, initial leaf progress, pending suppression and an actual evaluation
+callback pass. The fixture reads the adopted modules without replacement.
+
+Rust actions/assertions remain unchanged except paths. The room fixture now uses
+the actual set_brief API and verifies its name exceeds twenty characters, correcting
+the earlier inert set_short call. Actual twenty-character environment truncation
+now passes; the earlier audit's coverage wording is corrected below. All other
+helpers remain. Functional comparison retains queue, parse, node, timer-name and
+context checks, allowing independent IDs, mood-list ordering, random cool_down
+moods in its callback case and the explicit remote-room fixture correction.
+Per-run exact row and inspection-state assertions remain intact.
+
+Evidence: /tmp/lima-behaviour-adoption-20261014. Locked workspace library-test build
+and workspace/Rust 2024 fixture formatting pass. The actual master/simuls/user/body/
+shell/CMD code runs with one in-memory connection, empty help index and stubbed
+IMUD. Distinct nil, preserved players and **4,000 ms** tasks remain. Each runtime
+fixture preloads **21 stock recipe prototypes** and the real crafting daemon;
+cold crafting startup remains unqualified. Other tracked source and original Lima
+remain unchanged, the temporary include is restored, indexes are empty and all
+114 frozen audit artifacts remain intact.
+
+Next audit later leaf execution and the base cluster's legacy command-dispatch
+tuple. Full autonomous AI, broker timing, timer lifecycle, inventories, startup
+and native full suites remain separate; earlier NPC-script engine issues retain
+their existing scope.
+
+
 #### Lima behavior-tree dependency audit
 
 Audited **14 October 2026** after committing smartmobs dispatch as Lima **5c71d766**
@@ -3172,7 +3212,7 @@ runtime groups and **seventeen complete positive compile checks**. **Sixteen
 registered inputs** include six following pwd checks, with zero caught errors.
 Nine populated smartmobs observations use actual Goblin clones locally, remotely
 and without an environment, plus an active excluded prototype. Exact fields,
-environment truncation, real moods, ignored arguments and direct-output routing
+environment fields, real moods, ignored arguments and direct-output routing
 pass. Inspection preserves observed parse counts, queue, emotions and timer IDs.
 All five configured clusters initialize. The fixture explicitly advances the real
 root before placement; nil readers, empty/root progression, no-exit results,
