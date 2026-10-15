@@ -3145,6 +3145,47 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima admtool user and access menus
+
+Adapted and tested **15 October 2026**, after game-category commits Lima
+**ef0199a7** and native notes **758b563c**. Four controllers in obj/admtool/secure
+use 37 bare or bound named callbacks. Frame previews pass nil for the absent style;
+the directory-protection report uses a sorted loop in place of functional implode.
+The theme header writer uses quoted [`%Q`](efun/sprintf.md) output for nested strings.
+The offline account branch reads its bodies mapping through native
+[restore_map](efun/restore_map.md), replacing legacy textual save-line extraction.
+Purge preview supplies the last-login daemon's explicit sorting argument.
+No native API, daemon implementation, access rule or privilege policy changes.
+
+Registered input opens all four menus, renders help and returns to their category.
+Selected local flows cover ordinary and abstract domains, generated directories,
+member/lord changes and reports, privilege definitions and grants, directory read/
+write reports and clearing, frame listing/palette/previews, theme edits and header
+writing. The user menu exercises existing-account branches, wizard-position editing,
+and cancellation of nuke/purge confirmations. Wizard positions are enabled in this
+checkout and use the character field through the existing USER_D interface.
+
+The access database, character position and generated frame header survive restart;
+the fresh driver renders the saved theme and domain report. **76 first-session
+inputs plus 10 restart inputs** retain every prior check and both **151-preload,
+zero-failure boots**, with normal exits, no caught or driver runtime errors and no
+remaining admtool clones. The fixed loopback fixture and distinct-nil, preserved
+player and 4000ms configuration remain unchanged.
+
+The admtool target set now compiles **33/34**; the remaining compile blocker is
+per-object memory_info. The bounded refresh checks **168 targets**: **79/81 wizard
+entries**, **4/4 guild** and **83/83 supporting targets**, including the player
+frame/palette commands. The three previously failing management controllers now
+compile, with no regression, timeout or crash. The full-library count stays historical.
+Evidence: /tmp/lima-admtool-management-20261015.
+
+This qualifies navigation and the listed flows, not every administrative action.
+Account deletion, successful offline password reset, wizard creation/removal and
+the actual purge loop remain untested; the adapted offline read is compile/source
+review only. Existing policies and UI quirks, including the frames menu's duplicate
+accent/add key, remain. Admtool stays open: mudinfo's races and memory controllers
+are the next consumer group, with the memory API needing a separate decision.
+
 #### Lima admtool game category
 
 Adapted and tested **15 October 2026**, after daemon-category commits Lima
