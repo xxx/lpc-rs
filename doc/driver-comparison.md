@@ -3145,6 +3145,60 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima NPC-script trigger registration and recovery audit
+
+Audited **14 October 2026** after committing file function actions as Lima
+**eff8eb0e** and adoption notes as native **56320537**. Actual dedicated module,
+trigger, action and state-daemon sources execute without replacement. Upstream
+claims are source review at **eefaff66**, with port-only runtime checks; another
+driver is not executed.
+
+The [script engine][lima-npc-script] registers the following trigger before running
+the preceding action. A synchronous message produced inside that action can match,
+so moving registration until after the action would lose that message. The existing
+match path schedules progression while the action's own path also schedules it:
+the synchronous case leaves two next_step callbacks and one response callback.
+The earlier first-step unarmed trigger and adjacent-trigger premature registration
+are reproduced again.
+
+The [trigger module][lima-npc-trigger] reports every accepted pattern match to
+triggered. It does not identify which patterns belong to the active script. A
+separate ordinary pattern therefore advances a script waiting for another trigger,
+leaving the script's expected pattern registered.
+
+Actual [state-daemon recovery][lima-state-daemon] invokes recover and clears active
+script tracking. The fixture's recovery hook records the call. An armed pattern
+remains, conversation remains disabled and stopped ambient actions are not resumed.
+A later match of that stale pattern still advances the idle index and queues a
+response. A response and progression callback queued before recovery also survive;
+explicitly executing the actual response pointer runs its command after abort.
+The [action module][lima-follow-actions] cancels responses on object removal, while
+the script's recovery path does not perform that cleanup.
+
+Starting another script retains earlier patterns and pending progression callbacks.
+Repeated starts with different recovery deadlines retain all three queue entries;
+an old pattern can advance the replacement before its first WAIT executes. These
+gaps follow the reviewed existing Lima control flow. No new native support
+requirement or engine change is established by this audit.
+
+All **seven focused checks** pass: six runtime groups and **six complete positive
+compile checks**, including Robert, with **six following registered pwd inputs**
+and zero caught input errors. The actual heartbeat and selected private response
+callbacks are invoked explicitly. Evidence: /tmp/lima-npc-trigger-audit-20261014.
+Distinct nil, preserved call-out players and **4,000 ms** tasks remain. Workspace
+library-test build and workspace/Rust 2024 formatting pass; the temporary include
+is restored, both source checkouts remain clean and all 38 frozen adoption artifacts
+remain intact. Broker timing, full startup and native full suites are not repeated.
+Initial fixture/control errors were corrected by inheriting the real conversation
+module and compiling complete hosts; successful runtime actions/assertions remain
+unchanged, and the failed runs remain in the evidence package.
+
+Recommendation: keep these engine issues as separate Lima follow-ups and continue
+the port with the smartmobs command and its real smart-movement inspection surface.
+An eventual engine fix needs explicit pattern ownership, one progression callback
+and recovery/replacement cleanup while preserving synchronous message capture.
+
+
 #### Lima NPC-script file action adaptation
 
 Adopted and tested **14 October 2026** after audit notes **076df1cf**, using the
