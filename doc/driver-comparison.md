@@ -3145,6 +3145,41 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima NPC-script file action adaptation
+
+Adopted and tested **14 October 2026** after audit notes **076df1cf**, using the
+dedicated Lima checkout at **d3772fea**. The module and README match the reviewed
+two-file proposal. A file function action now passes its captured method name
+and spreads its captured arguments to call_other. This fixes the observed silent
+skipped call without changing the parser, step API or trigger policy. The LPC
+module retains CRLF; no native API change is needed.
+
+All **five adopted-source checks** pass: four runtime groups and **sixteen complete
+positive compile checks**, including Robert and the state daemon. **Four following
+registered pwd inputs** pass with zero caught errors. The fixture uses the actual
+module and scripts command without replacement. Successful audit actions and
+assertions are unchanged; function/command ledgers, definitions, progress, patterns
+and shell/modal/input state match, allowing independent timer IDs.
+
+Real file functions cover distinct integer/string argument lists, zero arguments,
+comments, blank/trailing-newline fields and absolute/relative paths. WAIT/DESC,
+completion, ordered `@@` commands, named NPC delivery and missing-target/body
+exclusion pass. Real trigger matching and explicit execution of the queued response
+callback pass. The existing first-step unarmed trigger and adjacent-trigger early
+registration remain reproduced limitations, with no engine redesign included.
+
+Evidence: /tmp/lima-npc-script-file-adoption-20261014. Locked workspace library-test
+build and workspace/Rust 2024 fixture formatting pass under distinct nil, preserved
+call-out players and **4,000 ms** tasks. The local fixture uses one in-memory
+connection, an empty help index and stubbed IMUD. Other tracked source and original
+Lima remain unchanged, the temporary include is restored, indexes are empty and
+all 49 frozen audit artifacts remain intact. Broker timing, arbitrary file-expression
+syntax, inventories, startup, native full suites and cold timing are not repeated.
+Next review trigger registration/recovery semantics and the first/adjacent-trigger
+limitations before choosing an engine change, including why the existing code
+registers a trigger during its preceding action.
+
+
 #### Lima NPC-script file actions and trigger audit
 
 Audited **14 October 2026**, using native **5a5ea646** and dedicated Lima
