@@ -2,6 +2,7 @@ pub mod code_pool;
 mod function;
 mod function_scope;
 pub(crate) mod linker;
+mod memory;
 
 pub use function::Function;
 pub use function_scope::FunctionScope;
@@ -11,10 +12,11 @@ use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use derive_builder::Builder;
+use educe::Educe;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
@@ -123,9 +125,15 @@ pub fn dispatch_table(
         .collect()
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Builder)]
+#[derive(Debug, Default, Educe, Builder)]
+#[educe(Clone, PartialEq, Eq)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Program {
+    // Cloning starts an editable program, so its diagnostic cache must be recomputed.
+    #[educe(Clone(method(memory::fresh_cache)), PartialEq(ignore))]
+    #[builder(setter(skip))]
+    pub(crate) memory_size: OnceLock<Option<usize>>,
+
     /// The in-game source identity, retaining host origin for unrestricted outside sources.
     #[builder(setter(into))]
     pub filename: Arc<LpcPath>,

@@ -463,6 +463,7 @@ impl CodegenWalker {
             std::mem::take(&mut self.context.inherit_names),
         ));
         Ok(Program {
+            memory_size: Default::default(),
             filename,
             functions: Box::new(functions),
             dispatch: Box::new(dispatch),

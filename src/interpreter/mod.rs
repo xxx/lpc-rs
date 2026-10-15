@@ -21,6 +21,7 @@ pub mod lpc_float;
 pub mod lpc_int;
 pub mod lpc_mapping;
 pub mod lpc_ref;
+pub(crate) mod memory;
 pub mod object_space;
 #[cfg(feature = "opcode-profile")]
 pub mod opcode_profile;

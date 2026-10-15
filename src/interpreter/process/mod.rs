@@ -166,6 +166,16 @@ pub(crate) enum Liveness {
 }
 
 impl Process {
+    pub(crate) fn storage_bytes(&self, image: &ProgramImage) -> lpc_rs_errors::Result<usize> {
+        let mut size = crate::interpreter::memory::Size::new(size_of::<Self>());
+        size.items::<usize>(2)?;
+        size.add(image.storage_bytes()?)?;
+        if let ObjectName::Virtual(name) = &self.name {
+            size.add(name.capacity())?;
+        }
+        Ok(size.bytes())
+    }
+
     /// Shared constructor body for `new`, `new_clone` and `new_virtual`.
     fn with_name(program: Arc<Program>, name: ObjectName) -> Self {
         Self {

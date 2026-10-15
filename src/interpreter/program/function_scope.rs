@@ -17,6 +17,32 @@ pub struct FunctionScope {
 }
 
 impl FunctionScope {
+    pub(super) fn storage_bytes(
+        &self,
+        size: &mut crate::interpreter::memory::Size,
+        seen: &mut std::collections::HashSet<usize>,
+    ) -> lpc_rs_errors::Result<()> {
+        let mut pending = vec![self];
+        while let Some(scope) = pending.pop() {
+            if !seen.insert(scope as *const Self as usize) {
+                continue;
+            }
+            size.items::<usize>(2)?;
+            size.items::<Self>(1)?;
+            size.items::<(String, Option<Ustr>, usize)>(scope.functions.capacity())?;
+            for name in scope.functions.keys() {
+                size.add(name.capacity())?;
+            }
+            size.add(size_of_val(&*scope.inherits))?;
+            size.items::<(String, usize, usize)>(scope.inherit_names.capacity())?;
+            for name in scope.inherit_names.keys() {
+                size.add(name.capacity())?;
+            }
+            pending.extend(scope.inherits.iter().map(AsRef::as_ref));
+        }
+        Ok(())
+    }
+
     pub(crate) fn new(
         filename: &LpcPath,
         functions: &IndexMap<String, Function, ahash::RandomState>,

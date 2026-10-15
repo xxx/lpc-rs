@@ -11,3 +11,6 @@ For peak process RSS reported by the operating system, use
 
 For retained diagnostic source storage, see
 [`source_cache_stats`](source_cache_stats.md).
+
+For estimated LPC object, program and data storage, see
+[`object_memory_info`](object_memory_info.md).

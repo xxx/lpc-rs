@@ -79,6 +79,19 @@ pub struct FunctionPtr {
 }
 
 impl FunctionPtr {
+    pub(crate) fn storage_bytes(&self) -> Result<usize> {
+        let mut size = crate::interpreter::memory::Size::new(size_of::<Self>());
+        if self.partial_args.capacity() != 0 {
+            size.items::<usize>(2)?;
+            size.items::<Option<LpcRef>>(self.partial_args.capacity())?;
+        }
+        if self.upvalue_ptrs.capacity() != 0 {
+            size.items::<usize>(2)?;
+            size.items::<VarId>(self.upvalue_ptrs.capacity())?;
+        }
+        Ok(size.bytes())
+    }
+
     /// Classification for an explicit pointer call, before dispatcher overrides.
     pub(crate) fn call_origin(&self) -> CallOrigin {
         match &self.address {

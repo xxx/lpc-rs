@@ -72,6 +72,7 @@ pub(crate) mod mkdir;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod object_clones;
+pub(crate) mod object_memory_info;
 pub(crate) mod object_time;
 pub(crate) mod object_update;
 pub(crate) mod objects;
@@ -1373,6 +1374,11 @@ efuns! {
     rusage => {
         returns: LpcType::Mapping(false),
     },
+    object_memory_info [async] => {
+        returns: LpcType::Mapping(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
 
 }
 
@@ -1761,6 +1767,7 @@ mod tests {
                 "disassemble",
                 "function_signature",
                 "rusage",
+                "object_memory_info",
             ]
         );
     }

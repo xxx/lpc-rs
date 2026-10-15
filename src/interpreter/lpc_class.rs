@@ -34,6 +34,20 @@ pub struct LpcClass {
 }
 
 impl LpcClass {
+    pub(crate) fn storage_bytes(&self) -> Result<usize> {
+        let mut size = crate::interpreter::memory::Size::new(size_of::<Self>());
+        size.items::<Slot>(self.slots.capacity())?;
+        size.items::<View>(self.views.capacity())?;
+        for view in &self.views {
+            size.add(size_of_val(&*view.slots))?;
+        }
+        Ok(size.bytes())
+    }
+
+    pub(crate) fn value_at(&self, index: usize) -> Option<&LpcRef> {
+        self.slots.get(index).map(|slot| &slot.value)
+    }
+
     #[cfg(test)]
     pub(crate) fn new(definition: Arc<ClassDefinition>) -> Self {
         Self::with_null_mode(definition, Default::default())

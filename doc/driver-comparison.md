@@ -375,6 +375,7 @@ across all five drivers; the broader rows describe differences within each area.
 |---|---|---|---|---|---|
 | Execution | Parallel LPC tasks; snapshot reads, atomic commits and conflict retries. [Runtime](../README.md#how-execution-works); [monotonic elapsed VM uptime](efun/uptime.md). | Tasks evaluated serially by the [backend loop][cd-backend]. | Sequential [backend evaluation][ld-backend]; explicit [coroutines][ld-async]. | Event-driven LPC; [async functions and promises][fl-async], with worker-thread I/O in the async package. | Explicit [atomic functions][dgd-lpc] roll back on errors; multicore acceleration is a separate [Hydra offering][dgd-readme]. |
 | Process resource usage | [`rusage()`](efun/rusage.md) returns 16 OS process statistics, with CPU times in milliseconds and peak RSS in KiB; failed or unsupported sampling returns an empty mapping. | **Not checked**. | **Not checked**. | Core `rusage()` returns 16 resource fields, with CPU times in milliseconds and other fields in platform units. [Pinned implementation][fl-rusage-audit-source]. | **Not checked**. |
+| Object memory estimates | [`object_memory_info`](efun/object_memory_info.md) returns current object/program/data/total estimates, with transactional reads and sharing/cycle handling. | **Not checked**. | **Not checked**. | Core memory_info(object) includes program, instance data and header; memory_info() uses driver accounting. [Pinned implementation][fl-object-memory-source]. | **Not checked**. |
 | Saving and restarting | [Object and mapping save files, including class records](save-format.md), with [`nosave` globals](lpc/nosave.md); [`save_value`](efun/save_value.md) / [`restore_value`](efun/restore_value.md) serialize individual values as strings. Whole-world snapshot/restart is not implemented. | [Object variable saves][cd-save]. | [Object saves][ld-save] with selectable formats and a serialised-string form. | [Object saves][fl-save] with flags, optional compression and a serialised-string form; [`nosave` globals][fl-nosave-keywords] with `SENSIBLE_MODIFIERS`; individual values through [`save_variable`][fl-save-variable] / [`restore_variable`][fl-restore-variable]. | Object saves plus [whole-system snapshots][dgd-dump] and [restart from a snapshot][dgd-intro]. |
 | Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [Type-sensitive array set matching with destroyed-object normalization](lpc/comparisons.md#collection-matching); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
 | Text file writes | [`write_file`](efun/write_file.md) stages append (0/default) or whole-file replacement (1), with pending reads and commit-time delivery. | **Not checked**. | **Not checked**. | Core `write_file` uses bit 1 for overwrite and bit 2 for compression. [Implementation][fluffos-file-write-flags]. | **Not checked**. |
@@ -662,6 +663,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Saved-file migration | The reader skips `#` lines, decodes unescaped carriage returns inside strings as newlines, and reads positional `(/.../)` class records. [Implementation][fl-object-persistence]. | Headers need removal, string values need decoding and re-encoding, and classes need nominal identities and typed named fields. Header removal alone does not establish equivalence. See the [native format](save-format.md) and [Lima persistence notes](#lima-daemon-persistence). |
 | Value serialization | `save_variable(mixed)` returns a string and `restore_variable(string)` reads one, using the driver's object-save format. [Save][fl-save-variable], [restore][fl-restore-variable]. | Use [`save_value`](efun/save_value.md) and [`restore_value`](efun/restore_value.md). They use the native [save format](save-format.md), including class and bytes encodings and configured nil handling. Renaming calls does not establish compatibility with existing saved strings; audit and migrate persisted data separately. Cross-driver data interchange is **not checked**. |
 | Named global reads and writes | `fetch_variable(name, object?)` and `store_variable(name, value, object?)` default to the current object. Lookup takes the first match, searching inherits before the object's own globals. The implementation rejects a private match on a foreign target; it does not enforce the reference's public-only description. Self-access includes private globals, and `nosave` globals remain accessible. The setter copies the value without a declared-type check. [References][fl-fetch-variable], [setter][fl-store-variable], [implementation][fl-named-globals], [lookup][fl-global-lookup], [assignment][fl-global-assignment]. | Read through [`variable_info`](efun/variable_info.md); no native `fetch_variable` is needed for a name lookup. The native setter takes the target **first**, requires a live object, and accepts an optional exact declaring-source path. Duplicate names require that selector; it does not choose the first match. Writes check retained types, configured nil semantics and scalar class identity. Foreign writes require [`valid_store_variable`](apply/master/valid_store_variable.md), including public fields, separately from inspection permission. Update argument order, duplicate-name handling, type assumptions, and master policy together. |
+| Object memory inspection | Core memory_info(object) returns an approximate integer including the full program for each clone; its no-argument overload estimates driver categories. [Implementation][fl-object-memory-source]. | Use [`object_memory_info(ob)`](efun/object_memory_info.md) and select total_bytes for a ranking or the separate fields for a breakdown. Rows are nonadditive estimates, with explicit exclusions, not a strict upper bound or bytes freed by destruction. Review cyclic/shared data and error limits. The global overload has no native alias; allocator resident memory and source-cache storage are separate diagnostics. |
 | Global declaration enumeration | `variables(ob)` lists inherited declarations before local ones, including private/protected/nosave globals and duplicate names. A nonzero second argument returns name/type pairs; enumeration does not read values or ask `valid_bind`. [Reference][fl-global-declarations], [implementation][fl-global-declarations-source]. | [`variable_info(ob)`](efun/variable_info.md) returns every retained declaration with its exact source, type, flags and actual value. Foreign inspection requires [`valid_variable_info`](apply/master/valid_variable_info.md) before any entries are returned. Report separate values for shadowed globals instead of repeatedly fetching the first match; see the [Lima dbxvars port](#lima-wizard-dbxvars-port). |
 | Rebinding named-global helpers | `bind` can change an eligible function pointer's owner after `valid_bind` permission. A rebound efun pointer therefore performs named-variable operations as its new owner. [Implementation][fl-bind-source], [pointer context][fl-bound-context]. | Pass the target explicitly to `store_variable` or `variable_info`. Translate the original privilege checks into the native master policies; removing rebinding must not remove its authorization. An inherited helper runs as its containing object, but a simul-efun wrapper runs as the simul-efun object and needs permission to access its caller. General pointer rebinding remains unsupported. |
 | Legacy password hashes | `oldcrypt` supports the older MudOS algorithm. [Reference][fl-oldcrypt]. | `crypt` does not recognise that format. Existing password data needs a migration plan; renaming the efun is insufficient. See [stored passwords](#stored-passwords) and the native [`crypt` reference](efun/crypt.md). |
@@ -3144,6 +3146,56 @@ starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
 ordinary shell state, defaults, directory resolution, flags and pipeline behavior
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
+
+#### Lima object-memory diagnostics and mudinfo menus
+
+Implemented and tested **15 October 2026**, after audit commit **ca61bebe**;
+Lima remains based on management commit **91c530e2**. Native
+[object_memory_info](efun/object_memory_info.md) returns object/program/data/total
+byte estimates. Immutable program storage is cached and shared by clones. Data
+inspection reads current transactional globals, arrays, mapping keys/values, class
+slots, strings/bytes and function arguments/captures. Identity tracking handles
+sharing/cycles; ordinary object references do not traverse other objects. The
+bounded asynchronous walk yields to task cancellation and errors on overflow or
+its traversal limit. Estimates exclude allocator/MVCC/native-resource overhead and
+historical images; they are neither strict upper bounds nor reclaimable bytes.
+No new master apply, placement path, serialization protocol or native formatter change.
+
+Both real mudinfo controllers use bare action functions. Memory ranking selects
+total_bytes from the native mapping and labels rows as nonadditive estimates.
+It builds an array of short rows, avoiding a combined string above the native
+8192-byte limit. The race report retains its existing discovery and calculations.
+Normal root/category/leaf navigation, help and return/quit now work. Captured output
+checks all six race definitions' eight modifiers, four ranges, three bonuses and
+zero adjustment sums in both tables. Documentation is included by the existing
+source glob; restricted/coder remains outside it.
+
+The first session ranks **274 objects**, and the restored session **257**, all
+positive and sorted descending, including the real master. Loaded object sets
+naturally differ between sessions. Direct and bare-function evaluate calls verify
+four native fields, a shared human prototype/clone program estimate and an empty
+null-target result. Fifteen new first-session and nine restart inputs preserve
+all earlier checks and both **151-preload, zero-failure boots**, normal exits and
+zero remaining admtool clones; no runtime/apply/transaction/panic errors.
+
+Fifteen new native regressions cover estimates, staged updates, cycles/sharing,
+all heap value kinds, clone state, current/recompiled/older-snapshot images,
+cache semantics, overflow and cancellation limits. The workspace CI runner passes
+**5107 tests, two skipped**, plus doctests. Clippy across all targets/features,
+workspace builds and docs are warning-free; formatting/raw diffs pass. An initial
+shared-process cargo test run failed two log-capture assertions; each passes in
+isolation and in nextest, with no unrelated source change.
+
+Actual bounded LPC refresh: **177 targets**, **79/81 wizard entries**, **4/4 guild**,
+**92/92 supporting targets**, with memory.c newly compiling and no regression,
+timeout or crash. The full admtool set is **34/34**. All 25 leaf controllers now
+have navigation evidence and the previously listed selected-action coverage.
+Untested administrative actions and existing UI quirks retain their scope; this
+is not exhaustive admin testing or completion of the whole-library port. Historical
+753/1180 full-sweep counts are unchanged. Distinct nil, preserved players, 4000ms and
+the existing fixed loopback fixture remain. Evidence: /tmp/lima-object-memory-20261015.
+Two wizard entries remain: socketinfo and treefor; audit socketinfo's existing
+native inspection adapters next, without reopening completed menu/gameplay work.
 
 #### Lima admtool races and memory audit
 
@@ -22842,3 +22894,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-behaviour-goblin]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/goblin.c
 [lima-behaviour-association]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/behaviour/clusters/association.c
 [lima-behaviour-bandage]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/bandage.c
+
+[fl-object-memory-source]: https://raw.githubusercontent.com/fluffos/fluffos/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc

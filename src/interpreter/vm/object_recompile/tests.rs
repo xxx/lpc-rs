@@ -213,6 +213,35 @@ async fn upgrades_identity_and_independent_state_with_new_defaults() {
 }
 
 #[tokio::test]
+async fn object_memory_uses_the_current_image_and_preserves_an_older_snapshot() {
+    let (root, mut vm, admin) = setup("recompile-memory").await;
+    let target = vm.global_state.object_space.lookup("/target#0").unwrap();
+    let old = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let old_txn = TxnHandle::new(Transaction::new(old.inner.clone()));
+    let before = crate::interpreter::memory::object_memory(&target, &old_txn)
+        .await
+        .unwrap();
+    std::fs::write(
+        root.join("target.c"),
+        format!("{ORIGINAL}\nstring extra = \"x\" * 8192;"),
+    )
+    .unwrap();
+    assert_eq!(run(&mut vm, &admin).await.state, "succeeded");
+    let current = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let txn = TxnHandle::new(Transaction::new(current.inner.clone()));
+    let after = crate::interpreter::memory::object_memory(&target, &txn)
+        .await
+        .unwrap();
+    assert!(after.object_bytes > before.object_bytes);
+    assert!(after.program_bytes > before.program_bytes);
+    assert!(after.data_bytes >= before.data_bytes + 8192);
+    let retained = crate::interpreter::memory::object_memory(&target, &old_txn)
+        .await
+        .unwrap();
+    assert_eq!(retained.fields().unwrap(), before.fields().unwrap());
+}
+
+#[tokio::test]
 async fn compilation_and_initializer_failures_leave_the_whole_group_unchanged() {
     let (root, mut vm, admin) = setup("recompile-failure").await;
     for source in [
