@@ -3145,6 +3145,52 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard smartmobs audit and behavior-tree blockers
+
+Audited **14 October 2026** after committing trigger notes as native **4509be70**,
+using dedicated Lima **eff8eb0e**. The [smartmobs command][lima-wizard-smartmobs]
+needs the usual protected CMD dispatch wrapper. Its report body stays unchanged
+in the tested command/README proposal, which remains unadopted and preserves CRLF.
+No new native API is needed for that wrapper.
+
+The inspector's is_smart and parses_made methods belong to the
+[behavior tree][lima-behaviour-tree]; emotion_string belongs to its
+[base cluster][lima-behaviour-base]. This refines the earlier handoff's
+smart-movement description: M_SMARTMOVE alone does not provide those inspectors.
+The command selects loaded smart clones globally and formats their parse count,
+environment short or Nowhere, and mood. Populated rows are source-reviewed only.
+
+The actual [Goblin host][lima-behaviour-goblin] fails compilation at an
+unparenthesized assignment in the [navigation cluster][lima-behaviour-navigation].
+A preliminary compile-only probe changing just those parentheses exposes remaining
+base-cluster object-zero, string call-out and omitted format_list separator
+adaptations. No AI source is replaced in the runtime checks, and no marker/getter
+stub is used to claim populated-report support. The base cluster retains its
+earlier parser-context and naming adaptations. The command, tree, navigation and
+Goblin match upstream **eefaff66**; those upstream claims are source review, with
+execution checks on this port only.
+
+All **four focused checks** pass: original command/dependency failure controls,
+two proposal runtime groups and **thirteen complete positive compile checks**.
+The **fourteen registered shell inputs** include three following pwd checks, with
+zero caught errors. Ten proposal observations verify the exact empty header,
+ignored raw arguments and real shell routing. Direct printf bypasses command
+buffers: overwrite/pipe destinations are empty, append retains prior text and
+incoming text is ignored. Shell/modal/input state and rearming remain.
+
+Evidence: /tmp/lima-smartmobs-audit-20261014. Distinct nil, preserved call-out players
+and **4,000 ms** tasks remain. Locked workspace library-test build and workspace/
+Rust 2024 fixture formatting pass. The fixture uses actual master/simuls/user/body/
+shell/CMD code, one in-memory connection, empty help index and stubbed IMUD. Source
+checkouts stay unchanged, the temporary include is restored and all 49 frozen
+trigger-audit artifacts remain intact. Full AI behavior, populated rows, inventories,
+startup, native full suites and cold timing are not qualified by these checks.
+
+Next adopt the dispatch-only proposal with its bounded coverage retained, then
+audit and port the behavior-tree dependencies before qualifying real smart clones.
+The preliminary base diagnostics are a starting point, not an exhaustive inventory.
+
+
 #### Lima NPC-script trigger registration and recovery audit
 
 Audited **14 October 2026** after committing file function actions as Lima
@@ -22003,3 +22049,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-wizard-scripts]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/scripts.c
 [lima-npc-script]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_npcscript.c
 [lima-npc-trigger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_triggers.c
+[lima-wizard-smartmobs]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/smartmobs.c
+[lima-behaviour-tree]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/behaviour/behaviour_tree.c
+[lima-behaviour-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/behaviour/clusters/base.c
+[lima-behaviour-navigation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/behaviour/clusters/navigation.c
+[lima-behaviour-goblin]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/goblin.c
