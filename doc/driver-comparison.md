@@ -3145,6 +3145,54 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima unittest command and suite framework
+
+Adopted and tested **15 October 2026**, after SPECIAL commits Lima **ee739038**
+and native notes **9813399a**. Eight LPC sources change: unittest, the test daemon,
+the shared suite base and five bundled suite registrations. No native API changes.
+
+The command adds protected CMD entry. The suite base uses four native class-field
+assignments and nil for two missing-object results. Callback examples use bare
+functions or bound pointers, and describe the existing comparison to 1 or 0.
+Thirty-eight bundled registrations use those native callback forms; their test
+bodies remain unchanged. Callback `args` remains one array argument, with nonarray
+values normalized to an empty array, preserving the existing runner behavior.
+
+The initial real rerun exposed a lifecycle mismatch: the test daemon could load
+a suite but could not destroy its `/std/tests` object under the current master
+policy. A suite now exposes `remove_suite` only to the test daemon and removes
+itself through the existing self-destruction path. The daemon requests that removal
+before loading a fresh instance. Master rules and daemon privileges stay unchanged.
+The initial failed rerun is retained as a regression control.
+
+A focused suite inherits the actual base and runs through registered `unittest`
+inputs and the real test daemon. Its eight cases yield the expected six successes
+and two deliberate failures, covering bare/bound callbacks, array arguments,
+normalization, no-argument callbacks and comparison to the expected result.
+Normal/debug output, fresh-object replacement, counter reset and recovery pass.
+Quiet execution is checked through `TEST_D->test_suite(..., -1)`; the command's
+`all quiet` form and full bundled suite execution are not runtime-qualified here.
+A second suite proves that a callback error retains its message, skips later tests
+and permits a subsequent normal run. Debug execution/counts pass again after restart.
+
+The accepted production-driver workflow retains the preceding login, guild,
+SPECIAL, todo/netstat and RST checks, including all 30 lifecycle checkpoints and
+two **151-preload, zero-failure boots**. Seventeen added registered inputs exercise
+the new framework, with fixture suites added only to the disposable test tree.
+No shipped test daemon/base is stubbed and no bundled suite is replaced.
+
+Actual bounded compilation checks **112 targets**: **76/81 wizard commands**,
+**4/4 guild commands** and **27/27 complete supporting objects**, with seven new
+successes and no regression, timeout or crash. All five bundled suites compile;
+that does not establish passing gameplay assertions. The separately checked
+`test_dummy` retains its existing inherited-method arity error and stays unchanged.
+The whole-library count remains its historical measurement. Distinct nil, preserved
+players and 4000ms remain. Evidence: /tmp/lima-unittest-port-20261015.
+
+Five wizard entries remain: admtool, iftp, socketinfo, tasktool and treefor. Full
+bundled gameplay tests, optional configurations and the test dummy are separate
+consumers; these compilation results do not reopen completed equipment audits.
+
 #### Lima guild special command exits
 
 Adopted and tested **15 October 2026**, after guild/catalog/governance commits
