@@ -3145,6 +3145,58 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima NPC-script file actions and trigger audit
+
+Audited **14 October 2026**, using native **5a5ea646** and dedicated Lima
+**d3772fea**, after committing script status support and its notes. The current
+[NPC-script file parser][lima-npc-script] still constructs function actions with a
+packed argument array in its call_other closure. The original control silently
+skips the target call and advances to the following step; it does not raise the
+error initially predicted from source review.
+
+The tested two-file module/README proposal changes one closure: use the parsed
+method name as call_other's second argument and spread the remaining arguments,
+capturing each parsed list separately. The module retains CRLF, its parser/API,
+step logic and existing trigger policy. No native API change is needed.
+
+Actual file loading accepts comments, blank lines, trailing newlines, absolute
+and relative paths. Integer/quoted-string arguments, zero-argument functions and
+distinct consecutive function closures execute correctly. WAIT/DESC data and
+completion are checked. String ACTION sequences execute `@@` commands in order;
+NPCACTION reaches an existing named NPC, skips missing names and excludes bodies.
+The real command path and function-call targets record these effects.
+
+Normal WAIT-to-TRIGGER handoff registers the pattern. Nonmatching messages leave
+state alone; a matching message removes the pattern, advances once and queues the
+real response callback. Explicitly invoking that callback executes its command;
+the following function action completes and a repeated message has no effect.
+The [trigger module][lima-npc-trigger] already calls triggered on a match.
+
+Two existing source limitations are retained: a first-step trigger is never armed,
+and adjacent triggers arm the later pattern while waiting for the earlier one.
+An out-of-order later message is consumed and advances the script prematurely.
+These are reproduced behaviors in the existing engine, rather than effects of
+the callback port fix. They prevent an unrestricted trigger-engine qualification.
+
+All **six focused checks** pass: one original control, four proposal runtime groups
+and **sixteen complete positive compile checks**, including Robert and the state
+daemon. **Five following registered pwd inputs** have zero caught errors; proposal
+groups include four. Real script/trigger/action/CMD/parser/state methods execute
+with fixture NPCs and a small local recording command. Initial control expected an
+exception; only that expectation was corrected to the observed silent skip.
+
+Evidence: /tmp/lima-npc-script-file-audit-20261014. Locked workspace library-test
+build and workspace/Rust 2024 fixture formatting pass under distinct nil, preserved
+call-out players and **4,000 ms** tasks, with one in-memory connection, empty help
+index and stubbed IMUD. Dedicated/original source and other native files remain
+unchanged, include restored and all 38 frozen status-adoption artifacts remain.
+Script and response callbacks are invoked explicitly; broker timing, arbitrary
+file-expression syntax, first/adjacent-trigger fixes, inventories, native suites,
+startup and cold timing remain separate. Next adopt the closure fix and repeat
+five successful proposal checks against actual source, then review trigger
+registration/recovery semantics before deciding on an engine change.
+
+
 #### Lima wizard scripts and NPC-script status adaptation
 
 Adopted and tested **14 October 2026** after audit notes **599db90e**, using native
@@ -21861,3 +21913,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-example-test-dummy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/test_dummy.c
 [lima-wizard-scripts]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/scripts.c
 [lima-npc-script]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_npcscript.c
+[lima-npc-trigger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_triggers.c
