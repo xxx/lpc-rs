@@ -3145,6 +3145,53 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima admtool daemon category
+
+Adapted and tested **15 October 2026**, after root commits Lima **6573c610** and
+native notes **bd49c2f5**. Nine daemon controllers, the admtool base and the shared
+two-argument input helper change; the tenth controller (`misc`) already uses real
+expression closures. Seventy-two leaf callbacks use bare functions or bound
+pointers, while genuine expression closures keep their evaluation timing.
+
+Parent return invokes the base's public help renderer, and alias confirmation
+resumes the active MENUS parser. Two helper callbacks bind the collected first
+argument/action correctly. Missing group/emoji lookup is checked before sorting;
+channel/archive prompt parameters accept text before explicit integer conversion.
+Domain currency formatting supplies its absent separator explicitly. I3 reports
+use sorted loops and native mapping `filter` instead of functional `implode` and
+`filter_mapping`. No native API, master rule or daemon privilege changes.
+
+Real registered input opens all ten menus, renders help and returns to the parent.
+Group edits cover fully prompted, partially supplied and inline two-argument input,
+blank-first-argument abort, member add/remove, missing-group reporting and temporary
+group deletion. Alias edits cover player/wizard bindings, confirmation, resumed
+input and wizard-alias removal. Native group and alias saves survive restart.
+The existing shell retains its copied alias defaults; the fresh login executes
+the newly saved global alias. That existing policy is preserved.
+
+Colour, domain and movement-method reports run against their actual daemons.
+The loopback fixture adds one fixed channel-list reply alongside its mud list,
+providing populated detail/owned-channel reports for all three type labels and
+owner filtering. The existing code sends automatic local subscription packets;
+no live router, file transfer or remote administrative action is exercised.
+Eighty-two added inputs retain all previous checks and two **151-preload,
+zero-failure boots**, with no runtime errors and no remaining admtool clones.
+
+The separate admtool tree now compiles **25/34 targets**, with all ten daemon
+controllers compiling and **nine failing leaves elsewhere**. The bounded refresh
+checks **141 targets**: **79/81 wizard entries**, **4/4 guild entries** and **56/56
+supporting objects**, with the domain/channel controllers newly passing and no
+regression, timeout or crash. The full-library total stays historical. Distinct
+nil, preserved players and 4000ms remain. Evidence:
+/tmp/lima-admtool-daemons-20261015.
+
+Admtool remains open: the other fifteen controllers and untested administrative
+actions still need their own consumer checks. Banish mutations, live channel
+administration, news delivery/restriction changes, full rebuild actions and
+three-argument prompting are not qualified by these flows. Existing controller
+policies, including the duplicate I3 `D` key, remain unchanged. The game category
+is the next source group; memory/status APIs and generated AST syntax stay separate.
+
 #### Lima admtool root and remaining controllers
 
 Audited and root-tested **15 October 2026**, after tasktool commits Lima
