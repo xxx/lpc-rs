@@ -3145,6 +3145,44 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima behavior-tree command dispatch and association-leaf adaptation
+
+Adopted and tested **15 October 2026** after audit notes **93824569**, using the
+dedicated Lima checkout on `lpc-rs-port` at **aae38778** before the pending patch.
+The base cluster and README exactly match the frozen proposal. LPC CRLF remains;
+no native API or AI policy changes. The [command runner][lima-behaviour-base] uses
+literal argument text, empty mapping flags and nil routes for ordinary CMD calls.
+Movement, arrival and departure hooks use bare named pointers.
+
+All **five adopted-source checks** pass: four runtime groups and **sixteen complete
+positive compile checks**. Nine direct NPC command observations include one
+expected throwing handler; four following registered `pwd` inputs have zero caught
+errors. Literal, quoted, empty and flag-like arguments, mapping flags, nil input,
+NPC user/body context, caller restoration before return/rethrow, raw commands,
+native parser fallback and environment-less paths pass. The recorded write before
+the caught handler error remains, and the following command succeeds.
+
+Three explicit advances execute actual evaluation callbacks through look-around,
+limb-configured own-status and study-beings. Actual arrival hooks, association
+registration, stale limb-entry clearing and a parser-dispatched look at the
+newcomer pass. Rust actions/assertions and helper bytes stay unchanged; cross-run
+comparison matches command calls, following inputs, complete compiles and leaf
+observations exactly.
+
+Evidence: /tmp/lima-behaviour-dispatch-adoption-20261015. Source guards now expect
+the adopted base; its fixture replacement is removed. The recording commands and
+look observation remain, with the actual look implementation retained. Distinct
+nil, preserved players, **4,000 ms** tasks and four individual warmups of all 21
+recipes plus actual crafting_d remain. The connection is in memory; IMUD is
+stubbed and the help index empty. Workspace/Rust 2024 formatting and CRLF-aware
+patch checks pass. The temporary include is restored, indexes empty, original Lima
+unchanged and all **75 frozen audit artifacts** intact. Only dedicated base/README
+and native adoption notes remain pending commit.
+
+Next audit equipment inventory selection and wear/wield command paths. These
+prepared-runtime checks do not qualify cold crafting startup, full autonomous AI,
+broker timing or timer lifecycle; earlier NPC-script issues retain their scope.
+
 #### Lima behavior-tree command dispatch and association-leaf audit
 
 Audited **14–15 October 2026** after committing the dependency adaptation as Lima
