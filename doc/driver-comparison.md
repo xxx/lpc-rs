@@ -390,6 +390,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Object enumeration | [`objects()`](efun/objects.md) lists all loaded objects from the current transaction, including its own placements, in unspecified order. [`object_clones`](efun/object_clones.md) lists one compiled program's clones. [`all_inventory`](efun/all_inventory.md) and [`deep_inventory`](efun/deep_inventory.md) exclude objects destroyed in that transaction. | **Not checked**. | **Not checked**. | [`objects`][fl-objects] lists loaded objects with optional filtering, visibility rules and an array-size cap; [`children`][fl-children] groups by base filename. | **Not checked**. |
 | Function inspection | [`functions`](efun/functions.md) lists resolved visible names; [`function_exists`](efun/function_exists.md) reports the defining program, [`function_signature`](efun/function_signature.md) exposes compiled declaration metadata and [`function_info`](efun/function_info.md) inspects pointer bindings. | **Not checked**. | **Not checked**. | [`functions(ob, 1)`][fl-function-declarations] returns declaration rows, including inherited and nonpublic functions; requires PACKAGE_CONTRIB. | **Not checked**. |
 | Program disassembly | [`disassemble`](efun/disassemble.md) returns the live object's current compiled listing as lines. [CLI `-S` / `--emit-asm`](../lpc-rs-lpcc/README.md#usage) prints instructions without executing LPC. | **Not checked**. | **Not checked**. | [`dump_prog`][fl-program-dump] writes program details and optional disassembly; requires `PACKAGE_DEVELOP`. | **Not checked**. |
+| Compiler tree inspection | No LPC syntax-tree API; the Rust frontend retains an AST. [Lima audit](#lima-wizard-treefor-audit). | **Not checked**. | **Not checked**. | `__TREE__(...)` and `__TREE__{...}` produce compiler-tree arrays only with `DEBUG`. [Lexer][fl-tree-lexer], [grammar][fl-tree-grammar]. | **Not checked**. |
 | Named global access | [`variable_info`](efun/variable_info.md) reads all declarations, with master authorization for foreign inspection; [`store_variable`](efun/store_variable.md) replaces one by name and optional declaring source, with retained-type checks and separate authorization for foreign writes. | **Not checked**. | **Not checked**. | [`variables`][fl-global-declarations] enumerates names or name/type rows, including nonpublic declarations; [`fetch_variable`][fl-fetch-variable] / [`store_variable`][fl-store-variable] read/write values with `PACKAGE_CONTRIB`. [Lookup and access restrictions][fl-named-globals]. | **Not checked**. |
 | Connection observation | Authorized one-to-one [`snoop`](efun/snoop.md), asynchronous typed callbacks, bounded delivery. | Not reviewed. | Not reviewed. | One-to-one snooping; optional callback delivery. [Source][fl-snoop]. | Not reviewed. |
 | Connection model | [Raw TCP sockets](tcp-sockets.md) and [Telnet sessions](efun/query_connection.md) with [line](efun/input_to.md) and [character](efun/get_char.md) callbacks and optional [TLS listeners](secure-connections.md). Connection metadata supplies idle time for [Lima player naming](#lima-player-naming). | Driver-managed [Telnet negotiation][cd-telnet]. | Telnet with [mudlib negotiation hooks][ld-telnet] and optional [TLS][ld-tls]. | Configurable [Telnet, binary, WebSocket and TLS listeners][fl-config]. | Configured [Telnet and binary ports][dgd-config]; additional facilities can come from [extension modules][dgd-extensions]. |
@@ -597,6 +598,7 @@ save import still require further driver support. See [class support](lpc/classe
 | Character input | `get_char` delivers one UTF-8 character or control byte, then returns to line mode unless rearmed. Its reference specifies first-registration-wins and extra arguments after the input. [Reference][fl-get-char]. | [`get_char`](efun/get_char.md) shares transactional registration with `input_to`; the last registration wins across both APIs. Its second argument is boolean no-echo; use ordinary pointer binding for extra arguments, which precede the character. Classic SGA negotiation is supported; RFC LINEMODE is refused. Unread input is preserved across mode changes. Audit repeated registrations, callback argument order, and flag use. |
 | Function inspection | `functions(ob, 1)` returns name, declared argument count, return type and saved parameter types for inherited and local functions, including nonpublic declarations. Flag 2 excludes inherited definitions; flag 3 combines both choices. Unsaved argument types are zero. [Reference][fl-function-declarations], [implementation][fl-function-declarations-source]. | [`functions(ob, 1)`](efun/functions.md) returns local names; the default includes inherited names. Both hide foreign nonpublic functions. [`function_exists`](efun/function_exists.md) supplies the defining program. [`function_info`](efun/function_info.md) describes pointer bindings rather than declaration types or arity. Use [`function_signature(name, ob)`](efun/function_signature.md) alongside name enumeration for fresh declaration records, including fixed/default counts, parameter types, reference flags and modifiers. Counts exclude variadic collectors; program paths retain source extensions. See the [Lima dbxfuncs port](#lima-wizard-dbxfuncs-port). |
 | Program disassembly | `dump_prog(ob, flags, file)` writes program details to a file; flag 1 includes disassembly and flag 2 line information. Requires `PACKAGE_DEVELOP` and write permission. [Implementation][fl-program-dump], [declaration][fl-program-dump-spec], [format][fl-program-dump-format]. | Use [`disassemble(ob)`](efun/disassemble.md) for a fresh array of native instruction lines, including nonpublic code and initializers. Print lines individually when the complete listing exceeds one string's limit; no output file or heading split is needed. The diagnostic format differs and is not stable. For source compilation without LPC execution use [CLI assembly output](../lpc-rs-lpcc/README.md#usage); [`compile_string`](efun/compile_string.md) initializes its object normally. There is no native `dump_prog` file API. |
+| Compiler tree inspection | Debug-only `__TREE__` forms return nested compiler-node arrays. [Lexer][fl-tree-lexer], [grammar][fl-tree-grammar], [generator][fl-tree-generator]. | No native `__TREE__` or syntax-tree efun. A source-inspection API needs native frontend access; function metadata and disassembly cannot reproduce that tree. The [Lima audit](#lima-wizard-treefor-audit) proposes a general `syntax_tree(name, source)` diagnostic returning lines; it is not implemented. |
 | Structured frame inspection | Core `dump_trace()` returns root-to-current frame mappings with source details and current argument/local values where available; the runtime error handler uses the same builder. Container values retain shared references. [Builder][fl-dbxframe-trace], [efun][fl-dbxframe-efun]. | [`error_handler`](apply/master/error_handler.md) optionally receives root-to-leaf `frames` with source details and named, rendered argument/local values captured before rollback. Mutable containers use summaries. Limits retain inner frames and expose omission/truncation counts. Caught failures retain a string; there is no live-frame inspection efun. See the [Lima adaptation](#lima-saved-error-frame-support). |
 | Process resource usage | Core `rusage()` samples `RUSAGE_SELF`, returning 16 integer fields or an empty mapping on syscall failure; CPU times are in milliseconds, while maxrss retains the platform unit. [Implementation][fl-rusage-audit-source], [fallback][fl-rusage-audit-fallback]. | [`rusage()`](efun/rusage.md) uses the same keys and process scope, but normalizes peak RSS to KiB, including on Apple targets. Check any assumptions about maxrss units. Unsupported backends return an empty mapping. OS samples repeat on transaction retry; [`uptime()`](efun/uptime.md) measures VM lifetime, which can differ from process lifetime in embedded use. |
 | Stack inspection | `call_stack(0/1/2)` returns defining programs, executing objects, or function names, starting with the current frame. `all_previous_objects()` aliases `previous_object(-1)`. [Reference][fl-call-stack], [declaration][fl-core-spec]. | [`calling_program(-1)`](efun/calling_program.md), [`calling_object(-1)`](efun/calling_object.md), and [`calling_function(-1)`](efun/calling_function.md) provide aligned caller arrays, excluding the inspecting function. A local helper can include the requesting function as row zero. Use direct no-argument queries for immediate-caller checks. Replace `all_previous_objects()` with [`previous_object(-1)`](efun/previous_object.md) at the call site; a simul wrapper adds its own caller entry. Frame counts and synthetic labels need not match FluffOS. |
@@ -3146,6 +3148,50 @@ starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
 ordinary shell state, defaults, directory resolution, flags and pipeline behavior
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
+
+#### Lima wizard treefor audit
+
+Reviewed **15 October 2026**, after socketinfo commits Lima **9bba6c12** and
+native **14b13eca**. The original treefor command lacks protected CMD dispatch
+and returns an integer from void main. Temporary repairs make the command file
+compile, but its generated `__TREE__{ ... }` program still fails. The parenthesized
+form also fails. An entry-only repair would therefore overstate port support.
+
+At reviewed FluffOS **44532e02**, the [lexer][fl-tree-lexer] recognizes `__TREE__`
+only with `DEBUG`, and the [grammar][fl-tree-grammar] calls the debug-only
+[tree generator][fl-tree-generator]. The reviewed [CMake path][fl-tree-build]
+enables `DEBUG` for Debug builds. This produces nested arrays of compiler-specific
+nodes and opcode names; it is a developer diagnostic, not source evaluation or
+portable AST serialization. These are pinned source findings, not FluffOS execution.
+
+Native Rust already provides parsed and semantically checked frontend trees.
+The existing `TreePrinter` omits nil, class definitions/construction, member access,
+compound member assignment, references, spreads and explicit capture markers.
+Probes retain those nodes in the AST while showing their missing output. It also
+prints literal newlines without escaping, builds one combined Rust string and discards
+some visitor errors. A small input produces **18,792 bytes** of tree output.
+Directly exposing the current printer would preserve these diagnostic gaps.
+
+Recommend `string *syntax_tree(string name, string source)` for a complete LPC
+translation unit: use the checked frontend with ordinary source identity,
+include/inherit authorization, transaction-visible files, current simul efuns and
+diagnostics. Render the root's frontend AST, including inherit declarations rather
+than flattening parent bodies, without publishing an object or running initializers
+or functions. Constant folding and frontend normalization remain visible; this is
+not a reversible source representation. Complete node rendering, escape literals,
+propagate errors and enforce output limits during rendering. Return diagnostic
+lines with an explicitly unstable format, reusing the same formatter for host tools.
+This is a proposed API; no native syntax-tree efun exists yet.
+
+Then adapt treefor to wrap its input as a function in a wizard-home source identity,
+print the returned lines and report errors without the EVAL file/object round trip.
+Disassembly remains codefor's separate purpose. Seven compile controls have their
+expected outcomes; fourteen Rust inputs run in parsed/checked forms, with three
+expected syntax/semantic failures. Includes, folding, inheritance markers, omitted
+nodes, output size and lack of execution are checked. Dedicated Lima sources remain
+unchanged. No production-driver run or workspace build/test suite is repeated.
+The adopted inventory stays **80/81 wizard**, **4/4 guild**, **93/93 supports**;
+treefor remains unported. Evidence: /tmp/lima-treefor-audit-20261015.
 
 #### Lima socketinfo command
 
@@ -22931,3 +22977,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-behaviour-bandage]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/bandage.c
 
 [fl-object-memory-source]: https://raw.githubusercontent.com/fluffos/fluffos/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc
+
+[fl-tree-lexer]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc#L148-L152
+[fl-tree-grammar]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y#L2827-L2843
+[fl-tree-generator]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/generate.cc#L667-L811
+[fl-tree-build]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/CMakeLists.txt#L173-L180
