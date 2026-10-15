@@ -3145,6 +3145,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima todo/netstat and remaining command dependencies
+
+Adopted and tested **15 October 2026**, after RST/mkdir commits Lima **46d8f42d**
+and native **b405dc87**. `todo` and `netstat` gain protected CMD adapters; netstat
+uses `sizeof` for its empty-list test, preserving native array identity semantics.
+No shared reporter, news, editor, socket wrapper or native implementation changes.
+
+Six command cases pass through actual production-driver login: netstat display,
+ignored arguments and plain file output; todo inline text, editor completion and
+abort. Inline redirection characters remain report text and create no destination
+file. Two actual todo news posts persist; abort adds none. Following `pwd` and
+saved-state restart checks pass, including netstat and restored posts. The original
+30 account/gameplay checkpoints and two 151-preload boots remain clean. An initial
+fixture incorrectly looked in the replayed journal after restart; checking the
+actual main news save fixes that assertion without production changes.
+
+A bounded **95-target** compile check reaches **74/81 wizard commands**, retains
+0/4 guild commands and passes all ten complete supporting objects. Todo/netstat
+are the only new successes; no prior success is lost. The full 1,180-source sweep
+is not repeated. Evidence: /tmp/lima-remaining-commands-20261015. Distinct nil,
+preserved players and 4,000 ms remain; source/log copies stay under /tmp.
+
+Temporary dispatch-only adapters also classify all thirteen preceding command
+failures without adopting them. Six wizard entry files compile after that edit,
+but this does not qualify their dynamically loaded consumers:
+
+| Remaining group | Concrete boundary |
+|---|---|
+| Governance and four guild commands | Governance's daemon has an integer-return adaptation; its guild daemon fails on a duplicate `guild_favours` declaration. The shared SPECIAL base also needs typed absence and a decision about `defer`. |
+| Admtool and tasktool | Their real tool compositions fail on typed string returns or inherited constructor arity. Entry adapters alone do not make the menus usable. |
+| Iftp | Typed absence and a legacy modal callback remain; its interactive object compiling does not establish file-transfer behavior. |
+| Socketinfo | `socket_status()` is absent; select an explicit status API adaptation rather than assuming an entry adapter supplies it. |
+| Treefor | A void-return repair exposes runtime-generated `__TREE__` source requiring a separate compiler-diagnostic decision. |
+| Unittest | The shared suite base still uses function-member access for class data; running the suites remains unqualified. |
+
+FluffOS source review at **2c272875**, with core `F_DEFER` and the configurable
+`reverse defer` ordering, shows callback registration on the current control frame
+and execution on frame removal, including error unwinding. See
+[registration](https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc#L3262-L3296),
+[frame exit](https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/interpret.cc#L1386-L1441)
+and [error restoration](https://github.com/fluffos/fluffos/blob/2c27287500daf48a87a1f89d69a97d8b9603028d/src/vm/internal/base/interpret.cc#L5535-L5547).
+A zero-delay timer changes that contract. No FluffOS runtime, new defer API or
+unreviewed substitution is introduced. Seven wizard and four guild commands
+remain; further work should follow these shared dependency boundaries.
+
 #### Lima RST restart cleanup
 
 Fixed and tested **15 October 2026**, following the failed lifecycle checkpoint
