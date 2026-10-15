@@ -378,7 +378,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Saving and restarting | [Object and mapping save files, including class records](save-format.md), with [`nosave` globals](lpc/nosave.md); [`save_value`](efun/save_value.md) / [`restore_value`](efun/restore_value.md) serialize individual values as strings. Whole-world snapshot/restart is not implemented. | [Object variable saves][cd-save]. | [Object saves][ld-save] with selectable formats and a serialised-string form. | [Object saves][fl-save] with flags, optional compression and a serialised-string form; [`nosave` globals][fl-nosave-keywords] with `SENSIBLE_MODIFIERS`; individual values through [`save_variable`][fl-save-variable] / [`restore_variable`][fl-restore-variable]. | Object saves plus [whole-system snapshots][dgd-dump] and [restart from a snapshot][dgd-intro]. |
 | Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [Type-sensitive array set matching with destroyed-object normalization](lpc/comparisons.md#collection-matching); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
 | Text file writes | [`write_file`](efun/write_file.md) stages append (0/default) or whole-file replacement (1), with pending reads and commit-time delivery. | **Not checked**. | **Not checked**. | Core `write_file` uses bit 1 for overwrite and bit 2 for compression. [Implementation][fluffos-file-write-flags]. | **Not checked**. |
-| File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`rm`](efun/rm.md) checks pending entry changes, and [`rmdir`](efun/rmdir.md) checks pending directory membership without reading file contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
+| File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`mkdir`](efun/mkdir.md) and [`rm`](efun/rm.md) check pending entry changes, and [`rmdir`](efun/rmdir.md) checks pending directory membership without reading file contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
 | Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
 | Commands and grammars | [`command`](efun/command.md#callback-context), [`add_action`](efun/add_action.md), [`parse_command`](efun/parse_command.md), [`parse_sentence`](efun/parse_sentence.md) with [separate actor and command giver](efun/parse_sentence.md#callback-context), caller-owned [`parse_my_rules`](efun/parse_my_rules.md) with [retained LPC callers](efun/parse_sentence.md#callback-context), [multiword verbs](efun/parse_add_rule.md#the-verb), [multiple text captures](efun/parse_add_rule.md#text-captures-and-split-selection), [visible-only slots](efun/parse_add_rule.md), [structured scopes](efun/parse_sentence.md#scope), and [four handler tiers](apply/object/parser_handlers.md), [deferred failure diagnostics](apply/master/parser_error_message.md), and [`parse_string`](efun/parse_string.md), plus [native command patterns](command-rules.md) and [structured parser registration inspection](efun/query_parser_registry.md). | [`add_action` commands][cd-actions] and object-aware [`parse_command` patterns][cd-parser]. | [`add_action` commands][ld-actions] and optional [`parse_command` patterns][ld-parser]. | [`add_action` commands][fl-actions], [`parse_command` patterns][fl-patterns] and [`parse_sentence` rules and handlers][fl-parser]; build options below. | [`parse_string`][dgd-parse] accepts grammar text and produces parse results. |
 | Driver–mudlib interface | [Master, object, living and connection applies](../ulib/doc/applies.md), including [constructor arguments](efun/clone_object.md), explicit [load](apply/master/valid_load.md), [inherit](apply/master/valid_inherit.md) and [destruction](apply/master/valid_destruct.md) permissions; configurable simul-efuns and automatic inheritance in [default.env](../default.env), with optional [`valid_override`](apply/master/valid_override.md) control of explicit efun calls. [`error_handler`](apply/master/error_handler.md) receives text diagnostics and bounded, rendered frame snapshots for uncaught evaluation failures. | [Master callbacks][cd-master] define policy and connections; [simulated efuns][cd-functions] expose mudlib functions. | [Driver hooks][ld-hooks] configure movement, identity and creation; [simul-efuns][ld-simul] expose mudlib functions and structs. | [Master and object applies][fl-driver] for connections and lifecycle; [simul-efuns][fl-simul] extend or wrap efuns. [`valid_override`][fl-valid-override] controls explicit efun bypasses. | A [driver object and automatically inherited auto object][dgd-intro]; the auto object can wrap kfuns. |
@@ -3144,6 +3144,75 @@ starting with cmds/wiz/pwd.c and trans/cmds/cd.c, then trans/cmds/ls.c. Validate
 ordinary shell state, defaults, directory resolution, flags and pipeline behavior
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
+
+#### Lima RST restart cleanup
+
+Fixed and tested **15 October 2026**, following the failed lifecycle checkpoint
+below. RST invokes its existing private recursive cleanup through `unguarded(1,
+&delete_directory(RST_DIR))`, matching its other filesystem writes. The daemon's
+visibility, fixed output directory, rebuild algorithm and sweep timers stay.
+
+The permission repair exposed a native [`mkdir`](efun/mkdir.md) inconsistency:
+`file_size` saw a pending `rmdir`, but `mkdir` still checked the physical directory
+and raised an already-exists error. `mkdir` now uses the existing pending-entry
+view, applying earlier changes before checking existence. Effects still commit
+in order. Four native regression cases cover nested recreation, rollback,
+pending-file conflicts and a removed file path becoming a directory.
+
+The production-driver regression preserves all **30 account/gameplay checkpoints**.
+Before the saved-account restart it adds two obsolete RST files in nested output
+directories, with no saved RST watermark and no account/body reseeding. Restart
+removes both files and both nested directories and recreates all seven category
+directories. Cold boot and restart each load **151 preloads with zero failures**;
+both processes exit zero and overall checkpoint status passes. The original
+permission failure and intermediate mkdir failure remain recorded.
+
+Distinct nil, preserved players, **4,000 ms** tasks and normal master/recipe/help/
+RST paths remain. The temporary IMUD addresses use the same receive-only loopback
+endpoint; no external router or additional service case runs. Evidence:
+/tmp/lima-rst-restart-20261015. The earlier full compile inventory remains a
+separate measurement; source-wide migration and the nine wizard/four guild command
+backlog remain unfinished. Existing wear/wield evidence stays closed.
+
+#### Lima port checkpoint
+
+Checked **15 October 2026** with native **9d3b424c** and dedicated Lima **03cf0cbe**.
+The configured fresh-account path works; the source-wide port remains incomplete.
+A locked workspace build passes. A fresh **1,180-source** sweep yields **753
+successes, 427 failures, zero timeouts/crashes**. All 90 verbs, 49 transitional
+commands and nine transitional administrator commands compile; player commands
+are 65/67, wizard commands 72/81 and guild commands 0/4. Standalone counts include
+optional and partial sources and are not a completion percentage. The checked
+complete core objects and the configured starting room compile.
+
+The production driver passes **30 account/gameplay checkpoints** across cold boot
+and a fresh-process saved-account restart: account/character creation, menu,
+Grand Hall, look/inventory, native saves, restored entry and logout. Both processes
+exit zero. Each boot attempts **151 normal preloads**: fresh boot has zero failures;
+restart reproduces **one RST cleanup error**, `rmdir: permission denied` at
+`rst_d.c:46`. Overall checkpoint status remains failed because of that preload,
+even though both sessions pass. Clean restart is the concrete lifecycle gap.
+
+Validation uses distinct nil, preserved call-out players and **4,000 ms** tasks.
+Only the temporary IMUD router/OOB addresses change to loopback; a receive-only
+local endpoint supplies no router replies. Actual RST/help and normal recipe
+preloads run without replacement. No external host, upstream driver, live-intermud
+session or new service case is exercised. Source/configuration stay unchanged.
+Evidence: /tmp/lima-port-checkpoint-20261015.
+
+The retained October 6 per-file inventory has **219 fewer successes**, with no
+previous success lost today. October 10 documented 690 successes; its detailed
+/tmp package is gone, so no per-file comparison against that date is claimed.
+Nine wizard tools and four guild commands still stop first at the established
+CMD dispatch adapter. Experimental random2 remains deferred and suicide disabled
+upstream. Other failures need consumer-level classification rather than new native
+APIs inferred from standalone diagnostics.
+
+Wear/wield, two-handed loadouts, armour absorption and equipment restoration were
+already covered by the October 7 player audits. Untested NPC gear-choice callers
+are separate coverage. The next bounded repair is RST restart cleanup; further
+module audits are not automatically queued. Existing Lima bugs, foreign-data
+migration, optional configurations and full autonomous AI retain their scope.
 
 #### Lima behavior-tree command dispatch and association-leaf adaptation
 
