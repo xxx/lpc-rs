@@ -3145,6 +3145,46 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima admtool races and memory audit
+
+Audited **15 October 2026**, after management commits Lima **91c530e2** and
+native notes **9f6ff77c**. This is source/compile review, with no adopted LPC or
+native implementation change. The remaining mudinfo category has two leaves.
+The races report already uses native class fields and genuine expression callbacks;
+its one named action needs the established bare-function adaptation. Its top-level
+glob includes six race files, including the documentation template, and excludes
+restricted/coder. All six definitions compile and their literal adjustment sums are
+zero. Report execution and category navigation remain unqualified.
+
+Memory inspection is a genuine native feature gap. Lima calls memory_info(object)
+at exactly one site, sorts every loaded object by the result and describes rows as
+an upper bound that ignores sharing. The category catalog eagerly loads every leaf
+for its metadata, so the unresolved memory controller blocks normal entry to both
+menus. Neither a hidden controller nor a placeholder result was introduced.
+Temporary callback proposals compile **41/42 targets**; the sole failure remains
+memory_info. The admtool set stays **33/34**, and earlier command/lifecycle counts
+retain their existing scope. No cold boot or runtime suite is repeated for this audit.
+
+At the pinned FluffOS revision, with core F_MEMORY_INFO enabled, the object result
+includes the full program plus instance data/header, even for clones; its no-argument
+form uses separate driver accounting. Source review only, no FluffOS execution.
+[Implementation](https://raw.githubusercontent.com/fluffos/fluffos/2c27287500daf48a87a1f89d69a97d8b9603028d/src/packages/core/efuns_main.cc).
+Native [allocator resident memory](efun/query_resident_memory.md) and
+[diagnostic source storage](efun/source_cache_stats.md) measure different things.
+[Global inspection](efun/variable_info.md) exposes values but cannot supply compiled
+program or allocation sizes. Serialized length is not an object-memory measure.
+
+Recommendation, not an implemented API: add a native object_memory_info(object)
+returning object/program/data/total byte estimates, then use its total in Lima's
+report. Count shared values once within a queried object, include the full program
+for each object's row, handle cycles, read through the current transaction and
+avoid following ordinary object references into the whole world. Cache immutable
+program accounting and calculate mutable data when requested. The report must say
+estimate rather than claiming a strict upper bound or memory freed on destruction.
+A global driver total is separate work; the proposed name gives the new API an
+explicit object scope. Exact accounting boundaries and field names need agreement
+before implementation. Evidence: /tmp/lima-admtool-mudinfo-20261015.
+
 #### Lima admtool user and access menus
 
 Adapted and tested **15 October 2026**, after game-category commits Lima
