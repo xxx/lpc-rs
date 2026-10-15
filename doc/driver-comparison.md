@@ -3145,6 +3145,42 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima wizard smartmobs dispatch adaptation
+
+Adopted and tested **14 October 2026** after audit notes **45c75dde**, using the
+dedicated Lima checkout at **eff8eb0e**. The actual command matches the reviewed
+dispatch-only proposal and retains CRLF. Its report body and raw-argument policy
+stay unchanged. README wording now describes adoption and retains the audit's
+coverage limits. No native API or behavior-tree change is included.
+
+All **three adopted-source checks** pass: two runtime groups and **thirteen complete
+positive compile checks**. **Twelve registered shell inputs** include two following
+pwd checks, with zero caught errors. Ten exact empty-header/routing observations,
+input records and shell/modal/input state match the successful audit checks.
+The test actions, assertions and helper bytes are unchanged. The fixture copies
+the actual command from the dedicated checkout without replacing it.
+
+Empty reports retain the Object/Parses/Env/Mood header and ignore raw arguments.
+Direct printf bypasses command buffers: overwrite/pipe files stay empty, append
+keeps prior text and incoming text is ignored. Populated reports remain
+unqualified because the real Goblin behavior-tree host still has compilation
+blockers. Navigation/base/tree sources and enabled clusters remain unchanged.
+
+Evidence: /tmp/lima-smartmobs-adoption-20261014. Locked workspace library-test build
+and workspace/Rust 2024 fixture formatting pass under distinct nil, preserved
+call-out players and **4,000 ms** tasks. Actual master/simuls/user/body/shell/CMD
+code runs with one in-memory connection, an empty help index and stubbed IMUD.
+Other tracked source and original Lima remain unchanged, the temporary include is
+restored, indexes are empty and all 50 frozen audit artifacts remain intact.
+Full AI execution, populated rows, inventories, startup, native full suites and
+cold timing are not qualified by this change.
+
+Next audit and port the behavior-tree dependencies, starting with the recorded
+navigation assignment and base-cluster adaptations, then qualify populated reports
+against real smart clones. Earlier NPC-script engine issues remain separate Lima
+follow-ups.
+
+
 #### Lima wizard smartmobs audit and behavior-tree blockers
 
 Audited **14 October 2026** after committing trigger notes as native **4509be70**,
