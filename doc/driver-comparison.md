@@ -3145,6 +3145,55 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima guild catalog and governance
+
+Adopted and tested **15 October 2026**, after todo/netstat commits Lima **d128fe22**
+and native **8fbf85ee**. This batch adapts ten LPC sources and the bundled guild
+save; no native API or implementation changes. SPECIAL/defer and the four guild
+special commands remain unchanged.
+
+The guild daemon retains its existing `nosave` favour catalog and removes the
+duplicate persistent declaration. It rebuilds the catalog from source on creation,
+like its mission/object caches. Thirty-five class-data accesses use `.`, named
+call-outs use function values, a missing guild directory returns nil, and expired
+object-array cleanup uses nil. The two mission/favour bases use native callbacks;
+five stock setup overrides accept their parent's existing guild-string argument.
+Governance adds protected CMD entry, five bound modal callbacks and an explicit
+integer-zero return for an absent manager.
+
+The bundled guild save's known September limitation is resolved explicitly:
+**ten zeros in five declared string-array fields across two classes become nil**.
+Every other byte of that saved file stays unchanged, including integer zeros,
+case-sensitive keys and historical content. Runtime reads verify bundled values
+0 and 10 and a nil attribute array. This is a reviewed bundled-data adaptation;
+`restore_object` still imports numeric zero as zero and class validation stays strict.
+The old zero-mode-only guild-save qualification is historical, not the active Lima
+configuration.
+
+Actual production-driver input loads **four mission definitions and one favour**,
+reads and mutates class data through public guild APIs, runs governance reports,
+menu listing/invalid input, leader changes, manager add/remove, menu exit/reentry
+and the absent-manager branch. A separate test guild preserves both bundled guild
+records. Native saves omit the transient catalogs; a fresh process rebuilds them
+and restores the test guild/title/attributes/leader/manager state. These add **24
+registered inputs** to the preceding workflow. All 30 login/gameplay checkpoints,
+six todo/netstat cases and two **151-preload, zero-failure boots** remain passing.
+The initial restore refusal is retained as the data regression control.
+
+Fresh bounded compilation passes **75/81 wizard commands**, retains 0/4 guild
+commands and passes all **19 complete supporting objects**, across **104 targets**.
+Governance and nine guild/catalog helpers become successes, with no regression or
+timeout/crash. The earlier full-library count is not relabelled. Evidence:
+/tmp/lima-guild-foundation-audit-20261015. Distinct nil, preserved players, 4,000 ms,
+existing source line endings and the same receive-only loopback IMUD fixture remain.
+No guild daemon or content stub replaces the actual loaders.
+
+This qualifies the catalog/governance foundation, not mission execution/rewards,
+buff application, guild rooms/NPCs, special combat or legacy user-data imports.
+Existing remove-manager result/count policy stays. Six wizard and four guild
+special commands remain. SPECIAL needs a deliberate function-exit defer adaptation
+or generic feature decision before its callback is changed.
+
 #### Lima todo/netstat and remaining command dependencies
 
 Adopted and tested **15 October 2026**, after RST/mkdir commits Lima **46d8f42d**
