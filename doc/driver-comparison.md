@@ -3145,6 +3145,51 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima admtool root and remaining controllers
+
+Audited and root-tested **15 October 2026**, after tasktool commits Lima
+**5c384d75** and native notes **6a93e448**. Four LPC sources adapt the command,
+root, shared admtool base and directory catalog. This qualifies the root flow;
+admtool's category actions remain an open porting item.
+
+The command adds protected CMD entry. Six callbacks use native bare/bound values;
+the base supplies concrete module defaults, including nil optional metadata, and
+uses nil for a missing parent and absent constraint. Menu layouts are constructed
+only for clones. The previous prototype constructor built whole menus just to
+answer metadata queries, recursively loading all leaf controllers. Root discovery
+now loads the four real category prototypes without loading any of the 25 leaf
+prototypes; no category is hidden and no metadata or loader is stubbed.
+
+Real root input verifies all four category labels/keys, help, blank input, invalid
+selection, extra-argument rejection, quit/reentry and removal of menu clones.
+Object lookup verifies zero leaf prototypes before and after root use. Root/help/
+quit works after saved-account restart. Seventeen new registered inputs retain
+all earlier checks and both **151-preload, zero-failure boots**, with no runtime
+errors. The fixed loopback fixture, distinct nil, preserved players and 4000ms stay.
+
+The bounded core refresh checks **125 targets**: **79/81 wizard entries**,
+**4/4 guild entries** and **40/40 supporting objects**, with eight newly compiling
+entries/hosts and no regression, timeout or crash. These are compilation counts,
+not completed-controller counts. The separate 34-target admtool audit improves
+from 2 to 23 compiling targets; **eleven leaf modules still fail**:
+
+| Area | Remaining compile leads |
+|---|---|
+| Daemons | `domain`: format-list argument; `i3chan`: reducer forms and mapping filter. |
+| Game | `body`: class fields; `messages`: format-list argument; `quest` and `settings`: typed nil; `skill`: function syntax. |
+| MUD info | `memory`: missing per-object `memory_info` API. |
+| Privileged modules | `frames`: typed absent string; `security`: reducer form; `user`: restore-variable API. |
+
+All 25 leaf actions remain unqualified, including those that compile. They still
+need callback/class-data and actual consumer review. Parent-menu return calls a
+protected renderer remotely; alias input resumption still references a legacy
+uninitialized dispatcher, and two-argument prompting has an old callback form.
+These are named followups for the first concrete category, not reasons to repeat
+the entire shared audit. No native API, master rule or shared menu library changes.
+The full-library count remains historical. Evidence:
+/tmp/lima-admtool-audit-20261015. Two wizard entry files remain (`socketinfo`,
+`treefor`), alongside the explicitly open admtool controller work.
+
 #### Lima tasktool menus and task persistence
 
 Adopted and tested **15 October 2026**, after iftp commits Lima **23a7ae6c** and
