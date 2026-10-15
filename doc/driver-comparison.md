@@ -3145,6 +3145,59 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima behavior-tree command dispatch and association-leaf audit
+
+Audited **14–15 October 2026** after committing the dependency adaptation as Lima
+**aae38778**, notes as native **a6e8fe65**. The tested, unadopted two-file base/README
+proposal preserves CRLF and needs no new native API. Upstream references are
+source-reviewed at **eefaff66**; runtime checks use the current port.
+
+The [base command runner][lima-behaviour-base] still passed six empty strings and
+the argument text to [CMD][lima-command-base]. In the current port's
+[stdio path][lima-command-stdio], its empty-string output route is rejected before
+the ordinary handler runs. The control records no handler invocation and no thrown
+error. Raw no-redirection handlers and native parser fallback already work.
+The proposal uses the tuple already used by [M_ACTIONS][lima-follow-actions]:
+literal argument text, empty mapping flags, nil route slots and original input.
+
+Movement, arrival and departure hooks also need bare named pointers. Their former
+expression closures returned function references rather than invoking the hooks.
+With only the command tuple fixed, study-beings could register the newcomer but
+received no arrival-driven look. Converting the three hook sites lets actual room
+movement record the arrival and the [association leaves][lima-behaviour-association]
+issue the real parser-dispatched look. Existing AI and timer policies remain.
+
+All **six focused checks** pass: one original control, four proposal runtime groups
+and **sixteen complete positive compile checks**. Twelve direct NPC command calls
+record argument/context behavior, including one expected handler error. Literal,
+quoted, empty and flag-like text reaches ordinary handlers; flags are mappings and
+input is nil. NPC user/body context is correct inside handlers, and the original
+player is restored before return or rethrow. Following commands, raw handlers,
+native look fallback, unknown commands and environment-less paths pass.
+
+Three explicitly invoked actual evaluation callbacks execute look-around,
+own-status and study-beings. Real arrival hooks, association records, room-change
+clearing and a look at the newcomer pass. This Lima configuration uses limbs:
+own-status clears stale worst-limb entries for the unwounded fixture. An initial
+hit-point assertion was corrected to that configured contract; the intermediate
+tuple-only run then exposed the remaining inert hooks. All those logs remain.
+
+Evidence: /tmp/lima-behaviour-dispatch-audit-20261014. **Five following registered
+pwd inputs** have zero caught errors. The actual master/simuls/user/body/shell/CMD/
+stdio/parser/Goblin/flea code runs with two recording command fixtures; look's
+handler is observed without replacing its implementation. The locked workspace
+library build and workspace/Rust 2024 formatting pass. Distinct nil, preserved
+players, **4,000 ms** tasks and individual preloads of 21 recipes plus crafting_d
+remain, with one in-memory connection, empty help index and stubbed IMUD. Both Lima
+checkouts stay clean, the temporary include is restored and all 63 frozen dependency
+adoption artifacts remain intact. Cold startup, full autonomous AI, timer lifecycle,
+other leaves, inventories and native full suites remain separate.
+
+Next adopt the base/README proposal and repeat five successful proposal checks
+against actual source, then audit the equipment cluster's inventory selection
+and wear/wield command paths. Earlier NPC-script source issues retain their scope.
+
+
 #### Lima behavior-tree dependency adaptation
 
 Adopted and tested **14 October 2026** after audit notes **3723d7b0**, using dedicated
