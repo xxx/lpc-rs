@@ -3145,6 +3145,60 @@ ordinary shell state, defaults, directory resolution, flags and pipeline behavio
 before adoption. Experimental random2 remains deferred and suicide disabled
 upstream; existing Lima source issues stay separate from compatibility work.
 
+#### Lima behavior-tree dependency audit
+
+Audited **14 October 2026** after committing smartmobs dispatch as Lima **5c71d766**
+and adoption notes as native **77008e0f**. The tested, unadopted proposal changes
+five LPC files and README. All LPC files retain CRLF; no native API changes.
+Upstream references are source-reviewed at **eefaff66**; execution uses this port.
+
+The [base cluster][lima-behaviour-base] uses nil for absent object/class references,
+typed callbacks and explicit default format_list separators. The
+[navigation cluster][lima-behaviour-navigation] parenthesizes its assignment and
+returns explicit failure when there are no exits, with a matching declaration.
+The [association cluster][lima-behaviour-association] uses native filter and a typed
+corpse callback, and removes a surplus argument from its existing two-parameter
+sort comparator. Comparator ordering and targeting rules remain unchanged.
+
+The [tree evaluator][lima-behaviour-tree] uses explicit integer returns, drops an
+unused recursive argument and schedules a typed evaluation callback. Its pending
+check searches this object's call-outs by function name through existing native
+introspection. This preserves the check's scope without introducing another efun.
+The actual Goblin inventory also needs [bandage][lima-behaviour-bandage] to name its
+object inherit with an explicit alias and convert its heal value using to_float.
+
+All **seven focused checks** pass: two original failure controls, four proposal
+runtime groups and **seventeen complete positive compile checks**. **Sixteen
+registered inputs** include six following pwd checks, with zero caught errors.
+Nine populated smartmobs observations use actual Goblin clones locally, remotely
+and without an environment, plus an active excluded prototype. Exact fields,
+environment truncation, real moods, ignored arguments and direct-output routing
+pass. Inspection preserves observed parse counts, queue, emotions and timer IDs.
+All five configured clusters initialize. The fixture explicitly advances the real
+root before placement; nil readers, empty/root progression, no-exit results,
+pending-evaluation suppression and an actual selected evaluation callback pass.
+
+Cold Goblin setup reached the existing **4,000 ms** limit in the crafting daemon's
+recipe scan, almost entirely in compilation and with no conflicts. The prepared
+fixture initializes all **21 stock recipe prototypes** and the real crafting
+daemon in separate calls before Goblin creation. Every recipe currently compiles.
+The budget stays unchanged; this qualifies prepared runtime rather than cold
+startup. Bandage failures, cold timeouts and the fixture corrections remain in
+the evidence package.
+
+Evidence: /tmp/lima-behaviour-audit-20261014. The locked workspace library build and
+workspace/Rust 2024 fixture formatting pass; a final run reuses that binary with
+fixed input hashes. Distinct nil, preserved call-out players and 4,000 ms tasks
+remain, with one in-memory connection, empty help index and stubbed IMUD. Both Lima
+checkouts stay clean, the temporary include is restored and all 41 frozen smartmobs
+adoption artifacts remain intact. Full autonomous AI, later leaves, broker timing,
+timer lifecycle, inventories, startup and native full suites remain separate.
+
+Next adopt the six-file proposal and repeat its five successful proposal checks
+against actual source. Then audit later leaf execution and the base cluster's
+legacy command-dispatch tuple, retaining the earlier NPC-script source follow-ups.
+
+
 #### Lima wizard smartmobs dispatch adaptation
 
 Adopted and tested **14 October 2026** after audit notes **45c75dde**, using the
@@ -22090,3 +22144,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-behaviour-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/behaviour/clusters/base.c
 [lima-behaviour-navigation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/behaviour/clusters/navigation.c
 [lima-behaviour-goblin]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/goblin.c
+[lima-behaviour-association]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/behaviour/clusters/association.c
+[lima-behaviour-bandage]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/bandage.c
