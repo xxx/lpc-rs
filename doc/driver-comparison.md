@@ -1355,6 +1355,43 @@ no Rust workspace gate is claimed for this LPC-only batch. Next refresh the whol
 source inventory before selecting another consumer family. Evidence:
 /tmp/lima-recorder-20261016.
 
+#### Lima guild artefact item and menu audit
+
+Reviewed **16 October 2026**, after inventory commits native **2dc657f5** and Lima
+**fd3152e8**. A **five-file temporary proposal** adapts the [pager][lima-artefact-item],
+[module][lima-artefact-module], [board][lima-favour-board], [ledger][lima-guild-ledger]
+and [menu][lima-artefact-menu]: float values, explicit object formatting, native
+callbacks/partial application, the parent's parser declaration, explicit long time
+format and nil read argument. The pager retains one owner callback because Lima's
+hook API requires exact function identity; a real drop/get then deduplicates it.
+All headers, three CRLF files and three missing final newlines remain. Dedicated
+LPC/native code, shared frameworks, authorization and configuration are unchanged.
+Original claims use pinned **eefaff66** source review, without upstream execution;
+distinct nil, preserved call-out player and 4,000 ms remain configured.
+
+Baseline **5/5 family targets fail**; final **17/17 complete family/caller targets
+compile**. The focused **72.73s / 71-input** run passes all **30 lifecycle
+checkpoints**, two clean **151-preload** boots, saved login and normal exits, with
+no failed apply or worker panic. Five item constructors, real clone/look/put/get/
+drop/read/use commands, blank/programmed/full modules, movement-hook identity,
+blank/populated ledgers, two sorted contributors, nested game menu, mission/favour
+details and both confirmation cancellations pass. A separate guild uses public
+configuration/data APIs; bundled Yakitori/lfe records compare unchanged. Real
+master/simuls/user/body/parser, same six fixtures/two address overrides, no helper
+or grant. The prior **1429-input** full replay and **957/1182** inventory retain
+their measured scopes; neither is repeated or advanced arithmetically here.
+
+Installed modules remain hidden from parser scope; retrieval says they are absent
+before reaching the existing permanent-install method. Previous-owner hook policy,
+the board's inclusive top-20 slice and unconfigured leader behavior remain original
+source policy. **Mission/favour activation and active-buff display are untested**:
+activation needs the still-unported mission controller, with known string call_out
+and object-zero boundaries. Cancellation does not qualify those branches. No
+native feature change is recommended. Next adopt this proposal with the retained
+production replay, then audit the controller dependency. RST shutdown/default-
+argument observations, reserved inheritance/cache work and completed equipment/TCP
+remain separate. Evidence: /tmp/lima-guild-artefact-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
