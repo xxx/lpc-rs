@@ -799,6 +799,58 @@ AI equipment choice, burst-rate semantics and other gameplay remain separate.
 Existing wear/wield and TCP work is not reopened. Native workspace tests were not
 rerun for this LPC-only change. Evidence: /tmp/lima-ranged-ammunition-20261015.
 
+#### Lima school and tutorial audit
+
+Reviewed **15 October 2026** at native **cc92e4b9** and dedicated Lima **74166d7d**,
+with distinct nil, preserved call-out players, audit/system includes and 4,000 ms.
+All **88 school sources** still match original Lima **eefaff66**. The previous
+ranged batch is committed; this audit changes no dedicated LPC or native
+implementation. The retained whole-source count remains 818/1,180.
+
+The family contains **87 room sources and one map**. In a disposable copy,
+removing **87 active include semicolons** and converting **104 outer `@TAG`
+blocks to ordinary adjacent string literals makes **88/88 compile**, without
+changing native preprocessing or string syntax. Conversion recognizes strings
+and comments and consumes each entire outer block, so nested example code stays
+text rather than becoming directives, inherits or executable statements. See the
+[nested room example][lima-school-basicroom] and [school map][lima-school-map].
+The reviewed [FluffOS lexer][fl-school-text-blocks] at **44532e02** handles those
+blocks without a feature define; its terminator/newline/escape handling informs
+the conversion. This is pinned source review, not upstream execution.
+
+A standalone native literal control using real simuls verifies all **104 texts**
+(**46,222 bytes**) against the extracted original bodies, including blank lines,
+quotes, backslashes, maps and embedded directives. It does not initialize the
+master or school rooms. All CLI checks use at most two processes, two Tokio
+workers each, 4 GiB per process and 40 seconds per file.
+
+A static review of executable tokens finds **190 exits and 14 object references**.
+All 87 room nodes are reachable from the academy in that graph. Three references
+are stale: two lessons request `/domains/std/map`, whose reviewed current source
+is `/domains/std/object/map`; the [sword lesson][lima-school-sword] returns to
+missing `R "sword"` instead of `R "sword01"`. Applying those three path corrections
+in the temporary copy leaves no missing static references and retains 88/88
+compilation. Graph reachability does not prove runtime movement or initialization.
+
+Of **10 distinct referenced object sources**, **six compile and four fail**:
+bank_accountant reaches a string/float expression in M_ACCOUNTANT, dragon reaches
+assignment/negation syntax in M_WANDER, Harry uses legacy anonymous-function syntax,
+and shopkeeper reaches float/nil/arity adaptations in M_VENDOR. These first
+boundaries affect five lessons' NPCs; they do not establish five failed room
+initializations or four missing native APIs. No NPC is removed or replaced to
+make the source count pass. The [teaching text][lima-school-value-example] also
+retains unsupported example forms: nested text blocks in ten lessons, a string-
+named call_out, an include semicolon and two integer-valued set_value examples.
+Their text-preservation controls intentionally preserve the original wording.
+
+Recommend the school source syntax/path conversion next, with native example
+updates reviewed explicitly and ordinary room/map/navigation checks through the
+real game. Keep the four NPC dependency sources as a separate coherent audit;
+compiling all school files alone does not qualify their lessons. No gamedriver or
+Rust workspace test was run for this source/text audit. Dedicated configuration,
+original checkout and prior ranged/runtime evidence remain unchanged. Evidence:
+/tmp/lima-school-audit-20261015.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
@@ -23122,3 +23174,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-plasma-ammunition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/ammo/13mm_plasma.c
 
 [lima-fire-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/fire.c
+
+[lima-school-basicroom]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/basicroom.c
+[lima-school-map]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/O/map.c
+[lima-school-sword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/sword02.c
+[lima-school-value-example]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/object03.c
+[fl-school-text-blocks]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc#L1039-L1398
