@@ -1551,6 +1551,39 @@ reserved inheritance/cache work remain separate. No native feature is introduced
 no Rust gate is claimed for this LPC-only correction. Evidence:
 /tmp/lima-favour-lifecycle-20261016.
 
+#### Lima mission completion and automatic expiry audit
+
+Reviewed **16 October 2026**, after favour commits Lima **2843e0c6** and native
+**2d7e655f**. A **temporary one-file proposal** makes [guild add_log][lima-guild]
+record the body's existing name when available and 'system' when no body exists.
+The function body is identical to pinned original **eefaff66** before this proposal;
+no upstream driver is executed. A real playerless mission expiry exposes the actor
+assumption: reward succeeds, then delayed cleanup dereferences nil in add_log and
+leaves the mission/controller live. No native feature is required. Header/LF,
+dedicated LPC/native source, master, privilege, configuration and fixtures remain
+unchanged. Distinct nil, preserved call-out player and 4,000 ms remain configured.
+
+**22/22 complete targets compile**. The **111.78s / 172-input** focused run passes
+all **30 lifecycle checkpoints**, two clean **151-preload** boots, saved login and
+normal exits, without failed apply or worker panic. The actual STATE_D repeater is
+recreated through public APIs under nil player, with the interactive user restored
+before setup returns. Public duration/queue APIs accelerate expiry; the test does
+not invoke mission ending directly. Ten normal bucket gifts yield 20 wood and one
+online contributor's 500-favour reward; an incomplete two-wood mission pays zero.
+Both clear the controller, destroy after the original 10/5-second delays and log
+'<system>' completion/failure. Same six fixtures/two address overrides, actual
+master/simuls/user/body/parser, no new LPC helper or grant. The earlier **1639-input
+full replay plus 10 restored-favour checks** and **957/1182** sweep retain their scopes.
+
+Multiple contributors/rounding, offline rewards, other recipes, overlapping missions
+and repeat-end/cancellation policy remain unqualified. Cleanup explicitly flushes
+the diagnostic logs through an existing save API; autonomous delayed-log persistence
+is not newly qualified. Next adopt the proposal with the retained production replay,
+placing its helper before the favour helper's saved-state preparation. Unrelated
+game policy, native observations and reserved inheritance/cache work stay separate.
+No Rust gate or whole-source refresh is claimed. Evidence:
+/tmp/lima-mission-expiry-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
