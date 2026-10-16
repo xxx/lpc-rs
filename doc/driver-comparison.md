@@ -1242,14 +1242,70 @@ fixtures, fixed local frames/two address overrides and real master/simuls/user/b
 commands; no new LPC test helper or grant.
 
 This establishes the bundled grid/maze virtual-room paths, not every virtual
-factory. PARAM_OBJ and the recorder/button/panel/transcript family remain the next
-consumer audit; the master now selects factories through virtual_blueprint rather
-than the legacy object-returning entry. General parameterized objects, broader
+factory. The following audit reviews PARAM_OBJ and its recorder consumers; the
+master selects virtual factories through virtual_blueprint rather than the legacy
+object-returning entry. General parameterized objects, broader
 coordinate/game policy, idle cleanup, unrelated game logic, completed equipment/TCP
 work and reserved native discussions retain their scopes. The whole-source
 **924/1,180** remains its preceding measured sweep; the two new files are not an
 arithmetic revision of that inventory. No Rust workspace gate is claimed for this
 LPC-only migration. Evidence: /tmp/lima-virtual-rooms-20261016.
+
+#### Lima parameterized objects and recorder audit
+
+Reviewed **16 October 2026** after virtual-room support commits Lima **e11b627d**
+and native **fd0e88d3**. A **three-file proposal** is tested only in a disposable
+library; dedicated LPC/native implementation and configuration remain unchanged.
+Original claims use pinned **eefaff66** source review, without upstream execution.
+Distinct nil, preserved call-out player and 4,000 ms remain configured.
+
+All five recorder-family sources compile in the baseline, but constructing the
+[recorder][lima-recorder] fails when its container tries to clone button/play through
+an unsupported parameterized path. [PARAM_OBJ][lima-param-obj]'s existing object
+factory and explicit string constructor arguments already produce labelled button
+clones. Each recorder owns five independent buttons; native [clone_object](efun/clone_object.md)
+clones a virtual blueprint's program with fresh state. The proposed consumer calls
+the existing object factory directly and replenishes missing labels on reset,
+retaining normal container reset for its [panel][lima-recorder-panel]. No native
+feature, generic clone wrapper or parameterized virtual namespace is needed by
+this bundled consumer.
+
+In [button][lima-recorder-button], use the bare my_long callback and an explicit
+normal direct_press_obj check. Recorder's two delayed callbacks use native bound
+pop_up pointers. [Container][lima-container]'s reset cleanup filters live objects
+instead of subtracting integer zero: the original expression retains a removed
+panel reference in distinct-nil mode and fails during filename matching. This
+one-line adapter is verified by removing children in one command and resetting in
+a later command. Other container/gettable/readable/native code remains unchanged.
+All three source headers/LF are preserved; [transcript][lima-recorder-transcript]
+and PARAM_OBJ itself need no source change in the proposal.
+
+**14/14 complete targets compile**. Two separately checked gettable/readable files
+are host fragments with expected missing-definition diagnostics, covered through
+their complete recorder/button/panel/transcript hosts; they are not native gaps.
+The final **106.43s** focused run passes **30 lifecycle checkpoints**, two
+clean **151-preload** boots, saved login and normal process exits. Its **108
+audit inputs** check two independent recorders with five buttons/one panel each,
+normal descriptions/presses/push/read/take refusals, recording/append/overwrite,
+three resulting transcripts, six delayed one-shot callbacks, exact missing-label/
+panel replenishment, surviving button identity, idempotent reset, silence text and
+cleanup. Real master/simuls/user/body/commands, same six fixtures, fixed local frames/
+two address overrides; no new LPC helper or grant. Final proposal logs have no
+background panic. The prior **1318-input** full gameplay run is retained, not
+replayed here; the whole-source **924/1,180** remains its measured sweep.
+
+The baseline diagnostic additionally records a native RST shutdown observation:
+after SIGTERM cancels background file_time work, a worker reports a closed-committer
+panic despite process exit zero. It precedes this proposal and does not recur in
+the final run; no native fix is claimed. Reset failure and shutdown evidence remain
+diagnostic records, not passed production qualification.
+
+Recommend adopting these three bounded corrections, then replaying the retained
+production coverage with the recorder checks. Arbitrary parameterized virtual names,
+attic recorder, play-button/message-policy quirks, ignored pop_up return strings,
+idle cleanup and unrelated game logic remain separate. Completed equipment/TCP and
+reserved native discussions stay closed. Evidence:
+/tmp/lima-recorder-audit-20261016.
 
 #### Lima basic player commands and help
 
@@ -23605,3 +23661,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-sloping-tunnel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/caves/Sloping_Tunnel.c
 [lima-labyrinth-entrance]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/labyrinth/0,0.c
 [lima-plains-server]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/V_Plains.c
+[lima-param-obj]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/param_obj.c
+[lima-recorder]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/recorder.c
+[lima-recorder-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/recorder/button.c
+[lima-recorder-panel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/recorder/panel.c
+[lima-recorder-transcript]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/recorder/transcript.c
