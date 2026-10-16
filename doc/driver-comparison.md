@@ -1747,7 +1747,7 @@ guard for child refusal strings and a native bound one-shot callback. Its active
 item check filters objects by truthy healing flag: an ordinary bucket otherwise
 returns nil, survives subtracting zero and wrongly blocks the first item. Pain
 killers matches the OBJ parser argument, and three pet treats use integer FOOD
-values/deluxe weight1.0. Cigarette/joint need no edits. Original value/fuel/30s/count
+values/deluxe weight 1.0. Cigarette/joint need no edits. Original value/fuel/30s/count
 policy and raw headers/line endings remain. No native API, master, privilege,
 configuration, framework or fixture change. Original claims pin **eefaff66** source
 review, without upstream execution; configured distinct nil/preserved player/4000ms.
@@ -1768,6 +1768,40 @@ full replay and **966/1182** inventory retain measured scopes without repetition
 additive count. Next adopt the five files with retained replay before saved-favour
 setup. Existing native observations and reserved inheritance/cache remain separate.
 Evidence: /tmp/lima-consumables-audit-20261016.
+
+#### Lima slow-healing and consumable support
+
+Reviewed **16 October 2026**, after audit commits Lima **3dab1202** and native
+**026c4c82**. Five dedicated LPC files exactly match the audited proposal. Slowheal
+uses explicit conversion, a mixed consume guard, a bound remaining-count timer and
+an object predicate that skips nil non-healer flags. Pain killers matches the OBJ
+parser argument; pet treats preserve integer FOOD values/multiplier and deluxe
+weight1.0. Cigarette/joint need no edits. Headers/line endings, fuel/heal/abuse/value
+formulas, original count 10 and 30s intervals remain. No native API/code/config/
+master/privilege/framework/fixture change. Original claims pin **eefaff66** source
+review, without upstream execution; distinct nil/preserved player/4000ms remain.
+
+**62/62 complete targets compile**. Full **470.4s** replay passes **1989
+first-session inputs**, including **108 consumable inputs**, plus **10 retained
+restored-favour inputs**, all 30 lifecycle checkpoints/two clean 151-preload boots,
+saved login/bank restoration and normal exits, without failed apply/runtime input
+error/STATE_D error/panic. Previous 1871-input scope remains with unchanged helpers
+and retained sequence comparison; repeated observations/generated/menu/saved values
+may vary. **966/1182** remains its actual preceding source sweep.
+
+Real eat/light/smoke/refusals/non-healer inventory/single-active guard and treat
+bites/values/head healing pass. A natural 30s callback heals the head by 4 again
+and schedules count 8 after count 9. Three terminal checks cancel pending timers and explicitly
+call public timed_healing(0); the full course/disconnect/transfer/broad health/pet
+policy remains separate. Controls clean up before retained mission/expiry/favour
+setup and actual restoration. Same six fixtures/two address overrides and actual
+master/simuls/user/body/parser, no new LPC host/helper/body/grant.
+
+Next commit this adoption and audit camera/button/picture consumers, whose last
+sweep fails button's integer mass argument. Review actual construction/press/photo
+delivery before adapters. Completed recorder/container/framework/TCP, native
+observations and reserved inheritance/cache work stay separate. Evidence:
+/tmp/lima-consumables-20261016.
 
 #### Lima basic player commands and help
 
