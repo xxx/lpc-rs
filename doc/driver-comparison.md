@@ -1300,12 +1300,55 @@ panic despite process exit zero. It precedes this proposal and does not recur in
 the final run; no native fix is claimed. Reset failure and shutdown evidence remain
 diagnostic records, not passed production qualification.
 
-Recommend adopting these three bounded corrections, then replaying the retained
-production coverage with the recorder checks. Arbitrary parameterized virtual names,
+The recorder adoption below applies the three bounded corrections and replays the
+retained production coverage with these checks. Arbitrary parameterized virtual names,
 attic recorder, play-button/message-policy quirks, ignored pop_up return strings,
 idle cleanup and unrelated game logic remain separate. Completed equipment/TCP and
 reserved native discussions stay closed. Evidence:
 /tmp/lima-recorder-audit-20261016.
+
+#### Lima recorder support
+
+Reviewed **16 October 2026** after audit commits native **493c9408** and Lima
+**4e2b9aa5**. The three source files exactly match the reviewed proposal: recorder
+uses the existing PARAM_OBJ object factory per label and replenishes missing buttons
+on reset; button has a bare long callback and normal press check; bound pop_up
+callbacks are scheduled natively. Container reset filters live objects before
+matching children. All headers/LF remain. PARAM_OBJ, panel/transcript, master,
+native code, authorization hooks and configuration are unchanged. Original claims
+remain pinned **eefaff66** source review, without upstream execution. Distinct nil,
+preserved call-out player and 4,000 ms remain configured.
+
+**14/14 complete targets compile** from the adopted dedicated source. The final
+**276.80s** production replay passes all **30 lifecycle checkpoints**, two
+clean **151-preload** boots, saved login, banker restoration and normal exits.
+It retains the preceding gameplay families (1321 replay records) and adds
+**108 recorder inputs**, **1429 total**. The static pre-virtual command sequence
+matches after normalizing only consecutive identical npc-wander/junk-pulse polls.
+The unchanged 136-input virtual helper checks the current generated maze layout;
+all prior room, constructor/search/state/menu/command and connected-player vehicle
+cases remain. The recorder sequence matches the accepted focused audit exactly.
+
+Two recorders construct five independently labelled button clones and one panel
+each. Normal look/press/push/read/get commands verify descriptions, refusals,
+recording/append/overwrite and three transcripts. Six actual delayed one-shot
+callbacks complete. Removing a record button and panel in one command, then resetting
+in another, recreates just those children and preserves four button identities;
+a second reset creates no duplicates. Instance state, silence text and cleanup
+pass. The two recorders are removed and the player is empty-handed in Grand Hall
+before restart. Same six accepted fixtures, fixed local frames/two address overrides,
+real master/simuls/user/body/commands, no new LPC helper or grant.
+
+The final driver log has no failed apply or background panic. The audit's baseline
+RST/closed-committer shutdown observation remains recorded separately and unfixed;
+this run makes no claim of resolution. Native code is unchanged. PARAM_OBJ remains
+an explicit clone factory, with no need for generic virtual-clone state copying.
+Original playback/message policy, broader parameterized namespaces, retired attic
+code, idle cleanup, equipment/TCP and reserved native discussions retain their
+scopes. The whole-source **924/1,180** remains its preceding measured inventory;
+no Rust workspace gate is claimed for this LPC-only batch. Next refresh the whole
+source inventory before selecting another consumer family. Evidence:
+/tmp/lima-recorder-20261016.
 
 #### Lima basic player commands and help
 
