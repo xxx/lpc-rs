@@ -684,65 +684,63 @@ the adaptations described below.
 #### Lima source coverage
 
 The current dedicated-checkout inventory, reviewed **15 October 2026** against
-native **b1355532** and Lima **7bcd6943**, checks all **1,180 `.c` files**:
-**818 compile, 362 fail, zero timeouts and crashes**. It uses distinct nil,
-preserved call-out players and 4,000 ms, with two CLI workers, two Tokio threads
-per worker, a 4 GiB address-space cap and a 40-second timeout per file. Target
-constructors do not run; the real simulated-efun program is initialized for each
-check. These are standalone-source results, including fragments and optional code,
-not a port-completion percentage or evidence of 362 upstream bugs/native gaps.
+native **e6822728** and Lima **39da199b**, checks all **1,180 `.c` files**:
+**924 compile, 256 fail, zero timeouts and crashes**. The identical target set
+gains **106 successes without regressions** since the previous 818 checkpoint:
+88 school sources, 11 ranged/ammunition sources and seven NPC/account objects.
+It uses distinct nil, preserved call-out players, 4,000 ms, two CLI processes,
+two Tokio workers each, 4 GiB and 40s per file. Target constructors do not run;
+real simulated efuns initialize for the checks. Counts include fragments and
+optional code; they are not a completion percentage or native-gap count.
 
-Compared with the preceding 753/1,180 checkpoint, the identical target set has
-**65 new successes and no lost successes**. Player commands are **65/67** (random2
-deferred, suicide disabled upstream), wizard **81/81**, guild **4/4**, verbs **90/90**,
-transitional **49/49** and transitional administrator **9/9**. All 17 tracked core
-objects still compile, including master, simuls, user, body, both shells and the
-configured/previously adapted daemons. All 22 std/classes files and eight Pinto
-examples compile; this alone does not establish their runtime behavior.
+Player commands remain **65/67** (random2 deferred, suicide disabled upstream),
+wizard **81/81**, guild **4/4**, verbs **90/90**, transitional **49/49** and
+administrator **9/9**. All **17** tracked core objects, **88** school sources,
+**22** std/classes files and **eight** Pinto examples compile, as does the prior
+124-target NPC/school/core set. Compilation alone does not qualify runtime behavior.
 
 | Source family | Compile | Fail |
 |---|---:|---:|
 | WWW | 7 | 3 |
 | cmds | 240 | 2 |
 | contrib | 7 | 23 |
-| daemons | 47 | 15 |
-| domains | 190 | 170 |
+| daemons | 48 | 14 |
+| domains | 291 | 69 |
 | obj | 59 | 13 |
 | secure | 37 | 14 |
-| std | 165 | 122 |
+| std | 169 | 118 |
 | trans | 66 | 0 |
 
-Selected source-composition review confirms **32 failed standalone fragments**
-inside passing complete hosts: user components, IMUD/channel components, shell
-parts and the CMD dispatcher base. Their missing host methods are not new efuns.
-Other module failures remain unclassified until their intended compositions are
-checked. Of all failed targets, 58 first report a diagnostic outside the target;
-an inherited failure can still be a real complete-consumer blocker.
+**58 failed standalone fragments have passing complete hosts**. The prior 32
+user/channel/IMUD/shell/CMD reviews retain matching source hashes and passing
+hosts; 26 additional module/body/adversary compositions are confirmed by direct
+inheritance and current host compilation. These are classification results,
+without implementation changes or new gameplay claims. Further fragments and
+alternate configurations remain unclassified; the other 198 failures are not a
+count of complete objects or new efun requirements. Forty-three first diagnostics
+point outside their checked target. First-blocker categories include 71 type
+adaptations, ten declaration mismatches, 14 legacy-syntax cases and 88 unresolved
+names/host contracts needing further consumer review, in addition to the reviewed
+fragments, arities, source paths, iteration and two deferred/disabled commands.
 
-The school has **88 failing examples**: 87 first reject semicolons after #include,
-and the map first rejects a legacy @ text block. Later school diagnostics are not
-yet exposed. Other first-blocker groups include 77 value/argument/return-type
-adaptations, 16 inherited declaration mismatches, five non-mixed scalar collectors,
-and unresolved names/host contracts requiring consumer review. These are first
-blocking diagnostics, not counts of fixes or distinct missing driver features.
-Contributed/WWW code, legacy sockets and alternate configurations retain their own
-scope; no optional service is enabled or contacted by this inventory.
+The configured lifecycle and selected gameplay retain the preceding **881-input**
+production-driver evidence: **30 checkpoints**, two clean **151-preload** boots,
+saved login, bank restoration and normal exits. This checkpoint adds no runtime,
+native implementation/workspace test or service check. Original **eefaff66** and
+configuration remain unchanged; no upstream driver is executed. Completed
+wear/wield, guild/framework/menu and TCP work stays closed, with existing source
+quirks and reserved native discussions separate.
 
-The configured fresh-account/character and saved-login lifecycle remains qualified
-by the retained production-driver run: 30 checkpoints, two 151-preload boots without
-failures, normal exits and the selected ordinary command/menu flows. That run uses
-only its fixed loopback fixture; live services, all administrative actions, foreign
-saves and full gameplay assertions remain separate. No new driver runtime or native
-build/test suite was run for this source-only classification. All LPC sources and
-the original Lima checkout remain unchanged.
-
-The ranged weapon/ammunition batch below ports 11 of these failed targets and
-qualifies the selected matching pistol/clip flows. Its bounded checks do not replace
-this whole-source inventory. General inheritance-policy changes and completed
-wear/wield work remain separate decisions. School/tutorial conversion, other standard object
-families and optional contributions form a finite backlog rather than an automatic
-one-file gameplay audit chain. Inventory evidence:
-/tmp/lima-source-families-20261015. Earlier dated reports retain their scopes.
+Next audit the **22 standard junk examples** together with the material-spawner,
+stateful and junk bases: **25 targets**, 23 failing and two passing. Twenty examples
+first reject integer weight/value arguments. The [material spawner][lima-material-spawner]
+has a void-expression return and path-argument adapter to review; the
+[dirt pile][lima-dirt-pile] changes its initializer contract, while
+[random trash][lima-random-trash] selects ten bundled junk paths. These are first
+boundaries for a consumer audit, not an adopted patch or proof that later errors
+are known. Inventory evidence: /tmp/lima-source-inventory-20261015. The earlier
+818 checkpoint remains at /tmp/lima-source-families-20261015; dated implementation
+reports below retain their original scopes.
 
 #### Lima ranged weapons and ammunition
 
@@ -912,8 +910,9 @@ non-trailing-default bug retain their scopes. Evidence:
 #### Lima school NPC support
 
 Reviewed **15 October 2026**, following the audit committed as native **3adb4da3**
-and Lima **901aca3e**. **Eleven LPC sources** adapt the four NPC dependencies and
-their required consumers, pending commit in the dedicated port. Configuration,
+and Lima **901aca3e**. The resulting **eleven LPC sources** and README are committed
+as Lima **39da199b**, with native notes **e6822728**. They adapt the four NPC
+dependencies and required consumers. Configuration,
 original **eefaff66**, native implementation and master policy remain unchanged.
 Upstream claims use the pinned source review above; no other driver was executed.
 
@@ -23291,3 +23290,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-school-account-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/account_d.c
 [lima-school-vendor-list]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/list.c
 [lima-school-vendor-buy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/buy.c
+[lima-material-spawner]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/material_spawner.c
+[lima-dirt-pile]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/junk/dirt_pile.c
+[lima-random-trash]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/junk/random_trash.c
