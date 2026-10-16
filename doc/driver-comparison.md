@@ -1834,6 +1834,43 @@ before saved-favour preparation; completed frameworks/TCP, native observations a
 reserved inheritance/cache work remain separate. Evidence:
 /tmp/lima-camera-audit-20261016.
 
+#### Lima camera support
+
+Reviewed **16 October 2026**, after audit commits Lima **61122c8e** and native
+**3740cd3c**. The [button][lima-camera-button] change exactly matches the proposal:
+explicit mass conversion preserving 4 and a concrete press guard retaining default
+visibility/short checks. [Camera][lima-camera-object]/[picture][lima-camera-picture]
+source, existing callback and get/do_not_restore behavior stay. Headers/LF/final
+newline remain. No native API/code/config/master/privilege/framework/fixture change;
+original claims pin **eefaff66** source review, without upstream execution.
+
+**72/72 complete targets compile**. Full **413.38s** replay passes **2028
+first-session inputs**, including **50 camera inputs**, plus **10 retained
+restored-favour inputs**, all 30 lifecycle checkpoints/two clean 151-preload boots,
+saved login/bank restoration and normal exits, without failed apply/runtime input
+error/STATE_D failure/panic. Prior 1989-input scope remains with unchanged helpers
+and retained sequence comparison; repeated observations/generated/menu/saved values
+may vary. **966/1182** remains its preceding actual sweep.
+
+Normal press/push creates four photos, three carrier/one room, capturing two actual
+room descriptions and preserving older snapshots after movement. Hidden button
+look/press, get refusal and child retention pass. In-memory public M_SAVE roundtrips
+preserve picture long and restore exactly one newly constructed button that still
+presses. Fresh-driver item restoration is not qualified; wrapper restart follows
+cleanup. Same six fixtures/two address overrides and real master/simuls/user/body/
+parser, no new LPC helper/body/host/grant; distinct nil/preserved player/4000ms stay.
+Camera cleanup precedes retained mission/expiry/favour preparation and restoration.
+The initial full run's floor-photo assertion assumed identical independently random
+camera sentences; it is retained. The verified helper compares six permitted full
+snapshots differing only in that line, keeping all other text exact and all audited
+cases; no source/RNG change. Focused 78.44s/50-input replay passes.
+
+Next commit this adoption and audit the writable-paper example/M_WRITING_SURFACE
+string-hook boundary with the existing write verb; WIP burnable std/paper.c is
+separate. Completed hook/parser/container/save/TCP frameworks, broader game policy,
+native observations and reserved inheritance/cache work remain separate. Evidence:
+/tmp/lima-camera-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
