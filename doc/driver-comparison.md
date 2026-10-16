@@ -1187,18 +1187,69 @@ to Inside_Cave. Cleanup returns the player empty-handed to the Grand Hall before
 restart. Same six accepted source fixtures, fixed local frames/two address overrides
 and real master/simuls/user/body/commands; no new LPC helper or grant.
 
-This qualifies the bounded source adaptations; **virtual room loading remains
-unported**. The two expected virtual-load controls still demonstrate the existing
-configured-clone versus blueprint-path mismatch, leave no named virtual room and
-remove their diagnostic clones. The entrance's corrected server reference does
-not fix lowercase generated-path routing. Next migrate virtual factories to return
-blueprint paths and initialize actual requested virtual identities, preserving maze
-state and grid configuration with consistent case routing. No native API change is
+This qualified the bounded source adaptations; virtual room loading was still
+unported in that run. Its expected failed-load controls captured the clone/path
+mismatch. The virtual-room migration below replaces them with positive loading,
+identity/reuse and lowercase-routing checks while preserving the other room cases. No native API change is
 made here. Recorder/parameterized objects, out-of-grid policy, unrelated original
 game logic, completed equipment/TCP work and reserved native discussions retain
 their scopes. The whole-source **924/1,180** remains its preceding measured sweep;
 no new whole-tree count or Rust workspace gate is claimed for this LPC-only batch.
 Evidence: /tmp/lima-standard-rooms-20261016.
+
+#### Lima virtual room factories
+
+Reviewed **16 October 2026** after source-adaptation commits Lima **ede8a6da** and
+native **a30c92a4**. Six production files implement the room-factory migration:
+master, grid server, Labyrinth/Labroom and two additions, std/grid_room.c plus the
+lowercase domains/std/room/labyrinth.c proxy. Existing headers/LF are preserved;
+the additions carry the source header. Native code/apply contracts, authorization
+hooks, configuration, V_Plains and the entrance remain unchanged. Original claims
+remain pinned **eefaff66** source review, without upstream execution. Distinct nil,
+preserved call-out player and 4,000 ms remain configured.
+
+The master now asks an ancestor server for **virtual_blueprint(string coordinates)**
+and returns that string to native [compile_object](apply/master/compile_object.md).
+Lookup creates no configured room clone. Grid selectors recognise canonical in-range
+x/y names and return std/grid_room; that room's setup parses its actual file_name
+and asks the existing server to configure it. Maze selectors recognise canonical
+in-range x,y names and return Labroom (or the entrance). Labroom obtains its six
+setup values from query_room_configuration on the named server. The lowercase
+proxy delegates to the existing uppercase Labyrinth singleton, preserving one maze
+while matching generated paths. Legacy direct virtual_create APIs still construct
+clones, with their preceding positive controls retained.
+
+**14/14 complete implementation/caller targets compile**. The focused **90.96s**
+run and final **281.52s** production replay each pass **30 lifecycle
+checkpoints**, two clean **151-preload** boots, saved login and normal exits.
+The full replay retains the prior gameplay families (1182 records including
+69 room controls), adding **136 virtual-room inputs**, **1318 total**. Six old
+room-command lines change within the known failed-load block: loading/string calls
+now succeed, identity/reuse is verified and the lowercase route exists. The other
+63 room commands stay; non-room command sequence comparison normalizes only
+consecutive identical npc-wander/junk-pulse polls. Banker restoration and both
+connected-player vehicle handovers remain checked.
+
+All **64 plains cells/256 cardinal exits** and **49 reachable maze cells** match
+the server data, descriptions, exits and requested names. Lookups reuse the same
+objects, with virtual rooms reported as non-clones. **13 normal movement commands**
+exercise cold grid-room entry, an edge return, maze entry/revisit and return to the
+Grand Hall. Property changes remain local to one room. Two destruction/recreation
+cases restore configuration without the temporary property; the maze keeps its
+shared layout. Blueprint lookup and materialization create no factory room clones.
+Explicit teardown removes the checked rooms before restart. Same six retained
+fixtures, fixed local frames/two address overrides and real master/simuls/user/body/
+commands; no new LPC test helper or grant.
+
+This establishes the bundled grid/maze virtual-room paths, not every virtual
+factory. PARAM_OBJ and the recorder/button/panel/transcript family remain the next
+consumer audit; the master now selects factories through virtual_blueprint rather
+than the legacy object-returning entry. General parameterized objects, broader
+coordinate/game policy, idle cleanup, unrelated game logic, completed equipment/TCP
+work and reserved native discussions retain their scopes. The whole-source
+**924/1,180** remains its preceding measured sweep; the two new files are not an
+arithmetic revision of that inventory. No Rust workspace gate is claimed for this
+LPC-only migration. Evidence: /tmp/lima-virtual-rooms-20261016.
 
 #### Lima basic player commands and help
 
@@ -22114,12 +22165,12 @@ errors independently. The old `log_error` method is not a native compiler hook.
 
 For virtual ancestor searches, stop when the final slash is at index zero:
 `path[0..idx - 1]` otherwise becomes `path[0..-1]`, which retains the whole path
-under native [slice semantics](lpc/indexing.md). This termination fix does not
-adapt the virtual factory contract: native
+under native [slice semantics](lpc/indexing.md). Native
 [`compile_object`](apply/master/compile_object.md) requires a blueprint path,
-whereas Lima returns a configured object. Preserve constructor and instance
-state when porting those factories. Factory adaptation and lifecycle paths
-beyond the tested startup/login remain separate porting work.
+whereas original Lima returns a configured object. The [virtual-room migration](#lima-virtual-room-factories)
+adapts the bundled grid/maze factories and initializes their actual requested
+identities without losing configured state. Other parameterized factories and
+lifecycle paths outside that coverage remain separate porting work.
 
 #### Lima security initialization
 
