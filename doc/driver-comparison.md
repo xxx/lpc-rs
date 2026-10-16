@@ -1511,6 +1511,46 @@ Unrelated game logic, native shutdown/default-position observations, reserved
 inheritance/cache and completed equipment/TCP/framework work remain separate.
 Evidence: /tmp/lima-mission-controller-20261016.
 
+#### Lima favour lifecycle corrections
+
+Reviewed **16 October 2026**, after controller/give commits Lima **6816385f** and
+native **769c710e**. Two LPC files correct the source issues above. [Guild daemon][lima-guild]
+assigns the buff and cache one absolute deadline, preserves explicit/restored ends
+and uses the actual expiry boundary for removal/restore, replacing the old 30-second
+cutoff. [Favour base][lima-guild-standard-favour] no longer registers itself as the
+active mission or eagerly resolves an NPC during creation. Explicit controller
+lookup remains lazy. Headers/LF and the missing final newline remain. These are
+Lima logic corrections; native code/API, master, privilege, configuration and
+fixtures are unchanged. Original claims pin **eefaff66** source review without
+upstream execution. Distinct nil, preserved call-out player and 4,000 ms remain.
+
+**21/21 complete targets compile**. Focused **99.16s** passes 75 first-session and
+10 restoration inputs. Final **391.16s** full replay passes **1639 first-session
+inputs plus 10 new restored-favour inputs**, all **30 lifecycle checkpoints**, both
+clean **151-preload** boots, saved login/bank restoration and normal exits, with no
+failed apply or worker panic. Prior meaningful 1562-input scope is retained; 65
+revised mission inputs convert the old failure expectations and add explicit favour
+cleanup. Earlier helpers remain unchanged, including current generated-maze,
+recorder, artefact and connected-player vehicle checks. Only repeated observation
+polls/displayed menu numbers vary. Same six fixtures/two address overrides, no helper
+or grant. Whole-source **957/1182** remains its preceding measured sweep.
+
+Two ordinary confirmed purchases each charge 500 once. Object/cache clocks agree,
+20% XP survives repeated updates, and normal bucket delivery still reaches the
+active mission. A six-second explicit expiry stays active in its final seconds
+and clears XP/object/cache at the deadline. Actual restart preserves the saved
+epoch, balance and membership; application survives updates without loading either
+guild room. The first restore diagnostic hit the unchanged four-second budget
+during unnecessary eager room/NPC construction; lazy lookup fixes this bounded
+path without preloads, warmups or a budget increase. The final callback test waits
+for delivery completion instead of assuming 2.3s includes compilation time.
+
+Next audit mission completion/autonomous expiry and actor context. Broad rewards,
+stacking/cancellation policy, native performance/other recorded observations and
+reserved inheritance/cache work remain separate. No native feature is introduced;
+no Rust gate is claimed for this LPC-only correction. Evidence:
+/tmp/lima-favour-lifecycle-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
