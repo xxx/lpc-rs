@@ -736,53 +736,68 @@ saves and full gameplay assertions remain separate. No new driver runtime or nat
 build/test suite was run for this source-only classification. All LPC sources and
 the original Lima checkout remain unchanged.
 
-The ranged weapon/ammunition audit below identifies source adapters for 11 of
-these failed targets; they are tested only in a disposable copy and have not changed
-this inventory. General inheritance-policy changes and completed wear/wield work
-remain separate decisions. School/tutorial conversion, other standard object
+The ranged weapon/ammunition batch below ports 11 of these failed targets and
+qualifies the selected matching pistol/clip flows. Its bounded checks do not replace
+this whole-source inventory. General inheritance-policy changes and completed
+wear/wield work remain separate decisions. School/tutorial conversion, other standard object
 families and optional contributions form a finite backlog rather than an automatic
 one-file gameplay audit chain. Inventory evidence:
 /tmp/lima-source-families-20261015. Earlier dated reports retain their scopes.
 
-#### Lima ranged weapon and ammunition audit
+#### Lima ranged weapons and ammunition
 
-Reviewed **15 October 2026** at native **e4228022** and dedicated Lima **152352a2**,
-using distinct nil, preserved call-out players and the 4,000 ms task budget. All
-11 family sources are byte-identical to original Lima **eefaff66**. This is source
-review and native temporary controls; no upstream execution is claimed. The
-[shared ranged definition][lima-ranged-definition] uses a scalar string collector;
-the [ammunition definition][lima-ammunition-definition] adds an optional parameter
-to inherited `short()`. Both block complete consumers under current native rules.
+Reviewed **15 October 2026** at native **6f383ece** and dedicated Lima **e80b70e7**
+with the source adaptations below pending commit. Distinct nil, preserved call-out
+players and the 4,000 ms task budget remain configured. Original Lima **eefaff66**
+is unchanged. This is native execution and pinned original-source review, with no
+upstream driver execution claimed.
 
-Recommend nine source-file adaptations: declare `set_fire_type(string *ft...)`,
-retain its flattening, split the base short description into a protected helper
-while keeping `short()` parameterless, and update the sole `short(1)` consumer in
-the [plasma magazine][lima-plasma-ammunition]. Use `nil` for two absent-object
-sentinels and float expressions for seven `set_value` arguments. The only current
-fire-type caller supplies separate strings. Native array collectors also accept an
-array in the tail without inspecting its elements; retaining `flatten_array`
-preserves that input form. The [existing collector rules](lpc/variadic_parameters.md)
-and general inherited-signature policy are unchanged.
+Ten Lima source files adapt the [ranged definition][lima-ranged-definition],
+[ammunition][lima-ammunition-definition], seven examples and the
+[fire verb][lima-fire-verb]. The collector is explicit `string *ft...` and retains
+flattening; its default list is `({"single"})`, matching the default mode. A
+protected base-description helper preserves parameterless `short()` and the
+[plasma magazine][lima-plasma-ammunition] prefix. Two absent-object sentinels use
+`nil`, and seven value arguments use float expressions. These retain the existing
+[collector rules](lpc/variadic_parameters.md) and inherited-signature policy.
 
-After those temporary changes, **11/11 targets compile**, against 0/11 in the
-retained inventory, with no timeouts or crashes. Four additional contract controls
-accept separate/spread strings and the flattened array form, reject a scalar string
-collector declaration, and reject the obsolete direct `short(1)` call. A standalone
-method control using real simuls reproduces a default-mode switch error because
-`fire_type` is nil; initializing it to `({"single"})`, matching `fire_mode`, fixes
-that case and retains the separate, array and spread forms. The final temporary
-family still compiles 11/11. Controls use at most two CLI processes, two Tokio
-workers each, 4 GiB per process and 40 seconds per invocation.
+Live checks exposed callback sites hidden by the initial compilation failures.
+Fire uses bare function values; ammunition schedules
+`call_out(&finish_discharge(target), 0)`, binding the target in the callback.
+When invoked, native [`(: name :)`](lpc/function_type.md) returns the named
+function value without calling it. [`call_out`](efun/call_out.md) takes its
+function, delay and optional repeat; callback arguments belong in the bound
+function value.
+The original fire verb also lacks its registered plural action and an indirect
+living-target permission hook. A plural `handle_obs` adapter invokes the singular
+action; an owner fallback reuses the target's existing kill-permission check.
+Target-specific indirect firing hooks retain precedence. No native API changed.
 
-These adapters remain a proposal: dedicated LPC and native implementation sources
-are unchanged. No master, player session, combat tick or deferred ammunition
-callback was exercised by the standalone method control. Apply the source adapters
-next, then check actual clone descriptions/configuration and the matching pistol/
-clip flows through the normal game. Existing bundled crossbow/quarrel ammunition
-identifiers differ, and the quarrel has no configured maximum charge count; their
-configuration/gameplay behavior is separate from these compiler adaptations.
-Do not declare full ranged combat qualified or reopen completed equipment/TCP
-work. Audit evidence: /tmp/lima-ranged-ammunition-audit-20261015.
+**36/36 bounded targets compile**: the 11 family targets, all 17 tracked core
+objects and eight related parents/commands. The whole-source inventory above
+remains the earlier 818/1,180 measurement; it has not been rerun. Both original
+source headers and LF/CRLF conventions are retained. CLI limits remain two
+processes, two Tokio workers each, 4 GiB and 40 seconds per file.
+
+The final production-driver run passes **30 lifecycle checkpoints**, two clean
+**151-preload** boots and saved login, with normal exits. All **482** retained
+first-session command records remain, plus **114** ranged inputs (596 total).
+Nine real clones verify descriptions, four clip charge/max counts and numeric
+values. Normal handlers cover single/semi mode changes, unsupported-mode refusal,
+unloaded and unwielded refusals, matching 11mm/13mm loading, ready/unready, loaded
+inspection, **15 shots**, both clip depletions and removal, reload and the next
+shot. A separate call to the real quarrel `discharge` verifies its deferred move
+to the target's room and clearing its weapon link to nil, proving target binding;
+it does not qualify the crossbow's ammunition configuration. The actual flea's
+maximum health is raised through its public API to survive the shots. Acceptance
+uses normal handlers, with no new test fixture source or master grant. The same
+six prior fixture sources, fixed local router packets and two address-only
+overrides remain.
+
+The default crossbow/quarrel identifiers and charge maximum, continuous combat,
+AI equipment choice, burst-rate semantics and other gameplay remain separate.
+Existing wear/wield and TCP work is not reopened. Native workspace tests were not
+rerun for this LPC-only change. Evidence: /tmp/lima-ranged-ammunition-20261015.
 
 #### Lima basic player commands and help
 
@@ -23105,3 +23120,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-ranged-definition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/ranged_weapon.c
 [lima-ammunition-definition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/ammunition.c
 [lima-plasma-ammunition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/ammo/13mm_plasma.c
+
+[lima-fire-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/fire.c
