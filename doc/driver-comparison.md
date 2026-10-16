@@ -1738,6 +1738,37 @@ no gameplay or Rust gate is repeated. Native observations, reserved inheritance/
 cache and completed equipment/TCP/framework scopes stay separate. Evidence:
 /tmp/lima-guild-source-inventory-20261016.
 
+#### Lima slow-healing and consumable audit
+
+Reviewed **16 October 2026**, after inventory commits Lima **92098d7c** and native
+**dab12c75**. A **five-file temporary proposal** leaves dedicated LPC/native source
+unchanged. [Slowheal][lima-slowheal] uses explicit numeric conversion, a mixed consume
+guard for child refusal strings and a native bound one-shot callback. Its active
+item check filters objects by truthy healing flag: an ordinary bucket otherwise
+returns nil, survives subtracting zero and wrongly blocks the first item. Pain
+killers matches the OBJ parser argument, and three pet treats use integer FOOD
+values/deluxe weight1.0. Cigarette/joint need no edits. Original value/fuel/30s/count
+policy and raw headers/line endings remain. No native API, master, privilege,
+configuration, framework or fixture change. Original claims pin **eefaff66** source
+review, without upstream execution; configured distinct nil/preserved player/4000ms.
+
+All seven baseline targets fail; **27/27 complete targets** pass the proposal.
+Focused **115.86s / 108-input** gameplay passes all 30 lifecycle checkpoints,
+both clean 151-preload boots, saved login and normal exits, without failed apply,
+runtime input error or worker panic. Actual eat/light/smoke, refusals, ordinary
+non-healer inventory, second-active restriction, values and four pet-treat bites/
+head healing pass. A natural 30s callback heals pills again and decrements bound
+count9->8; three terminal checks explicitly cancel the pending timer and invoke
+public timed_healing(0). The full natural course, disconnects/transfer and broad
+health/pet policy are not qualified. Controls/inventory restore.
+
+Same six fixtures/two address-only overrides and real master/simuls/user/body/parser,
+no new LPC host/helper/body/grant. Prior **1871 + 10 restored-favour inputs / 413.0s**
+full replay and **966/1182** inventory retain measured scopes without repetition or
+additive count. Next adopt the five files with retained replay before saved-favour
+setup. Existing native observations and reserved inheritance/cache remain separate.
+Evidence: /tmp/lima-consumables-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
