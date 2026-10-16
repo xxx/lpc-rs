@@ -1803,6 +1803,37 @@ delivery before adapters. Completed recorder/container/framework/TCP, native
 observations and reserved inheritance/cache work stay separate. Evidence:
 /tmp/lima-consumables-20261016.
 
+#### Lima camera consumer audit
+
+Reviewed **16 October 2026**, after consumable commits Lima **109b22a0** and native
+**9c0eaf32**. A **one-file temporary proposal** changes [button][lima-camera-button]
+mass to to_float(SMALL), preserving value 4, and provides a concrete press guard
+returning default_object_checks. The inherited generic guard refuses presses;
+visibility/short checks and the original callback remain. [Camera][lima-camera-object]
+and [picture][lima-camera-picture] source stay unchanged. Headers/LF/final newline,
+USE_MASS/METRIC enabled/USE_SIZE disabled and distinct nil/preserved player/4000ms
+remain. Original claims pin **eefaff66** source review, without upstream execution.
+No native API/code/config/master/privilege/framework/fixture change.
+
+Baseline camera/picture compile, button fails mass typing. Mass-only construction/
+look works but ordinary press has no picture feedback. Final **11/11 complete
+targets** and focused **71.22s / 46 inputs** pass, with all 30 lifecycle
+checkpoints, two clean 151-preload boots, saved login and normal exits, without
+failed apply/runtime input error/panic. Normal press/push creates four photos,
+three delivered to the carrier and one to the room. Two actual room descriptions
+are captured; old photos remain unchanged after movement. Button get is refused
+and child retention checked; the observed generic wording remains unchanged.
+
+Public M_SAVE in-memory roundtrips preserve picture long and restore a camera with
+one constructor-created button that still presses. Fresh-driver item restoration
+is not qualified; the wrapper restarts with cleaned inventory. Same six fixtures/
+two address overrides, actual master/simuls/user/body/parser and cleanup, no new LPC
+helper/body/host/grant. Prior **1989 + 10 restored-favour inputs / 470.4s** replay and
+**966/1182** sweep retain measured scopes. Next adopt with retained full replay
+before saved-favour preparation; completed frameworks/TCP, native observations and
+reserved inheritance/cache work remain separate. Evidence:
+/tmp/lima-camera-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
@@ -24203,3 +24234,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-consumable-large]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/treat_large.c
 
 [lima-consumable-small]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/treat_small.c
+
+[lima-camera-object]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/camera.c
+
+[lima-camera-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/camera/button.c
+
+[lima-camera-picture]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/camera/picture.c
