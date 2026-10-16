@@ -801,9 +801,10 @@ rerun for this LPC-only change. Evidence: /tmp/lima-ranged-ammunition-20261015.
 
 #### Lima school and tutorials
 
-Reviewed **15 October 2026** at native **e5872e61** and dedicated Lima **e56ad53f**,
-with the school source changes pending commit. Distinct nil, preserved call-out
-players, audit/system includes and the 4,000 ms task budget remain configured.
+Reviewed **15 October 2026**. School sources are committed as dedicated Lima
+**59b25659** and **71bf5b9b**, with native comparison notes **10083846**. Distinct
+nil, preserved call-out players, audit/system includes and the 4,000 ms task budget
+remain configured.
 Original Lima **eefaff66** and native implementation remain unchanged; this is
 native execution and pinned original-source review, without upstream execution.
 
@@ -855,10 +856,57 @@ Five lessons with four unported NPC dependencies remain unvisited, with all spaw
 definitions intact: bank_accountant reaches M_ACCOUNTANT's string/float expression,
 dragon reaches M_WANDER's assignment/negation syntax, Harry uses legacy anonymous-
 function syntax, and shopkeeper reaches M_VENDOR's type/arity adaptations. Their
-sources and later masked diagnostics need a coherent dependency audit next.
+sources and later masked diagnostics are covered by the dependency audit below;
+that proposal has not been adopted.
 This does not qualify every school room or displayed snippet. Completed equipment
 and TCP scopes remain closed, and no Rust workspace gate was rerun for LPC-only
 changes. Evidence: /tmp/lima-school-20261015.
+
+#### Lima school NPC dependency audit
+
+Reviewed **15 October 2026** against original Lima **eefaff66**, dedicated Lima
+**71bf5b9b** and native **10083846**. The four school NPC dependencies have a
+**seven-file source proposal**, tested only in a disposable library. Dedicated
+LPC sources, master policy and native implementation remain unchanged. Original
+claims here come from pinned source review, without executing another driver.
+
+The [accountant module][lima-school-accountant] needs bare/bound callbacks, explicit
+float-to-text formatting, nil player cleanup and a float zero for an absent pocket
+balance. The domain banker can inherit Lima's existing [ACCOUNTANT base][lima-school-accountant-base],
+which initializes both adversary and accountant modules, and use a 5.0 fee.
+The [wander module][lima-school-wander] needs parenthesized assignment under
+negation and native hook/timer functions. Its [host][lima-school-wandering-monster]
+must initialize both moving_monster and m_wander; an unqualified inherited call
+selects the last parent under native [inheritance rules](lpc/inheritance.md#calls-and-aliases).
+[Harry][lima-school-harry] needs a native block closure and nil absent trigger
+strings; integer zero fails the pattern class's string-field checks. The
+[vendor module][lima-school-vendor] needs float item prices, nil/arity adapters
+and each stock object's existing remove() API in place of direct foreign
+destruction. No permission grant is proposed. The banker lesson's M_VENDOR advice
+should also become ACCOUNTANT, with a float fee, when implementing this proposal.
+
+**All four NPCs compile and initialize as native livings** through normal clone
+commands with the real driver/master/simuls/user/body/shell. Shopkeeper creates
+five stock entries and preserves a 0.25 cost. The focused **86.50s** constructor
+run passes all **30 lifecycle checkpoints**, two clean **151-preload** boots,
+saved login and normal exits. Its **16 recorded inputs** are audit controls;
+they do not replace/replay the prior accepted 799-input run or qualify banking,
+wandering timing, trigger delivery or purchases. The same six retained fixtures,
+fixed loopback frames and two address overrides remain. An initial constructor
+run exposed missing living registration, typed trigger strings and denied stock
+destruction; a later harness's unsupported class inspection is excluded from
+stock evidence. The final check uses existing query_stored/selling_cost APIs.
+
+Bounded complete-consumer checks pass **14/15**: four NPCs, three bases, five
+school rooms and two world rooms compile; Yakitori cashier retains a private
+handle_blocks inherited-call blocker. There are no timeouts/crashes. The
+whole-source 818/1,180 remains historical. Existing [bank-account lookup][lima-school-account-data],
+wander-area removal and duplicate vendor-stock quirks are recorded separately,
+without treating them as new driver gaps or automatically fixing them. Next
+adopt the source adapters and validate ordinary interactions and the five
+remaining school rooms. Completed equipment/TCP scopes and the separate native
+non-trailing-default bug retain their scopes. Evidence:
+/tmp/lima-school-npcs-audit-20261015.
 
 #### Lima basic player commands and help
 
@@ -23189,3 +23237,11 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-school-sword]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/sword02.c
 [lima-school-value-example]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/school/R/object03.c
 [fl-school-text-blocks]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc#L1039-L1398
+
+[lima-school-accountant]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_accountant.c
+[lima-school-accountant-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/accountant.c
+[lima-school-wander]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wander.c
+[lima-school-wandering-monster]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/wandering_monster.c
+[lima-school-harry]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/harry.c
+[lima-school-vendor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_vendor.c
+[lima-school-account-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/account_d.c
