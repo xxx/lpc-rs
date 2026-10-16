@@ -993,7 +993,8 @@ retain their scopes. Evidence: /tmp/lima-junk-audit-20261015.
 #### Lima standard junk and material-spawner support
 
 Reviewed **15 October 2026**, after the audit committed as native **2b4c14fa** and
-Lima **f2d70304**. The **22-file adaptation** matches the reviewed proposal exactly:
+Lima **f2d70304**. The resulting **22-file adaptation** is committed as Lima
+**cb1769ce**, with native notes **dfc32a7a**, matching the reviewed proposal:
 26 explicit float weight/value arguments, a split void call/return, nil path prefix
 and dirt-pile configuration through setup(string loot). Parent initialization runs
 before area setup; dirt's zero-returning state_update stays. Twenty CRLF example
@@ -1017,10 +1018,49 @@ player to the Grand Hall before restart; prior bank and other checks remain.
 Existing redundant trash setup, fertilizer weight, message/yield/capacity and
 cooldown-policy quirks remain separate. English grammar stays in LPC, and the
 whole-source **924/1,180** remains its preceding inventory measurement. No native
-workspace gate is claimed for this LPC-only change. Next audit the vehicle base
-and its Camaro/horse consumers from the remaining source inventory; completed
-equipment/TCP work and reserved native discussions stay separate. Evidence:
+workspace gate is claimed for this LPC-only change. The vehicle audit below
+reviews the next Camaro/horse dependency family; completed equipment/TCP work
+and reserved native discussions stay separate. Evidence:
 /tmp/lima-junk-20261015.
+
+#### Lima vehicle audit
+
+Reviewed **15 October 2026** after junk support commits Lima **cb1769ce** and
+native **dfc32a7a**. A **four-file source proposal** is tested in a disposable
+library; dedicated LPC/native implementation and policies/configuration remain
+unchanged. Original claims use pinned **eefaff66** source review, with no upstream
+execution. Distinct nil, preserved call-out player and 4,000 ms remain configured.
+
+The [vehicle base][lima-vehicle-base] and [horse][lima-vehicle-horse] need three nil
+string returns. Vehicle callbacks use three bare function values and two native
+partials; its unused movement payloads use mixed because move_data.exit_dir can
+be a function-valued description. Existing integer flags become nil/actual vehicle
+objects to match the original object-valued driver setter. Canonical enter/leave
+registration uses the destination's default relation, avoiding an out relation
+derived by the current ported bridge from get out. Existing METHOD_D synonyms stay.
+The [exit][lima-vehicle-exit] and [dismount][lima-vehicle-dismount] verbs pass an
+explicit empty rule from their no-argument handlers. [Camaro][lima-vehicle-camaro],
+shared mover/complex-exit/body code and the method table stay unchanged. Headers/LF
+are retained; no native feature or inheritance-policy change is recommended.
+
+**12/12 complete targets compile**, compared with the inventory's three vehicle
+failures. Four isolated forwarding/hook/class controls pass, identifying the hook
+payload as a source contract mismatch. The final **67.38s** focused run passes
+**30 lifecycle checkpoints**, two clean **151-preload** boots, saved login and
+normal exits. Its **22 audit inputs** clone both examples, enter the Camaro,
+drive east/west while remaining inside, exit, mount/dismount the horse and verify
+driver flags plus actual vehicle identity/clearing. Same six retained fixtures,
+fixed frames/two address overrides, real master/simuls/user/body and no new LPC
+helper or grant. Initial payload/relation failures remain diagnostic evidence.
+The preceding 1052-input production run is retained without being replayed here;
+the whole-source **924/1,180** remains its measured inventory.
+
+Next adopt the proposal and validate descriptions, ordinary drivers/passengers,
+handover and notifications. Legacy direct mount helpers, all aliases, followers/
+other room hooks and detailed message wiring remain unqualified source scopes.
+No native forwarding/class-copy defect is established by this audit. Completed
+equipment/TCP work and reserved native discussions remain separate. Evidence:
+/tmp/lima-vehicles-audit-20261015.
 
 #### Lima basic player commands and help
 
@@ -23365,3 +23405,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-dirt-pile]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/junk/dirt_pile.c
 [lima-random-trash]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/junk/random_trash.c
 [lima-junk-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/junk.c
+[lima-vehicle-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/vehicle.c
+[lima-vehicle-camaro]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/camaro.c
+[lima-vehicle-horse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/horse.c
+[lima-vehicle-exit]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/exit.c
+[lima-vehicle-dismount]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/dismount.c
