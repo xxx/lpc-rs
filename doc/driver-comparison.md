@@ -731,15 +731,15 @@ configuration remain unchanged; no upstream driver is executed. Completed
 wear/wield, guild/framework/menu and TCP work stays closed, with existing source
 quirks and reserved native discussions separate.
 
-Next audit the **22 standard junk examples** together with the material-spawner,
-stateful and junk bases: **25 targets**, 23 failing and two passing. Twenty examples
+The audit below reviews the **22 standard junk examples** with the
+material-spawner, stateful and junk bases: **25 targets**, 23 failing and two passing. Twenty examples
 first reject integer weight/value arguments. The [material spawner][lima-material-spawner]
 has a void-expression return and path-argument adapter to review; the
 [dirt pile][lima-dirt-pile] changes its initializer contract, while
 [random trash][lima-random-trash] selects ten bundled junk paths. These are first
-boundaries for a consumer audit, not an adopted patch or proof that later errors
-are known. Inventory evidence: /tmp/lima-source-inventory-20261015. The earlier
-818 checkpoint remains at /tmp/lima-source-families-20261015; dated implementation
+boundaries; the audit below records a temporary source proposal and constructor
+controls without adopting that proposal. Inventory evidence:
+/tmp/lima-source-inventory-20261015. The earlier 818 checkpoint remains at /tmp/lima-source-families-20261015; dated implementation
 reports below retain their original scopes.
 
 #### Lima ranged weapons and ammunition
@@ -950,6 +950,45 @@ Yakitori cashier's private inherited-call blocker remains. The whole-source
 818/1,180 is historical; no Rust workspace gate is claimed for this LPC-only
 batch. Completed equipment/TCP work and the separate non-trailing-default compiler
 bug retain their scopes. Evidence: /tmp/lima-school-npcs-20261015.
+
+#### Lima standard junk and material-spawner audit
+
+Reviewed **15 October 2026**, after inventory notes native **f404925c** and Lima
+**7845826b**. A **22-file source proposal** is tested only in a disposable library;
+no dedicated LPC/native implementation, master policy or configuration change is
+adopted. Original claims use source pinned to **eefaff66**, without upstream
+execution. Distinct nil, preserved call-out player and 4,000 ms remain configured.
+
+Twenty [JUNK-based][lima-junk-base] examples need **26 float arguments** for weight
+and value; integer salvage counts and other bytes remain. The
+[material spawner][lima-material-spawner] splits a void call from its return and
+passes nil for evaluate_path's string prefix. The [dirt pile][lima-dirt-pile] can
+configure itself in setup(string loot), leaving its parent's mudlib_setup contract
+intact. Common initialization then supplies the 3–7-minute interval and state
+registration before area configuration; dirt's zero-returning state_update stays.
+This lifecycle adaptation uses the existing object hooks and native contract rules.
+[random_trash][lima-random-trash], M_STATEFUL and JUNK need no source change.
+Headers and LF/CRLF are preserved. English grammar remains in LPC.
+
+**25/25 temporary targets compile**, compared with the inventory's 2/25. Real-driver
+controls initialize all **22 examples** by normal clone commands, check 20 final
+masses/five explicit values and salvage mappings, and observe both spawners'
+attachment/interval/STATE_D registration. A supplied-loot dirt constructor also
+succeeds (**23 constructors**). The focused **95.59s** run passes **30 lifecycle
+checkpoints**, two clean **151-preload** boots, saved login and normal exits.
+Its **120 audit inputs** use the real master/simuls/user/body/handlers and the same
+six retained fixtures, fixed frames and two address overrides, with no new source
+helper or grant. It does not replay/replace the prior 881-input run or qualify
+search delivery, custom-loot selection or cooldown updates. The actual whole-source
+inventory remains **924/1,180**.
+
+Existing redundant random-trash setup, fertilizer's final weight of 1, alternate
+message placeholders, ignored move results and receiver/repeats policies remain
+separate source scopes. Next adopt the reviewed adapters and validate ordinary
+searches, delayed busy completion and STATE_D cooldown behavior. No native
+inheritance-policy or pluralization feature is needed by this proposal. Completed
+equipment/TCP work and the separately tracked compiler default-position issue
+retain their scopes. Evidence: /tmp/lima-junk-audit-20261015.
 
 #### Lima basic player commands and help
 
@@ -23293,3 +23332,4 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-material-spawner]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/material_spawner.c
 [lima-dirt-pile]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/junk/dirt_pile.c
 [lima-random-trash]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/junk/random_trash.c
+[lima-junk-base]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/junk.c
