@@ -86,8 +86,9 @@ These checks are specific driver gates, not a general sandbox for arbitrary
 LPC. In particular, `valid_load()` controls loading missing programs, not calls
 to already resident objects; `valid_inherit()` controls which code may become
 part of another program. All source in the allowed directories is trusted code
-installed by the operator. Guests have no command for compiling or evaluating
-source. When adding a privileged operation, validate who may invoke that
+installed by the operator. Supplying source to `compile_string()` or
+`syntax_tree()` first requires `valid_write()`; this example denies both. Guests
+have no command for compiling, inspecting supplied source or evaluating code. When adding a privileged operation, validate who may invoke that
 operation instead of relying only on which directory holds its code.
 
 ## Why optional applies are disabled

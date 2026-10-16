@@ -16,7 +16,10 @@ use tokio::sync::mpsc::Sender;
 
 use crate::compile_time_config::{MAX_CALL_STACK_SIZE, MAX_TASK_CHAIN};
 use crate::{
-    compiler::source_reader::{SourceKind, SourceReader},
+    compiler::{
+        codegen::{tree_printer::TreePrinter, tree_walker::TreeWalker},
+        source_reader::{SourceKind, SourceReader},
+    },
     interpreter::{
         COMPILE_OBJECT, VALID_LOAD, VALID_WRITE,
         apply::{master_apply, report_warnings, valid_apply},
@@ -32,7 +35,7 @@ use crate::{
         task::Task,
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
-    util::process_builder::compile_process_in_context,
+    util::process_builder::{analyze_in_context, compile_process_in_context},
 };
 
 /// The command a task is running: what `query_verb`, `query_command`, and
@@ -343,6 +346,66 @@ impl TaskContext {
             .is_ok_and(|kind| kind == SourceKind::File)
     }
 
+    async fn authorize_source(
+        &self,
+        path: &LpcPath,
+        loader: &Loader,
+        supplied: bool,
+    ) -> Result<()> {
+        let source = self
+            .config()
+            .paths()
+            .source_name(&path.source_file())
+            .to_string();
+        let args = [
+            LpcRef::from(source),
+            LpcRef::from(loader.func.as_str()),
+            LpcRef::from(Arc::downgrade(loader.caller())),
+            loader.program.clone(),
+        ];
+        if supplied && !valid_apply(self, loader.callers(), VALID_WRITE, &args).await? {
+            return Err(LpcError::runtime(format!(
+                "{}: permission denied",
+                loader.func
+            )));
+        }
+        if !valid_apply(self, loader.callers(), VALID_LOAD, &args).await? {
+            return Err(LpcError::runtime(format!(
+                "{}: permission denied",
+                loader.func
+            )));
+        }
+        Ok(())
+    }
+
+    /// Render checked source in this attempt without placing or initializing an object.
+    pub(crate) fn syntax_tree<'a>(
+        &'a self,
+        path: &'a LpcPath,
+        loader: &'a Loader,
+        code: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
+        Box::pin(async move {
+            self.authorize_source(path, loader, true).await?;
+            let compiling = self.txn().time_compilation();
+            let reader: Arc<dyn SourceReader> =
+                Arc::new(TransactionSourceReader(self.txn().clone()));
+            let (mut node, warnings) = analyze_in_context(
+                self,
+                path,
+                code,
+                MasterGate::new(self, loader.callers()),
+                reader,
+            )
+            .await?;
+            drop(compiling);
+            report_warnings(self, loader.callers(), &path.source_file(), warnings).await?;
+            let mut printer = TreePrinter::new();
+            printer.visit_program(&mut node).await?;
+            Ok(printer.into_lines())
+        })
+    }
+
     /// Compile supplied text or the attempt's source file after authorization, without insertion.
     pub(crate) fn compile_source_process<'a>(
         &'a self,
@@ -351,29 +414,7 @@ impl TaskContext {
         code: Option<&'a str>,
     ) -> Pin<Box<dyn Future<Output = Result<Arc<Process>>> + Send + 'a>> {
         Box::pin(async move {
-            let source = self
-                .config()
-                .paths()
-                .source_name(&path.source_file())
-                .to_string();
-            let args = [
-                LpcRef::from(source),
-                LpcRef::from(loader.func.as_str()),
-                LpcRef::from(Arc::downgrade(loader.caller())),
-                loader.program.clone(),
-            ];
-            if code.is_some() && !valid_apply(self, loader.callers(), VALID_WRITE, &args).await? {
-                return Err(LpcError::runtime(format!(
-                    "{}: permission denied",
-                    loader.func
-                )));
-            }
-            if !valid_apply(self, loader.callers(), VALID_LOAD, &args).await? {
-                return Err(LpcError::runtime(format!(
-                    "{}: permission denied",
-                    loader.func
-                )));
-            }
+            self.authorize_source(path, loader, code.is_some()).await?;
             let gate = MasterGate::new(self, loader.callers());
             let compiling = self.txn().time_compilation();
             let reader: Arc<dyn SourceReader> =

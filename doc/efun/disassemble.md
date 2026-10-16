@@ -41,3 +41,6 @@ instruction format while compiling source without executing LPC initializers.
 
 [`compile_string`](compile_string.md), [`functions`](functions.md),
 [`function_info`](function_info.md), [`variable_info`](variable_info.md)
+
+[`syntax_tree`](syntax_tree.md) inspects the checked frontend without initializing
+an object or executing the supplied code.

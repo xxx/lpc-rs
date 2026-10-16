@@ -19,10 +19,13 @@ master that never defines it has a read-only lib. The apply runs inside the
 caller's task; an error thrown here is the caller's error. The change itself
 lands when the caller's task commits.
 
-`compile_string` asks this apply to authorize supplied source under an object
-identity, even though it writes no file. It passes the canonical `.c` name
-and `func` `"compile_string"`, then separately asks `valid_load`. This prevents
-load permission alone from granting permission to supply code for that name.
+`compile_string` and `syntax_tree` also ask this apply to authorize supplied
+source under a source identity, even though neither writes a source file. They
+pass its canonical `.c` name and their efun name as `func`, then separately ask
+`valid_load`. Load permission alone does not authorize supplying code for that
+name. `syntax_tree` checks and renders source without creating or initializing
+an object, and still asks when the diagnostic identity already names a loaded
+object; that object and its file are unchanged.
 
 ### Examples
 

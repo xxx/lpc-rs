@@ -136,6 +136,7 @@ pub(crate) mod sprintf;
 pub(crate) mod sscanf;
 pub(crate) mod store_variable;
 pub(crate) mod strindex;
+pub(crate) mod syntax_tree;
 pub(crate) mod tell_object;
 pub(crate) mod terminal_colour;
 mod terminal_text;
@@ -1379,6 +1380,11 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
+    syntax_tree [async] => {
+        returns: LpcType::String(true),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::String(false)],
+    },
 
 }
 
@@ -1768,6 +1774,7 @@ mod tests {
                 "function_signature",
                 "rusage",
                 "object_memory_info",
+                "syntax_tree",
             ]
         );
     }

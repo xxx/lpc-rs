@@ -60,6 +60,7 @@ void preload(string file) {
  * not which trusted object requested it, and all other paths are denied.
  * This is not a call permission: resident objects and clones of resident
  * prototypes are reused without another valid_load() check.
+ * compile_string() and syntax_tree() source identities also ask after valid_write().
  */
 int valid_load(string path, string func, object caller, string program) {
     return path[0..4] == "/obj/"
@@ -104,7 +105,7 @@ int valid_read(string path, string func, object caller, string program) {
 }
 
 /**
- * Authorise filesystem changes and source supplied through compile_string().
+ * Authorise filesystem changes and source for compile_string() or syntax_tree().
  * path is the canonical in-game target, func names the operation, caller
  * requested it, and program defines the requesting code.
  * Return 0 for every request: guest names and conversations are not saved,

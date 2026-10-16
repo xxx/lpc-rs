@@ -6,7 +6,8 @@ use lpc_rs_utils::config::Config;
 
 use crate::{
     compiler::{
-        Compiled, Compiler, CompilerBuilder, compile_gate::CompileGate, source_reader::SourceReader,
+        Compiled, Compiler, CompilerBuilder, ast::program_node::ProgramNode,
+        compile_gate::CompileGate, source_reader::SourceReader,
     },
     interpreter::{
         object_space::ObjectSpace,
@@ -16,6 +17,23 @@ use crate::{
     },
     util::get_simul_efuns,
 };
+
+fn configured_compiler(
+    object_space: &ObjectSpace,
+    gate: Option<Arc<dyn CompileGate>>,
+    source_reader: Option<Arc<dyn SourceReader>>,
+    simul_efuns: Option<Arc<Program>>,
+) -> Result<Compiler> {
+    CompilerBuilder::default()
+        .config(object_space.config().clone())
+        .code_pool(object_space.code_pool.clone())
+        .definition_cache(object_space.definition_cache.clone())
+        .parser_cache(object_space.parser_cache.clone())
+        .simul_efuns(simul_efuns)
+        .gate(gate)
+        .source_reader(source_reader)
+        .build()
+}
 
 /// The one compile core: `compile` runs in a [`Compiler`] configured from
 /// `object_space`, with `gate` installed, and yields a
@@ -32,16 +50,7 @@ where
     F: FnOnce(Compiler) -> Fut + Send,
     Fut: Future<Output = Result<Compiled>> + Send,
 {
-    let config = object_space.config();
-    let compiler = CompilerBuilder::default()
-        .config(config.clone())
-        .code_pool(object_space.code_pool.clone())
-        .definition_cache(object_space.definition_cache.clone())
-        .parser_cache(object_space.parser_cache.clone())
-        .simul_efuns(simul_efuns)
-        .gate(gate)
-        .source_reader(source_reader)
-        .build()?;
+    let compiler = configured_compiler(object_space, gate, source_reader, simul_efuns)?;
     let Compiled { program, warnings } = compile(compiler)
         .await
         .map_err(LpcError::with_catch_diagnostics)?;
@@ -124,6 +133,37 @@ pub(crate) async fn compile_process_in_context(
         },
     )
     .await
+}
+
+/// Check supplied source against the attempt's dependencies without creating a process.
+pub(crate) async fn analyze_in_context(
+    ctx: &crate::interpreter::task_context::TaskContext,
+    path: &LpcPath,
+    code: &str,
+    gate: Arc<dyn CompileGate>,
+    source_reader: Arc<dyn SourceReader>,
+) -> Result<(ProgramNode, Vec<LpcError>)> {
+    let compiler = configured_compiler(
+        ctx.object_space(),
+        Some(gate),
+        Some(source_reader),
+        ctx.simul_efuns().map(|process| process.program(ctx.txn())),
+    )?;
+    let (node, mut context) = compiler
+        .analyze_string(path.source_file(), code)
+        .await
+        .map_err(LpcError::with_catch_diagnostics)?;
+    let own = context
+        .diagnostics
+        .finish()
+        .map_err(LpcError::with_catch_diagnostics)?;
+    let warnings = context
+        .inherited_warnings
+        .into_iter()
+        .flat_map(|group| group.warnings)
+        .chain(own)
+        .collect();
+    Ok((node, warnings))
 }
 
 /// Bootstrap an object, publishing system objects transactionally with initialization.
