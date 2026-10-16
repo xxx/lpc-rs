@@ -852,12 +852,12 @@ Grand Hall with an empty inventory before saved login. The same six retained fix
 fixed local router frames and two address-only overrides remain; no new fixture
 source, master grant or replacement handler is added.
 
-Five lessons with four unported NPC dependencies remain unvisited, with all spawn
-definitions intact: bank_accountant reaches M_ACCOUNTANT's string/float expression,
+That run leaves five lessons with four unported NPC dependencies unvisited,
+with all spawn definitions intact: bank_accountant reaches M_ACCOUNTANT's string/float expression,
 dragon reaches M_WANDER's assignment/negation syntax, Harry uses legacy anonymous-
 function syntax, and shopkeeper reaches M_VENDOR's type/arity adaptations. Their
 sources and later masked diagnostics are covered by the dependency audit below;
-that proposal has not been adopted.
+the resulting implementation is described after the audit.
 This does not qualify every school room or displayed snippet. Completed equipment
 and TCP scopes remain closed, and no Rust workspace gate was rerun for LPC-only
 changes. Evidence: /tmp/lima-school-20261015.
@@ -866,8 +866,9 @@ changes. Evidence: /tmp/lima-school-20261015.
 
 Reviewed **15 October 2026** against original Lima **eefaff66**, dedicated Lima
 **71bf5b9b** and native **10083846**. The four school NPC dependencies have a
-**seven-file source proposal**, tested only in a disposable library. Dedicated
-LPC sources, master policy and native implementation remain unchanged. Original
+**seven-file source proposal**, tested only in a disposable library at that audit.
+Its dedicated LPC sources, master policy and native implementation were unchanged.
+The resulting source implementation is described below. Original
 claims here come from pinned source review, without executing another driver.
 
 The [accountant module][lima-school-accountant] needs bare/bound callbacks, explicit
@@ -907,6 +908,49 @@ adopt the source adapters and validate ordinary interactions and the five
 remaining school rooms. Completed equipment/TCP scopes and the separate native
 non-trailing-default bug retain their scopes. Evidence:
 /tmp/lima-school-npcs-audit-20261015.
+
+#### Lima school NPC support
+
+Reviewed **15 October 2026**, following the audit committed as native **3adb4da3**
+and Lima **901aca3e**. **Eleven LPC sources** adapt the four NPC dependencies and
+their required consumers, pending commit in the dedicated port. Configuration,
+original **eefaff66**, native implementation and master policy remain unchanged.
+Upstream claims use the pinned source review above; no other driver was executed.
+
+The accountant uses native callbacks, explicit fee text, nil cleanup and float
+balance; the banker inherits existing ACCOUNTANT, and its lesson teaches that base and a
+5.0 fee. Two accountant displays use scalar currency-balance APIs rather than
+mappings of floats. [ACCOUNT_D][lima-school-account-data] also needs float/formatter
+compile adapters in stat_me, leaving lookup/transaction algorithms unchanged.
+The wander module uses actual hook/timer functions and a parenthesized assignment;
+its host initializes both parents. Harry uses a native block closure, nil trigger
+strings and a guard for an absent leave-pattern capture. Vendor prices stay floats
+and stock cleanup calls each object's remove(), with no added permission grant.
+The [list][lima-school-vendor-list] and [buy][lima-school-vendor-buy] verbs put
+explicit vendor forms before broad STR rules to match native
+[parser registration order](efun/parse_sentence.md#result).
+
+**124/124 bounded targets compile**, extending the previous school/core set with
+complete NPC hosts, bases, consumers, verbs and account/money daemons. The final
+normal driver run passes **30 lifecycle checkpoints**, two clean **151-preload**
+boots, saved login and normal exits in **202.66s**. It retains all **799**
+previous first-session command lines and adds **82 NPC inputs** (**881 total**).
+All five remaining NPC lessons load with their real spawns through **10 recorded
+ordinary exit moves**. Banker menus, deposit/withdrawal/both exchange paths, wallet
+and transaction results pass; balance **8.0** and two records restore in the fresh
+process. A real scheduled dragon move uses public 2-second/unrestricted-area
+controls before restoring its example settings. Harry's laugh and block-nod
+responses and vendor list/filter/explicit selection, sword and coloured-stick
+buy/sell paths pass. The player returns to the Grand Hall with wallet/pager state
+restored and empty inventory. Same six retained fixtures, fixed frames and two
+address-only overrides remain; no new source fixture/helper or policy grant.
+
+Existing absent/zero bank lookup, non-base exchange, Harry following, duplicate/
+unique vendor stock and wandering-area removal retain separate source scopes.
+Yakitori cashier's private inherited-call blocker remains. The whole-source
+818/1,180 is historical; no Rust workspace gate is claimed for this LPC-only
+batch. Completed equipment/TCP work and the separate non-trailing-default compiler
+bug retain their scopes. Evidence: /tmp/lima-school-npcs-20261015.
 
 #### Lima basic player commands and help
 
@@ -23245,3 +23289,5 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-school-harry]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/monster/harry.c
 [lima-school-vendor]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_vendor.c
 [lima-school-account-data]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/account_d.c
+[lima-school-vendor-list]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/list.c
+[lima-school-vendor-buy]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/buy.c
