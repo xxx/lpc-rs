@@ -683,21 +683,21 @@ the adaptations described below.
 
 #### Lima source coverage
 
-The current dedicated-checkout inventory, reviewed **15 October 2026** against
-native **e6822728** and Lima **39da199b**, checks all **1,180 `.c` files**:
-**924 compile, 256 fail, zero timeouts and crashes**. The identical target set
-gains **106 successes without regressions** since the previous 818 checkpoint:
-88 school sources, 11 ranged/ammunition sources and seven NPC/account objects.
-It uses distinct nil, preserved call-out players, 4,000 ms, two CLI processes,
-two Tokio workers each, 4 GiB and 40s per file. Target constructors do not run;
-real simulated efuns initialize for the checks. Counts include fragments and
-optional code; they are not a completion percentage or native-gap count.
+The current dedicated-checkout inventory, reviewed **16 October 2026** against
+native **2870a0b4** and Lima **6ca00180**, checks all **1,182 `.c` files**:
+**957 compile, 225 fail, zero timeouts and crashes**. All 924 prior successes remain.
+There are **31 new successes among the original targets** (23 junk/spawner, three
+vehicle and five room/grid sources), plus two passing additions: std/grid_room.c
+and domains/std/room/labyrinth.c. The preceding 924/1,180 measurement remains its
+dated baseline; this is a fresh enumeration, not an arithmetic estimate.
 
 Player commands remain **65/67** (random2 deferred, suicide disabled upstream),
 wizard **81/81**, guild **4/4**, verbs **90/90**, transitional **49/49** and
 administrator **9/9**. All **17** tracked core objects, **88** school sources,
-**22** std/classes files and **eight** Pinto examples compile, as does the prior
-124-target NPC/school/core set. Compilation alone does not qualify runtime behavior.
+**22** std/classes files and **eight** Pinto examples compile. All **34** sources
+under domains/std/room and **22** junk examples now compile. Constructors do not
+run in this sweep; source counts include optional and inherited-only code and are
+not a port-completion percentage.
 
 | Source family | Compile | Fail |
 |---|---:|---:|
@@ -705,42 +705,47 @@ administrator **9/9**. All **17** tracked core objects, **88** school sources,
 | cmds | 240 | 2 |
 | contrib | 7 | 23 |
 | daemons | 48 | 14 |
-| domains | 291 | 69 |
+| domains | 320 | 41 |
 | obj | 59 | 13 |
 | secure | 37 | 14 |
-| std | 169 | 118 |
+| std | 173 | 115 |
 | trans | 66 | 0 |
 
-**58 failed standalone fragments have passing complete hosts**. The prior 32
-user/channel/IMUD/shell/CMD reviews retain matching source hashes and passing
-hosts; 26 additional module/body/adversary compositions are confirmed by direct
-inheritance and current host compilation. These are classification results,
-without implementation changes or new gameplay claims. Further fragments and
-alternate configurations remain unclassified; the other 198 failures are not a
-count of complete objects or new efun requirements. Forty-three first diagnostics
-point outside their checked target. First-blocker categories include 71 type
-adaptations, ten declaration mismatches, 14 legacy-syntax cases and 88 unresolved
-names/host contracts needing further consumer review, in addition to the reviewed
-fragments, arities, source paths, iteration and two deferred/disabled commands.
+**60 failed standalone fragments have passing complete hosts**. The prior 58
+fragment reviews retain identical fragment bytes and fresh host passes. BASE_ROOM
+has changed since that inventory; its M_EXIT inheritance is rechecked with the
+current successful complete host, rather than called byte-identical. Two additional
+confirmations from the recorder work cover M_GETTABLE and M_READABLE with actual
+macro inheritance and complete button/panel/transcript hosts. These are
+classification results, not source fixes or new runtime checks. The remaining
+165 failures include further fragments, optional/legacy code and adapters needing
+review; they are not a count of complete objects or new efun requirements.
+Thirty-nine first diagnostics point outside their checked target; the logs contain
+1,103 error lines including secondary/masked diagnostics. The first diagnostic and
+source remain unchanged for all remaining failed targets.
 
-The configured lifecycle and selected gameplay retain the preceding **881-input**
-production-driver evidence: **30 checkpoints**, two clean **151-preload** boots,
-saved login, bank restoration and normal exits. This checkpoint adds no runtime,
-native implementation/workspace test or service check. Original **eefaff66** and
-configuration remain unchanged; no upstream driver is executed. Completed
-wear/wield, guild/framework/menu and TCP work stays closed, with existing source
-quirks and reserved native discussions separate.
+The source sweep takes **269.618s**, using at most two CLI processes, two
+Tokio workers each, 4 GiB/40s per file and the normal 4,000 ms task budget. Source,
+configuration and existing binary hashes are guarded unchanged. This checkpoint
+adds no native implementation, Rust workspace gate, driver gameplay rerun or service
+check. The preceding **1429-input** production replay retains its scoped gameplay,
+**30 lifecycle checkpoints**, both clean **151-preload** boots, saved login, bank
+restoration and normal exits. Its log has no failed apply or worker panic; the
+prior RST/closed-committer shutdown observation remains recorded separately and
+unfixed. Original **eefaff66** and configured distinct nil/preserved call-out player
+remain unchanged; no upstream driver is executed.
 
-The audit below reviews the **22 standard junk examples** with the
-material-spawner, stateful and junk bases: **25 targets**, 23 failing and two passing. Twenty examples
-first reject integer weight/value arguments. The [material spawner][lima-material-spawner]
-has a void-expression return and path-argument adapter to review; the
-[dirt pile][lima-dirt-pile] changes its initializer contract, while
-[random trash][lima-random-trash] selects ten bundled junk paths. These are first
-boundaries; the audit below records a temporary source proposal and constructor
-controls without adopting that proposal. Inventory evidence:
-/tmp/lima-source-inventory-20261015. The earlier 818 checkpoint remains at /tmp/lima-source-families-20261015; dated implementation
-reports below retain their original scopes.
+Next audit **five guild artefact items/menu consumers**: [artefact][lima-artefact-item],
+[module][lima-artefact-module], [favour board][lima-favour-board],
+[ledger][lima-guild-ledger] and [artefact menu][lima-artefact-menu]. Their current
+first boundaries are explicit float value, parser-method declaration, omitted time
+format argument and nil read argument adaptations. Actual guild/configuration,
+parser callbacks, movement hooks, menu callers and later diagnostics need review
+before choosing a patch. No source proposal is adopted by this inventory. Keep
+completed guild/menu frameworks, equipment/TCP, original game-policy quirks and
+reserved native discussions separate. Evidence: /tmp/lima-source-inventory-20261016.
+The previous source sweep remains frozen at /tmp/lima-source-inventory-20261015;
+dated implementation reports below retain their original scopes.
 
 #### Lima ranged weapons and ammunition
 
@@ -23709,3 +23714,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-recorder-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/recorder/button.c
 [lima-recorder-panel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/recorder/panel.c
 [lima-recorder-transcript]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/recorder/transcript.c
+[lima-artefact-item]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/item/artefact.c
+[lima-artefact-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/item/artefact_module.c
+[lima-favour-board]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/item/favour_board.c
+[lima-guild-ledger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/item/ledger.c
+[lima-artefact-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/artefact_menu.c
