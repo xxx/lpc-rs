@@ -954,10 +954,10 @@ bug retain their scopes. Evidence: /tmp/lima-school-npcs-20261015.
 #### Lima standard junk and material-spawner audit
 
 Reviewed **15 October 2026**, after inventory notes native **f404925c** and Lima
-**7845826b**. A **22-file source proposal** is tested only in a disposable library;
-no dedicated LPC/native implementation, master policy or configuration change is
-adopted. Original claims use source pinned to **eefaff66**, without upstream
-execution. Distinct nil, preserved call-out player and 4,000 ms remain configured.
+**7845826b**. At that audit a **22-file source proposal** was tested only in a
+disposable library, with implementation, policy and config unchanged. The resulting
+implementation is described below. Original claims use source pinned to
+**eefaff66**, without upstream execution. Distinct nil, preserved call-out player and 4,000 ms remain configured.
 
 Twenty [JUNK-based][lima-junk-base] examples need **26 float arguments** for weight
 and value; integer salvage counts and other bytes remain. The
@@ -984,11 +984,43 @@ inventory remains **924/1,180**.
 
 Existing redundant random-trash setup, fertilizer's final weight of 1, alternate
 message placeholders, ignored move results and receiver/repeats policies remain
-separate source scopes. Next adopt the reviewed adapters and validate ordinary
-searches, delayed busy completion and STATE_D cooldown behavior. No native
-inheritance-policy or pluralization feature is needed by this proposal. Completed
+separate source scopes. The implementation below adopts the reviewed adapters and
+validates ordinary searches, delayed completion and STATE_D cooldown behavior.
+No native inheritance-policy or pluralization feature is needed by this proposal. Completed
 equipment/TCP work and the separately tracked compiler default-position issue
 retain their scopes. Evidence: /tmp/lima-junk-audit-20261015.
+
+#### Lima standard junk and material-spawner support
+
+Reviewed **15 October 2026**, after the audit committed as native **2b4c14fa** and
+Lima **f2d70304**. The **22-file adaptation** matches the reviewed proposal exactly:
+26 explicit float weight/value arguments, a split void call/return, nil path prefix
+and dirt-pile configuration through setup(string loot). Parent initialization runs
+before area setup; dirt's zero-returning state_update stays. Twenty CRLF example
+files and two LF sources retain headers and other bytes. No native API, master
+policy or configuration change is made; original **eefaff66** remains unchanged.
+
+**27/27 bounded sources compile**. The final **259.11s** driver run passes all
+**30 lifecycle checkpoints**, both clean **151-preload** boots, saved login and
+normal exits. It retains all **881** preceding first-session command lines and adds
+**171 inputs** (**1052 total**), including **23 constructors**, **six normal
+searches** and **three actual STATE_D updates**. The real four-second body busy
+callback delivers random trash and default/custom dirt loot. Repeat searches
+refuse; two trash updates expire its receiver count and permit new loot, while
+dirt's update removes it from the queue without regenerating. Item values and
+salvage metadata, inventory counts and actor-specific state pass. Public scheduling
+APIs make only tested spawners due; no receiver edits, callback replacement, new
+LPC fixture/helper or policy grant is used. Same six retained fixtures, fixed
+frames and two address-only overrides remain. Cleanup restores an empty-handed
+player to the Grand Hall before restart; prior bank and other checks remain.
+
+Existing redundant trash setup, fertilizer weight, message/yield/capacity and
+cooldown-policy quirks remain separate. English grammar stays in LPC, and the
+whole-source **924/1,180** remains its preceding inventory measurement. No native
+workspace gate is claimed for this LPC-only change. Next audit the vehicle base
+and its Camaro/horse consumers from the remaining source inventory; completed
+equipment/TCP work and reserved native discussions stay separate. Evidence:
+/tmp/lima-junk-20261015.
 
 #### Lima basic player commands and help
 
