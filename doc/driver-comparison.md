@@ -1946,6 +1946,47 @@ qualification. WIP burnable std/paper.c, completed frameworks/TCP, broader gamep
 policy, native observations and reserved inheritance/cache work remain separate.
 Evidence: /tmp/lima-writing-20261016.
 
+#### Lima physical mailbox and leaflet audit
+
+Reviewed **16 October 2026**, after paper commits Lima **0bceb674** and native
+**99d7faf3**. The physical [small mailbox][lima-mailbox-prop] and
+[leaflet][lima-mailbox-leaflet] are room props, separate from the completed user-mail
+system. Both fresh baseline compiles fail integer mass arguments. A **two-file
+temporary proposal** uses to_float(MEDIUM)/to_float(VERY_SMALL), preserving masses
+16.0/1.0, integer capacity 4, anchored refusal, IDs, text and relative leaflet
+population. Headers/LF/final newline remain; dedicated LPC is unchanged pending
+adoption. No native API/code/config/master/privilege/framework/fixture change.
+Original claims pin **eefaff66** source review without upstream execution.
+
+**14/14 complete targets compile**. Focused **69.49s / 62-input** gameplay uses the
+actual entrance room constructor, mailbox and its one leaflet. Closed visibility
+and read/get refusal, normal open/close/repeat guards/open-up alias, look-at content
+display, all three leaflet IDs, read auto-acquisition and exact text, normal get/
+put/drop and anchored get refusal pass. Four unit-mass leaflets fit; ordinary put
+of a fifth refuses without movement or capacity mutation. Explicit public reset
+calls replace a missing leaflet once and preserve an existing one without duplicate
+creation; natural reset scheduling is not qualified. Stock filler instances and
+one temporary ID avoid parser ambiguity; no new LPC helper/host/body/grant.
+
+The inherited generic direct_look_str_obj guard refuses normal `look in mailbox`
+even when open; its body/signature are identical in reviewed original source.
+This remains unchanged. Public look_in hooks separately return the closed message
+and reveal open contents, while actual open/look-at provide ordinary content display.
+The first retained run stopped on an incorrect expectation of the closed wording;
+the final helper asserts the actual parser refusal and all visibility/access checks.
+
+All 30 lifecycle checkpoints, both clean 151-preload boots, saved account login
+and normal exits pass without failed apply/runtime input error/STATE_D failure/
+panic. Props are cleaned to one closed mailbox/leaflet, and the empty-handed player
+returns to Grand Hall; prop persistence across driver restart is not qualified.
+Same six fixtures/two address overrides, distinct nil/preserved player/4000ms and
+actual master/simuls/user/body/parser remain. Prior **2082 inputs + 10 restored-
+favour / 426.29s** replay and **966/1182** sweep retain measured scope. Next adopt
+the two-file proposal with retained full replay after writing cleanup and before
+mission/expiry/favour setup. Completed frameworks/TCP, broader game policy and
+reserved inheritance/cache work remain separate. Evidence:
+/tmp/lima-mailbox-props-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
@@ -24356,3 +24397,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-writing-paper]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/paper.c
 
 [lima-writing-surface]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_writing_surface.c
+
+[lima-mailbox-prop]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/lima/small_mailbox.c
+
+[lima-mailbox-leaflet]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/lima/leaflet.c
