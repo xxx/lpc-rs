@@ -1701,6 +1701,43 @@ adoption and refresh remaining complete-source failures before choosing the next
 family. Native observations, reserved inheritance/cache and completed framework/
 equipment/TCP work stay separate. Evidence: /tmp/lima-yakitori-shop-20261016.
 
+#### Lima source inventory after guild consumers
+
+Reviewed **16 October 2026**, after Yakitori commits Lima **65ce9796** and native
+**b03a0811**. Fresh enumeration checks the unchanged **1,182-source** set:
+**966 compile, 216 fail, zero timeouts/crashes, 252.849s**. All **957** preceding
+successes remain; **nine previous failures** now compile, with no added/removed
+files. Gains are four guild artefact items, four Yakitori consumers (including the
+mission controller NPC) and the artefact menu. All **25 bundled guild sources**
+compile. These are actual source measurements, not port-completion percentages.
+
+The failures include **61 confirmed composed fragments**: 60 carried reviews and
+new M_MISSION_CTRL/ADVERSARY composition in the actual controller NPC. Object hook
+providers and fresh host compilation establish that boundary. Changed
+M_CONVERSATION source is revalidated against greeter/cashier hosts and the frozen
+review; other carried fragment bytes remain. The other **155 failures** include
+unreviewed host parts, optional/legacy sources and port adapters, without identifying
+155 complete broken objects or native gaps. Remaining first messages/sources are
+unchanged. Core/command/school/room/junk/class/Pinto pass counts remain.
+
+Next audit [slowheal][lima-slowheal] and six consumable examples:
+[cigarette][lima-consumable-cig], [joint][lima-consumable-joint],
+[pain killers][lima-consumable-pills] and [deluxe][lima-consumable-deluxe],
+[large][lima-consumable-large], [small][lima-consumable-small] pet treats. First
+boundaries are numeric conversions, parser signatures and FOOD value types;
+review actual constructors and delayed healing/callback context before adapters,
+preserving dosage/timing policy. Original claims pin **eefaff66** source review,
+without upstream execution. No proposal or new runtime qualification is made here.
+
+Same distinct nil/preserved player/4,000 ms/includes/accounts; maximum two CLI
+processes/two workers each, 4 GiB/40s per file. Source/configuration/binaries remain
+unchanged; only README/comparison notes are pending. CLI checks do not run target
+constructors. Prior **1871 + 10 restored-favour inputs / 413.0s** production replay,
+30 lifecycle checkpoints/two clean boots and saved login/bank retain measured scope;
+no gameplay or Rust gate is repeated. Native observations, reserved inheritance/
+cache and completed equipment/TCP/framework scopes stay separate. Evidence:
+/tmp/lima-guild-source-inventory-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
@@ -24087,3 +24124,17 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-yakitori-damage-types]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/damage-types
 
 [lima-yakitori-sake]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/sake.c
+
+[lima-slowheal]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/slowheal.c
+
+[lima-consumable-cig]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/cig.c
+
+[lima-consumable-joint]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/joint.c
+
+[lima-consumable-pills]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/pain_killers.c
+
+[lima-consumable-deluxe]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/treat_deluxe.c
+
+[lima-consumable-large]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/treat_large.c
+
+[lima-consumable-small]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/treat_small.c
