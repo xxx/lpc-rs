@@ -1098,10 +1098,65 @@ no new source helper or policy grant.
 Existing entry/exit wording and horse arrival/departure templates are observed
 without repair. Legacy direct mount helpers, every preposition alias, followers/
 other room-hook interactions and detailed message wiring remain separate scopes.
-No native API or general inherited-contract change is needed. Next audit the four
-remaining standard rooms: Labroom, Labyrinth, V_Plains and caves/Sloping_Tunnel.
+No native API or general inherited-contract change is needed. The following audit
+reviews the four remaining standard rooms and their virtual factories.
 Completed equipment/TCP work and reserved native discussions remain closed here.
 Evidence: /tmp/lima-vehicles-20261015.
+
+#### Lima remaining standard rooms audit
+
+Reviewed **15 October 2026** after vehicle support commits Lima **3dcfddac** and
+native **d32f097c**. A **six-file proposal** is tested only in a disposable library;
+dedicated LPC/native implementations and configuration remain unchanged. Original
+claims use pinned **eefaff66** source review, with no upstream execution. Distinct
+nil, preserved call-out player and 4,000 ms remain configured.
+
+[Labroom][lima-labroom] passes nil for format_list's omitted separator; the
+[maze server][lima-labyrinth-server] and [grid server][lima-grid-server] return nil
+from object-valued declines. The grid names this_object explicitly for file_name.
+[Sloping_Tunnel][lima-sloping-tunnel] uses the live set_default_error API, and the
+[labyrinth entrance][lima-labyrinth-entrance] names the actual Labyrinth.c server.
+[BASE_ROOM][lima-base-room] forwards its constructor arguments to container::create,
+so cloned Labroom instances receive their coordinates and open directions. All six
+headers/LF are retained; [V_Plains][lima-plains-server] itself needs no edit.
+
+The original source also drops these constructor arguments and contains the
+entrance's case mismatch and tunnel's stale method name. These are concrete
+example/dependency defects, distinct from native typing/arity adapters. The first
+five-file compile-only proposal exposed the constructor issue at runtime: a room
+with an open direction still had no exits. No native constructor defect is
+established; the forwarding edit makes its supplied configuration arrive.
+
+Baseline **5/5 family targets fail**. With the final temporary proposal,
+**13/13 complete family/caller targets compile**. The **72.69s** focused
+run passes **30 lifecycle checkpoints**, two clean **151-preload** boots, saved
+login and normal exits. Its **69 audit inputs** check four Labroom direction/
+description cases, three generated maze rooms, the entrance constructor, **all 64
+plains cells** with **256 exits** and source-data descriptions, plus the tunnel's
+actual wrong-way refusal and southward movement. Both factory decline paths return
+nil. Real master/simuls/user/body/commands, same six fixtures, fixed local frames/
+two address overrides, no new LPC helper or grant. This is not a replay of the
+preceding 1117-input vehicle production run; the whole-source **924/1,180** remains
+its preceding measured inventory.
+
+Virtual rooms remain **unported**. A native load of V_Plains/4/7 returns nil; a
+string receiver exposes the expected compile_object path-versus-object error.
+The legacy factory has already configured an OUTDOOR_ROOM clone, whereas native
+[compile_object](apply/master/compile_object.md) creates a virtual identity from a
+blueprint path and then initializes it. Returning that clone's filename or source
+would not preserve its configured globals. Factory side effects from the failed
+loads are recorded and cleaned in the disposable library. Lowercase labyrinth
+virtual paths also fail to identify the uppercase server through the current
+ancestor search; the entrance correction alone does not fix that routing.
+
+Recommend adopting the bounded six-file corrections, then adapting the virtual
+factories to return blueprint paths and configure the actual requested virtual
+objects during initialization. Preserve maze state, grid configuration and stable
+identity; include maze path casing in that work. No native API change is proposed
+by this audit. Out-of-grid policy, recorder/parameterized objects and unrelated
+original game logic remain separate scopes. Completed equipment/TCP work and
+reserved native discussions remain closed. Evidence:
+/tmp/lima-standard-rooms-audit-20261015.
 
 #### Lima basic player commands and help
 
@@ -23451,3 +23506,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-vehicle-horse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/horse.c
 [lima-vehicle-exit]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/exit.c
 [lima-vehicle-dismount]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/dismount.c
+[lima-labroom]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Labroom.c
+[lima-labyrinth-server]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Labyrinth.c
+[lima-grid-server]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/grid_server.c
+[lima-sloping-tunnel]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/caves/Sloping_Tunnel.c
+[lima-labyrinth-entrance]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/labyrinth/0,0.c
+[lima-plains-server]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/V_Plains.c
