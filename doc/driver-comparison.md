@@ -1618,6 +1618,49 @@ through their shop, blocking, conversation and wear paths. Native observations,
 reserved inheritance/cache and completed equipment/TCP/framework work stay separate.
 Evidence: /tmp/lima-mission-expiry-20261016.
 
+#### Lima Yakitori outfit, shop and delivery-boy audit
+
+Reviewed **16 October 2026**, after playerless guild logging commits Lima
+**9e2f5a31** / native **b0274b98**. This new **five-file temporary proposal** leaves
+dedicated LPC/native implementation unchanged; README/comparison audit notes are
+pending. Original claims are source review at **eefaff66**, without upstream execution.
+Distinct nil, preserved call-out player, 4,000 ms and existing includes/accounts remain.
+
+Fresh baseline fails at [uniform][lima-yakitori-uniform]'s ARMOR,
+[cashier][lima-yakitori-cashier]'s private parent call and
+[delivery boy][lima-yakitori-delivery]'s duplicate assistance inherit. The proposal
+uses existing ARMOUR/set_armour_class, maps stale blade/electricity to the configured
+[damage registry][lima-yakitori-damage-types] names with unchanged values, removes the
+duplicate inherit and uses the actual bundled [sake][lima-yakitori-sake]. Cashier
+supplies the existing [exit-blocking callback][lima-yakitori-blocking] (1 allows, 0 denies), preserving
+private handlers. Concrete [assistance][lima-yakitori-assistance] and
+[conversation][lima-yakitori-conversation] sites bind arguments natively; conversation
+skips empty option additions because native [explode](efun/explode.md) preserves an
+empty field. No native API/privacy/inheritance, damage registry, master, privilege,
+config or fixture change. Headers/line endings/final newline remain.
+
+**17/17 complete targets compile**. Focused **83.98s / 76-input** gameplay
+passes all **30 lifecycle checkpoints**, two clean **151-preload** boots, saved login
+and normal exits, without failed apply, runtime input error or worker panic. Actual
+uniform wear/remove/torso-and-arm coverage, shop/cashier/kitchen constructors, normal
+outsider/member/solver exits, numbered Japanese riddle/rejection and domain-gold
+skewer purchase pass. Two stock boys construct wearing uniforms with actual sake;
+a one-shot bound-helper timer executes and assigns the helper's target. Public
+switch_to/under_attack_by with stock same-room helper/flea and raised health/disabled
+specials prepare that callback check; player attacks, natural hook dispatch,
+adjacent-room assistance and autonomous combat are not claimed. An earlier complete
+gameplay run passed 75 inputs but exceeded 4000ms on its second cold preload
+(3997.076ms compilation); that failure is retained. No limit increase or native
+performance fix is claimed by the unchanged replay.
+
+Same six fixtures/two address-only overrides and actual master/simuls/user/body/
+shell/parser/commands; no new helper/body/grant. Controls and inventory clean up.
+Previous **1810 + 10 restored-favour** full replay and **957/1182** source sweep
+retain measured scope without repetition or additive count. Next adopt the five
+files with retained full replay, before favour saved-state preparation. Completed
+framework/equipment/TCP, native observations and reserved inheritance/cache work
+stay separate. Evidence: /tmp/lima-yakitori-shop-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
@@ -23988,3 +24031,19 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-guild-give]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/give.c
 
 [lima-guild-standard-favour]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/favour/std_favour.c
+
+[lima-yakitori-uniform]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/yakitori/armor/uniform.c
+
+[lima-yakitori-cashier]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/yakitori/mob/cashier.c
+
+[lima-yakitori-delivery]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/yakitori/mob/delivery_boy.c
+
+[lima-yakitori-blocking]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_blockexits.c
+
+[lima-yakitori-assistance]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_assistance.c
+
+[lima-yakitori-conversation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_conversation.c
+
+[lima-yakitori-damage-types]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/damage-types
+
+[lima-yakitori-sake]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/consumable/sake.c
