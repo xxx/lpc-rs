@@ -1055,12 +1055,53 @@ helper or grant. Initial payload/relation failures remain diagnostic evidence.
 The preceding 1052-input production run is retained without being replayed here;
 the whole-source **924/1,180** remains its measured inventory.
 
-Next adopt the proposal and validate descriptions, ordinary drivers/passengers,
-handover and notifications. Legacy direct mount helpers, all aliases, followers/
-other room hooks and detailed message wiring remain unqualified source scopes.
+The adoption and connected-player coverage are recorded below. Legacy direct mount
+helpers, all aliases, followers/other room hooks and detailed message wiring retain
+their separate scopes.
 No native forwarding/class-copy defect is established by this audit. Completed
 equipment/TCP work and reserved native discussions remain separate. Evidence:
 /tmp/lima-vehicles-audit-20261015.
+
+#### Lima vehicle support
+
+Reviewed **15 October 2026**, following audit commits native **9b6b252c** and
+Lima **f50accf4**. The **four-file adaptation** exactly matches the reviewed
+proposal above: three nil string returns, native callbacks, mixed unused movement
+payloads, nil/actual vehicle setter values, canonical enter/leave registrations
+and explicit empty exit/dismount rules. Camaro, shared mover/complex-exit/body code,
+method table, native implementation and configuration stay unchanged; headers/LF
+are preserved. Original-source claims remain pinned to **eefaff66** source review,
+without upstream execution. Distinct nil, preserved call-out player and 4,000 ms
+remain configured.
+
+**12/12 complete targets compile** with the adopted dedicated source. The
+**81.63s** connected-player check and final **274.44s**
+production replay each pass two clean **151-preload** boots, **30 lifecycle
+checkpoints**, saved login and normal exits. The production run retains the prior
+gameplay sequence (1056 command inputs; only consecutive identical observational
+poll counts may vary), adding **61 vehicle inputs**, **1117 total**. Existing
+bank restoration and earlier family checks pass; the whole-source **924/1,180**
+remains its preceding inventory measurement.
+
+Two real connected accounts check Camaro/horse constructors, outside descriptions
+and in/on location views, passenger refusal to drive, driver flags/vehicle identity,
+handover after the first driver leaves, and final state clearing. Both drivers make
+an east/west trip in each vehicle: **four round trips/eight moves**, with automatic
+passenger views and outside-observer departure/arrival notifications. Repeated entry
+leaves occupants unchanged; visibility can refuse it before the vehicle check.
+Both bodies end empty-handed in the Grand Hall, and the second account/body saves
+before normal logout. Existing AUTO_WIZ gives that new account guest wizard status;
+it is not an admin and receives no extra grant. Same six retained source fixtures,
+fixed local frames/two address overrides and real master/simuls/user/body/commands;
+no new source helper or policy grant.
+
+Existing entry/exit wording and horse arrival/departure templates are observed
+without repair. Legacy direct mount helpers, every preposition alias, followers/
+other room-hook interactions and detailed message wiring remain separate scopes.
+No native API or general inherited-contract change is needed. Next audit the four
+remaining standard rooms: Labroom, Labyrinth, V_Plains and caves/Sloping_Tunnel.
+Completed equipment/TCP work and reserved native discussions remain closed here.
+Evidence: /tmp/lima-vehicles-20261015.
 
 #### Lima basic player commands and help
 
