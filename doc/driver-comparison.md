@@ -1584,6 +1584,40 @@ game policy, native observations and reserved inheritance/cache work stay separa
 No Rust gate or whole-source refresh is claimed. Evidence:
 /tmp/lima-mission-expiry-audit-20261016.
 
+#### Lima automatic mission expiry and playerless logs
+
+Reviewed **16 October 2026**, after audit commits native **3100493c** and Lima
+**cd678206**. The dedicated guild_d.c log change exactly matches the proposal:
+use the current body's name when available, otherwise 'system'. Header/LF/final
+newline remain. No native API/code, master, privilege, configuration, reward,
+clock or fixture change. Original-source claims pin **eefaff66** source review,
+without upstream execution. Distinct nil, preserved call-out player and 4,000 ms remain.
+
+**22/22 complete targets compile**. The final **369.75s** production replay
+passes **1810 first-session inputs plus the retained 10 restored-favour inputs**,
+all **30 lifecycle checkpoints**, both clean **151-preload** boots, saved login/bank
+restoration and normal exits, without failed apply or worker panic. Prior meaningful
+1639-input scope is retained, adding **169 expiry inputs** before favour saved-
+state preparation. Earlier helpers are byte-identical; only repeated observations,
+displayed menu numbers, current generated-maze paths and actual saved values vary.
+
+Actual nil-player STATE_D heartbeat/public duration/queue controls trigger expiry.
+Ten normal bucket gifts yield 20 wood and one online contributor's 500-favour reward;
+an incomplete two-wood round pays zero. Both clear the real controller, destroy
+after the original 10/5-second delays and log '<system>' completion/failure.
+No direct manual ending triggers expiry. Favour purchase/deadline/actual-restoration
+and all prior gameplay families remain. Same six fixtures/two address overrides,
+real master/simuls/user/body/parser, no helper or grant. Whole-source **957/1182**
+remains its preceding measured sweep; no new count or Rust gate is claimed.
+
+Multiple contributors/offline rewards, other recipes, overlapping/repeated ending
+and broad reward/cancellation policy remain separate. Cleanup explicitly flushes
+diagnostic logs, so autonomous delayed-log persistence itself is not newly qualified.
+Next audit the three remaining Yakitori uniform/cashier/delivery-boy consumers
+through their shop, blocking, conversation and wear paths. Native observations,
+reserved inheritance/cache and completed equipment/TCP/framework work stay separate.
+Evidence: /tmp/lima-mission-expiry-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
