@@ -736,14 +736,53 @@ saves and full gameplay assertions remain separate. No new driver runtime or nat
 build/test suite was run for this source-only classification. All LPC sources and
 the original Lima checkout remain unchanged.
 
-Next audit the ranged weapon/ammunition family: **11 failed targets** first reach
-std/ranged_weapon.c's scalar string collector or std/ammunition.c's optional short
-parameter conflicting with its inherited declaration. Inspect the complete consumers
-and call sites before choosing source adapters. General inheritance-policy changes
-and completed wear/wield work are separate decisions. The school/tutorial batch,
-other standard object families and optional contributions form a finite backlog;
-do not start another automatic one-file gameplay audit chain. Evidence:
-/tmp/lima-source-families-20261015. Earlier dated reports below retain their scopes.
+The ranged weapon/ammunition audit below identifies source adapters for 11 of
+these failed targets; they are tested only in a disposable copy and have not changed
+this inventory. General inheritance-policy changes and completed wear/wield work
+remain separate decisions. School/tutorial conversion, other standard object
+families and optional contributions form a finite backlog rather than an automatic
+one-file gameplay audit chain. Inventory evidence:
+/tmp/lima-source-families-20261015. Earlier dated reports retain their scopes.
+
+#### Lima ranged weapon and ammunition audit
+
+Reviewed **15 October 2026** at native **e4228022** and dedicated Lima **152352a2**,
+using distinct nil, preserved call-out players and the 4,000 ms task budget. All
+11 family sources are byte-identical to original Lima **eefaff66**. This is source
+review and native temporary controls; no upstream execution is claimed. The
+[shared ranged definition][lima-ranged-definition] uses a scalar string collector;
+the [ammunition definition][lima-ammunition-definition] adds an optional parameter
+to inherited `short()`. Both block complete consumers under current native rules.
+
+Recommend nine source-file adaptations: declare `set_fire_type(string *ft...)`,
+retain its flattening, split the base short description into a protected helper
+while keeping `short()` parameterless, and update the sole `short(1)` consumer in
+the [plasma magazine][lima-plasma-ammunition]. Use `nil` for two absent-object
+sentinels and float expressions for seven `set_value` arguments. The only current
+fire-type caller supplies separate strings. Native array collectors also accept an
+array in the tail without inspecting its elements; retaining `flatten_array`
+preserves that input form. The [existing collector rules](lpc/variadic_parameters.md)
+and general inherited-signature policy are unchanged.
+
+After those temporary changes, **11/11 targets compile**, against 0/11 in the
+retained inventory, with no timeouts or crashes. Four additional contract controls
+accept separate/spread strings and the flattened array form, reject a scalar string
+collector declaration, and reject the obsolete direct `short(1)` call. A standalone
+method control using real simuls reproduces a default-mode switch error because
+`fire_type` is nil; initializing it to `({"single"})`, matching `fire_mode`, fixes
+that case and retains the separate, array and spread forms. The final temporary
+family still compiles 11/11. Controls use at most two CLI processes, two Tokio
+workers each, 4 GiB per process and 40 seconds per invocation.
+
+These adapters remain a proposal: dedicated LPC and native implementation sources
+are unchanged. No master, player session, combat tick or deferred ammunition
+callback was exercised by the standalone method control. Apply the source adapters
+next, then check actual clone descriptions/configuration and the matching pistol/
+clip flows through the normal game. Existing bundled crossbow/quarrel ammunition
+identifiers differ, and the quarrel has no configured maximum charge count; their
+configuration/gameplay behavior is separate from these compiler adaptations.
+Do not declare full ranged combat qualified or reopen completed equipment/TCP
+work. Audit evidence: /tmp/lima-ranged-ammunition-audit-20261015.
 
 #### Lima basic player commands and help
 
@@ -23062,3 +23101,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-tree-grammar]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/grammar.y#L2827-L2843
 [fl-tree-generator]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/generate.cc#L667-L811
 [fl-tree-build]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/CMakeLists.txt#L173-L180
+
+[lima-ranged-definition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/ranged_weapon.c
+[lima-ammunition-definition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/ammunition.c
+[lima-plasma-ammunition]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/ammo/13mm_plasma.c
