@@ -1149,14 +1149,56 @@ loads are recorded and cleaned in the disposable library. Lowercase labyrinth
 virtual paths also fail to identify the uppercase server through the current
 ancestor search; the entrance correction alone does not fix that routing.
 
-Recommend adopting the bounded six-file corrections, then adapting the virtual
-factories to return blueprint paths and configure the actual requested virtual
-objects during initialization. Preserve maze state, grid configuration and stable
+The source adaptation below adopts the bounded six-file corrections. The next work
+is adapting virtual factories to return blueprint paths and configure the actual
+requested objects during initialization. Preserve maze state, grid configuration and stable
 identity; include maze path casing in that work. No native API change is proposed
 by this audit. Out-of-grid policy, recorder/parameterized objects and unrelated
 original game logic remain separate scopes. Completed equipment/TCP work and
 reserved native discussions remain closed. Evidence:
 /tmp/lima-standard-rooms-audit-20261015.
+
+#### Lima standard room source adaptations
+
+Reviewed **16 October 2026**, after audit commits native **5e381968** and Lima
+**f50376a5**. The six source files now exactly match the reviewed proposal above:
+explicit format_list separator, nil factory declines, explicit file_name receiver,
+BASE_ROOM constructor forwarding, entrance server case and the tunnel's live error
+setter. All headers/LF remain. The shared constructor now passes the supplied room
+coordinates/directions through the existing clone initializer. V_Plains, master,
+simuls, native implementation, policies and configuration remain unchanged.
+Original-source attribution remains pinned to **eefaff66** source review, without
+upstream execution. Distinct nil, preserved call-out player and 4,000 ms remain.
+
+**13/13 complete targets compile** from the adopted dedicated source. The final
+**237.05s** production replay passes all **30 lifecycle checkpoints**, two
+clean **151-preload** boots, saved login, bank restoration and normal exits. It
+retains the prior 1117-input gameplay sequence (1114 replay records, with
+3 fewer repeated observational polls) and adds **69 room inputs**, **1183 total**.
+Sequence comparison only normalizes consecutive identical npc-wander/junk-pulse
+observations; previous cases and both connected-player vehicle handovers remain.
+
+Four parameterized Labroom cases check 0/1/2/4 exits, destinations and descriptions;
+three maze factory rooms and the entrance constructor pass. All **64 plains cells**
+match the data-file descriptions and all **256 cardinal exits**, including edge
+returns to Example_Room1. Both factory decline paths return nil. Normal goto/east/
+south commands verify tunnel darkness, configured wrong-way refusal and movement
+to Inside_Cave. Cleanup returns the player empty-handed to the Grand Hall before
+restart. Same six accepted source fixtures, fixed local frames/two address overrides
+and real master/simuls/user/body/commands; no new LPC helper or grant.
+
+This qualifies the bounded source adaptations; **virtual room loading remains
+unported**. The two expected virtual-load controls still demonstrate the existing
+configured-clone versus blueprint-path mismatch, leave no named virtual room and
+remove their diagnostic clones. The entrance's corrected server reference does
+not fix lowercase generated-path routing. Next migrate virtual factories to return
+blueprint paths and initialize actual requested virtual identities, preserving maze
+state and grid configuration with consistent case routing. No native API change is
+made here. Recorder/parameterized objects, out-of-grid policy, unrelated original
+game logic, completed equipment/TCP work and reserved native discussions retain
+their scopes. The whole-source **924/1,180** remains its preceding measured sweep;
+no new whole-tree count or Rust workspace gate is claimed for this LPC-only batch.
+Evidence: /tmp/lima-standard-rooms-20261016.
 
 #### Lima basic player commands and help
 
