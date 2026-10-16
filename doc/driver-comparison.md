@@ -1661,6 +1661,46 @@ files with retained full replay, before favour saved-state preparation. Complete
 framework/equipment/TCP, native observations and reserved inheritance/cache work
 stay separate. Evidence: /tmp/lima-yakitori-shop-audit-20261016.
 
+#### Lima Yakitori outfit, shop and delivery-boy support
+
+Reviewed **16 October 2026**, after audit commits Lima **7c07095e** and native
+**ab29ded1**. The five reviewed LPC adapters are adopted in the dedicated checkout,
+with one indentation-only cleanup and otherwise exact proposal bytes. Headers,
+LF/CRLF and final-newline state remain. Original claims pin **eefaff66** source
+review, without upstream execution. Distinct nil/preserved player/4,000 ms remain.
+
+[Uniform][lima-yakitori-uniform] uses existing ARMOUR/armour-class and configured
+slashing/lightning names with unchanged resistance/coverage. [Cashier][lima-yakitori-cashier]
+uses the existing [exit-block callback][lima-yakitori-blocking] to admit members/
+solvers and deny visitors, preserving private handlers. [Delivery boy][lima-yakitori-delivery]
+keeps one assistance inherit and the bundled std sake. Concrete assistance and
+conversation sites bind arguments natively; conversation skips empty option
+additions under native [explode](efun/explode.md) semantics. No native API/source,
+master, privilege, config, damage registry or fixture change.
+
+**37/37 complete targets compile**. The full **413.0s** production replay
+passes **1871 first-session inputs**, including **69 new Yakitori inputs**,
+plus **10 retained restored-favour inputs**, all **30 lifecycle checkpoints**,
+both clean **151-preload** boots, saved login/bank restoration and normal exits,
+without failed apply, runtime input error, STATE_D error or worker panic. Prior
+1810-input scope remains, comparing unchanged helpers and retained sequences;
+repeated observations, displayed artefact indices, generated maze and actual saved
+expiry/score can vary. Whole-source **957/1182** remains its preceding actual sweep.
+
+Actual uniform wear/remove/coverage, shop/kitchen constructors, outsider/member/
+solver exits, numbered riddle/rejection, domain-gold skewer purchase and two equipped
+delivery boys with actual sake pass. A one-shot helper-bound timer executes and
+assigns the helper's target under stock same-room NPC/flea/public target/health/
+special controls. Natural attack dispatch, adjacent assistance and full combat/AI
+are not claimed. Same six fixtures/two address overrides, no new LPC helper/body/
+grant. Cleanup precedes retained mission/expiry/favour preparation and restoration.
+
+The audit's earlier cold-preload timeout remains preserved; successful adoption
+claims no native performance fix or execution-limit increase. Next commit this
+adoption and refresh remaining complete-source failures before choosing the next
+family. Native observations, reserved inheritance/cache and completed framework/
+equipment/TCP work stay separate. Evidence: /tmp/lima-yakitori-shop-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
