@@ -1472,6 +1472,45 @@ No native API change is recommended. Unrelated source logic, native observations
 reserved inheritance/cache and completed equipment/TCP/framework work remain separate.
 Evidence: /tmp/lima-mission-controller-audit-20261016.
 
+#### Lima mission controller and give support
+
+Reviewed **16 October 2026**, after audit commits native **845d3ff3** and Lima
+**75324c55**. The two dedicated source files exactly match the proposal above:
+bound native delivery call-out, nil mission clearing and bare arrival callback in
+the controller module; bare action callback in give. Headers, controller CRLF/missing
+final newline and give LF remain. No native source/API, master, shared-framework
+policy, authorization or configuration change. Original claims remain pinned
+**eefaff66** source review, without upstream execution. Distinct nil, preserved
+call-out player and 4,000 ms remain configured.
+
+**21/21 complete targets compile** from adopted source. The final **325.19s**
+production replay passes all **30 lifecycle checkpoints**, both clean **151-preload**
+boots, saved login/bank restoration and normal exits, with no failed apply or worker
+panic. It retains the prior meaningful 1500-input scope (1501 replay records;
+only repeated observational polls may vary), adding **61 mission inputs**,
+**1562 total**. The unchanged virtual helper checks the current maze; prior
+108 recorder and 71 artefact cases remain along with all earlier gameplay families.
+
+Actual Yakitori room/controller construction and reuse, inactive give refusal,
+ordinary bucket give, two-second bound delivery, two wood scraps and actual
+contributor feedback pass. Manual incomplete ending clears the controller to nil
+and destroys the mission after the original 10/5-second delays. Active-buff board
+rendering passes through the public activation/state API. Diagnostic cache,
+membership and shell variables are cleaned before saved login. Same six fixtures,
+fixed local frames/two address-only overrides, real master/simuls/user/body/parser,
+no helper or grant. The whole-source **957/1182** remains its preceding measured
+sweep; no new count or Rust gate is claimed.
+
+The original favour lifecycle issues remain unchanged: activation replaces the
+still-live mission pointer, and the buff expires immediately despite the future
+cached expiry/board; a state update applies then clears XP and leaves the cache.
+Purchase accounting, sustained/restored favours, mission rewards and autonomous
+expiry remain unqualified. Next review favour expiry propagation/controller
+ownership as a separate bounded LPC correction. No native feature is required.
+Unrelated game logic, native shutdown/default-position observations, reserved
+inheritance/cache and completed equipment/TCP/framework work remain separate.
+Evidence: /tmp/lima-mission-controller-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
