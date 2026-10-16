@@ -1430,6 +1430,48 @@ sweep; no new count or Rust gate is claimed. Native shutdown/default-position
 observations, reserved inheritance/cache work and completed equipment/TCP remain
 separate. Evidence: /tmp/lima-guild-artefact-20261016.
 
+#### Lima mission controller and activation audit
+
+Reviewed **16 October 2026**, after guild item/menu support commits Lima **3ad685f6**
+and native **2a6dfe08**. A **temporary two-file proposal** adapts the
+[controller module][lima-guild-mission-control] to native bound call-out, nil clearing
+and a bare arrival callback; [give][lima-guild-give] supplies a bare dispatch callback
+to [handle_obs][lima-verb-base]. Its old native closure returns a function, so normal
+successful give silently does nothing. The concrete Yakitori host needs these
+adapters; no new prototype or native feature is established by standalone fragment
+errors. Headers, module CRLF/missing final newline and give LF remain. Dedicated
+LPC/native source, shared frameworks, authorization and configuration are unchanged.
+Original claims pin **eefaff66** source review, without upstream execution. Distinct
+nil, preserved call-out player and 4,000 ms remain configured.
+
+Baseline **18/19** complete targets compile (controller host fails); final
+**21/21** compile with actual bucket/crafting callers. The **95.73s / 61-input**
+focused run passes all **30 lifecycle checkpoints**, both clean **151-preload** boots,
+saved login and normal exits, without failed apply or worker panic. Real room/NPC
+construction and reuse, inactive give refusal, normal give, two-second bound delivery,
+two wood scraps and actual contributor feedback pass. Manual incomplete ending
+clears the controller and destroys the mission after the source's 10/5-second delays.
+Active-buff board rendering is now exercised in this proposal. Real master/simuls/
+user/body/parser, same six fixtures/two address overrides, no helper or grant.
+The prior **1500-input** full replay and **957/1182** inventory retain their scopes.
+
+Two unmodified LPC favour issues are characterized. [The favour base][lima-guild-standard-favour]
+replaces the still-live mission in the controller. Its ends_at starts at time(),
+while [guild start_favour][lima-guild] assigns the ordinary duration only to the
+cache. The buff reports zero remaining time while the board shows about 30 minutes;
+a state update applies then immediately clears 20% XP and leaves the future cache
+entry. Original controller/length statements are identical; the clock assignment
+differs only by the earlier new(filename) constructor adapter. These are source
+logic observations, not upstream execution or native gaps, and remain unpatched.
+Public cleanup clears the diagnostic cache before restart. Purchase accounting,
+sustained/restored favours, mission rewards and autonomous expiry are unqualified.
+
+Next adopt the two reviewed adapters with the retained production replay, then
+review favour expiry/controller ownership as a separate bounded LPC correction.
+No native API change is recommended. Unrelated source logic, native observations,
+reserved inheritance/cache and completed equipment/TCP/framework work remain separate.
+Evidence: /tmp/lima-mission-controller-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
@@ -23794,3 +23836,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-favour-board]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/item/favour_board.c
 [lima-guild-ledger]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/item/ledger.c
 [lima-artefact-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/artefact_menu.c
+
+[lima-guild-mission-control]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_mission_control.c
+
+[lima-guild-give]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/give.c
+
+[lima-guild-standard-favour]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/guild/favour/std_favour.c
