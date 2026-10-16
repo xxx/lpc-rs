@@ -1906,6 +1906,46 @@ preparation. Prior **2028 inputs + 10 restored-favour / 413.38s** replay and the
 std/paper.c, shared frameworks/TCP, broader game policy and reserved inheritance/
 cache work remain outside this audit. Evidence: /tmp/lima-writing-audit-20261016.
 
+#### Lima writable-paper support
+
+Reviewed **16 October 2026**, after audit commits Lima **0034b8dd** and native
+**31b43d61**. The [M_WRITING_SURFACE][lima-writing-surface] change exactly matches
+the audited proposal: one private nosave callback returns current extra text and
+supplies stable identity to the function-typed hook API. The [paper][lima-writing-paper],
+write verb and shared hook/description source stay unchanged. Headers/LF/final
+newline, original wording and capacity/add_text policy remain. No native API/code,
+config/master/privilege/framework/fixture change; original claims pin **eefaff66**
+source review without upstream execution.
+
+**75/75 complete targets compile**. Full **426.29s** replay passes **2082
+first-session inputs**, including **60 paper inputs**, plus **10 retained
+restored-favour inputs**, all 30 lifecycle checkpoints, both clean 151-preload boots,
+saved login/bank restoration and normal exits, without failed apply/runtime input
+error/STATE_D failure/panic. Prior 2028-input scope remains with unchanged helpers
+and retained sequence comparison; repeated observations/generated/menu/saved values
+may vary. **966/1182** remains the preceding measured source sweep. A retained
+initial replay hit the existing 4000ms cold-compilation budget entering the school
+banker room before paper checks (4008.938ms total/3961.815ms compilation); source,
+helpers and limits stayed unchanged for the retry. No native fix is claimed.
+
+Both write rules and both inscribe aliases accumulate exact text; used/fresh paper
+accepts exactly 100 characters and refuses overflow without mutation. Repeated
+writes retain one paper-owned function identity; an unrelated stock-paper callback
+survives another write. Actual look shows one current description; get/drop keeps
+text and fresh clones start blank. Written-item restoration across driver restart
+is not qualified; cleanup precedes retained mission/expiry/favour preparation.
+The helper omits one unused informational print, retaining every audited assertion
+and action. Same six fixtures/two address overrides and actual master/simuls/user/
+body/parser; distinct nil/preserved player/4000ms remain, with no new LPC helper/
+body/host/grant.
+
+Next commit this adoption and audit the physical small-mailbox/leaflet room props,
+separate from the completed user-mail system. The last source sweep reports their
+integer mass arguments; boundary snapshots are source review, not fresh runtime
+qualification. WIP burnable std/paper.c, completed frameworks/TCP, broader gameplay
+policy, native observations and reserved inheritance/cache work remain separate.
+Evidence: /tmp/lima-writing-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
