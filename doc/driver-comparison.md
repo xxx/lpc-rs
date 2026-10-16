@@ -1392,6 +1392,44 @@ production replay, then audit the controller dependency. RST shutdown/default-
 argument observations, reserved inheritance/cache work and completed equipment/TCP
 remain separate. Evidence: /tmp/lima-guild-artefact-audit-20261016.
 
+#### Lima guild artefact item and menu support
+
+Reviewed **16 October 2026** after audit commits native **214bede6** and Lima
+**a77e9a4d**. The five dedicated source files exactly match the proposal above:
+float values, explicit object formatting, native callbacks/partial application,
+one retained owner-hook value, parent-compatible parser declaration, explicit long
+time mode and nil read argument. Headers, three CRLF files and three missing final
+newlines remain. Native code/API, master/simuls, shared frameworks, authorization
+and configuration are unchanged. Original-source claims remain pinned **eefaff66**
+source review, without upstream execution. Distinct nil, preserved call-out player
+and 4,000 ms remain configured.
+
+**17/17 complete targets compile** from adopted source. The final **290.14s**
+production replay passes all **30 lifecycle checkpoints**, both clean **151-preload**
+boots, saved login/bank restoration and normal exits, with no failed apply or worker
+panic. It retains the prior meaningful 1429-input scope (1429 replay records,
+allowing only repeated observational-poll differences), adding **71 artefact inputs**,
+**1500 total**. The unchanged virtual helper checks the current generated maze;
+the preceding 108 recorder inputs and all earlier gameplay families remain.
+
+Five item constructors, normal descriptions/values, drop/get hook deduplication,
+unprogrammed/full modules, actual insertion/action/guild list and hidden retrieval
+refusal pass. Blank/populated ledgers, attachment refusal, two sorted contributor
+rows, leader/score display, nested game menu, mission/favour details and both
+confirmation cancellations pass. Bundled Yakitori/lfe records compare unchanged;
+a separate guild uses public APIs. Items/test guild class/shell variables are
+cleaned before restart. Same six fixtures, fixed local frames/two address overrides,
+real master/simuls/user/body/parser/commands, no helper or grant.
+
+**Activation and active-buff display remain untested** pending the concrete mission
+controller dependency; cancellation does not qualify them. Next audit that host/
+module without reopening completed guild/menu frameworks. Original hidden-inventory,
+previous-owner hook, absent-leader and board-slice policy remain unchanged. No native
+feature change is required. The whole-source **957/1182** remains its actual prior
+sweep; no new count or Rust gate is claimed. Native shutdown/default-position
+observations, reserved inheritance/cache work and completed equipment/TCP remain
+separate. Evidence: /tmp/lima-guild-artefact-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
