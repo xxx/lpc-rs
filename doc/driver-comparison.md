@@ -799,57 +799,66 @@ AI equipment choice, burst-rate semantics and other gameplay remain separate.
 Existing wear/wield and TCP work is not reopened. Native workspace tests were not
 rerun for this LPC-only change. Evidence: /tmp/lima-ranged-ammunition-20261015.
 
-#### Lima school and tutorial audit
+#### Lima school and tutorials
 
-Reviewed **15 October 2026** at native **cc92e4b9** and dedicated Lima **74166d7d**,
-with distinct nil, preserved call-out players, audit/system includes and 4,000 ms.
-All **88 school sources** still match original Lima **eefaff66**. The previous
-ranged batch is committed; this audit changes no dedicated LPC or native
-implementation. The retained whole-source count remains 818/1,180.
+Reviewed **15 October 2026** at native **e5872e61** and dedicated Lima **e56ad53f**,
+with the school source changes pending commit. Distinct nil, preserved call-out
+players, audit/system includes and the 4,000 ms task budget remain configured.
+Original Lima **eefaff66** and native implementation remain unchanged; this is
+native execution and pinned original-source review, without upstream execution.
 
-The family contains **87 room sources and one map**. In a disposable copy,
-removing **87 active include semicolons** and converting **104 outer `@TAG`
-blocks to ordinary adjacent string literals makes **88/88 compile**, without
-changing native preprocessing or string syntax. Conversion recognizes strings
-and comments and consumes each entire outer block, so nested example code stays
-text rather than becoming directives, inherits or executable statements. See the
-[nested room example][lima-school-basicroom] and [school map][lima-school-map].
-The reviewed [FluffOS lexer][fl-school-text-blocks] at **44532e02** handles those
-blocks without a feature define; its terminator/newline/escape handling informs
-the conversion. This is pinned source review, not upstream execution.
+The **88 school sources** (87 rooms and one map) use ordinary adjacent string
+literals for **104 outer text blocks**, and 87 active include semicolons are
+removed. Quoted examples and nested directives remain description data. **91 text
+bodies retain their exact original values**; **13** have reviewed native examples.
+The [skeleton room][lima-school-basicroom] uses the real school header and bundled
+paths, nested text-block examples use native strings, timers use a bare function
+value, and value/weight examples use float literals. The sword example supplies
+its id, and the plate-mail weight typo is corrected. The explicit-line-break
+lesson demonstrates `\n` and adjacent literals. **11 complete displayed examples**
+compile with their actual inherit/include declarations. Other historical prose
+and partial examples are not thereby fully qualified.
 
-A standalone native literal control using real simuls verifies all **104 texts**
-(**46,222 bytes**) against the extracted original bodies, including blank lines,
-quotes, backslashes, maps and embedded directives. It does not initialize the
-master or school rooms. All CLI checks use at most two processes, two Tokio
-workers each, 4 GiB per process and 40 seconds per file.
+Two obsolete map references now use `/domains/std/object/map`; the
+[sword lesson][lima-school-sword] returns to `R "sword01"`. Static review retains
+190 exit edges and 14 object references, with no missing source and all 87 room
+nodes reachable. The [school map][lima-school-map] preserves its ASCII layout.
+The earlier [FluffOS lexer review][fl-school-text-blocks] at **44532e02** established
+the original text-block boundary/escape semantics; it was source review only.
 
-A static review of executable tokens finds **190 exits and 14 object references**.
-All 87 room nodes are reachable from the academy in that graph. Three references
-are stale: two lessons request `/domains/std/map`, whose reviewed current source
-is `/domains/std/object/map`; the [sword lesson][lima-school-sword] returns to
-missing `R "sword"` instead of `R "sword01"`. Applying those three path corrections
-in the temporary copy leaves no missing static references and retains 88/88
-compilation. Graph reachability does not prove runtime movement or initialization.
+**109/109 bounded sources compile**: all 88 school sources, 17 tracked core objects
+and four related map/room/command sources. A separate native literal control
+verifies all 104 final texts, distinguishing the 91 unchanged values from the 13
+reviewed updates. CLI limits remain two processes, two Tokio workers each, 4 GiB
+and 40 seconds per file. The whole-source 818/1,180 inventory remains its earlier
+measurement; it was not rerun for this batch.
 
-Of **10 distinct referenced object sources**, **six compile and four fail**:
-bank_accountant reaches a string/float expression in M_ACCOUNTANT, dragon reaches
-assignment/negation syntax in M_WANDER, Harry uses legacy anonymous-function syntax,
-and shopkeeper reaches float/nil/arity adaptations in M_VENDOR. These first
-boundaries affect five lessons' NPCs; they do not establish five failed room
-initializations or four missing native APIs. No NPC is removed or replaced to
-make the source count pass. The [teaching text][lima-school-value-example] also
-retains unsupported example forms: nested text blocks in ten lessons, a string-
-named call_out, an include semicolon and two integer-valued set_value examples.
-Their text-preservation controls intentionally preserve the original wording.
+The final production run passes **30 lifecycle checkpoints**, both **151-preload**
+boots without failures, saved login and normal exits. It retains all **596** prior
+first-session command records and adds **203 school inputs** (799 total).
+The walkthrough visits **45 actual rooms**, views 31 selected lessons and follows
+**73 recorded ordinary exit moves**, plus the repaired sword return. It checks
+academy item descriptions, the school map and both main-world map references,
+map acquisition/drop through normal read/drop commands, nested/native examples,
+desk aliases and read/get responses, and string/array/function room chats.
+Chats use a 100% chance set through the public API before replaying each lesson's
+own setup; their five-second interval and original message/callback forms run.
+The room-chat declaration explicitly defaults its final chance parameter to zero,
+keeping defaults contiguous so supplied intervals are preserved; a native control
+records the unresolved non-trailing-default compiler edge case. The middle default
+came from the earlier port, rather than original Lima. The player returns to the
+Grand Hall with an empty inventory before saved login. The same six retained fixture sources,
+fixed local router frames and two address-only overrides remain; no new fixture
+source, master grant or replacement handler is added.
 
-Recommend the school source syntax/path conversion next, with native example
-updates reviewed explicitly and ordinary room/map/navigation checks through the
-real game. Keep the four NPC dependency sources as a separate coherent audit;
-compiling all school files alone does not qualify their lessons. No gamedriver or
-Rust workspace test was run for this source/text audit. Dedicated configuration,
-original checkout and prior ranged/runtime evidence remain unchanged. Evidence:
-/tmp/lima-school-audit-20261015.
+Five lessons with four unported NPC dependencies remain unvisited, with all spawn
+definitions intact: bank_accountant reaches M_ACCOUNTANT's string/float expression,
+dragon reaches M_WANDER's assignment/negation syntax, Harry uses legacy anonymous-
+function syntax, and shopkeeper reaches M_VENDOR's type/arity adaptations. Their
+sources and later masked diagnostics need a coherent dependency audit next.
+This does not qualify every school room or displayed snippet. Completed equipment
+and TCP scopes remain closed, and no Rust workspace gate was rerun for LPC-only
+changes. Evidence: /tmp/lima-school-20261015.
 
 #### Lima basic player commands and help
 
