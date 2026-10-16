@@ -683,28 +683,67 @@ the adaptations described below.
 
 #### Lima source coverage
 
-A fresh compile inventory on **6 October 2026** checks every **1,180 `.c` file**
-in the local overlay after FTP adoption: **534 compile and 646 fail**, with no
-compiler crashes or timeouts. These are standalone-source counts, including
-partial modules, optional and contributed code. A failed partial module can
-compile inside its containing object; a first failing inherit can also hide
-later errors. The counts do not measure port completion or establish upstream
-bugs. Target objects are not initialized during these checks.
+The current dedicated-checkout inventory, reviewed **15 October 2026** against
+native **b1355532** and Lima **7bcd6943**, checks all **1,180 `.c` files**:
+**818 compile, 362 fail, zero timeouts and crashes**. It uses distinct nil,
+preserved call-out players and 4,000 ms, with two CLI workers, two Tokio threads
+per worker, a 4 GiB address-space cap and a 40-second timeout per file. Target
+constructors do not run; the real simulated-efun program is initialized for each
+check. These are standalone-source results, including fragments and optional code,
+not a port-completion percentage or evidence of 362 upstream bugs/native gaps.
 
-The master, simuls, user, body, both shells, IMUD, IMAIL, HTTP, FTP and RST
-compile, as do all **90 verb files**. At that inventory baseline,
-**21 of 67 player commands** and **14 of 81 wizard commands** compile. Forty-five
-player commands stop first at the missing protected dispatch adapter described
-[below](#lima-command-dispatch-and-stdio); `colours` stops at legacy inline-function
-syntax. The batches below port thirteen of these commands; other entries still need
-dispatch, callback and type adaptations while retaining private handlers.
+Compared with the preceding 753/1,180 checkpoint, the identical target set has
+**65 new successes and no lost successes**. Player commands are **65/67** (random2
+deferred, suicide disabled upstream), wizard **81/81**, guild **4/4**, verbs **90/90**,
+transitional **49/49** and transitional administrator **9/9**. All 17 tracked core
+objects still compile, including master, simuls, user, body, both shells and the
+configured/previously adapted daemons. All 22 std/classes files and eight Pinto
+examples compile; this alone does not establish their runtime behavior.
 
-Other sources expose nil returns, integer literals supplied to float setters,
-class/callback syntax, containing-object hooks and override signatures. The
-lexical scan's 16 explicit native references all name existing registry entries;
-that checks spelling rather than API or runtime compatibility. Successful fresh
-startup and the HTTP/FTP tests establish the paths described below, while broad
-command, world and optional-source compatibility remains unfinished.
+| Source family | Compile | Fail |
+|---|---:|---:|
+| WWW | 7 | 3 |
+| cmds | 240 | 2 |
+| contrib | 7 | 23 |
+| daemons | 47 | 15 |
+| domains | 190 | 170 |
+| obj | 59 | 13 |
+| secure | 37 | 14 |
+| std | 165 | 122 |
+| trans | 66 | 0 |
+
+Selected source-composition review confirms **32 failed standalone fragments**
+inside passing complete hosts: user components, IMUD/channel components, shell
+parts and the CMD dispatcher base. Their missing host methods are not new efuns.
+Other module failures remain unclassified until their intended compositions are
+checked. Of all failed targets, 58 first report a diagnostic outside the target;
+an inherited failure can still be a real complete-consumer blocker.
+
+The school has **88 failing examples**: 87 first reject semicolons after #include,
+and the map first rejects a legacy @ text block. Later school diagnostics are not
+yet exposed. Other first-blocker groups include 77 value/argument/return-type
+adaptations, 16 inherited declaration mismatches, five non-mixed scalar collectors,
+and unresolved names/host contracts requiring consumer review. These are first
+blocking diagnostics, not counts of fixes or distinct missing driver features.
+Contributed/WWW code, legacy sockets and alternate configurations retain their own
+scope; no optional service is enabled or contacted by this inventory.
+
+The configured fresh-account/character and saved-login lifecycle remains qualified
+by the retained production-driver run: 30 checkpoints, two 151-preload boots without
+failures, normal exits and the selected ordinary command/menu flows. That run uses
+only its fixed loopback fixture; live services, all administrative actions, foreign
+saves and full gameplay assertions remain separate. No new driver runtime or native
+build/test suite was run for this source-only classification. All LPC sources and
+the original Lima checkout remain unchanged.
+
+Next audit the ranged weapon/ammunition family: **11 failed targets** first reach
+std/ranged_weapon.c's scalar string collector or std/ammunition.c's optional short
+parameter conflicting with its inherited declaration. Inspect the complete consumers
+and call sites before choosing source adapters. General inheritance-policy changes
+and completed wear/wield work are separate decisions. The school/tutorial batch,
+other standard object families and optional contributions form a finite backlog;
+do not start another automatic one-file gameplay audit chain. Evidence:
+/tmp/lima-source-families-20261015. Earlier dated reports below retain their scopes.
 
 #### Lima basic player commands and help
 
