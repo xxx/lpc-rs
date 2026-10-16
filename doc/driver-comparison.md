@@ -1871,6 +1871,41 @@ separate. Completed hook/parser/container/save/TCP frameworks, broader game poli
 native observations and reserved inheritance/cache work remain separate. Evidence:
 /tmp/lima-camera-20261016.
 
+#### Lima writable-paper audit
+
+Reviewed **16 October 2026**, after camera commits Lima **c9ec2f52** and native
+**d5fc3fb4**. The [writable paper][lima-writing-paper] is the sole consumer of
+[M_WRITING_SURFACE][lima-writing-surface] in this checkout. The complete paper fails
+because the module passes strings to hooks declared to accept functions; that
+source-level mismatch also exists in upstream **eefaff66**. This is source review,
+without upstream execution. The module's standalone missing-host-method diagnostic
+is separate; the existing write verb already compiles.
+
+A **one-file temporary proposal** stores a private nosave callback returning the
+current extra text, uses that same function for hook removal/addition, and matches
+the host's function-typed declarations. Paper/verb/shared hooks and description
+source stay unchanged. Headers/LF/final newline, original 100-character paper,
+first-entry plural wording, set_space behavior and caller-checked add_text stay.
+No native API/code, mode/config/master/privilege or fixture change is proposed.
+
+**11/11 complete targets compile**. Focused **71.26s / 61-input** gameplay passes
+both write rules and both inscribe aliases, four accumulated writes, exact-fit
+100-character writes on used/fresh paper, overflow refusals without mutation,
+one stable paper-owned callback, an unrelated stock-paper callback, one current
+look description, and get/drop retention. All 30 lifecycle checkpoints, two clean
+151-preload boots, saved account login and normal exits pass without failed apply,
+runtime input error or panic. Written-item restoration across driver restart is
+not qualified; items are removed before the account restart. Same six fixtures,
+two address-only overrides, distinct nil/preserved player/4000ms and real
+master/simuls/user/body/parser remain; no new LPC helper/body/host/grant.
+
+Dedicated LPC remains unchanged pending adoption. Next adopt the module proposal
+with the retained full replay after camera cleanup and before mission/expiry/favour
+preparation. Prior **2028 inputs + 10 restored-favour / 413.38s** replay and the
+**966/1182** source sweep retain their measured scopes. The separate WIP burnable
+std/paper.c, shared frameworks/TCP, broader game policy and reserved inheritance/
+cache work remain outside this audit. Evidence: /tmp/lima-writing-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
@@ -24277,3 +24312,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-camera-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/camera/button.c
 
 [lima-camera-picture]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/camera/picture.c
+
+[lima-writing-paper]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/paper.c
+
+[lima-writing-surface]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_writing_surface.c
