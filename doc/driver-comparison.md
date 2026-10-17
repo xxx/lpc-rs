@@ -2163,6 +2163,124 @@ isolated checkout. The execution overview and native GC/deadline contracts remai
 accurate. The prior **2,159 + 10** full replay and **966/1182** source inventory
 retain their measured scope. Evidence: /tmp/lpc-gc-native-20261017.
 
+#### Lima GC cleanup using published APIs
+
+The follow-up source review and optimized container studies use the unmodified
+registry imbl **7.0.2** archive, Rayon **1.12.0** and the native allocator version.
+They compare serial cleanup, batched consuming iteration, payload extraction,
+mutable-iterator pipelines, partially consumed map copies and fixed groups of
+two/four/eight maps. A separate comparison selects standard or triomphe pointers
+through public generic types while preserving imbl's default backend. All **700
+measured trials** complete their survivor/content checks. Maps are constructed
+independently; five rotated repetitions share one hash seed within each process.
+Survivor construction and all disposal preparation are charged to collection.
+
+Fixed storage partitions provide owned maps that Rayon can destroy using existing
+APIs. With 32-byte values owning separate Arc payloads, two maps measure
+**68.777 -> 37.526 ms** at **900,000 entries**, and **276.922 -> 152.490 ms** at
+**2.3 million entries**, compared with a single serial map. These combined layout
+and parallelism gains are about **45%**; two-map serial controls measure
+**57.116/239.265 ms**. Four maps improve some large collections further, but do
+not consistently beat two across sizes and access patterns.
+
+Separate container benchmarks include snapshot clone/drop, reads and updates.
+For two maps, clone/drop rises from approximately **13 ns to 24–25 ns**; sampled
+read/update medians improve by **1–14%**. The read ranges overlap, and these are
+container costs rather than interpreter transaction throughput. Batched iteration
+has inconsistent owned-payload gains and substantially regresses scalar cleanup.
+Mutable pipelines and the alternate pointer backend do not supply a convincing
+general improvement. The published `OrdMap::split` implementation rebuilds entries
+rather than detaching tree branches cheaply.
+
+Recommend a bounded native prototype containing two persistent maps in the same
+snapshot, under the existing single version and committer. Workers must finish
+inside the accepted atomic GC message; quiescence and deadline accounting remain.
+No fork or vendoring is required for this direction. The uncommitted dependency
+extension proposal is withdrawn and preserved in its prior evidence bundle; the
+active native checkout uses the original registry dependency and passes the
+workspace build. No native storage change or new Lima replay is claimed. The
+execution overview, earlier full replay and source inventory retain their scope.
+Evidence: /tmp/lpc-gc-public-api-20261017.
+
+An additional matched container study compares the patched branch API with public
+map partitions in one executable: identical 32-byte values, survivor IDs, hash
+seed, allocator and two workers. Seven rotations put each method in each order
+position once; all **196 measured trials** pass. Owned-payload total medians are
+**33.360 ms** for patched branches versus **26.898 ms** for two maps at **900k**
+entries, and **123.999 versus 125.744 ms** at **2.3m**. The latter difference is
+small relative to the overlapping ranges. Scalar medians are **13.570/8.132 ms**
+and **61.529/59.062 ms** respectively. Four-map disposal reaches **78.776 ms** in
+the larger owned case, with the previously measured additional handle-copy cost.
+The partition algorithm uses only the unchanged public map operations; the local
+extension is linked into both cases to hold the dependency build constant. These
+are container measurements; native snapshot/transaction/GC validation is recorded
+below. Main native source and registry dependencies are unchanged. Evidence:
+/tmp/lpc-gc-matched-20261017.
+
+#### Native validation of public map partitions
+
+The isolated native prototype stores two or four ordinary registry imbl maps in
+one snapshot, under the existing version and committer. A lazy two-worker Rayon
+pool destroys retired maps synchronously inside the accepted GC message; small
+worlds and worker-creation failures use synchronous serial cleanup. Quiescence,
+deadline accounting and the production configuration remain unchanged.
+
+Optimized native measurements use the same **596-command** Lima prefix, six
+fixtures, two address-only overrides and normal **300-second** collection period:
+
+| Native variant | Total GC pause | Retired-map disposal |
+|---|---:|---:|
+| Unchanged registry driver | 263.9 ms | Not separately instrumented |
+| Patched imbl branch API, two workers | 169.4 ms | 132.6 ms |
+| Two public maps, two workers | 178.2 ms | 139.9 ms |
+| Four public maps, two workers | 193.1 ms | 144.0 ms |
+
+All runs pass, collecting roughly **899k cells to 15.3k**, with **656 roots**.
+These are single collection samples, not identical heap snapshots: retained
+counts are **15,268** for the control and **15,264** for the other variants.
+Two maps reduce the observed pause by **32.5%** versus the control and finish
+about **5.2%** behind the patched reference. Four maps do not improve this case.
+
+Both partition variants pass **5,138 tests / 2 skips**, including nine new
+routing, snapshot, fallback and destruction-completion tests, plus doctests,
+formatting, warning-free Clippy/docs and optimized workspace builds. All **560
+transaction trials** and **96 longer repeats** pass. Longer repeats of the three
+initially slower cases put two-map medians between **2.0% faster and 2.5% slower**
+than the control, with overlapping ranges; zero overhead is not established.
+
+The two-map implementation supplies a viable option using published APIs without
+vendoring. That prototype remains isolated; its private four-map measurement
+feature and auxiliary binary are not production features. Original public
+debug/release executables were restored after the comparison. These are prefix/GC
+measurements; the preceding full replay and inventory retain their scope.
+Evidence: /tmp/lpc-gc-world-native-20261017.
+
+#### Maintained imbl fork
+
+The selected dependency strategy preserves the single world map and carries the
+owned-branch extension in [the imbl fork][imbl-owned-branch-fork], pinned directly
+in Cargo to **5fa322d043faee90d32c63430b51a52be3ad121d**. Review on **17 October
+2026** confirms its base, upstream **v7.0.2 / 834c67f1**, matches the tested
+release's Rust source and original manifest. A separate commit corrects the
+upstream lockfile's stale self-version. Existing dependency versions and imbl
+feature selection remain unchanged; no vendored copy or root patch override is
+needed by downstream Git/path consumers.
+The pinned dependency passes **5,136 workspace tests / 2 skips**, doctests,
+formatting, warning-free Clippy/docs and the normal workspace build. The fork
+also passes its **125 upstream library tests** and seven ownership checks with
+default and all features. Separate consumer metadata resolves the exact pin
+without a root patch override; no separate consumer compile is claimed.
+
+Seven ownership contract tests cover unique/shared roots, shared descendants,
+collisions, parallel destruction and local non-Send values in both the fork and
+the workspace checks. The [maintenance guide](maintaining-imbl.md) records how to
+replay the small feature commit onto reviewed upstream releases and advance the
+pin after validation. This prepares the dependency API: production GC still uses
+the committed selective serial collector. The earlier parallel-GC measurements
+remain isolated prototype results. Evidence: /tmp/lpc-imbl-fork-20261017.
+
+[imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
+
 [imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
 [rayon-parallel-bridge]: https://docs.rs/rayon/1.12.0/rayon/iter/trait.ParallelBridge.html
 
