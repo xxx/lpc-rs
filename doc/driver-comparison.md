@@ -2447,11 +2447,23 @@ master policy, configuration or fixture changes. Combat and saved-guard restorat
 remain untested; earlier full replay and source inventory retain their scopes.
 Evidence: /tmp/lima-guild-guard-20261017.
 
-Next review constructor coverage for the remaining standard rooms, distinguishing
-concrete rooms, factories and already-qualified cases. Check unverified stock-child
-construction before choosing more source adapters; source compilation alone missed
-the beach and guard dependencies above.
+The standard-room constructor review accounts for all **34 sources**: **30 concrete
+rooms** and **four parameterized templates/servers**. Nine concrete rooms and the
+four template/server sources retain source-matched prior evidence. The remaining
+**21 room checks pass**, including direct stock objects and the adventurer's
+inventory/navigation table's shovel. Sixteen rooms load directly, two through
+checked dependencies, and three are already loaded during startup. **67 focused
+inputs**, **151 clean preloads** and normal documentation scanning, saves and
+shutdown pass in **153.59 seconds**. No LPC/native source, configuration or
+fixture changes. This qualifies construction, not every room's gameplay or exits;
+the earlier full replay and **985/1,182** inventory retain their scopes.
+Evidence: /tmp/lima-room-construction-20261017.
 
+Next audit [Lava Room][lima-lava-room]'s arrival callback and timed burn behavior.
+Its constructor passes; callback execution and departure cleanup need separate
+runtime evidence. The constructor coverage map is complete for this directory.
+
+[lima-lava-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Lava_Room.c
 [lima-outside-cave]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Outside_Cave.c
 [lima-monster-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Monster_Room.c
 [lima-guild-guard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/guild_guard.c
