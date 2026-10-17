@@ -2336,6 +2336,16 @@ spawn, ordinary item commands and reset replenishment; combat damage and item
 restoration across driver restarts remain outside that check. Native code and
 configuration are unchanged. Evidence: /tmp/lima-whiskey-bottle-20261017.
 
+The weather daemon reached through the example Weather Room now retains its
+timer ID for cancellation and schedules its named callback. Its **120-second**
+period, weather selection, descriptions and recipient filtering are unchanged.
+Four daemon/room/support targets compile. A production run passes **23 new inputs
+plus 97 retained inputs**, **151 clean preloads** and normal shutdown. Repeated
+initialization leaves one timer, and one natural firing reschedules correctly;
+that sample stays foggy and emits no change notification. Other states and
+multiple recipients remain outside the sample. No native API or configuration
+change is needed. Evidence: /tmp/lima-weather-20261017.
+
 [imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
 
 [imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
