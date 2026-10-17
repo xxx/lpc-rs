@@ -683,69 +683,66 @@ the adaptations described below.
 
 #### Lima source coverage
 
-The current dedicated-checkout inventory, reviewed **16 October 2026** against
-native **2870a0b4** and Lima **6ca00180**, checks all **1,182 `.c` files**:
-**957 compile, 225 fail, zero timeouts and crashes**. All 924 prior successes remain.
-There are **31 new successes among the original targets** (23 junk/spawner, three
-vehicle and five room/grid sources), plus two passing additions: std/grid_room.c
-and domains/std/room/labyrinth.c. The preceding 924/1,180 measurement remains its
-dated baseline; this is a fresh enumeration, not an arithmetic estimate.
+The current dedicated-checkout inventory, reviewed **17 October 2026** against
+native **1ffebc70** and Lima **6f755146**, checks all **1,182 `.c` files**:
+**985 compile, 197 fail, zero timeouts and crashes**, in **241.316 seconds**.
+All **966** successes from the preceding inventory remain; **19 previous failures**
+now compile, with no added or removed targets. Gains cover consumables/slowheal,
+camera and paper, mailbox/workroom/container examples, weather and loot generation.
+This is a fresh enumeration, not an arithmetic estimate or completion percentage.
 
 Player commands remain **65/67** (random2 deferred, suicide disabled upstream),
 wizard **81/81**, guild **4/4**, verbs **90/90**, transitional **49/49** and
 administrator **9/9**. All **17** tracked core objects, **88** school sources,
-**22** std/classes files and **eight** Pinto examples compile. All **34** sources
-under domains/std/room and **22** junk examples now compile. Constructors do not
-run in this sweep; source counts include optional and inherited-only code and are
-not a port-completion percentage.
+**34** standard-room sources, **22** junk examples, **22** std/classes files,
+**eight** Pinto examples, **25** bundled guild sources and **18** consumable
+examples compile. Target constructors do not run in this sweep.
 
 | Source family | Compile | Fail |
 |---|---:|---:|
 | WWW | 7 | 3 |
 | cmds | 240 | 2 |
 | contrib | 7 | 23 |
-| daemons | 48 | 14 |
-| domains | 320 | 41 |
-| obj | 59 | 13 |
+| daemons | 49 | 13 |
+| domains | 342 | 19 |
+| obj | 60 | 12 |
 | secure | 37 | 14 |
-| std | 173 | 115 |
+| std | 177 | 111 |
 | trans | 66 | 0 |
 
-**60 failed standalone fragments have passing complete hosts**. The prior 58
-fragment reviews retain identical fragment bytes and fresh host passes. BASE_ROOM
-has changed since that inventory; its M_EXIT inheritance is rechecked with the
-current successful complete host, rather than called byte-identical. Two additional
-confirmations from the recorder work cover M_GETTABLE and M_READABLE with actual
-macro inheritance and complete button/panel/transcript hosts. These are
-classification results, not source fixes or new runtime checks. The remaining
-165 failures include further fragments, optional/legacy code and adapters needing
-review; they are not a count of complete objects or new efun requirements.
-Thirty-nine first diagnostics point outside their checked target; the logs contain
-1,103 error lines including secondary/masked diagnostics. The first diagnostic and
-source remain unchanged for all remaining failed targets.
+**62 failed standalone fragments have passing complete hosts**. All 61 previous
+reviews retain fresh host passes. The changed gettable module still obtains its
+hooks through OBJ, directly in the panel and through PARAM_OBJ in the button.
+The new writing-surface classification is established by paper's direct
+M_WRITING_SURFACE/OBJ composition and the object hook provider. The other
+**135 failures** include unreviewed host parts, optional/legacy code and adapters;
+they are not 135 established complete-object bugs or missing native features.
+The remaining first diagnostics and sources match the preceding inventory.
+Thirty-five first diagnostics point outside their checked target; the logs contain
+1,062 error lines including secondary diagnostics, not 1,062 feature requirements.
 
-The source sweep takes **269.618s**, using at most two CLI processes, two
-Tokio workers each, 4 GiB/40s per file and the normal 4,000 ms task budget. Source,
-configuration and existing binary hashes are guarded unchanged. This checkpoint
-adds no native implementation, Rust workspace gate, driver gameplay rerun or service
-check. The preceding **1429-input** production replay retains its scoped gameplay,
-**30 lifecycle checkpoints**, both clean **151-preload** boots, saved login, bank
-restoration and normal exits. Its log has no failed apply or worker panic; the
-prior RST/closed-committer shutdown observation remains recorded separately and
-unfixed. Original **eefaff66** and configured distinct nil/preserved call-out player
-remain unchanged; no upstream driver is executed.
+The sweep uses at most two CLI processes, two Tokio workers each, 4 GiB/40s per
+file and the normal **4,000 ms** task budget. Source, configuration and binary
+hashes are guarded unchanged during the run. The current binary hashes differ
+from the previous inventory, so this comparison does not isolate source edits or
+measure their performance. Distinct nil, preserved call-out player and pinned
+original **eefaff66** remain. No upstream driver, target gameplay or Rust gate
+is run here; prior full replay and the **345-input** generator run retain their
+scopes. The source set and all 1,549 library files remain unchanged by the sweep.
 
-Next audit **five guild artefact items/menu consumers**: [artefact][lima-artefact-item],
-[module][lima-artefact-module], [favour board][lima-favour-board],
-[ledger][lima-guild-ledger] and [artefact menu][lima-artefact-menu]. Their current
-first boundaries are explicit float value, parser-method declaration, omitted time
-format argument and nil read argument adaptations. Actual guild/configuration,
-parser callbacks, movement hooks, menu callers and later diagnostics need review
-before choosing a patch. No source proposal is adopted by this inventory. Keep
-completed guild/menu frameworks, equipment/TCP, original game-policy quirks and
-reserved native discussions separate. Evidence: /tmp/lima-source-inventory-20261016.
-The previous source sweep remains frozen at /tmp/lima-source-inventory-20261015;
-dated implementation reports below retain their original scopes.
+Next audit [Rocky Beach][lima-rocky-beach] and its [debris][lima-beach-debris]
+consumer, the generated rock, ocean and Outside_Cave return context. The room
+compiles but spawns debris that fails its integer mass argument to the float
+setter. Four of these five sources compile. Review actual construction, the
+attached debris get handler, rock creation and reset behavior before selecting a
+patch; compilation alone does not establish that the room works. No source
+proposal or new gameplay qualification is made here. Keep completed equipment,
+parser/exit/framework/TCP/GC work and reserved native discussions separate.
+Evidence: /tmp/lima-source-inventory-20261017. Earlier dated inventories remain
+in their frozen packets; implementation reports below retain their original scopes.
+
+[lima-rocky-beach]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Rocky_Beach.c
+[lima-beach-debris]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/debris.c
 
 #### Lima ranged weapons and ammunition
 
