@@ -1987,6 +1987,40 @@ mission/expiry/favour setup. Completed frameworks/TCP, broader game policy and
 reserved inheritance/cache work remain separate. Evidence:
 /tmp/lima-mailbox-props-audit-20261016.
 
+#### Lima physical mailbox and leaflet adoption
+
+Reviewed after audit commits Lima **15cee47d** and native **ae501e34**. The
+[mailbox][lima-mailbox-prop]/[leaflet][lima-mailbox-leaflet] changes exactly match
+the audited two-line mass conversions, preserving masses 16.0/1.0, integer capacity
+4, anchored refusal, IDs/text, relative population and headers/LF/final newline.
+No native API/code/config/master/privilege/framework/fixture change; original
+claims remain pinned **eefaff66** source review without upstream execution.
+
+**83/83 compilation checks are retained** for unchanged LPC source/configuration/
+binaries; compilation was not repeated. The full retry now passed **all 62 mailbox
+inputs**, unchanged from the focused 69.49s audit, along with the earlier helpers
+through normal mission checks. The first boot loaded all 151 preloads cleanly.
+Full validation remains **pending**: the run ended normally after **343.78s**,
+during mission-expiry polling, before saved-state restart and favour restoration.
+
+The new failure was input callback resolution at **4001.388ms**, with **zero
+compilation time**. A GC completion reclaiming **2,272,887 variables** and a failed
+reply to a cancelled live-snapshot request followed about 385ms later. Source
+review confirms snapshot acquisition is inside the callback deadline and GC runs
+atomically in the same committer. A GC/snapshot-wait timeout is suspected; this
+has not been isolated or fixed and differs from the earlier cold-preload failures.
+Both earlier startup failures remain frozen under /tmp/lima-mailbox-props-20261016.
+
+Source/helper/fixture/configuration guards pass: same six fixtures/two address
+overrides, distinct nil/preserved player/4000ms and real master/simuls/user/body/
+parser; no new LPC helper/body/host/grant. Generic look-in parser refusal remains
+unchanged. The last successful full replay remains **2082 inputs + 10 restored-
+favour / 426.29s**; **966/1182** remains the measured source sweep. Investigate the
+native snapshot/GC deadline before further full validation or the table/chest
+audit; shared frameworks/TCP/user-mail, broader gameplay policy and reserved
+inheritance/cache work stay separate. Evidence:
+/tmp/lima-mailbox-props-retry-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
