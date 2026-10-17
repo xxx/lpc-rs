@@ -2459,28 +2459,29 @@ fixture changes. This qualifies construction, not every room's gameplay or exits
 the earlier full replay and **985/1,182** inventory retain their scopes.
 Evidence: /tmp/lima-room-construction-20261017.
 
-The [Lava Room][lima-lava-room] audit confirms two local adapters are needed.
-Its original arrival closure returns the handler instead of invoking it. Temporarily
-registering the returned named handler through the normal hook API exposes a second
-problem: ordinary objects receive the melting message, but `destruct(o)` is denied
-under the port's existing policy; their normal `remove()` succeeds. Recommend a
-named arrival callback and `o->remove()` followed by return, preserving policy.
+The [Lava Room][lima-lava-room] port now registers its named arrival callback and
+uses normal object `remove()` followed by return after the original melting
+message. The audit found the old closure returned the handler without invoking it,
+and cross-object `destruct` failed under the port's existing policy. Only this one
+LPC file changes; native/master policy, configuration and fixtures stay unchanged.
+The earlier 43-input diagnostic audit remains at /tmp/lima-lava-room-audit-20261017.
 
-Under that temporary callback control, natural five-second burns deal **5 damage**
-and reschedule. Departure leaves a pending timer which expires without more damage
-or rescheduling. A ridden Camaro survives, with an unharmed rider and recurring
-cosmetic vehicle burns. Quick re-entry creates two timers under the existing room
-logic. Preserve those vehicle/re-entry semantics for the initial adapter; no timer
-tracking is proposed here. The audit passes **43 inputs**, **151 clean preloads**
-and normal saves/logout/shutdown in **141.43 seconds**. Original hooks, health,
-healing, paths and props are restored. No LPC/native/master/configuration/fixture
-changes or production-fix qualification. Two incomplete runs retain an uncaught
-cleanup failure and a health-baseline assumption corrected after normal lazy limb
-initialization. Evidence: /tmp/lima-lava-room-audit-20261017.
+**One complete target compiles**. The production run passes **42 focused inputs**,
+**151 clean preloads**, normal documentation scanning, account/body saves and
+logout/shutdown in **140.68 seconds**, with no runtime hook replacement or
+expected failure. Repeated direct object arrivals and ordinary `drop` remove rocks
+with no extra timer or leftover object. Natural five-second living burns deal
+**5 damage** and reschedule. Departure consumes the pending timer without another
+burn. A ridden Camaro survives and its rider is unharmed. Existing cosmetic
+vehicle burns and quick-reentry timer overlap remain unchanged. Health/healing,
+paths and props restore, and the production callback remains registered.
+Evidence: /tmp/lima-lava-room-20261017. Previous constructor coverage, full replay
+and **985/1,182** source inventory retain their measured scopes.
 
-Next adapt only Lava Room's callback and ordinary-object cleanup, then validate
-normal arrivals. Constructor coverage remains complete; prior full replay and
-source inventory retain their scopes.
+Next audit `std/book.c` and its concrete `domains/std/lima_guide.c` host. Their
+sources still match the inventory's compile failures in callback initialization
+and mass typing. Check fresh targets before choosing an adapter; do not repeat
+completed room constructors or propose native prototype changes without evidence.
 
 [lima-lava-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Lava_Room.c
 [lima-outside-cave]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Outside_Cave.c
