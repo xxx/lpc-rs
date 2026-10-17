@@ -2495,16 +2495,31 @@ contents/removal, selected-page fallback, empty-book append/read and resident
 callable pages pass. Props/path restore. The callback-page audit limitation is
 resolved with a book-owned function, without changing the shared readable module.
 
-Command-layer limitations remain: `read about docs in guide` uses bare-topic lookup
-and returns no entry; explicit page/topic and bare-about forms work. Rejected turns
-preserve page state and their class validators return the proper messages, but the
-commands display missing-object fallbacks. These exact read/turn cases are the next
-bounded routing/error-selection audit. No workaround or native change is selected.
-Evidence: /tmp/lima-book-20261017. Two earlier incomplete attempts retain boundary
-message assumptions and the alias defect; the second also fails source-consistency
-validation after repair during cleanup. Prior audit, full replay and **985/1,182**
-inventory retain their scopes; no additive source recount or constructor repeat.
+Book source/notes are committed as Lima **a5efeef1**, native **c2895b85**. The
+remaining command cases follow the [documented registration-order policy](efun/parse_sentence.md#result):
+first successful rule wins, while equal-progress failures retain trial order.
+[Lima read][lima-read-verb-order] registers broad `about STR` before its object forms;
+[Lima turn][lima-turn-verb-order] puts `OBJ` before its page forms. Their ordering
+matches the pinned original source reviewed 17 October 2026; no upstream execution
+comparison is claimed.
 
+A temporary test version changes **only those two rule arrays**. **32 audit inputs**,
+**151 clean preloads** and normal saves/logout/shutdown complete in **133.91
+seconds**. Qualified about reads (`in` and `from`) now use the correct object action;
+first/last/missing/empty page turns report their book messages. Valid controls and
+page state remain correct. All rule texts and handler bodies are retained;
+dedicated source is unchanged.
+
+Rejected trailing-direction turns still show fallback noun errors: an earlier
+rule's wrong noun and the later book refusal tie at zero completed object slots.
+Valid trailing turns work. Recommend the two Lima registration-order adaptations
+and document this remaining diagnostic edge, preserving native selection policy.
+The control is not a production fix. Evidence: /tmp/lima-command-routing-audit-20261017.
+No Rust/source implementation, parser/shared-readable/master/configuration or new
+fixture change. Prior book/full replay/source-inventory scopes remain.
+
+[lima-read-verb-order]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/read.c
+[lima-turn-verb-order]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/turn.c
 [lima-book]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/book.c
 [lima-guide]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/lima_guide.c
 [lima-lava-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Lava_Room.c
