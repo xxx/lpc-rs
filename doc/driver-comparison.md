@@ -2495,28 +2495,32 @@ contents/removal, selected-page fallback, empty-book append/read and resident
 callable pages pass. Props/path restore. The callback-page audit limitation is
 resolved with a book-owned function, without changing the shared readable module.
 
-Book source/notes are committed as Lima **a5efeef1**, native **c2895b85**. The
-remaining command cases follow the [documented registration-order policy](efun/parse_sentence.md#result):
-first successful rule wins, while equal-progress failures retain trial order.
-[Lima read][lima-read-verb-order] registers broad `about STR` before its object forms;
-[Lima turn][lima-turn-verb-order] puts `OBJ` before its page forms. Their ordering
-matches the pinned original source reviewed 17 October 2026; no upstream execution
+Book source/notes are committed as Lima **a5efeef1**, native **c2895b85**; routing
+audit notes as Lima **d0063df1**, native **1d138a6d**. The port now reorders only the
+[Lima read][lima-read-verb-order] and [turn][lima-turn-verb-order] rule arrays:
+qualified about forms precede broad `about STR`, and page-turn forms precede bare
+`OBJ`. Every rule text and handler is retained. This follows the
+[documented registration-order policy](efun/parse_sentence.md#result): first
+successful rule wins; equal-progress failures retain trial order. The original
+orders match pinned Lima source reviewed 17 October 2026; no upstream execution
 comparison is claimed.
 
-A temporary test version changes **only those two rule arrays**. **32 audit inputs**,
-**151 clean preloads** and normal saves/logout/shutdown complete in **133.91
-seconds**. Qualified about reads (`in` and `from`) now use the correct object action;
-first/last/missing/empty page turns report their book messages. Valid controls and
-page state remain correct. All rule texts and handler bodies are retained;
-dedicated source is unchanged.
+Both complete verb targets compile. **32 routing inputs plus 74 retained book
+inputs** pass in **140.45 seconds**, with **151 clean preloads**, normal RST
+completion, saved account/body, logout and shutdown. Actual registered order,
+qualified about in/from reads, first/last/missing/empty page messages, valid turns,
+page preservation and cleanup pass. Numeric/alias/empty/resident-callback book
+regressions remain green. The production run uses the dedicated source with no
+rule-array or hook controls. Evidence: /tmp/lima-command-routing-20261017.
 
 Rejected trailing-direction turns still show fallback noun errors: an earlier
 rule's wrong noun and the later book refusal tie at zero completed object slots.
-Valid trailing turns work. Recommend the two Lima registration-order adaptations
-and document this remaining diagnostic edge, preserving native selection policy.
-The control is not a production fix. Evidence: /tmp/lima-command-routing-audit-20261017.
-No Rust/source implementation, parser/shared-readable/master/configuration or new
-fixture change. Prior book/full replay/source-inventory scopes remain.
+Valid trailing turns work and refusals preserve state. This remaining diagnostic
+edge is documented; native selection policy is unchanged. No native/parser,
+shared-readable/book/master/configuration or fixture edit. The previous temporary
+order-control audit remains /tmp/lima-command-routing-audit-20261017. Prior full
+replay/source-inventory scopes remain. Next audit std/pelt.c construction and its
+loot-daemon consumer, an unported source in the retained inventory.
 
 [lima-read-verb-order]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/read.c
 [lima-turn-verb-order]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/turn.c
