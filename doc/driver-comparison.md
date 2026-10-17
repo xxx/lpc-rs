@@ -2346,6 +2346,24 @@ that sample stays foggy and emits no change notification. Other states and
 multiple recipients remain outside the sample. No native API or configuration
 change is needed. Evidence: /tmp/lima-weather-20261017.
 
+The directory/workroom example now matches the open-handler signatures and uses
+Rust's named gift callback. Its get/drop checks also exposed shared callback
+registrations that returned function values and default get validation that
+applied a container's gettable state to its contents. The port invokes those
+checks and distinguishes ancestor requests from the target's individual or
+plural-array validation, preserving acquisition of nested items.
+
+Six real compositions compile. The full production replay passes **2,367 gameplay
+inputs + 10 restored-favour inputs**, **30 checkpoints**, both clean **151-preload
+boots** and normal exits in **336.70 seconds**. All prior scenarios and the exact
+mailbox sequence remain; **41 workroom inputs** and **27 get/drop response checks**
+exercise the new paths. Both open forms reach Beek's actual room, and boolean,
+message and function responses work through the shared hooks. Periodic GC and
+the natural weather tick run normally. No native API, configuration or fixture
+change is needed. Beek dialogue and item persistence across driver restarts remain
+outside this check; the whole-source inventory was not repeated.
+Evidence: /tmp/lima-workroom-20261017.
+
 [imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
 
 [imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
