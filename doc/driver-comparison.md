@@ -2430,10 +2430,27 @@ combat remain untested. Retained weather and natural chest-expiry checks pass.
 Earlier full replay and the **985/1,182** inventory retain their scopes.
 Evidence: /tmp/lima-rocky-beach-20261017.
 
-The next constructor dependency is the guild guard spawned by
-[Monster Room][lima-monster-room]. Its [base class][lima-guild-guard] still fails a
-private parent-handler call. Audit that consumer and its existing block-action
-interface before selecting an adapter; no native visibility change is proposed.
+The next selected constructor dependency was the guild guard spawned by
+[Monster Room][lima-monster-room]. Its [base class][lima-guild-guard] failed a
+private parent-handler call. The port now uses the existing block-action callback:
+members and allies return permission, while other characters receive the original
+refusal action. The blocking module and native visibility rules are unchanged.
+
+**Three complete targets compile**. Production passes **63 new inputs plus 393
+retained inputs**, **151 clean preloads** and normal shutdown in **178.76 seconds**.
+The real room's guard admits members and blocks nonmembers, including zero-level
+memberships. Isolated guild records and a stock room clone check allied/unrelated
+membership and revocation. Guard movement transfers its hook. After removal,
+normal traversal prunes its hook; reset restores one guard. Memberships, shell paths, temporary records and
+props are cleaned up; bundled ally relationships remain unchanged. No native code,
+master policy, configuration or fixture changes. Combat and saved-guard restoration
+remain untested; earlier full replay and source inventory retain their scopes.
+Evidence: /tmp/lima-guild-guard-20261017.
+
+Next review constructor coverage for the remaining standard rooms, distinguishing
+concrete rooms, factories and already-qualified cases. Check unverified stock-child
+construction before choosing more source adapters; source compilation alone missed
+the beach and guard dependencies above.
 
 [lima-outside-cave]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Outside_Cave.c
 [lima-monster-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Monster_Room.c
