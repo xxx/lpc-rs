@@ -6,7 +6,7 @@ use std::{
 };
 
 use tokio::sync::watch;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::interpreter::{
     function_type::function_address::FunctionAddress,
@@ -343,11 +343,12 @@ impl Committer {
         true
     }
 
-    /// Mark the world from `roots` and drop every unreachable `Ref`, `Array`
-    /// and `Mapping` var; object and connection identities are never dropped.
+    /// Mark the world from `roots` and sweep unreachable payload cells, preserving identities.
     /// Returns the number of vars dropped.
     #[inline(never)]
     fn mark_world(&mut self, roots: &[WorldRoot]) -> usize {
+        let started = std::time::Instant::now();
+        let cells_before = self.snapshot.state().len();
         let mut marked: BTreeSet<VarId> = BTreeSet::new();
         let mut images = BTreeSet::new();
         let mut work: Vec<MarkWork> = Vec::with_capacity(roots.len());
@@ -420,29 +421,73 @@ impl Committer {
             }
         }
 
-        let to_drop: Vec<VarId> = self
-            .snapshot
-            .state()
-            .filter(|(var_id, world_value)| {
-                !marked.contains(*var_id)
-                    && matches!(
-                        world_value,
-                        WorldValue::Ref(_)
-                            | WorldValue::Array(_)
-                            | WorldValue::Class(_)
-                            | WorldValue::Mapping(_)
-                            | WorldValue::Image(_)
-                            | WorldValue::Snoop(_)
-                            | WorldValue::Socket(_)
-                    )
+        let mark_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let scanning = std::time::Instant::now();
+        // Absent marked IDs and duplicate identities make this a conservative survivor bound.
+        let identities = (marked.len() <= cells_before / 10)
+            .then(|| {
+                self.snapshot
+                    .state()
+                    .filter(|(_, value)| !Self::can_sweep(value))
+                    .map(|(id, _)| *id)
+                    .collect::<Vec<_>>()
             })
-            .map(|(var_id, _)| *var_id)
-            .collect();
-        let reclaimed = to_drop.len();
-        for var_id in to_drop {
-            self.snapshot.drop_var(var_id);
-        }
+            .filter(|ids| marked.len() + ids.len() <= cells_before / 10);
+        let to_drop: Vec<VarId> = if identities.is_none() {
+            self.snapshot
+                .state()
+                .filter(|(id, value)| !marked.contains(*id) && Self::can_sweep(value))
+                .map(|(id, _)| *id)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let scan_ms = scanning.elapsed().as_secs_f64() * 1000.0;
+        let sweeping = std::time::Instant::now();
+        let sweep_mode = if let Some(ids) = identities {
+            self.snapshot
+                .rebuild_state(marked.iter().copied().chain(ids));
+            "rebuild"
+        } else {
+            for id in to_drop {
+                self.snapshot.drop_var(id);
+            }
+            "key_removal"
+        };
+        let reclaimed = cells_before - self.snapshot.state().len();
+        let sweep_ms = sweeping.elapsed().as_secs_f64() * 1000.0;
+        let marked_cells = marked.len();
+        drop(marked);
+        drop(images);
+        drop(work);
+        info!(
+            target: "lpc_rs::gc",
+            cells_before,
+            cells_after = self.snapshot.state().len(),
+            roots = roots.len(),
+            marked_cells,
+            reclaimed,
+            sweep_mode,
+            mark_ms,
+            scan_ms,
+            sweep_ms,
+            pause_ms = started.elapsed().as_secs_f64() * 1000.0,
+            "world collection completed"
+        );
         reclaimed
+    }
+
+    fn can_sweep(value: &WorldValue) -> bool {
+        match value {
+            WorldValue::Process(_) | WorldValue::Connection(_) | WorldValue::Rules(_) => false,
+            WorldValue::Ref(_)
+            | WorldValue::Array(_)
+            | WorldValue::Class(_)
+            | WorldValue::Mapping(_)
+            | WorldValue::Image(_)
+            | WorldValue::Snoop(_)
+            | WorldValue::Socket(_) => true,
+        }
     }
 
     /// Append outgoing payload and capture references to the mark stack.
@@ -1640,6 +1685,67 @@ mod tests {
     }
 
     #[test]
+    fn gc_sweeps_preserve_reachable_cycles_and_unmarked_identities() {
+        for garbage_cells in [1, 256] {
+            let mut committer = Committer::with_null_mode(NullMode::Distinct);
+            let root = SVar::<LpcArray>::new();
+            let capture = VarId::new();
+            let pointer = FunctionPtrBuilder::default()
+                .address(FunctionAddress::Efun(ustr("dump")))
+                .upvalue_ptrs(thin_vec![capture])
+                .build()
+                .unwrap();
+            let mut seed = Changeset::new(committer.snapshot.version());
+            seed.write(
+                root.id,
+                WorldValue::Array(Arc::new(LpcArray::new([LpcRef::Function(Arc::new(
+                    pointer,
+                ))]))),
+            );
+            seed.write(capture, WorldValue::ref_of(LpcRef::Array(root.clone())));
+            for value in [
+                WorldValue::Process(Arc::new(Process::default())),
+                WorldValue::Connection(None),
+                WorldValue::Rules(Default::default()),
+            ] {
+                seed.write(VarId::new(), value);
+            }
+            let garbage: Vec<_> = (0..garbage_cells).map(|_| VarId::new()).collect();
+            for id in &garbage {
+                seed.write(*id, WorldValue::ref_of(7.into()));
+            }
+            committer.commit(seed).unwrap();
+            let before = committer.snapshot.clone();
+            let expected: imbl::HashMap<_, _> = before
+                .state()
+                .filter(|(id, _)| !garbage.contains(id))
+                .map(|(id, value)| (*id, value.clone()))
+                .collect();
+
+            assert_eq!(
+                committer.mark_world(&[WorldRoot::Var(root.id)]),
+                garbage_cells
+            );
+
+            assert_eq!(
+                committer
+                    .snapshot
+                    .state()
+                    .map(|(id, value)| (*id, value.clone()))
+                    .collect::<imbl::HashMap<_, _>>(),
+                expected
+            );
+            assert_eq!(committer.snapshot.version(), before.version());
+            assert_eq!(
+                committer.snapshot.object_membership,
+                before.object_membership
+            );
+            assert_eq!(committer.snapshot.null_mode, before.null_mode);
+            assert_eq!(before.peek(garbage[0]), Some(&WorldValue::ref_of(7.into())));
+        }
+    }
+
+    #[test]
     fn gc_pass_keeps_the_cells_of_a_reachable_closure() {
         let (tx, _rx) = flume::unbounded();
         let mut committer = Committer::new();
@@ -1868,12 +1974,17 @@ mod tests {
                     .collect(),
             ))
         });
+        txn.with(|txn| {
+            for _ in 0..128 {
+                txn.write(VarId::new(), 0.into());
+            }
+        });
         committer
             .commit(txn.with(|txn| txn.take_changeset()))
             .unwrap();
         assert_eq!(
             committer.mark_world(&[WorldRoot::Ref(LpcRef::Mapping(root))]),
-            0
+            128
         );
         for id in [cell.id, capture, array.id] {
             assert!(committer.snapshot.peek(id).is_some());

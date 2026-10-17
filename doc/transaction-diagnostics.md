@@ -27,6 +27,24 @@ with zero compilation time and no conflicts. A snapshot reply arriving after the
 timeout can report a closed reply channel; the abandoned snapshot releases its pin.
 Compare these failures with GC activity as well as evaluation and compilation.
 
+## Collector diagnostics
+
+Accepted quiescent collections emit a `lpc_rs::gc` info event, `world collection
+completed`, with these fields:
+
+| Field | Meaning |
+|---|---|
+| `cells_before`, `cells_after`, `reclaimed` | World cell counts before and after collection, and their difference; these are neither byte nor object counts. |
+| `roots`, `marked_cells` | Supplied root records and unique traced cell IDs; traced IDs can include cells absent from the world. |
+| `mark_ms`, `scan_ms`, `sweep_ms` | Wall time tracing reachable values, selecting the sweep, and removing or rebuilding cells. |
+| `sweep_mode` | `key_removal` for individual deletions or `rebuild` for reconstructing a world with few retained cells. |
+| `pause_ms` | Collector service time, including disposal of temporary mark sets. |
+
+The pause excludes root gathering, committer queue waits, refusal retries and log
+formatting. Collection remains one atomic committer operation and refuses while
+snapshots are held. Both sweep modes preserve the same reachable cells and protected
+identity cells; rebuilding preserves the snapshot version and object lookup index.
+
 ## Diagnostic output
 
 Transaction failures emit one `lpc_rs::transactions` warning for the owning task and attach the same diagnostic to its error notes. Nested applies contribute to the owner's transaction; they do not emit separate transaction summaries. Successful transactions that needed retries emit a debug summary. Set `RUST_LOG` in the driver's environment or a `.env` file explicitly loaded with `-e <path>`:

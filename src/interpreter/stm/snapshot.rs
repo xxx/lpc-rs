@@ -84,7 +84,7 @@ impl Snapshot {
     }
 
     /// The world's vars by id, for the quiescent sweep.
-    pub(crate) fn state(&self) -> impl Iterator<Item = (&VarId, &WorldValue)> {
+    pub(crate) fn state(&self) -> impl ExactSizeIterator<Item = (&VarId, &WorldValue)> {
         self.state.iter()
     }
 
@@ -92,6 +92,14 @@ impl Snapshot {
     /// cells; a re-transaction would re-commit the value).
     pub(crate) fn drop_var(&mut self, var_id: VarId) {
         self.state.remove(&var_id);
+    }
+
+    /// Rebuild from retained cell IDs without changing snapshot metadata or the object index.
+    pub(crate) fn rebuild_state(&mut self, retained: impl IntoIterator<Item = VarId>) {
+        self.state = retained
+            .into_iter()
+            .filter_map(|id| self.state.get(&id).map(|value| (id, value.clone())))
+            .collect();
     }
 
     pub(crate) fn version(&self) -> Version {
@@ -124,6 +132,39 @@ impl Snapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rebuild_preserves_metadata_bootstrap_objects_and_older_snapshots() {
+        let live = VarId::new();
+        let dead = VarId::new();
+        let mut snapshot = Snapshot::new(
+            Version::new(),
+            [
+                (live, WorldValue::ref_of(7.into())),
+                (dead, WorldValue::ref_of(9.into())),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        snapshot.null_mode = NullMode::Distinct;
+        let process = Arc::new(Process::default());
+        snapshot
+            .objects
+            .insert("/bootstrap".into(), process.clone());
+        let before = snapshot.clone();
+
+        snapshot.rebuild_state([live, live, VarId::new()]);
+
+        assert_eq!(snapshot.version, before.version);
+        assert_eq!(snapshot.object_membership, before.object_membership);
+        assert_eq!(snapshot.null_mode, before.null_mode);
+        assert_eq!(snapshot.objects.len(), 1);
+        assert_eq!(snapshot.state().len(), 1);
+        assert!(Arc::ptr_eq(&snapshot.objects["/bootstrap"], &process));
+        assert_eq!(snapshot.read(live), before.read(live));
+        assert_eq!(snapshot.read(dead), None);
+        assert_eq!(before.read(dead), Some(WorldValue::ref_of(9.into())));
+    }
 
     #[test]
     fn read_returns_none_for_missing_var_id() {

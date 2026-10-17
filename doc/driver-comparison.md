@@ -2050,6 +2050,39 @@ validation remains pending despite all 62 mailbox inputs passing the last retry.
 Keep the earlier cold-compilation issue and reserved inheritance/cache work
 separate. Evidence: /tmp/lpc-gc-snapshot-audit-20261016.
 
+#### Lima selective collector sweep validation
+
+Following the snapshot audit, the native collector selects reconstruction from
+marked IDs and protected identity cells when their conservative survivor bound is
+at most 10% of the world; other collections keep individual deletion. Both paths
+preserve reachable values, snapshot metadata and the object lookup index. Collection
+remains atomic and refuses held snapshots; timeout accounting is unchanged.
+[Collector diagnostics](transaction-diagnostics.md#collector-diagnostics) describe
+the new occupancy, phase timing and sweep-mode fields. Two new regression tests
+and stronger class/closure coverage pass with **5,129 workspace nextest cases**
+and **10 doctests**, warning-free Clippy/docs, formatting and the workspace build.
+
+The unchanged ordinary Lima replay passes in **474.85s**: **2,159 first-session
+inputs**, **10 restored-favour inputs**, **30 lifecycle checkpoints** and two clean
+**151-preload boots**. All retained gameplay and the exact **62-input mailbox
+sequence** pass with the same six fixtures, two address-only overrides, distinct
+nil, preserved call-out player and **4,000 ms** limit. A normal periodic collection
+uses reconstruction on **2,186,372 cells**, retaining **29,167** and reclaiming
+**2,157,205**, with a **2,775.341 ms** collector pause. The replay reports no
+transaction timeout or cancelled snapshot reply and restores account/body/bank/
+favour state.
+
+A separate original-collector measurement after the retained 596-command prefix
+and idle client input reclaims **883,261 of 898,525 cells** in **2,047.404 ms**;
+per-key removal accounts for **1,430.554 ms**. Its smaller world does not form a
+matched native speed comparison with the full replay. A separate optimized scalar
+map fixture favors the selected reconstruction path, but does not establish a
+universal threshold or a full Lima speedup. No GC schedule, budget or mudlib
+workaround is introduced. The earlier cold-compilation issue remains separate;
+the next bounded source audit is the standard table and treasure chest. The
+previous whole-source inventory remains **966/1182**, without additive estimates.
+Evidence: /tmp/lpc-gc-sweep-20261017.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
