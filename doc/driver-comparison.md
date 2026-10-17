@@ -2478,11 +2478,33 @@ paths and props restore, and the production callback remains registered.
 Evidence: /tmp/lima-lava-room-20261017. Previous constructor coverage, full replay
 and **985/1,182** source inventory retain their measured scopes.
 
-Next audit `std/book.c` and its concrete `domains/std/lima_guide.c` host. Their
-sources still match the inventory's compile failures in callback initialization
-and mass typing. Check fresh targets before choosing an adapter; do not repeat
-completed room constructors or propose native prototype changes without evidence.
+Fresh checks of [the standard book][lima-book] and [Lima Guide][lima-guide] both fail: open/close
+callbacks are declared but never implemented, and an int mass reaches `set_mass`.
+A temporary test version removes those unused hook references and casts mass,
+allowing both targets to compile without changing the dedicated source.
+Source review: pinned revision `eefaff66`, 17 October 2026, active `USE_MASS`;
+execution below is lpc-rs only.
+Its **29-input audit**, **151 clean preloads** and normal saves/logout/shutdown pass
+in **135.50 seconds**; this is diagnostic evidence, not a production port.
 
+The remaining description/page-conversion closures return functions, causing
+string/function and numeric-sort errors. Explicit page/topic reads work; the
+`about` form with an object takes the bare-topic route and misses its entry in this
+control. Appending after page ten overwrites it, description drops title/author,
+and empty reading indexes an empty array. Backward-boundary and default-read reset
+errors are also visible in the original source, blocked here by callback failures.
+A callback-page probe used a destructed temporary command owner and is inconclusive
+for readable support. No shared-readable or parser change is justified yet.
+
+Recommend class-local callback/mass adaptations and basic numeric page, empty-book,
+page-retention and description fixes, then recheck normal commands and resident
+callback-valued pages. No new prototype/visibility API or type loosening is proposed.
+Dedicated source remains unchanged; next implement this bounded book repair.
+Evidence: /tmp/lima-book-audit-20261017. Two incomplete runs retain shell-wrap
+capture and topic-read assumptions; prior full/source/constructor scopes remain.
+
+[lima-book]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/book.c
+[lima-guide]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/lima_guide.c
 [lima-lava-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Lava_Room.c
 [lima-outside-cave]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Outside_Cave.c
 [lima-monster-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Monster_Room.c
