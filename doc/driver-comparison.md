@@ -2380,7 +2380,30 @@ are unchanged. Loot-daemon generation/placement and fresh-driver loot persistenc
 remain untested; the preceding full replay and whole-source inventory retain
 their scopes. Evidence: /tmp/lima-loot-chest-20261017.
 
+The subsequent [loot-daemon][lima-loot-daemon] audit, reviewed on **17 October
+2026**, leaves mudlib source unchanged. The daemon, chest and coins compile;
+[gem][lima-loot-gem] and [art][lima-loot-art] fail on return/value types and quoted
+callbacks. Both generators also contain self-recursive value getters, identified
+by source review. The [boss mixin][lima-loot-boss] requires its host's methods;
+no bundled source inherits it in the reviewed checkout.
+
+A **25-input** production audit catches both generator failures, constructs and
+describes coins, and reproduces a chest with no environment after `drop_chest`.
+It uses level 17's original empty loot result to isolate placement without forcing
+random outcomes; the table only implements levels 0–16. **151 clean preloads**,
+ordinary documentation scanning and normal shutdown pass in **133.09 seconds**.
+Recommended source changes adapt generator types and callbacks, use inherited
+value getters and place the chest in the recipient's room. The existing loot
+table and boss rules remain unchanged.
+Actual boss combat, random distribution and loot restoration remain untested.
+No native API or configuration change is indicated. Earlier full replay and
+inventory results retain their scopes. Evidence: /tmp/lima-loot-generation-audit-20261017.
+
 [lima-loot-chest]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/loot_chest.c
+[lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
+[lima-loot-gem]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/gem.c
+[lima-loot-art]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/art_object.c
+[lima-loot-boss]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_boss.c
 
 [imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
 
