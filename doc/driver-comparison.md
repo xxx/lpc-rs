@@ -2121,6 +2121,48 @@ Driver storage, dependencies, GC/deadline/mode contracts and Lima source remain
 unchanged. The prior **2,159 + 10** full replay remains qualification. Evidence:
 /tmp/lpc-gc-parallel-20261017.
 
+#### Lima native GC worker testing
+
+The follow-up uses a detached native checkout at **d2a2c28b**, with the local imbl
+owned-branch API and Rayon **1.12.0**. Production Rust code, dependencies and Lima
+source/configuration remain unchanged. Only retired-map disposal uses workers;
+tracing and survivor construction keep their existing paths. A lazy two-worker
+pool handles large maps, with serial disposal for small maps or worker creation
+failure. All work finishes before the atomic GC message replies.
+
+The isolated prototype passes **5,134 workspace tests / 2 skips**, including five
+new tests for small/serial pool laziness, shared snapshots, worker completion and
+native array payload destruction before the GC reply. The **10 doctests**,
+warning-free workspace/all-targets Clippy and documentation checks, formatting and
+optimized workspace build also pass.
+
+One paired optimized measurement uses the same driver binary, retained
+**596-command prefix**, six fixtures, two address-only overrides and ordinary
+five-minute collection period. A private prototype control selects serial or
+two-worker disposal; Lima stays distinct nil/preserved player/**4,000 ms**. Both
+runs retain **15,264 cells** from approximately **899,000**, with identical root
+and marked-cell counts. Serial disposal/collector service measure
+**275.136/315.667 ms**; parallel disposal of **32 owned branches** measures
+**143.752/184.006 ms**. Collector service is **41.7% shorter** in this pair;
+retired-map populations differ by **0.04%**. This is a native measurement, not a
+full replay qualification or universal latency bound.
+
+Existing transaction workloads run with one/two workers, fixed matched call
+counts and alternating executable order. Both builds use the patched dependency;
+the baseline keeps serial GC and the prototype adds native disposal integration.
+Initial short samples show large
+differences that do not persist in nine longer paired repetitions of the affected
+cases. Repeated median changes range from **8.2% faster to 2.5% slower**, with
+overlapping ranges; this does not establish zero overhead. All **362 measured
+trials** complete their expected transactions without reply failures.
+
+The results support owned-branch disposal without changing world storage or
+deferring reclamation. Adoption still needs a maintained dependency API strategy;
+the unpublished imbl extension and temporary path/control are confined to the
+isolated checkout. The execution overview and native GC/deadline contracts remain
+accurate. The prior **2,159 + 10** full replay and **966/1182** source inventory
+retain their measured scope. Evidence: /tmp/lpc-gc-native-20261017.
+
 [imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
 [rayon-parallel-bridge]: https://docs.rs/rayon/1.12.0/rayon/iter/trait.ParallelBridge.html
 
