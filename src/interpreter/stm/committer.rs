@@ -14,7 +14,7 @@ use crate::interpreter::{
     process::{Process, ProgramImage},
     stm::{
         CommitOrigin, Conflict, VarId, Version, WorldValue, changeset::Changeset,
-        snapshot::Snapshot,
+        reclaimer::Reclaimer, snapshot::Snapshot,
     },
 };
 
@@ -208,6 +208,7 @@ pub(crate) struct Committer {
     live_versions: BTreeMap<Version, u32>,
     /// Statistics related to the committer's activities
     stats: CommitterStats,
+    reclaimer: Reclaimer,
 
     /// Fan-out watermark: bumped once per written commit for losers to await.
     commit_watch: watch::Sender<Version>,
@@ -226,6 +227,7 @@ impl Committer {
             oldest_retained: version,
             live_versions: BTreeMap::new(),
             stats: CommitterStats::default(),
+            reclaimer: Reclaimer::new(),
             commit_watch,
         }
     }
@@ -445,8 +447,10 @@ impl Committer {
         let scan_ms = scanning.elapsed().as_secs_f64() * 1000.0;
         let sweeping = std::time::Instant::now();
         let sweep_mode = if let Some(ids) = identities {
-            self.snapshot
+            let retired = self
+                .snapshot
                 .rebuild_state(marked.iter().copied().chain(ids));
+            self.reclaimer.reclaim(retired);
             "rebuild"
         } else {
             for id in to_drop {
@@ -1743,6 +1747,31 @@ mod tests {
             assert_eq!(committer.snapshot.null_mode, before.null_mode);
             assert_eq!(before.peek(garbage[0]), Some(&WorldValue::ref_of(7.into())));
         }
+    }
+
+    #[test]
+    fn gc_reply_follows_parallel_payload_destruction() {
+        let (tx, _rx) = flume::unbounded();
+        let mut committer = Committer::new();
+        let payload = Arc::new(LpcArray::new([]));
+        let weak = Arc::downgrade(&payload);
+        let mut seed = Changeset::new(committer.snapshot.version());
+        seed.write(VarId::new(), WorldValue::Array(payload));
+        for _ in 0..512 {
+            seed.write(VarId::new(), WorldValue::ref_of(7.into()));
+        }
+        committer.commit(seed).unwrap();
+        let (reply, response) = flume::bounded(1);
+        committer.process(
+            CommitProtocol::GcPass {
+                roots: Vec::new(),
+                reply,
+            },
+            &tx,
+        );
+        assert_eq!(response.recv().unwrap().unwrap().reclaimed, 513);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(committer.reclaimer.initialized_workers(), Some(2));
     }
 
     #[test]

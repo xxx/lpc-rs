@@ -35,6 +35,7 @@ mod committer;
 mod diagnostics;
 mod effects;
 mod merge;
+mod reclaimer;
 mod retry;
 mod snapshot;
 mod world_value;

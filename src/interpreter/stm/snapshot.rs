@@ -94,12 +94,16 @@ impl Snapshot {
         self.state.remove(&var_id);
     }
 
-    /// Rebuild from retained cell IDs without changing snapshot metadata or the object index.
-    pub(crate) fn rebuild_state(&mut self, retained: impl IntoIterator<Item = VarId>) {
-        self.state = retained
+    /// Rebuild retained cells and return the retired map without changing snapshot metadata.
+    pub(crate) fn rebuild_state(
+        &mut self,
+        retained: impl IntoIterator<Item = VarId>,
+    ) -> HashMap<VarId, WorldValue> {
+        let replacement = retained
             .into_iter()
             .filter_map(|id| self.state.get(&id).map(|value| (id, value.clone())))
             .collect();
+        std::mem::replace(&mut self.state, replacement)
     }
 
     pub(crate) fn version(&self) -> Version {
@@ -153,7 +157,8 @@ mod tests {
             .insert("/bootstrap".into(), process.clone());
         let before = snapshot.clone();
 
-        snapshot.rebuild_state([live, live, VarId::new()]);
+        let retired = snapshot.rebuild_state([live, live, VarId::new()]);
+        drop(retired);
 
         assert_eq!(snapshot.version, before.version);
         assert_eq!(snapshot.object_membership, before.object_membership);

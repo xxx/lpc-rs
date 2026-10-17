@@ -2275,9 +2275,37 @@ Seven ownership contract tests cover unique/shared roots, shared descendants,
 collisions, parallel destruction and local non-Send values in both the fork and
 the workspace checks. The [maintenance guide](maintaining-imbl.md) records how to
 replay the small feature commit onto reviewed upstream releases and advance the
-pin after validation. This prepares the dependency API: production GC still uses
-the committed selective serial collector. The earlier parallel-GC measurements
-remain isolated prototype results. Evidence: /tmp/lpc-imbl-fork-20261017.
+pin after validation. That dependency change prepared the API without enabling
+GC workers. Its parallel-GC measurements remain isolated prototype results.
+Evidence: /tmp/lpc-imbl-fork-20261017.
+
+#### Native GC worker integration
+
+The production collector now uses the pinned owned-branch API when rebuilding a
+large sparse world. A lazy two-worker Rayon pool finishes disposing of the retired
+branches before the atomic GC operation replies. Small maps, unsplittable roots
+and worker-creation failures use synchronous serial cleanup. The single world map,
+snapshot version, reachability rules, protected identity cells, GC interval and
+execution allowance accounting remain unchanged. No experimental worker switch or
+partitioned storage is included. [Collector diagnostics](transaction-diagnostics.md#collector-diagnostics)
+describe the threshold, worker lifetime and disposal timing fields.
+
+The integrated implementation passes **5,142 workspace tests / 2 skips**, including
+six new runtime tests for small/shared/direct cleanup, worker-creation fallback,
+synchronous destruction and garbage-array destruction before the GC reply.
+Doctests, formatting, warning-free Clippy/docs and debug/release workspace builds
+pass. The first library-test compilation was killed before tests ran; its retry
+with one Cargo job passed under the same resource limits, without a source change.
+
+One optimized production run passes the retained **596 inputs** with **151 clean
+preloads**, the same six fixtures and two address-only overrides. Lima remains
+distinct nil/preserved player/**4,000 ms**, using its ordinary **300-second** GC
+period. Collection reduces **898,442 cells to 15,264**, tracing **656 roots** and
+**18,172 cell IDs**. Disposal of **32 owned chunks on two workers** takes
+**154.114 ms**, with **201.341 ms** total collector service. These are single-run
+measurements; the earlier timings above are historical samples, not a controlled
+comparison with this run. No new full replay or source inventory is claimed.
+Evidence: /tmp/lpc-gc-workers-20261017.
 
 [imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
 
