@@ -2478,30 +2478,32 @@ paths and props restore, and the production callback remains registered.
 Evidence: /tmp/lima-lava-room-20261017. Previous constructor coverage, full replay
 and **985/1,182** source inventory retain their measured scopes.
 
-Fresh checks of [the standard book][lima-book] and [Lima Guide][lima-guide] both fail: open/close
-callbacks are declared but never implemented, and an int mass reaches `set_mass`.
-A temporary test version removes those unused hook references and casts mass,
-allowing both targets to compile without changing the dedicated source.
-Source review: pinned revision `eefaff66`, 17 October 2026, active `USE_MASS`;
-execution below is lpc-rs only.
-Its **29-input audit**, **151 clean preloads** and normal saves/logout/shutdown pass
-in **135.50 seconds**; this is diagnostic evidence, not a production port.
+The [standard book][lima-book] and [Lima Guide][lima-guide] now compile after a
+class-local `std/book.c` repair. It removes dangling open/close hook references,
+registers named callbacks, uses int page indexes and explicit float mass, and fixes
+numeric append, selected-page retention, backward boundaries, empty/untitled books,
+description prefixes and canonical topic-to-page resolution. Trivial open/close
+responses and public page/readable signatures remain. No shared-readable, guide,
+native, parser, master or configuration changes. Original-source review remains
+pinned to `eefaff66`, 17 October 2026, active `USE_MASS`; execution is lpc-rs only.
 
-The remaining description/page-conversion closures return functions, causing
-string/function and numeric-sort errors. Explicit page/topic reads work; the
-`about` form with an object takes the bare-topic route and misses its entry in this
-control. Appending after page ten overwrites it, description drops title/author,
-and empty reading indexes an empty array. Backward-boundary and default-read reset
-errors are also visible in the original source, blocked here by callback failures.
-A callback-page probe used a destructed temporary command owner and is inconclusive
-for readable support. No shared-readable or parser change is justified yet.
+**Two complete targets compile**. Production validation completes **74 inputs**,
+**151 clean preloads**, normal documentation scanning, account/body saves and
+logout/shutdown in **133.69 seconds**. Valid clone/look/read/turn commands,
+first-page return and trailing backwards form, numeric append beyond page ten,
+contents/removal, selected-page fallback, empty-book append/read and resident
+callable pages pass. Props/path restore. The callback-page audit limitation is
+resolved with a book-owned function, without changing the shared readable module.
 
-Recommend class-local callback/mass adaptations and basic numeric page, empty-book,
-page-retention and description fixes, then recheck normal commands and resident
-callback-valued pages. No new prototype/visibility API or type loosening is proposed.
-Dedicated source remains unchanged; next implement this bounded book repair.
-Evidence: /tmp/lima-book-audit-20261017. Two incomplete runs retain shell-wrap
-capture and topic-read assumptions; prior full/source/constructor scopes remain.
+Command-layer limitations remain: `read about docs in guide` uses bare-topic lookup
+and returns no entry; explicit page/topic and bare-about forms work. Rejected turns
+preserve page state and their class validators return the proper messages, but the
+commands display missing-object fallbacks. These exact read/turn cases are the next
+bounded routing/error-selection audit. No workaround or native change is selected.
+Evidence: /tmp/lima-book-20261017. Two earlier incomplete attempts retain boundary
+message assumptions and the alias defect; the second also fails source-consistency
+validation after repair during cleanup. Prior audit, full replay and **985/1,182**
+inventory retain their scopes; no additive source recount or constructor repeat.
 
 [lima-book]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/book.c
 [lima-guide]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/lima_guide.c
