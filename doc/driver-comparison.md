@@ -2399,6 +2399,24 @@ Actual boss combat, random distribution and loot restoration remain untested.
 No native API or configuration change is indicated. Earlier full replay and
 inventory results retain their scopes. Evidence: /tmp/lima-loot-generation-audit-20261017.
 
+The three-file generator/placement repair is now applied in the dedicated port.
+Gem and art use inherited value getters, float values, nil returns and named
+callbacks. The gem's previously missing maximum roll result is explicitly category
+0; existing thresholds and value formulas remain. The daemon resolves its recipient
+before deriving the room/currency and places the chest in that room. Loot-table
+bands, boss rules and expiry timing are unchanged.
+
+**Seven complete targets compile**. The production run passes **62 new inputs plus
+283 retained inputs**, **151 clean preloads** and normal shutdown in **177.45
+seconds**. Natural gem/art callbacks, both art tiers, inherited value factors,
+ordinary generated-item commands, recipient fallbacks and populated chest
+placement/coin collection pass. This chest contains one coin pile and five gems;
+direct factory tests cover art. The original chest-expiry checks and natural
+weather tick also pass. No native code, configuration or fixture change is needed.
+Actual boss combat, probability distributions and loot restoration remain
+untested; the earlier full replay and whole-source inventory retain their scopes.
+Evidence: /tmp/lima-loot-generation-20261017.
+
 [lima-loot-chest]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/loot_chest.c
 [lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
 [lima-loot-gem]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/gem.c
