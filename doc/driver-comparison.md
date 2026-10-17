@@ -2307,6 +2307,26 @@ measurements; the earlier timings above are historical samples, not a controlled
 comparison with this run. No new full replay or source inventory is claimed.
 Evidence: /tmp/lpc-gc-workers-20261017.
 
+A subsequent unchanged full replay on the integrated driver passes **2,160 gameplay
+inputs + 10 restored-favour inputs**, all **30 lifecycle checkpoints** and both clean
+**151-preload boots** in **487.60 seconds**. The exact mailbox sequence and retained
+account, body, bank and favour restoration checks pass. Normal periodic GC runs
+during gameplay; configuration, fixtures and address-only overrides are unchanged.
+This qualifies the integrated workers for the retained gameplay sequence. The
+whole-source inventory remains the earlier **966/1182** measurement.
+Evidence: /tmp/lima-container-consumers-20261017.
+
+The standard table and treasure-chest examples now use explicit float mass values;
+the chest also establishes its `in` relation before configuring contents. Both
+sources compile, and **70 focused production-driver inputs** pass construction,
+independent table capacities, containment, open/close, visibility, reading and
+reset checks, with **151 clean preloads** and normal shutdown. No native code,
+mudlib configuration or fixture source changes are needed. The focused run waits
+for automatic documentation scanning to finish before shutdown. Earlier short
+debug runs retain separate shutdown-race and cold-compilation failures; these
+driver issues are not fixed by the container adaptation. The whole-source
+inventory was not repeated.
+
 [imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
 
 [imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
