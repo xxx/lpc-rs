@@ -2364,6 +2364,24 @@ change is needed. Beek dialogue and item persistence across driver restarts rema
 outside this check; the whole-source inventory was not repeated.
 Evidence: /tmp/lima-workroom-20261017.
 
+The [loot chest][lima-loot-chest], reviewed on **17 October 2026**, now matches its
+inherited parser signatures, uses its named expiry callback and guards the final
+ownerless notification. Explicit handlers preserve its ownership and take-only
+checks across command aliases and the overlapping money/material put grammar.
+Ordinary items delegate `get ... out of ...` to their existing get-from check.
+
+**Eight complete targets compile**. A production run passes **95 new loot inputs
+plus 188 retained inputs**, **151 clean preloads** and normal shutdown in
+**172.99 seconds**. Player-owned, NPC-owned and ownerless chests expire naturally;
+the original formula produces notices at **15, 30 and 45 seconds**, with removal
+at the last notice. Opening, singular/plural taking, wrong-relation and put
+refusals pass. The natural weather tick also runs. Native code and configuration
+are unchanged. Loot-daemon generation/placement and fresh-driver loot persistence
+remain untested; the preceding full replay and whole-source inventory retain
+their scopes. Evidence: /tmp/lima-loot-chest-20261017.
+
+[lima-loot-chest]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/loot_chest.c
+
 [imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
 
 [imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
