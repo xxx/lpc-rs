@@ -730,13 +730,12 @@ original **eefaff66** remain. No upstream driver, target gameplay or Rust gate
 is run here; prior full replay and the **345-input** generator run retain their
 scopes. The source set and all 1,549 library files remain unchanged by the sweep.
 
-Next audit [Rocky Beach][lima-rocky-beach] and its [debris][lima-beach-debris]
-consumer, the generated rock, ocean and Outside_Cave return context. The room
-compiles but spawns debris that fails its integer mass argument to the float
-setter. Four of these five sources compile. Review actual construction, the
-attached debris get handler, rock creation and reset behavior before selecting a
-patch; compilation alone does not establish that the room works. No source
-proposal or new gameplay qualification is made here. Keep completed equipment,
+This inventory selected [Rocky Beach][lima-rocky-beach] and its [debris][lima-beach-debris]
+consumer, the generated rock, ocean and Outside_Cave return context. At that
+checkpoint, the room compiled but its debris failed the integer mass argument
+to the float setter; four of the five sources compiled. Actual construction,
+attached pickup, rock creation and reset required runtime review. The subsequent
+repair and gameplay qualification are recorded below. Keep completed equipment,
 parser/exit/framework/TCP/GC work and reserved native discussions separate.
 Evidence: /tmp/lima-source-inventory-20261017. Earlier dated inventories remain
 in their frozen packets; implementation reports below retain their original scopes.
@@ -2413,6 +2412,32 @@ weather tick also pass. No native code, configuration or fixture change is neede
 Actual boss combat, probability distributions and loot restoration remain
 untested; the earlier full replay and whole-source inventory retain their scopes.
 Evidence: /tmp/lima-loot-generation-20261017.
+
+The [Rocky Beach][lima-rocky-beach] consumer now converts debris's mass explicitly,
+preserving **5,000**. [Outside Cave][lima-outside-cave] registers its actual arrival
+callback, uses normal item removal for sinking objects and reads mass in the
+configured mass build. The original size branch is retained but was not tested.
+Stock rock settings, arrival messages, the large-object threshold and room/quest
+rules remain. No native code, master policy, configuration or fixture changes.
+
+**Five complete targets compile**. Production passes **48 new inputs plus 345
+retained inputs**, **151 clean preloads** and normal shutdown in **176.75 seconds**.
+Actual room construction, repeated rock supply, ordinary pickup/drop, directional
+refusals, both wade routes and debris replenishment pass. Small rocks sink;
+the large pile splashes and remains. Reset preserves the ocean and its hooks;
+the existing ocean route starts the pirate quest. Full quest completion and
+combat remain untested. Retained weather and natural chest-expiry checks pass.
+Earlier full replay and the **985/1,182** inventory retain their scopes.
+Evidence: /tmp/lima-rocky-beach-20261017.
+
+The next constructor dependency is the guild guard spawned by
+[Monster Room][lima-monster-room]. Its [base class][lima-guild-guard] still fails a
+private parent-handler call. Audit that consumer and its existing block-action
+interface before selecting an adapter; no native visibility change is proposed.
+
+[lima-outside-cave]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Outside_Cave.c
+[lima-monster-room]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/Monster_Room.c
+[lima-guild-guard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/guild_guard.c
 
 [lima-loot-chest]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/loot_chest.c
 [lima-loot-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/loot_d.c
