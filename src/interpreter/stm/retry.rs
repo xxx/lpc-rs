@@ -936,6 +936,80 @@ mod async_tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn snapshot_wait_can_exhaust_the_allowance_before_evaluation_starts() {
+        let (tx, rx) = flume::unbounded();
+        let mut committer = Committer::new();
+        let counter = VarId::new();
+        seed(&mut committer, counter, 0);
+        let body_tx = tx.clone();
+        let attempt = tokio::spawn(async move {
+            let mut body = TimedBody {
+                inner: IncBody::new(counter),
+                limit_ms: 100,
+                work: Duration::ZERO,
+                commit_delay: Duration::ZERO,
+                delivered: 0,
+            };
+            run_attempts(&body_tx, &AttemptTelemetry::default(), None, &mut body).await
+        });
+
+        let start = rx.recv_async().await.unwrap();
+        assert!(matches!(&start, CommitProtocol::Start { .. }));
+        tokio::time::advance(Duration::from_millis(100)).await;
+        let (result, stats) = attempt.await.unwrap();
+        assert!(result.unwrap_err().to_string().contains("evaluation limit"));
+        assert_eq!(stats.attempts, 1);
+        assert_eq!(stats.conflicts, 0);
+        assert_eq!(stats.phases.attempt, Duration::from_millis(100));
+        assert_eq!(committer.committed(counter), WorldValue::ref_of(0.into()));
+
+        committer.process(start, &tx);
+        while let Ok(message) = rx.try_recv() {
+            committer.process(message, &tx);
+        }
+        let (reply, stats_rx) = flume::bounded(1);
+        committer.process(CommitProtocol::Stats { reply }, &tx);
+        let stats = stats_rx.recv().unwrap();
+        assert_eq!(stats.reply_failures, 1);
+        assert_eq!(stats.live_snapshots, 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn snapshot_wait_leaves_only_the_remaining_allowance_for_evaluation() {
+        let (tx, rx) = flume::unbounded();
+        let mut committer = Committer::new();
+        let counter = VarId::new();
+        seed(&mut committer, counter, 0);
+        let body_tx = tx.clone();
+        let attempt = tokio::spawn(async move {
+            let mut body = TimedBody {
+                inner: IncBody::new(counter),
+                limit_ms: 100,
+                work: Duration::from_millis(80),
+                commit_delay: Duration::ZERO,
+                delivered: 0,
+            };
+            run_attempts(&body_tx, &AttemptTelemetry::default(), None, &mut body).await
+        });
+
+        let start = rx.recv_async().await.unwrap();
+        tokio::time::advance(Duration::from_millis(40)).await;
+        committer.process(start, &tx);
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(60)).await;
+        let (result, stats) = attempt.await.unwrap();
+        assert!(result.is_err());
+        assert_eq!(stats.phases.attempt, Duration::from_millis(100));
+        assert_eq!(committer.committed(counter), WorldValue::ref_of(0.into()));
+        while let Ok(message) = rx.try_recv() {
+            committer.process(message, &tx);
+        }
+        let (reply, stats_rx) = flume::bounded(1);
+        committer.process(CommitProtocol::Stats { reply }, &tx);
+        assert_eq!(stats_rx.recv().unwrap().live_snapshots, 0);
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn retries_share_one_evaluation_limit_and_release_the_interrupted_attempt() {
         let (result, stats, delivered, value) = run_timed_body(100, 40, 0, usize::MAX).await;
         let error = result.unwrap_err();

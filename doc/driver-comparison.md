@@ -2021,6 +2021,35 @@ audit; shared frameworks/TCP/user-mail, broader gameplay policy and reserved
 inheritance/cache work stay separate. Evidence:
 /tmp/lima-mailbox-props-retry-20261016.
 
+#### Lima snapshot and GC timeout audit
+
+Reviewed after mailbox commits Lima **4c15b53b** and native **8561a764**. Two
+paused-clock tests reproduce the native mechanism independently of machine load:
+a queued snapshot can exhaust the execution allowance before evaluation starts,
+and a partial wait leaves only the remainder for evaluation. A late cancelled
+reply releases its snapshot pin. Snapshot acquisition and atomic GC share the
+committer, matching the observed callback timeout/cancelled reply around GC.
+The actual replay's GC service duration was not instrumented, so its precise
+pause cause and cost remain unisolated. No production GC/accounting change is made.
+The [native diagnostics](transaction-diagnostics.md) now explain this case.
+
+A bounded scalar-world fixture at 2.3 million cells/1,000 survivors measured
+2.83s for current GC versus 1.62s for a reconstruction experiment in debug. An
+optimized persistent-map sweep microbenchmark measured medians 617ms/310ms for
+mostly-dead data, but 760ms/2,106ms for mostly-live data. These are separate
+fixtures, not a measured Lima speedup. The optimized whole-crate test build was
+killed before measurements; only the explicitly scoped map benchmark produced
+optimized results. Temporary profiling code is not part of the shared change.
+
+Recommend preserving the existing wall-clock allowance and atomic/quiescent GC
+contract while investigating a selective reconstruction path for garbage-heavy
+sweeps, with actual GC pause/occupancy measurements to choose its threshold.
+Unconditional reconstruction regressed the map fixture; simply increasing Lima's
+limit or disabling GC would leave the collector cost unexplained. Full Lima
+validation remains pending despite all 62 mailbox inputs passing the last retry.
+Keep the earlier cold-compilation issue and reserved inheritance/cache work
+separate. Evidence: /tmp/lpc-gc-snapshot-audit-20261016.
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected

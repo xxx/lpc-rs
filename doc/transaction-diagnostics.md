@@ -21,6 +21,12 @@ For timeouts with few conflicts, inspect evaluation and compilation work;
 for repeated conflicts, inspect shared writes and retry admission waits.
 Raising the limit also lets runaway tasks consume resources for longer.
 
+Snapshot acquisition waits for the committer, including any atomic GC pass already
+running there. This can exhaust an allowance before callback evaluation starts,
+with zero compilation time and no conflicts. A snapshot reply arriving after the
+timeout can report a closed reply channel; the abandoned snapshot releases its pin.
+Compare these failures with GC activity as well as evaluation and compilation.
+
 ## Diagnostic output
 
 Transaction failures emit one `lpc_rs::transactions` warning for the owning task and attach the same diagnostic to its error notes. Nested applies contribute to the owner's transaction; they do not emit separate transaction summaries. Successful transactions that needed retries emit a debug summary. Set `RUST_LOG` in the driver's environment or a `.env` file explicitly loaded with `-e <path>`:
