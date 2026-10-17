@@ -2327,6 +2327,15 @@ debug runs retain separate shutdown-race and cold-compilation failures; these
 driver issues are not fixed by the container adaptation. The whole-source
 inventory was not repeated.
 
+The whiskey bottle spawned by Pinto's swamp room now supplies its weight as
+`2.0`, preserving its value range, combat bonuses, skill and salvage settings.
+Both the weapon and its unchanged room compile. A focused production run passes
+**27 new inputs plus the 70 retained container inputs**, with **151 clean preloads**
+and normal shutdown after documentation scanning. It exercises the actual room
+spawn, ordinary item commands and reset replenishment; combat damage and item
+restoration across driver restarts remain outside that check. Native code and
+configuration are unchanged. Evidence: /tmp/lima-whiskey-bottle-20261017.
+
 [imbl-owned-branch-fork]: https://github.com/xxx/imbl/commit/5fa322d043faee90d32c63430b51a52be3ad121d
 
 [imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
