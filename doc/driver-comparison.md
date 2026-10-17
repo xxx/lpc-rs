@@ -2083,6 +2083,47 @@ the next bounded source audit is the standard table and treasure chest. The
 previous whole-source inventory remains **966/1182**, without additive estimates.
 Evidence: /tmp/lpc-gc-sweep-20261017.
 
+#### Lima GC parallelism investigation
+
+After commits native **50643c28** and Lima **e63c1f2a**, temporary instrumentation
+separates survivor-map construction from old-map destruction. Both debug and
+optimized native runs use the same **596-command prefix**, six fixtures, two
+address-only overrides and ordinary five-minute GC period, retaining distinct nil,
+preserved player and **4,000 ms**. Each retains **15,264 cells** from approximately
+**899,000**: debug measures **21.320 ms** construction, **735.378 ms** destruction
+and **885.167 ms** collector service; release measures **5.733 ms**, **235.220 ms**
+and **267.665 ms** respectively. These are measurement runs, not new full replay
+qualification or universal latency bounds. Destruction accounts for about **98%**
+of the optimized rebuild phase.
+
+A separate optimized imbl **7.0.2**/Rayon **1.12.0** study uses two workers, fixed
+hash seeds, five rotated repetitions and the native allocator version. For a
+2.3-million-entry map with Arc payloads, serial rebuild/destruction has a median
+**200 ms** total; `par_bridge` takes **701 ms**, and buffering entries for parallel
+disposal takes **249 ms**. The bridge serializes iterator advancement, while
+buffering includes a full traversal before parallel disposal. imbl's existing
+[Rayon feature][imbl-rayon-feature] covers `Vector`, not `HashMap`;
+[Rayon's bridge documentation][rayon-parallel-bridge] explains its serial cursor.
+
+An isolated local imbl API prototype instead exposes owned root branches for
+disposal, preserving shared roots and the existing map layout. On the same map
+layout, a second study measures **197 ms** serial versus **114 ms** using two
+Rayon workers. Ownership probes cover empty maps, retained values, shared roots,
+shared descendants and hash collisions. This API is not in published imbl 7.0.2
+and is not integrated into the driver; the fixture is not a measured native
+speedup. It suggests a narrower direction than partitioning all world storage.
+
+Recommend a bounded native prototype of owned-branch disposal, with dependency API
+support and normal transaction/GC checks before adoption. Workers must finish
+inside the existing atomic collection; no background lifetime deferral is selected.
+Temporary timing code is removed and production debug/release binaries rebuilt.
+Driver storage, dependencies, GC/deadline/mode contracts and Lima source remain
+unchanged. The prior **2,159 + 10** full replay remains qualification. Evidence:
+/tmp/lpc-gc-parallel-20261017.
+
+[imbl-rayon-feature]: https://docs.rs/imbl/7.0.2/imbl/#feature-flags
+[rayon-parallel-bridge]: https://docs.rs/rayon/1.12.0/rayon/iter/trait.ParallelBridge.html
+
 #### Lima basic player commands and help
 
 The subsequent source batch, reviewed on **6 October 2026**, adds the protected
