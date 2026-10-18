@@ -691,15 +691,51 @@ The checkout's `README.lpc-rs.md` provides startup and prepared-test instruction
 The configured fresh-account lifecycle has passed clean boot, native saves,
 fresh-process restart and saved login, with **151 clean preloads per boot** in
 the recorded lifecycle runs. Both actual shipped `unittest all` and
-`unittest all quiet` pass **59/59** in the separately prepared runtime. Their
-**42 individual loads** and loopback IMUD fixtures are part of that result;
-cold combined-suite execution and live I3 are not established by it. See the
-[combined qualification](#lima-combined-shipped-test-suites) and the
-[source inventory](#lima-source-coverage) for their distinct scopes.
+`unittest all quiet` pass **59/59**. The original prepared run loaded 42 programs
+individually; a subsequent fresh-driver run passes the five per-suite commands
+and both combined modes with **zero manual loads**. Direct cold combined execution
+has both a pass and a timeout under the unchanged 4000ms deadline. See the
+[cold command audit](#lima-cold-shipped-test-commands), original
+[combined qualification](#lima-combined-shipped-test-suites) and
+[source inventory](#lima-source-coverage) for their distinct scopes. Runtime
+qualifications use loopback IMUD fixtures; live I3 remains separate.
 
 Original-driver saved-data/password import, alternate build options, unselected
 or optional sources and documented upstream defects retain separate decisions.
 The source inventory is not a completion percentage or a missing-feature count.
+
+#### Lima cold shipped-test commands
+
+Reviewed **18 October 2026** at native **8784d200**, dedicated Lima **47e16fce**.
+Normal startup loads 151 files. Before the test commands, the five suites,
+test daemon and unittest command are absent; six of the 42 previously warmed
+programs are already loaded by ordinary account/character setup. Two shell
+observation commands compile evaluation code to retain references and inspect
+loaded state; they do not load test targets. No manual program loads, added LPC
+fixtures or gameplay replacements are used.
+
+The first direct `unittest all` times out at **4001.442ms**: **3801.751ms** in
+compilation and **199.689ms** in evaluation/snapshot, one attempt and zero conflicts.
+The diagnostic is in m_fluid_source while the liquids suite constructs its keg/ale.
+The prompt is rolled back with the command. The first harness waits for that
+missing prompt, then recovers input with goto; it retains its partial-run failure
+and does not qualify full cleanup or normal account logout. The next harness
+is adjusted to detect timeout output directly, but its independent fresh-driver
+repeat instead passes **59/59**, followed by **59/59** quiet.
+
+A third fresh driver passes `unittest items`, `limbs`, `liquids`, `race` and
+`salvage` separately (**26/16/7/5/5**), then both combined modes at **59/59**.
+The two completed runs preserve preexisting prototypes and player/inventory/lab
+state, clear their observation marker and finish saves/logout/shutdown normally,
+with 151 clean preloads and no unexpected errors. The cold item command remains
+close to the budget. These runs are not a timing distribution or a reliable
+cold-combined guarantee; quiet-first cold execution is unmeasured. Cold here
+means target programs remain unloaded after startup and those observations;
+it does not mean no earlier compilation or an empty OS file cache.
+
+The operator recipe now uses those existing per-suite commands before combined
+testing. Native/LPC source, profile, deadline and binaries are unchanged; the
+whole-source inventory is not rerun. Evidence: /tmp/lima-cold-suites-20261018.
 
 #### Lima source coverage
 
