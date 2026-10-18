@@ -1031,6 +1031,30 @@ setup does not qualify cold-suite performance; other suites/all/all quiet and fu
 source counts retain their prior scope. Native/profile/binaries remain unchanged.
 Evidence: /tmp/lima-liquids-suite-20261017.
 
+#### Lima bundled race suite
+
+Reviewed **18 October 2026** at native **5e62be06**, dedicated Lima **23f6497e**,
+with the following source/notes edits pending. The [race suite][lima-race-suite-review]
+loads shared race blueprints. Its original teardown catches seven destruction
+refusals and reports **4/5**. The one-file adapter clears the suite's mapping and
+example selection; shared blueprints remain loaded. Race definitions, four content
+assertions, stat classes, framework and master policy remain unchanged.
+
+The real command now passes **5/5**; repeated cleanup succeeds. All seven blueprint
+identities and their existing clone groups remain, including the active human
+character. Inspection confirms no retained race references in the suite. Thirteen
+scoped proposal/control targets and the original suite compile pass.
+
+**21 inputs / 133.28s**, 151 clean preloads and normal saves/logout/shutdown pass,
+with no unexpected runtime error. The temporary shell identity marker is removed.
+Only the disposable suite source changes between normal fresh-suite loads; its
+tested bytes are adopted exactly afterward. The prior six fixtures/two loopback
+substitutions remain, with no new helper. Native/profile/binaries remain unchanged.
+Limbs, salvage, all/all quiet, cold-suite performance and full-source inventory
+retain their prior scope. Evidence: /tmp/lima-race-suite-20261018.
+
+[lima-race-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/race.c
+
 [lima-liquids-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/liquids.c
 
 [lima-special-weapon-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_special_weapon.c
