@@ -681,16 +681,37 @@ separate native tests for each. Distinct nil does not emulate FluffOS
 `undefinedp` metadata; mapping membership and omitted arguments still need
 the adaptations described below.
 
+#### Lima port readiness
+
+As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
+checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
+qualification notes are committed through Lima **6a99ff86** and native **962cd832**.
+The checkout's `README.lpc-rs.md` provides startup and prepared-test instructions.
+
+The configured fresh-account lifecycle has passed clean boot, native saves,
+fresh-process restart and saved login, with **151 clean preloads per boot** in
+the recorded lifecycle runs. Both actual shipped `unittest all` and
+`unittest all quiet` pass **59/59** in the separately prepared runtime. Their
+**42 individual loads** and loopback IMUD fixtures are part of that result;
+cold combined-suite execution and live I3 are not established by it. See the
+[combined qualification](#lima-combined-shipped-test-suites) and the
+[source inventory](#lima-source-coverage) for their distinct scopes.
+
+Original-driver saved-data/password import, alternate build options, unselected
+or optional sources and documented upstream defects retain separate decisions.
+The source inventory is not a completion percentage or a missing-feature count.
+
 #### Lima source coverage
 
-The dedicated-checkout inventory, refreshed **17 October 2026** at native
-**14d766dc** and Lima **9cddebfc**, checks all **1,182 `.c` files**:
-**994 compile, 188 fail, zero timeouts and crashes**, in **603.911 seconds**.
-All **985** preceding successes remain; **9 previous failures** now compile,
-with no added or removed targets. Gains cover debris, guild guard and its example,
-book and Lima guide, ladder, meat, pelt and climb challenge. Eleven library sources
-changed since the previous inventory; configuration and compiler/driver binary hashes
-match. This is a source status comparison, not a performance benchmark.
+The dedicated-checkout inventory, refreshed **18 October 2026** at native
+**45648cfb** and Lima **fb3ad0a9**, checks all **1,182 `.c` files**:
+**998 compile, 184 fail, zero regressions, timeouts or crashes**, in **245.587 seconds**.
+All **994** preceding successes remain, with no added or removed targets. The four
+gains are baseball_bat, rapier, special_longsword and aliasmenu. Fifteen library
+sources changed since the preceding inventory; headers, configuration and binary
+hashes match. This is a source status comparison, not a performance benchmark.
+The subsequent [stone/sword adaptation](#lima-on-demand-stone-and-sword-sample)
+has focused compilation/runtime evidence; these totals remain the measured sweep.
 
 Command counts remain player **65/67** (random2 deferred, suicide disabled upstream),
 wizard **81/81**, guild **4/4**, verbs **90/90**, transitional **49/49** and
@@ -705,18 +726,20 @@ Target constructors do not run in this sweep.
 | cmds | 240 | 2 |
 | contrib | 7 | 23 |
 | daemons | 49 | 13 |
-| domains | 345 | 16 |
-| obj | 60 | 12 |
+| domains | 348 | 13 |
+| obj | 61 | 11 |
 | secure | 37 | 14 |
 | std | 183 | 105 |
 | trans | 66 | 0 |
 
-That full sweep established **82 failed standalone fragments with passing complete
-hosts**. The focused classification below adds **28** reviewed compositions, giving
-**110 proofs** against the same 188-file failure set and **78 remaining review
-items**. No new complete-source recount or native-gap count is established.
-The original full sweep's **33** first diagnostic locations outside their target
-and **1049** reported error lines retain their scope and include secondary errors.
+Of the failed standalone files, **111 fragments have passing complete hosts**.
+The other **73** retain reviewed contexts: **14** unselected combat/statistics
+alternatives, **32** WWW/contrib/attic entries with activation unestablished,
+**two** deferred/upstream-disabled player commands, **one** optional web editor and
+**24** other carried consumer decisions. The last group includes the subsequently
+adapted stone/sword sample. No configured caller found is not proof of unreachability.
+The **32** first diagnostic locations outside their target and **1049** reported
+error lines include secondary errors rather than separate native gaps.
 
 The sweep uses at most two CLI processes, two Tokio workers each, 4 GiB/40s per
 file and the normal **4,000 ms** task budget. All **1,549** library-file hashes,
@@ -724,18 +747,10 @@ configuration and compiler binary remain unchanged during the run. Distinct nil,
 preserved call-out player and pinned original **eefaff66** remain. No target gameplay,
 upstream-driver execution or Rust gate is repeated. Prior **2367+10-input** full replay,
 room construction and subsequent focused runtime qualifications retain their measured
-scopes. Evidence: /tmp/lima-source-inventory-refresh-20261017; preceding inventory:
-/tmp/lima-source-inventory-20261017.
-
-The preceding inventory selected Rocky Beach's debris/rock dependency, subsequently
-adapted and qualified below. The digging interaction audit below covers the existing
-[dig verb][lima-dig-verb], Navigation Room's shovel and Sandy Beach's sand/hole path.
-Both rooms and their stock already have construction evidence; interaction remains
-separate. The exported HOLE is **/std/hole**, not the failing legacy duplicate under
-/domains/std/object/. Review explicit/inferred tools and targets, modal selection,
-hole growth and the quest milestone without repeating the room-construction audit.
-Completed equipment/parser/exit/framework/TCP/GC work and reserved native discussions
-stay separate; no mudlib source change is made by this inventory.
+scopes. Evidence: /tmp/lima-source-inventory-20261018; preceding inventory:
+/tmp/lima-source-inventory-refresh-20261017. The detailed dated audits below retain
+their original revisions, outcomes and limits; earlier pending-work statements are
+historical rather than a new instruction to repeat completed work.
 
 #### Lima remaining source classification
 
