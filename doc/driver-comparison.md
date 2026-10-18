@@ -1081,6 +1081,35 @@ remain, with no new helper or native/profile/binary change. Salvage, all/all qui
 cold-suite performance and full-source inventory retain their prior scope.
 Evidence: /tmp/lima-limbs-suite-20261018.
 
+#### Lima bundled salvage suite
+
+Reviewed **18 October 2026** at native **f87b40af**, dedicated Lima **c325475f**,
+with the following source/notes edits pending. The [salvage suite][lima-salvage-suite-review]
+uses a troll without a material pouch. Its one-file adapter tests actual sword
+absence, tracks newly created base-material clones around its command, and removes
+recorded outputs, inventory and actor through their own methods. Shared prototypes
+and preexisting clones are excluded; command errors propagate after output capture.
+The five cases/expected outcomes, framework, master and crafting code remain.
+
+The original reaches three passes/one failure before teardown is refused. Ownership-
+only completes **4/5**, leaving three material objects in this run. The final real
+command passes **5/5**. A fixed-yield control confirms refusal preserves the wielded
+sword with no output, then unwielded salvage removes it and produces two steel
+scraps. Natural/repeated cleanup removes both and preserves an unrelated wood scrap.
+The player's pouch and tracked player/lab/clone state return to baseline.
+
+Eleven scoped source targets compile, including a final-suite recompile; original
+and ownership-only checks pass. **34 inputs / 133.83s**, 151 clean preloads and normal
+saves/logout/shutdown pass without unexpected errors. Original residues and non-green
+control results remain explicit. Tested bytes are adopted exactly afterward; the
+prior six fixtures/two loopback substitutions remain, with no new helper or native/
+profile/binary change. All five shipped suites have individual results; all/all quiet
+needs combined qualification. No new yield-probability, arbitrary-recipe, player-pouch
+credit, cold-suite or full-source inventory claim. Evidence:
+/tmp/lima-salvage-suite-20261018.
+
+[lima-salvage-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/salvage.c
+
 [lima-limbs-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/limbs.c
 
 [lima-race-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/race.c
