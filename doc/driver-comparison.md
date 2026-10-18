@@ -780,10 +780,55 @@ rejects its inline function syntax at line 325, so this is a concrete shell path
 not an unused filename. The secure/cgi/webed wrapper also calls failing
 obj/secure/webed; no HTTP request or editor execution is claimed here. This review
 establishes no new native feature requirement. Evidence:
-/tmp/lima-compile-classification-20261017. Audit/adapt the alias source with normal
-shell/menu cases next, preserving the existing alias API and persistence.
+/tmp/lima-compile-classification-20261017. The audit below now reviews normal
+shell/menu cases through the existing alias API and persistence.
 
 [lima-alias-menu-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/aliasmenu.c
+
+#### Lima alias-menu audit
+
+Reviewed **17 October 2026** at native **393670c5**, dedicated Lima **62abf6b3**,
+with classification notes committed. The [menu][lima-alias-menu-review] proposal is
+one temporary source replacement; persistent mudlib/native sources stay unchanged.
+Replace the legacy inline-function body with a named helper, adapt callback/nil
+syntax and string defaults, and retain the exact menu handler across questions.
+Source review also identifies incorrect shortcut dispatch, zero-based labels for
+one-based selection and editing that cannot clear space omission. The proposal
+corrects those through the existing shell API, without a native syntax extension.
+
+Seven before/after compile targets change from four to five passes. The menu,
+class definition, complete player/wizard shells and user pass; isolated M_ALIAS and
+base SHELL retain expected missing-host-method rejections. No timeout/crash occurs.
+**83 first-session inputs + 13 restored inputs / 142.92s** complete in two separate
+native driver processes, both with 151 clean preloads and normal saves/logout/shutdown. Normal
+inputs exercise menus, selection, defaults, editing/removal and argument/xverb
+expansion. Custom class records and xverb flags match exactly across authentic
+saved-account login/restart, and restored cleanup succeeds. This is native execution
+and pinned source review, without an upstream-driver execution claim.
+
+Two findings remain unresolved and are asserted in the final audit:
+
+- [Body quit][lima-body-quit-review] blindly pops the top handler on !quit during
+  editing. The pending alias is not saved and aliases/stack depth match after
+  re-entry, but one editor clone survives. The menu does not receive cancellation;
+  correct notification in a separate focused source patch.
+- [M_ALIAS][lima-alias-module-review] contains an obsolete positional-class migration
+  based on sizeof(expansion) != 4. Native [`sizeof`](efun/sizeof.md) returns zero for
+  classes, so this always resets global_alias_status to zero and saves daemon
+  defaults as personal overrides. Source, saved colors and restored runtime confirm
+  the transition from global status 1 to personal status 0. Remove that migration while
+  retaining the nominal class and existing save filter; no class reflection is needed.
+
+Audit success records matching observations, not a clean alias lifecycle result.
+Next adopt the menu adapter with the migration removal, then fix quit notification.
+Same distinct-nil/preserved-player/4000ms profile, binaries, six fixtures and two
+existing loopback address substitutions. Pagination, optional limits, exhaustive
+global administration and player-shell runtime are unqualified here. No full-source
+recount, new Rust gate or closed quest/equipment/TCP/GC work is included. Evidence:
+/tmp/lima-alias-menu-audit-20261017.
+
+[lima-alias-module-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/alias.c
+[lima-body-quit-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body.c
 
 [lima-dig-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/dig.c
 [lima-rocky-beach]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Rocky_Beach.c
