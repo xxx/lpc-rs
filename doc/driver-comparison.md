@@ -2521,35 +2521,32 @@ shared-readable/book/master/configuration or fixture edit. The previous temporar
 order-control audit remains /tmp/lima-command-routing-audit-20261017. Prior full
 replay/source-inventory scopes remain.
 
-Read/turn source and notes are committed as Lima **d234149d**, native **b47b39ed**.
-The next bounded audit covers [std/pelt.c][lima-pelt] and its existing loot-daemon
-consumer. Three of four complete targets compile; pelt fails its integer argument
-to float set_mass. A disposable copy with only explicit float conversion compiles.
-**41 audit inputs**, **151 clean preloads** and normal RST/saves/logout/shutdown
-complete in **139.32s**. This is diagnostic qualification, not a production fix.
-Dedicated source is unchanged. Evidence: /tmp/lima-pelt-audit-20261017.
+Pelt audit notes are committed as Lima **a99a39c1**, native **2023c7af**. Only
+[std/pelt.c][lima-pelt] now changes: explicit float constructor mass, initialization
+of pelt_size, direct inherited save registration, a nil-type guard for no-argument
+clones, saved current mass and type-ID rebuilding during load. The size
+assignment repairs the original constructor's zero salvage level. Existing
+constructor mass=s and setter mass=0.5*s scales remain. Original-source review is
+pinned to eefaff66, 17 October 2026, active USE_MASS/EVERYTHING_SAVES; no upstream
+execution comparison is claimed.
 
-With that single control, ordinary look/get/drop and actual loot-daemon corpse
-placement/collection work. Generic textile/pelt/skin IDs remain. A size-six
-constructor produces mass 6.0 but pelt_size/salvage level zero; normal salvage removes
-it and yields nothing. set_pelt_size(8) instead sets size/level eight and mass 4.0.
-The constructor's missing field assignment is present in unchanged pinned Lima
-source, reviewed 17 October 2026; no upstream execution comparison is claimed.
+**Four complete targets compile**. **55 production inputs**, **151 clean preloads**
+and normal RST/account/body saves/logout/shutdown pass in **139.90s**, with no
+diagnostic source/hook control or expected runtime failure. Generic pelt IDs and
+ordinary look/get/drop work. Size/type and a custom mass of **7.25** survive saving,
+loading a no-argument clone, type-ID rebuilding during load and actual recursive
+M_SAVE inventory restoration. Zero-size command salvage removes the pelt and yields
+nothing;
+positive-size salvage exercises the real crafting path and checks result bounds,
+without a fixed-yield or probability assertion. Loot creates a level-one pelt with
+size/salvage level one inside its real corpse; ordinary collection and cleanup pass.
 
-Persistence also fails: this_object()->add_save cannot reach the protected helper,
-so the save contains only #base_name#. Loading it into another typed clone
-leaves that clone unchanged. No-argument cloning, required by M_SAVE inventory
-restoration, fails while the absent type reaches ID grammar; this caught failure is
-expected audit evidence, separate from clean preloads. Native self call_other uses
-public methods only; existing implementation/test sources were reviewed, not rerun.
-
-Recommend a one-file pelt adapter: explicit float mass, initialize the size field,
-call inherited add_save directly, allow no-argument restoration clones, persist the
-current mass and rebuild the type ID after restoration. Preserve existing constructor
-mass=s and setter mass=0.5*s scales, shared save/object/crafting/loot behavior and
-native visibility. Two incomplete attempts retain an incorrect save expectation and
-a harness cleanup race; the final run waits for the corpse's deferred registration
-before removal. No native/configuration/fixture change or full replay/source recount.
+Evidence: /tmp/lima-pelt-20261017. Shared object/save/crafting/loot/corpse code,
+native policy, configuration and fixtures remain unchanged. No fresh-driver pelt
+restore, alternate-size build, full combat/death or random-distribution claim.
+The earlier 41-input diagnostic audit and its two incomplete attempts remain at
+/tmp/lima-pelt-audit-20261017. Prior whole inventory/full replay counts retain scope.
+Next audit std/meat.c, the loot daemon's other unported corpse product.
 
 [lima-pelt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/pelt.c
 [lima-read-verb-order]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/read.c
