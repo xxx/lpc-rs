@@ -737,6 +737,36 @@ The operator recipe now uses those existing per-suite commands before combined
 testing. Native/LPC source, profile, deadline and binaries are unchanged; the
 whole-source inventory is not rerun. Evidence: /tmp/lima-cold-suites-20261018.
 
+#### Lima parameter-default positions and colour helpers
+
+Reviewed **18 October 2026** at native **9f1fc65e**, dedicated Lima **c0ae3baf**.
+The upstream [colour-helper declarations][lima-xterm] have no explicit defaults;
+an earlier port added a text default before the mode parameter. The native driver
+currently accepts defaults followed by non-default fixed parameters, although its
+argument-count checks and initialization table assume a trailing block of defaults.
+Omitting a later parameter can therefore overwrite an earlier supplied value and
+run its default expression unnecessarily. Thirty isolated distinct-nil observations
+reproduce eleven supplied-value/side-effect mismatches across named, pointer,
+cross-object, closure and collector calls; trailing-default controls work.
+
+Lima's room-chat declaration already defaults both interval and chance. The two
+remaining identified colour declarations now explicitly default mode to an empty
+string as well. This preserves the existing plain fallback when mode is omitted.
+Two actual administrator sessions exercise **58 cases each**: six lost-text cases
+in the original are corrected by the tested adapter; explicit modes, empty/nil
+mode, no arguments and empty text retain their results. Player, colour settings
+and daemon identity remain unchanged, and both runs finish normal saves/logout/
+shutdown with **151 clean preloads** and no unexpected errors. Six complete
+source targets compile; tested runtime/compile bytes are adopted exactly.
+
+Only two parameter defaults change in xterm256_d. The native compiler defect
+remains open; keep defaults trailing in port declarations while its contract is
+resolved. The lexical corpus review identifies these two declarations but skips
+three unbalanced source files, so it is not an exhaustive compiler inventory.
+The initial CLI receiver/policy failures and unescaped-colour observer failure
+remain separate failed controls. No profile/binary change or whole-source recount
+is made. Evidence: /tmp/lima-parameter-defaults-20261018.
+
 #### Lima source coverage
 
 The dedicated-checkout inventory, refreshed **18 October 2026** at native
