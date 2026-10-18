@@ -2702,6 +2702,56 @@ No Rust gate, whole-source inventory or room-construction audit is repeated. Evi
 then audit Navigation Room's button, linked secret doors and remaining pirate
 milestone integration.
 
+#### Lima pirate passage timer audit
+
+Reviewed **17 October 2026** at native **76052e17** and dedicated Lima **133993b7**.
+The digging repair is committed. Distinct nil, preserved call-out player and
+**4,000 ms** remain. This audit changes no dedicated source or native API.
+
+All **ten complete targets compile**. The unchanged [button][lima-pirate-button]
+opens the paired walls and permits both travel directions, but the
+[rock wall][lima-pirate-rock-wall] schedules a call to nonexistent close(). Both
+press and push leave the pair open/visible beyond eight seconds. The
+[dock wall][lima-pirate-dock-wall] uses do_close and naturally closes/hides both;
+this isolates the remaining problem to the example's callback name. The original
+run completes 70 inputs in 133.80s, with two
+recorded timer findings and explicit public-method close resets for cleanup.
+
+The **one-line temporary proposal** schedules bare do_close, retaining eight
+seconds. **67 proposal inputs** pass in **134.05s** with real native
+0/1/8-second scheduling, **151 clean preloads** and normal scan/account/body
+saves/logout/shutdown. Both wall states, visibility, peer lookup and real movement
+stay synchronized. Closed-direction refusals, readable inscription, attached-button
+refusal, press/push, already-open behavior and river triggering pass. No direct
+callback advancement or manual close reset is used by the passing proposal.
+
+Focused ordinary gameplay earns **begin: 10 points/100 XP**, **secretPsg: 15/150**,
+and **end: 25/250**, with no injected quest state or changed reward policy. Repeating
+an already-open river action or digging after completion adds no reward. The
+run ends with earned progress and normal saves; restart restoration is not tested.
+Light/path/inventory/loose props are cleaned up, the table reset is requested and
+both walls finish closed. Six existing fixtures and two loopback-address substitutions remain.
+Only rock_wall.c is replaced in the proposal runtime.
+
+The earlier **7 October** six-test cave batch already qualified the continuous
+cave route and quest completion. Its selected object/body sources still match;
+quest_d differs only in the previously adapted quest_exists boolean result. That
+historical route is retained, not rerun or counted as new coverage. Current checks
+use controlled room placement plus actual ocean/river/passage/digging input. The
+obsolete Small_Dock constructor destination is ignored by the current setup chain;
+actual reciprocal destinations resolve correctly, so no path repair is proposed.
+
+This is pinned source review and native execution, with no upstream-driver run,
+Rust gate, full inventory, room-construction or generic door-framework rerun.
+Evidence and proposal.patch: /tmp/lima-pirate-passage-audit-20261017. Recommend
+adopting the one-line callback fix with retained replay. Then verify saved quest
+state after restart; the existing missing treasure-chest construction remains
+outside this timer repair.
+
+[lima-pirate-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/navigation_button.c
+[lima-pirate-rock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/rock_wall.c
+[lima-pirate-dock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/dock_wall.c
+
 [lima-digger-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_digger.c
 [lima-diggable-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_diggable.c
 
