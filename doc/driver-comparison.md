@@ -2748,6 +2748,30 @@ adopting the one-line callback fix with retained replay. Then verify saved quest
 state after restart; the existing missing treasure-chest construction remains
 outside this timer repair.
 
+#### Lima pirate passage timer repair
+
+Adopted **17 October 2026** at native **d8f2b752**, dedicated Lima **8eacce39**,
+with the source change pending commit. Only
+[rock_wall.c][lima-pirate-rock-wall] changes: its eight-second callback is now
+bare do_close, matching the reviewed one-line proposal and the dock-side method.
+Delay, messages, linked-door behavior and quest rules are preserved.
+
+**Ten complete compile targets pass**. **67 retained production inputs** pass in
+**135.85s**, with **151 clean preloads**, normal scan/account/body saves,
+logout and shutdown. All input lines and observed states match the proposal run.
+Both press/push timers naturally close and hide both doors; no proposal source
+override, manual callback advancement or close reset is used. Actual passage
+movement, refusals and ordinary quest actions retain their checked behavior.
+The character finishes with 25 points/250 XP; normal saves complete, while
+fresh-process quest restoration remains untested. Cleanup and scope match the audit.
+
+Six existing fixtures, two loopback-address substitutions and distinct nil/preserved
+player/4,000 ms remain. Native source, configuration, binaries and original checkout
+stay unchanged; no Rust gate, source sweep, generic door or continuous-cave-route
+rerun. Evidence: /tmp/lima-pirate-passage-20261017; prior audit remains frozen at
+/tmp/lima-pirate-passage-audit-20261017. Commit this repair, then verify completed
+quest state and points/XP through saved login/restart.
+
 [lima-pirate-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/navigation_button.c
 [lima-pirate-rock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/rock_wall.c
 [lima-pirate-dock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/dock_wall.c
