@@ -75,6 +75,30 @@ In [partial application](function_type.md), `&f(1,)` still leaves an unbound
 argument slot after the bound `1`; it constructs a function value rather than
 calling `f`.
 
+## Parameter defaults
+
+Fixed parameters can declare values to use when their arguments are omitted:
+
+```c
+int total(int first, int second = 2, int third = 3) {
+    return first + second + third;
+}
+```
+
+Defaults must form a trailing block: once a fixed parameter has a default,
+every later fixed parameter must also have one. This applies to function
+definitions, including `varargs` functions, and to declared closure parameters.
+For example, `void f(int first = 1, int second) {}` is a compile error.
+
+A final [variadic collector](variadic_parameters.md) or bare `...` can follow
+defaulted fixed parameters; it is separate from that block and has no default.
+`varargs` can still omit fixed parameters before the block, using their usual
+typed defaults.
+
+An explicit `0` or `nil` is a supplied argument and does not request the declared
+default; the usual type checks apply. Default expressions run only for omitted
+arguments.
+
 ## Function prototypes
 
 Functions can be called before their definition, so prototypes are unnecessary.

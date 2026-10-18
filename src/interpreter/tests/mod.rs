@@ -14,6 +14,7 @@ mod inheritance;
 mod loading;
 mod named_variadic;
 mod nosave;
+mod parameter_defaults;
 mod parse_command;
 mod parse_string;
 mod parser;

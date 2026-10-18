@@ -37,6 +37,22 @@ impl FunctionPrototypeWalker {
             max_closure_arg_reference: 0,
         }
     }
+
+    fn check_trailing_defaults(parameters: &[VarInitNode]) -> Result<()> {
+        for pair in parameters.windows(2) {
+            let previous = &pair[0];
+            let parameter = &pair[1];
+            if previous.value.is_some() && parameter.value.is_none() {
+                return Err(lpc_error!(
+                    parameter.span,
+                    "parameter `{}` must have a default value because it follows a defaulted parameter",
+                    parameter.name
+                )
+                .with_label("defaulted parameter declared here", previous.span));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl ContextHolder for FunctionPrototypeWalker {
@@ -59,6 +75,10 @@ impl Pass for FunctionPrototypeWalker {
 #[async_trait]
 impl TreeWalker for FunctionPrototypeWalker {
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+        if let Some(parameters) = &node.parameters {
+            Self::check_trailing_defaults(parameters)?;
+        }
+
         // `$N` names a position in the innermost closure only.
         let enclosing_max = std::mem::replace(&mut self.max_closure_arg_reference, 0);
 
@@ -128,6 +148,8 @@ impl TreeWalker for FunctionPrototypeWalker {
     }
 
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+        Self::check_trailing_defaults(&node.parameters)?;
+
         let proto_opt = self
             .context
             .lookup_function_complete(node.name, &CallNamespace::default());

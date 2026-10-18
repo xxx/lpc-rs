@@ -59,6 +59,10 @@ collector, while nested arrays, mappings, and objects keep their identities.
 
 ## Argument counts and defaults
 
+Fixed parameters follow the [default ordering rule](anatomy_of_a_program.md#parameter-defaults).
+The collector can follow defaulted fixed parameters because it is not itself
+a fixed parameter.
+
 Named collectors retain the same call rules as the bare `...` form:
 
 - Direct and simul-efun calls require the fixed parameters, except those with

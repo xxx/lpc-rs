@@ -767,6 +767,34 @@ The initial CLI receiver/policy failures and unescaped-colour observer failure
 remain separate failed controls. No profile/binary change or whole-source recount
 is made. Evidence: /tmp/lima-parameter-defaults-20261018.
 
+#### Lima trailing-default validation
+
+Following the parameter-position audit, fixed defaults now follow the
+[native trailing-default rule](lpc/anatomy_of_a_program.md#parameter-defaults).
+A later fixed parameter without a default is a compile error, including in
+`varargs` functions and declared closures. The diagnostic marks that parameter
+and labels the preceding default. A final named collector or bare `...` remains
+separate and can follow defaulted fixed parameters. The VM's argument initialization
+and call metadata are unchanged.
+
+Lima's committed room-chat and colour-helper declarations already obey this rule.
+Nine new compiler/runtime tests cover rejection, nested closures, collectors,
+omission, explicit zero and default-expression side effects. All five rejection
+tests reproduce the earlier acceptance before the guard is added; all nine pass
+with it. Workspace build, the serial workspace suite, warning-free Clippy across
+all targets and formatting pass. The first two-thread suite run misses a warning
+in an existing command-retry logging test; that test passes in isolation and in
+the serial run without changes.
+
+The rebuilt debug CLI compiles nine complete Lima targets, including all three
+school room-chat examples and the colour consumers, and rejects two invalid
+function/closure declarations with both diagnostic labels.
+
+The earlier 58-case colour-session result retains its own scope. This validation
+does not repeat gameplay or the whole-source inventory. Distinct nil, preserved
+call-out player, 4000ms and the dedicated Lima sources remain unchanged.
+Evidence: /tmp/lima-trailing-defaults-20261018.
+
 #### Lima source coverage
 
 The dedicated-checkout inventory, refreshed **18 October 2026** at native
