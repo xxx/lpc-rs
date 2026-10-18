@@ -683,20 +683,21 @@ the adaptations described below.
 
 #### Lima source coverage
 
-The current dedicated-checkout inventory, reviewed **17 October 2026** against
-native **1ffebc70** and Lima **6f755146**, checks all **1,182 `.c` files**:
-**985 compile, 197 fail, zero timeouts and crashes**, in **241.316 seconds**.
-All **966** successes from the preceding inventory remain; **19 previous failures**
-now compile, with no added or removed targets. Gains cover consumables/slowheal,
-camera and paper, mailbox/workroom/container examples, weather and loot generation.
-This is a fresh enumeration, not an arithmetic estimate or completion percentage.
+The dedicated-checkout inventory, refreshed **17 October 2026** at native
+**14d766dc** and Lima **9cddebfc**, checks all **1,182 `.c` files**:
+**994 compile, 188 fail, zero timeouts and crashes**, in **603.911 seconds**.
+All **985** preceding successes remain; **9 previous failures** now compile,
+with no added or removed targets. Gains cover debris, guild guard and its example,
+book and Lima guide, ladder, meat, pelt and climb challenge. Eleven library sources
+changed since the previous inventory; configuration and compiler/driver binary hashes
+match. This is a source status comparison, not a performance benchmark.
 
-Player commands remain **65/67** (random2 deferred, suicide disabled upstream),
+Command counts remain player **65/67** (random2 deferred, suicide disabled upstream),
 wizard **81/81**, guild **4/4**, verbs **90/90**, transitional **49/49** and
 administrator **9/9**. All **17** tracked core objects, **88** school sources,
 **34** standard-room sources, **22** junk examples, **22** std/classes files,
-**eight** Pinto examples, **25** bundled guild sources and **18** consumable
-examples compile. Target constructors do not run in this sweep.
+**eight** Pinto examples, **25** guild sources and **18** consumable examples compile.
+Target constructors do not run in this sweep.
 
 | Source family | Compile | Fail |
 |---|---:|---:|
@@ -704,42 +705,44 @@ examples compile. Target constructors do not run in this sweep.
 | cmds | 240 | 2 |
 | contrib | 7 | 23 |
 | daemons | 49 | 13 |
-| domains | 342 | 19 |
+| domains | 345 | 16 |
 | obj | 60 | 12 |
 | secure | 37 | 14 |
-| std | 177 | 111 |
+| std | 183 | 105 |
 | trans | 66 | 0 |
 
-**62 failed standalone fragments have passing complete hosts**. All 61 previous
-reviews retain fresh host passes. The changed gettable module still obtains its
-hooks through OBJ, directly in the panel and through PARAM_OBJ in the button.
-The new writing-surface classification is established by paper's direct
-M_WRITING_SURFACE/OBJ composition and the object hook provider. The other
-**135 failures** include unreviewed host parts, optional/legacy code and adapters;
-they are not 135 established complete-object bugs or missing native features.
-The remaining first diagnostics and sources match the preceding inventory.
-Thirty-five first diagnostics point outside their checked target; the logs contain
-1,062 error lines including secondary diagnostics, not 1,062 feature requirements.
+**82 failed standalone fragments have reviewed passing complete hosts**.
+All **62** carried proofs retain unchanged fragment/host/header/configuration inputs
+and fresh host passes. **20** additional reviews establish the object, container,
+room, body, light, food/drink, decay, salvage, complex-exit and digging compositions.
+For example, shovel and sand obtain their modal methods from M_INPUT; these isolated
+module failures do not prevent either complete object compiling. The other
+**106 failures** include unreviewed host parts, optional/legacy sources and source
+adapters; they are not 106 established native gaps. Remaining first diagnostic
+messages and source locations match the preceding inventory. There are
+**33** first locations outside the checked target
+and **1049** reported error lines, including secondary diagnostics.
 
 The sweep uses at most two CLI processes, two Tokio workers each, 4 GiB/40s per
-file and the normal **4,000 ms** task budget. Source, configuration and binary
-hashes are guarded unchanged during the run. The current binary hashes differ
-from the previous inventory, so this comparison does not isolate source edits or
-measure their performance. Distinct nil, preserved call-out player and pinned
-original **eefaff66** remain. No upstream driver, target gameplay or Rust gate
-is run here; prior full replay and the **345-input** generator run retain their
-scopes. The source set and all 1,549 library files remain unchanged by the sweep.
+file and the normal **4,000 ms** task budget. All **1,549** library-file hashes,
+configuration and compiler binary remain unchanged during the run. Distinct nil,
+preserved call-out player and pinned original **eefaff66** remain. No target gameplay,
+upstream-driver execution or Rust gate is repeated. Prior **2367+10-input** full replay,
+room construction and subsequent focused runtime qualifications retain their measured
+scopes. Evidence: /tmp/lima-source-inventory-refresh-20261017; preceding inventory:
+/tmp/lima-source-inventory-20261017.
 
-This inventory selected [Rocky Beach][lima-rocky-beach] and its [debris][lima-beach-debris]
-consumer, the generated rock, ocean and Outside_Cave return context. At that
-checkpoint, the room compiled but its debris failed the integer mass argument
-to the float setter; four of the five sources compiled. Actual construction,
-attached pickup, rock creation and reset required runtime review. The subsequent
-repair and gameplay qualification are recorded below. Keep completed equipment,
-parser/exit/framework/TCP/GC work and reserved native discussions separate.
-Evidence: /tmp/lima-source-inventory-20261017. Earlier dated inventories remain
-in their frozen packets; implementation reports below retain their original scopes.
+The preceding inventory selected Rocky Beach's debris/rock dependency, subsequently
+adapted and qualified below. The next bounded gameplay audit is the existing
+[dig verb][lima-dig-verb], Navigation Room's shovel and Sandy Beach's sand/hole path.
+Both rooms and their stock already have construction evidence; interaction remains
+separate. The exported HOLE is **/std/hole**, not the failing legacy duplicate under
+/domains/std/object/. Review explicit/inferred tools and targets, modal selection,
+hole growth and the quest milestone without repeating the room-construction audit.
+Completed equipment/parser/exit/framework/TCP/GC work and reserved native discussions
+stay separate; no mudlib source change is made by this inventory.
 
+[lima-dig-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/dig.c
 [lima-rocky-beach]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Rocky_Beach.c
 [lima-beach-debris]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/debris.c
 
@@ -2623,7 +2626,7 @@ qualify parsed go-object travel or change that verb. Shared health/skill/stats/
 navigation, native policy, configuration and fixtures stay. Evidence:
 /tmp/lima-climb-challenge-20261017; prior audit /tmp/lima-climb-challenge-audit-20261017.
 No injury redesign, random-distribution, alternate-build or full replay claim.
-Next refresh whole-source compile coverage after this group of adapters, retaining
+The refreshed whole-source coverage is recorded above, retaining
 prior host classifications and completed functional scopes before choosing another
 concrete port blocker.
 
