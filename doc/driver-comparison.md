@@ -2674,6 +2674,34 @@ caller changes with the retained replay before auditing Navigation Room's button
 secret-door pair and the remaining pirate milestone chain. Native/shared source,
 configuration, binaries, original checkout and completed scopes remain unchanged.
 
+#### Lima digging prompt repair
+
+Adopted **17 October 2026** at native **842fd5ed** and dedicated Lima **1ef5c2bb**,
+with the two-file implementation pending commit. Only
+[std/modules/m_digger.c][lima-digger-module] and
+[std/modules/m_diggable.c][lima-diggable-module] change, byte-for-byte matching the
+reviewed one-shot proposal. Existing modal_simple() removes the selection handler
+before its callback runs; forwarding through this_user()->modal_pass(input) leaves
+new prompts intact. No handler fields, explicit pops or framework API are added.
+
+**All eight complete targets compile**. The retained **84 production inputs** pass
+in **136.42s**, with **151 clean preloads**, normal documentation scan,
+account/body saves, logout and shutdown. Every input line and observed state matches
+the successful proposal run, now against the dedicated source with **no proposal
+source overrides**. Both nested handoff directions, repeated requests on the same
+object, ordinary selections/pass-through, digging forms, hole stages and refusal
+paths pass. Light, stock, props, inventory, path and unchanged quest/XP/score restore;
+no handler-recovery command is used. Six existing fixtures and the two established
+loopback-address substitutions remain.
+
+The negative quest guard retains its measured scope. No chest is invented, positive
+quest reward remains unqualified, and the unused tool argument is unchanged. Native
+source, configuration, binaries, original checkout and closed gameplay scopes stay.
+No Rust gate, whole-source inventory or room-construction audit is repeated. Evidence:
+/tmp/lima-digging-20261017; prior /tmp/lima-digging-audit-20261017. Commit this adoption,
+then audit Navigation Room's button, linked secret doors and remaining pirate
+milestone integration.
+
 [lima-digger-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_digger.c
 [lima-diggable-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_diggable.c
 
