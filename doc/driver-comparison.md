@@ -2772,9 +2772,40 @@ rerun. Evidence: /tmp/lima-pirate-passage-20261017; prior audit remains frozen a
 /tmp/lima-pirate-passage-audit-20261017. Commit this repair, then verify completed
 quest state and points/XP through saved login/restart.
 
+#### Lima completed quest restoration
+
+Verified **17 October 2026** at native **62a4b21e**, dedicated Lima **a4ef8318**.
+The passage timer repair is committed. **27 earning/save inputs plus eight restored
+inputs** pass in **137.36s** across **two separate driver processes**, each with
+**151 clean preloads**, normal menu login, logout and shutdown. No source change,
+new fixture, injected quest state or edited save file is needed.
+
+Ordinary ocean/river/digging actions prepare the character. Explicit save at
+secretPsg writes **15 points/150 XP**; completion writes end and **25/250**. Nine
+archived body-save checkpoints check the exact quests, points and private inherited
+experience fields through save, logout, restart, entry, display and re-save. The
+completed body file remains byte-identical from first shutdown through authentication, before
+play selection. The new body then matches every selected runtime
+field, including the complete quest mapping, finished status, identity, link,
+points/XP, empty inventory, light and location. Quests displays Finished and score
+shows 250 XP; read-only display and another save leave the progress intact.
+
+The full composition saves more eagerly than an earlier reading of the quest
+module suggested: update_quest has no direct save call, but its XP award invokes
+add_experience, which saves a linked body. Completion is already on disk before
+logout in this run. This corrects the description of existing behavior and changes
+no save or reward policy.
+
+The earlier continuous cave-route and passage-timer qualifications are retained;
+earning here is setup for restoration, not another route audit. The first normal
+RST scan completes and its saved watermark is retained for restart. Same six
+fixtures, two loopback-address substitutions and distinct-nil/preserved-player/
+4,000 ms configuration remain. No Rust gate or source sweep is repeated. Evidence:
+/tmp/lima-quest-restoration-20261017. Completed pirate quest/passage work is closed;
+next review the remaining classified source failures through complete hosts and
+actual consumer references. Chest construction remains an existing source omission.
+
 [lima-pirate-button]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/navigation_button.c
-[lima-pirate-rock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/rock_wall.c
-[lima-pirate-dock-wall]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/dock_wall.c
 
 [lima-digger-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_digger.c
 [lima-diggable-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_diggable.c
