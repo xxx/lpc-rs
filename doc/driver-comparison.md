@@ -685,16 +685,16 @@ the adaptations described below.
 
 As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **a1984c30** and native **0e87ead9**.
-The checkout's `README.lpc-rs.md` provides startup and prepared-test instructions.
+qualification notes are committed through Lima **b5580f53** and native **cae3c8cd**.
+The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
-The configured fresh-account lifecycle has passed clean boot, native saves,
-fresh-process restart and saved login, with **151 clean preloads per boot** in
-the recorded lifecycle runs. Both actual shipped `unittest all` and
-`unittest all quiet` pass **59/59**. The original prepared run loaded 42 programs
-individually; a subsequent fresh-driver run passes the five per-suite commands
-and both combined modes with **zero manual loads**. Direct cold combined execution
-has both a pass and a timeout under the unchanged 4000ms deadline. See the
+The rebuilt release driver passes the configured fresh-account lifecycle,
+native saves, fresh-process restart and saved login, with **151 clean preloads
+per boot**. All five shipped test commands pass separately, followed by
+`unittest all` and `unittest all quiet` at **59/59**, with **zero manual loads**.
+See the [release lifecycle qualification](#lima-release-lifecycle-qualification).
+The original prepared run loaded 42 programs individually. Direct cold combined
+execution has both a pass and a timeout under the unchanged 4000ms deadline. See the
 [cold command audit](#lima-cold-shipped-test-commands), original
 [combined qualification](#lima-combined-shipped-test-suites) and
 [source inventory](#lima-source-coverage) for their distinct scopes. Runtime
@@ -703,6 +703,33 @@ qualifications use loopback IMUD fixtures; live I3 remains separate.
 Original-driver saved-data/password import, alternate build options, unselected
 or optional sources and documented upstream defects retain separate decisions.
 The source inventory is not a completion percentage or a missing-feature count.
+
+#### Lima release lifecycle qualification
+
+Reviewed **18 October 2026** at native **cae3c8cd**, dedicated Lima **b5580f53**,
+using the rebuilt release driver and unchanged distinct-nil, preserved-player,
+4000ms profile. Two fresh processes pass **30 lifecycle checks** in **136.6s**:
+normal first-administrator account/character creation, Grand Hall entry, commands,
+native saves, password authentication after restart, restored character and
+ordinary logout. Both boots have **151 clean preloads** and exit normally on
+SIGTERM. The first documentation scan completes and saves before shutdown.
+
+The five real suite commands pass **26/16/7/5/5**, followed by both combined
+modes at **59 successes, zero failures**. No manual program loads or added LPC
+fixtures are used. Observations verify preexisting prototype identity, player,
+inventory and laboratory cleanup after each command; quiet output contains only
+aggregate results and the prompt. Saved login restores the user, character name,
+body program, race, room, empty inventory and material pouch; the observation
+marker is absent. The driver reports no runtime errors or preload failures;
+the earlier channel compiler warnings and five autodoc header warnings remain.
+
+All 1549 source files, the profile and five recorded binaries are unchanged.
+Runtime copies use only the existing loopback router/OOB substitutions and fixed
+mudlist/chanlist fixture; live services and original-driver save import are not
+qualified. The suite sequence uses 19 focused shell inputs plus one identity
+observation after restart. This refresh adds no native or mudlib source changes
+and does not establish cold combined-test reliability or mortal-only behavior.
+Evidence: /tmp/lima-release-lifecycle-20261018.
 
 #### Lima cold shipped-test commands
 
