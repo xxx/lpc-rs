@@ -848,10 +848,37 @@ supplied zero-status defaults. Restored global flags stay 1/2 rather than becomi
 No alias proposal override is used at runtime. The same six fixtures and two
 existing loopback address substitutions remain; source/config/binary hashes are
 guarded. The sole remaining finding is !quit's unnotified pop leaving one editor
-clone, still asserted and reserved for the focused body quit patch. This does not
-qualify cancellation cleanup, exhaustive global administration, player-shell runtime,
+clone, still asserted in that replay. The focused body quit cleanup below resolves
+it. That replay does not qualify cancellation cleanup, exhaustive global administration,
+player-shell runtime,
 pagination or optional limits. No whole-source count, Rust gate, native change or
 closed quest/equipment/TCP/GC scope is added. Evidence: /tmp/lima-alias-menu-20261017.
+
+#### Lima body quit input cleanup
+
+Reviewed **17 October 2026** at native **0ad959a1**, dedicated Lima **bcd959bf**,
+with two LPC sources and notes pending. Alias menu/persistence adaptations are
+committed at those revisions. Body quit now calls the user's current-body-only
+cancel_body_input entry point, which reuses the existing clear_input_stack loop.
+Each handler is removed before receiving -1, allowing editors to clean up without
+popping parents. The shell saves/removes itself; a new shell restores its data on
+re-entry. Only secure/user.c and std/body.c change; ordinary modal completion and the input system
+implementation remain. No native API, format, alias policy or supplied data changes.
+
+**8/8 scoped compile targets and 92+13 runtime inputs / 154.16s** pass, with
+two distinct driver processes, 151 clean preloads each and normal save/login/logout/
+shutdown. Pending and two nested alias editors are destroyed; repeated quit/re-entry
+has one shell handler and preserves existing aliases/defaults/xverbs/global flags.
+Custom class records and global flags 1/2 survive real restart. Six saved-shell
+checkpoints retain the alias filter. The existing cancellation-error log and normal
+runtime/dispatch/preload logs show no caught error. The known alias quit leak is closed.
+
+Same configured Lima profile, binaries, six fixtures and two existing loopback
+address substitutions, without proposal source overrides. No exhaustive handler,
+player-shell runtime, unrelated body-switch/reconnect, alternate-profile, whole-source
+or Rust-gate claim is added. Evidence: /tmp/lima-quit-input-20261017. Return to the
+classified source consumers; secure/cgi/webed's webed call remains an identified
+source/activation review. Completed equipment/quest/TCP/GC scope stays closed.
 
 [lima-alias-module-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/alias.c
 [lima-body-quit-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body.c
