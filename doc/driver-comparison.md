@@ -2519,9 +2519,39 @@ Valid trailing turns work and refusals preserve state. This remaining diagnostic
 edge is documented; native selection policy is unchanged. No native/parser,
 shared-readable/book/master/configuration or fixture edit. The previous temporary
 order-control audit remains /tmp/lima-command-routing-audit-20261017. Prior full
-replay/source-inventory scopes remain. Next audit std/pelt.c construction and its
-loot-daemon consumer, an unported source in the retained inventory.
+replay/source-inventory scopes remain.
 
+Read/turn source and notes are committed as Lima **d234149d**, native **b47b39ed**.
+The next bounded audit covers [std/pelt.c][lima-pelt] and its existing loot-daemon
+consumer. Three of four complete targets compile; pelt fails its integer argument
+to float set_mass. A disposable copy with only explicit float conversion compiles.
+**41 audit inputs**, **151 clean preloads** and normal RST/saves/logout/shutdown
+complete in **139.32s**. This is diagnostic qualification, not a production fix.
+Dedicated source is unchanged. Evidence: /tmp/lima-pelt-audit-20261017.
+
+With that single control, ordinary look/get/drop and actual loot-daemon corpse
+placement/collection work. Generic textile/pelt/skin IDs remain. A size-six
+constructor produces mass 6.0 but pelt_size/salvage level zero; normal salvage removes
+it and yields nothing. set_pelt_size(8) instead sets size/level eight and mass 4.0.
+The constructor's missing field assignment is present in unchanged pinned Lima
+source, reviewed 17 October 2026; no upstream execution comparison is claimed.
+
+Persistence also fails: this_object()->add_save cannot reach the protected helper,
+so the save contains only #base_name#. Loading it into another typed clone
+leaves that clone unchanged. No-argument cloning, required by M_SAVE inventory
+restoration, fails while the absent type reaches ID grammar; this caught failure is
+expected audit evidence, separate from clean preloads. Native self call_other uses
+public methods only; existing implementation/test sources were reviewed, not rerun.
+
+Recommend a one-file pelt adapter: explicit float mass, initialize the size field,
+call inherited add_save directly, allow no-argument restoration clones, persist the
+current mass and rebuild the type ID after restoration. Preserve existing constructor
+mass=s and setter mass=0.5*s scales, shared save/object/crafting/loot behavior and
+native visibility. Two incomplete attempts retain an incorrect save expectation and
+a harness cleanup race; the final run waits for the corpse's deferred registration
+before removal. No native/configuration/fixture change or full replay/source recount.
+
+[lima-pelt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/pelt.c
 [lima-read-verb-order]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/read.c
 [lima-turn-verb-order]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/turn.c
 [lima-book]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/book.c
