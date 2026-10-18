@@ -880,6 +880,36 @@ or Rust-gate claim is added. Evidence: /tmp/lima-quit-input-20261017. Return to 
 classified source consumers; secure/cgi/webed's webed call remains an identified
 source/activation review. Completed equipment/quest/TCP/GC scope stays closed.
 
+#### Lima optional web editor and consumer selection
+
+Reviewed **17 October 2026** at native **e4a6c18c**, dedicated Lima **55deab9c**.
+Quit cleanup is committed. The web editor has a source caller through WWW index,
+scgi routing and secure/cgi/webed, but the [HTTP daemon is commented out in the
+preload][lima-http-preload-review]. It remains an optional consumer in this profile.
+The [editor][lima-webed-source-review] first fails because the port's error->throw
+macro expands a parameter named error into a keyword. Minimal compiler examples
+reproduce that rejection and accept a renamed parameter; the complete editor is
+not adapted. Existing mappingp and optional CGI-header changes remain in place.
+This is pinned source review and native compile checking, without upstream execution.
+
+Nine real source checks give eight passes and the expected optional editor failure.
+CGI wrapper, HTTP, M_ACCESS, master, drop, COINS, netstat and full simuls compile;
+three small examples verify macro causality and USE_MONEY being unselected. Drop
+therefore selects COINS. Netstat's existing children helper inspects already-loaded
+prototypes and does not load OLD_SOCKET. These are compile/source qualifications,
+with no fresh runtime or protocol qualification. Existing optional service results
+retain their scope, and the whole-source inventory is not recomputed.
+
+An initial scan of 28 remaining source/host entries records absolute-path and
+macro references. Negative matches are not inactivity proofs; next resolve relative
+inheritance and object-stock consumers before selecting another adaptation. The
+optional web editor stays on the backlog. Sources/config/binaries/profile remain
+unchanged; no HTTP request or service activation occurs. Evidence:
+/tmp/lima-web-editor-audit-20261017. Closed alias/equipment/quest/TCP/GC scope remains.
+
+[lima-http-preload-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
+[lima-webed-source-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/webed.c
+
 [lima-alias-module-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/alias.c
 [lima-body-quit-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body.c
 
