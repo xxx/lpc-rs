@@ -2546,38 +2546,38 @@ native policy, configuration and fixtures remain unchanged. No fresh-driver pelt
 restore, alternate-size build, full combat/death or random-distribution claim.
 The earlier 41-input diagnostic audit and its two incomplete attempts remain at
 /tmp/lima-pelt-audit-20261017. Prior whole inventory/full replay counts retain scope.
-Pelt source and notes are committed as Lima **fd952bd6**, native **c047e1a0**.
-The meat audit covers [std/meat.c][lima-meat], byte-identical to pinned
-original Lima reviewed 17 October 2026, with USE_MASS/EVERYTHING_SAVES. Three of four
-complete targets compile; meat fails its inherited constructor signature. A
-disposable one-file control extracts type/level from variadic arguments, supplies
-M_EDIBLE's healing host contract via M_HEALING (default zero), qualifies junk setup
-and uses a function setup callback. Successive checks expose each blocker; the
-combined control compiles. Dedicated source is unchanged; no native gap is claimed.
+Meat audit notes are committed as Lima **6a0aa954**, native **1ab3938c**. Only
+[std/meat.c][lima-meat] now changes. Its variadic constructor retains type/level
+arguments, supplies the edible healing contract with default zero, and explicitly
+composes junk, edible and decay setup. Direct save registration retains type,
+level and actual mass alongside the inherited bite/poison/decay fields. Public
+setup_meat still initializes bites and three decay stages; a private derived-state
+helper rebuilds identity/actions during load without rerolling saved state.
+Initialization sets the five-minute interval before deferred queue registration.
+Original defaults, action text, random bite range, public setup entry point and
+native/shared policy remain. Original review: eefaff66, 17 October 2026,
+USE_MASS/EVERYTHING_SAVES; no upstream execution comparison.
 
-**51 audit inputs**, **151 clean preloads** and normal scan/saves/logout/shutdown
-complete in **133.91s**. Ordinary look/get/drop, both eat actions and final
-removal work. Actual STATE_D callbacks deliver three decay stages through removal;
-public APIs make only tested work due, without waiting five-minute intervals.
-Unmodified stock badger loot selects meat within **1 trial**; real corpse
-placement, collection and eating pass. Selection probabilities are unchanged and
-not measured. This remains diagnostic evidence, not a production fix.
+**Four complete targets compile**. **66 production inputs**, **151 clean
+preloads** and normal scan/account/body saves/logout/shutdown pass in **133.50s**,
+without diagnostic source/hook controls or expected failures. A real bite leaves
+six of seven; saving and direct/no-argument/recursive M_SAVE loading retain those
+counts, poison data seven, type/level, custom mass **0.375**, and two remaining
+decays with begun state. All survive natural deferred registration callbacks.
+Primary type ID and description rebuild during load without a child restore hook.
+Public setup_meat still resets initial counts when explicitly called.
 
-Saving contains only decay count/begun state: the protected type/level save helper
-is called through self call_other, and edible setup is never composed. A no-argument
-restore clone retains unknown type/level one, loses bite state and has mass zero.
-Its saved decay count initially loads as two, then deferred setup resets it to
-three. The original deferred initialization and missing edible setup are source
-issues; no upstream runtime comparison is claimed. Recommend a one-file adapter
-with explicit parent composition/direct save registration, and separate initial
-rolls from derived appearance/actions so load restores type/level/mass, bite state
-and age without rerolling them, including recursive inventory.
-
-Evidence: /tmp/lima-meat-audit-20261017. One incomplete run retains a typo in its
-final cleanup observation, corrected for the complete run. No shared food/decay/
-loot/state/save, native, configuration or fixture change; existing framework and
-whole inventory/full replay evidence retain scope. No combat, poison/healing,
-foreign import, fresh-driver meat restoration or random-distribution qualification.
+Ordinary look/get/drop/eat, final bite removal, actual STATE_D decay through final
+removal and unmodified badger loot/corpse collection/eating pass. Only tested work
+is made due via public APIs; five-minute delays and selection probabilities are
+not measured. Pelt and meat selections were left to stock loot logic. Poison was
+saved as data and cleared before eating; poison/healing behavior is not re-audited.
+No shared object/save/food/healing/decay/loot/state, native, configuration or fixture
+change. Evidence: /tmp/lima-meat-20261017. Earlier diagnostic audit remains
+/tmp/lima-meat-audit-20261017. No fresh-driver meat restoration or foreign-data/
+alternate-build claim; prior whole inventory/full replay scopes remain.
+Next audit the exported std/ladder.c constructor against its compiled stairs
+parent, keeping completed room/navigation and food/loot frameworks closed.
 
 [lima-meat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/meat.c
 [lima-pelt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/pelt.c
