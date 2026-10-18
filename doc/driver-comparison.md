@@ -1165,6 +1165,34 @@ are made. The combined 59/59 normal/quiet result retains its separate runtime sc
 The relative stone/sword sample remains a concrete on-demand consumer for the next
 constructor audit. Evidence: /tmp/lima-source-inventory-20261018.
 
+#### Lima on-demand stone and sword sample
+
+Reviewed **18 October 2026** at native **33ca97b6**, dedicated Lima **4910e637**,
+with the following source/notes edits pending. The [stone][lima-stone-consumer-review]
+creates its [child][lima-sword-in-stone-review] relatively through give_new_obj.
+Original construction rejects the child's integer mass. A float-only control then
+fails placement because the child advertises weapon rather than the sword ID that
+the stone accepts. The one-file adapter adds that ID and explicit float conversion;
+MEDIUM mass 16.0, weapon class 25, parent/container and selection policy remain.
+
+Eight complete proposal/control targets and two mass-only targets compile. Two
+connected real accounts qualify selection, nonking refusal, king extraction,
+return/re-extraction of the same sword, non-sword rejection and forced child cleanup.
+The configured guest uses ordinary commands; observations run through the administrator.
+The existing global/per-relation hide distinction is recorded and preserved.
+
+The accepted **36 shell plus 15 guest-creation inputs / 132.78s**, 151 clean preloads,
+both account/body saves and normal logout/shutdown pass without unexpected errors.
+Tracked player/inventory/pouch/lab/clone state restores. Two earlier partial harness
+runs retain their guest-eval and hide-observation failures separately; they do not
+qualify complete behavior or cleanup. Final tested bytes are adopted exactly, with
+no new helper or native/profile/binary change. This remains an on-demand sample
+without a selected stock/preload root established by the review. No new whole-source
+count, random-distribution or king-logout reselection result is claimed.
+Evidence: /tmp/lima-stone-sword-20261018.
+
+[lima-sword-in-stone-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/sword_in_stone.c
+
 [lima-unittest-command-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/unittest.c
 [lima-test-daemon-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/test_d.c
 
