@@ -1007,6 +1007,32 @@ with no new cold-performance, full-source inventory, other-suite/all/all quiet,
 upgrade-distribution or persistence-roundtrip claim. Native/profile/binaries remain
 unchanged. Evidence: /tmp/lima-item-construction-20261017.
 
+#### Lima bundled liquids suite
+
+Reviewed **17 October 2026** at native **dc40cf01**, dedicated Lima **f3a16824**,
+with the following source/notes edits pending. The [liquids suite][lima-liquids-suite-review]
+passes six assertions before direct actor destruction is refused by the existing
+master policy. The one-file adapter asks captured deep inventory, actor and keg to
+remove themselves, with nil guards. Fluid implementations, assertions, framework,
+callback payload and master policy remain unchanged.
+
+The real command now passes **7/7**. Cleanup also removes ale still inside a filled
+bottle and safely repeats. Twelve scoped proposal/control checks and the original
+suite compile pass. **24 inputs / 139.21s**, 151 clean preloads and normal
+saves/logout/shutdown pass, with no unexpected runtime error or residue. Player,
+lab and tracked clone state return to baseline.
+
+The original suite's four residual objects are explicitly removed before testing
+the adapter. Only the disposable suite source changes between normal fresh-suite
+loads; its tested bytes are then adopted exactly. The prior six fixtures/two
+loopback substitutions remain, with no new helper. A first harness run's incorrect
+weapon tracking is retained separately as a failed control. Individual prototype
+setup does not qualify cold-suite performance; other suites/all/all quiet and full
+source counts retain their prior scope. Native/profile/binaries remain unchanged.
+Evidence: /tmp/lima-liquids-suite-20261017.
+
+[lima-liquids-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/liquids.c
+
 [lima-special-weapon-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_special_weapon.c
 
 [lima-item-suite-discovery-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/items.c
