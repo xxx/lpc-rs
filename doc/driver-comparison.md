@@ -2594,10 +2594,44 @@ the player in place. Props/path/variables clean up; original plural stairs remai
 Only std/ladder.c changes; parent/shared exit/registry/native policy, configuration
 and fixtures stay. Evidence: /tmp/lima-ladder-20261017. Prior diagnostic evidence is
 /tmp/lima-ladder-audit-20261017. Existing room/navigation, food/loot, whole inventory
-and full replay retain their scopes. Bundled content paths are unchanged. Next
-audit the separate exported std/climb_challenge.c constructor/command contract;
-keep its injury/skill policy and native inherited-method design separate.
+and full replay retain their scopes. Bundled content paths are unchanged.
 
+Ladder source and notes are committed as Lima **fb1de80e**, native **860a3950**.
+The separate exported [climb challenge][lima-climb-challenge] is unchanged from
+pinned eefaff66, reviewed 17 October 2026, USE_MASS/EVERYTHING_SAVES. Four of five
+complete targets compile; its integer handler has a bare return. A return-only
+control compiles but construction fails when uninitialized direction text reaches
+sprintf. A second control initializes that text to expose its runtime paths.
+No upstream runtime comparison or bundled consumer is claimed.
+
+**84 audit inputs**, **151 clean preloads** and normal scan/account/body saves/
+logout/shutdown complete in **133.81s**. The real body, skill learning, movement
+and injury methods run; controlled health/skills/ranks/stat/reflex/rate/path data
+are verified restored through actual public getters. At zero reflex, ascend refuses
+while climb up succeeds. Descend at zero reflex injures and moves, while climb down
+succeeds without injury. The class checks literal verb names instead of its
+configured direction. Its fixed parser arguments also do not match the parent's
+OBJ versus WRD OBJ payloads; recommend the inherited variadic argument contract.
+An empty failure-message array raises before travel. The constructor and message
+errors are intentional caught audit cases, not preload failures.
+
+Successful high-reflex climbs move without damage. Failed skill checks spend the
+existing reflex cost, injure and still traverse; preserve that gameplay policy,
+random damage/message choice and five-point ascent threshold. Recommend one class
+adapter: explicit integer refusal, initialized description, compatible forwarding,
+direction-based reflex decisions across aliases, default failure messages and clear
+validation of undersized custom lists. No shared health/skill/navigation or native
+change is needed. Dedicated source remains unchanged; this is not production
+qualification. Evidence: /tmp/lima-climb-challenge-audit-20261017.
+
+One prior run is unqualified: its first random-limb lookup initialized/replaced the
+health mapping after the fixture baseline. Final setup warms that existing selector
+first; it does not replace body methods or change injury policy. One additional
+return-only constructor fixture is temporary; other six fixtures/configuration and
+all dedicated sources stay. Prior room/navigation, ladder, food/loot, inventory and
+full replay retain scope. No new skill/injury design or native method-policy work.
+
+[lima-climb-challenge]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/climb_challenge.c
 [lima-ladder]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/ladder.c
 [lima-meat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/meat.c
 [lima-pelt]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/pelt.c
