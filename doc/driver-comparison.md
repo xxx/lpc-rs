@@ -950,6 +950,37 @@ preprocessor model. Every filename and first diagnostic remains recorded in
 /tmp/lima-consumer-classification-20261017. No broader equipment, quest, alias/quit,
 TCP/GC or optional-service scope is added.
 
+#### Lima item-suite ownership and construction
+
+Reviewed **17 October 2026** at native **b831bdfb**, dedicated Lima **54555bda**,
+with source/notes edits pending. The actual item command first aborts when the
+[item suite][lima-item-suite-discovery-review] directly destructs its actor's starting
+sword; direct actor teardown has the same master-policy refusal. The adopted
+one-file adapter asks those objects to remove themselves and removes test inventory
+before the actor. Master policy, test framework, callback payload and weapon sources
+remain unchanged. Scalar and array clone controls both work; no argument-contract
+or native API change is required. Existing framework qualifications retain scope.
+
+The tested proposal completes **26 cases: 22 pass, four fail**, including successful
+setup, aggregate weapon/armour checks and cleanup. No suite actor or tracked item
+residue remains. **37 inputs / 146.26s** complete with 151 clean preloads and normal
+saves/logout/shutdown; the proposal bytes were then adopted exactly. Eleven targets
+retain seven compile passes and four known rejections before/after, without timeout
+or crash. Runtime uses individual prototype-load setup, the same six fixtures/two
+loopback address substitutions and one temporary proposal source override. It is
+not a cold whole-suite benchmark or a duplicate dedicated-source replay.
+
+The remaining failed clones are the three compiler-blocked weapons, plus stick:
+its typed colour constructor receives no fixture argument and nil reaches string
+concatenation. That expected init-program runtime error is explicitly retained.
+Next adapt the three weapon sources/shared mixin and supply valid stick fixture
+data, preserving typed nil/string semantics and established equipment APIs. The
+suite is not green; no all/all quiet, broader gameplay or new whole-source count
+is claimed. The original control retains its source failures and a later corrected
+harness pwd assumption, rather than being relabelled as a clean run. Evidence:
+/tmp/lima-item-suite-audit-20261017. No native/config/binary/privilege change or new
+fixture is introduced; closed alias/quit, quest, TCP/GC and optional-service scope remains.
+
 [lima-item-suite-discovery-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/items.c
 [lima-item-support-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_test_suite.c
 [lima-stone-consumer-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/stone.c
