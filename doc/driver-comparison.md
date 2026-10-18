@@ -733,7 +733,7 @@ scopes. Evidence: /tmp/lima-source-inventory-refresh-20261017; preceding invento
 /tmp/lima-source-inventory-20261017.
 
 The preceding inventory selected Rocky Beach's debris/rock dependency, subsequently
-adapted and qualified below. The next bounded gameplay audit is the existing
+adapted and qualified below. The digging interaction audit below covers the existing
 [dig verb][lima-dig-verb], Navigation Room's shovel and Sandy Beach's sand/hole path.
 Both rooms and their stock already have construction evidence; interaction remains
 separate. The exported HOLE is **/std/hole**, not the failing legacy duplicate under
@@ -2629,6 +2629,53 @@ No injury redesign, random-distribution, alternate-build or full replay claim.
 The refreshed whole-source coverage is recorded above, retaining
 prior host classifications and completed functional scopes before choosing another
 concrete port blocker.
+
+#### Lima digging interaction audit
+
+Reviewed **17 October 2026** at native **ad86b192**, dedicated Lima **01bc51ad**,
+with distinct nil, preserved call-out player and the unchanged **4,000 ms** budget.
+Source is unchanged pending adoption. Eight unchanged complete sources retain their
+hash/configuration/binary-matched passes from the **994/1182** inventory; this audit
+does not repeat that enumeration or room construction.
+
+The [digger][lima-digger-module] and [diggable][lima-diggable-module] modules both
+forward an unrecognised answer and then pop the top input handler. With the stock
+sand/castle targets and two uniquely named shovels, forwarding from the target prompt
+to a command that opens the tool prompt removes the new prompt and leaves the old
+handler active. Its cleared user binding then traps further input. This is a
+reproduced caller-lifecycle failure, with no new native feature required.
+
+The temporary **two-module proposal** uses existing modal_simple(), which removes
+a one-shot handler before invoking its callback, and forwards other commands through
+this_user()->modal_pass(input). Explicit pops and the three old modal prototypes
+become unnecessary. The proposal adds no saved state or framework API.
+
+With that proposal, **84 game inputs** pass in **134.03s**, with **151
+clean preloads**, normal documentation scan, account/body saves, logout and shutdown.
+Real table-stock pickup, no-tool/no-target refusal, explicit/reversed/inferred forms,
+up/out forms, hole growth **64→256→512**, exhaustion, castle refusal, both selection
+prompts and look pass-through work. Both cross-prompt handoffs and repeated requests
+on the same object finish with the new prompt usable and the normal shell stack
+restored. Light, path, props, stock, inventory and unchanged quest/XP/score are checked.
+The same six fixtures and two loopback-address overrides remain; only the two proposal
+files change in the disposable runtime. No handler-recovery command is needed.
+
+The sand's treasure message creates no chest in the reviewed source. Without the
+secretPsg prerequisite its end-milestone attempt grants no reward; positive reward
+and full pirate-quest completion remain unqualified. The preexisting dig() call also
+omits the tool argument, which both bundled targets ignore; it is not the observed
+input failure. These source facts do not establish an upstream-driver execution result.
+
+Earlier harness attempts are recorded separately: dark pickup, additive-ID ambiguity,
+and the discarded modal_remove proposal cannot qualify the final interaction result.
+That removal API requires the exact pushed function value. Evidence and reviewable
+patch: /tmp/lima-digging-audit-20261017 (proposal.patch). Recommend adopting the two
+caller changes with the retained replay before auditing Navigation Room's button,
+secret-door pair and the remaining pirate milestone chain. Native/shared source,
+configuration, binaries, original checkout and completed scopes remain unchanged.
+
+[lima-digger-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_digger.c
+[lima-diggable-module]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_diggable.c
 
 [lima-climb-challenge]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/climb_challenge.c
 [lima-ladder]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/ladder.c
