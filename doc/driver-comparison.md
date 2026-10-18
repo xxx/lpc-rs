@@ -711,17 +711,12 @@ Target constructors do not run in this sweep.
 | std | 183 | 105 |
 | trans | 66 | 0 |
 
-**82 failed standalone fragments have reviewed passing complete hosts**.
-All **62** carried proofs retain unchanged fragment/host/header/configuration inputs
-and fresh host passes. **20** additional reviews establish the object, container,
-room, body, light, food/drink, decay, salvage, complex-exit and digging compositions.
-For example, shovel and sand obtain their modal methods from M_INPUT; these isolated
-module failures do not prevent either complete object compiling. The other
-**106 failures** include unreviewed host parts, optional/legacy sources and source
-adapters; they are not 106 established native gaps. Remaining first diagnostic
-messages and source locations match the preceding inventory. There are
-**33** first locations outside the checked target
-and **1049** reported error lines, including secondary diagnostics.
+That full sweep established **82 failed standalone fragments with passing complete
+hosts**. The focused classification below adds **28** reviewed compositions, giving
+**110 proofs** against the same 188-file failure set and **78 remaining review
+items**. No new complete-source recount or native-gap count is established.
+The original full sweep's **33** first diagnostic locations outside their target
+and **1049** reported error lines retain their scope and include secondary errors.
 
 The sweep uses at most two CLI processes, two Tokio workers each, 4 GiB/40s per
 file and the normal **4,000 ms** task budget. All **1,549** library-file hashes,
@@ -741,6 +736,54 @@ separate. The exported HOLE is **/std/hole**, not the failing legacy duplicate u
 hole growth and the quest milestone without repeating the room-construction audit.
 Completed equipment/parser/exit/framework/TCP/GC work and reserved native discussions
 stay separate; no mudlib source change is made by this inventory.
+
+#### Lima remaining source classification
+
+Reviewed **17 October 2026** at native **cae150fa**, dedicated Lima **0caed83c**.
+Quest restoration notes are committed; pirate passage/quest work stays closed.
+This is a focused review of the preceding **188-file failure set**, with no new
+1,182-file enumeration, runtime replay, configuration or source change.
+
+**43 scoped compile checks** reproduce **11 passing complete hosts**, **30 expected
+isolated-fragment rejections** and **two failing tools with confirmed callers**,
+with no unexpected outcome, timeout or crash. Source edges, active macros and
+provider definitions establish **28 additional composition proofs**: 13 adversary
+components, seven behaviour-tree components and eight object modules. They receive
+missing functions from the body, Goblin, dancing lights, delivery boy, horse,
+weapon, armour, lantern and rock compositions. This classifies compilation only;
+no new combat, equipment, behaviour or companion gameplay is claimed.
+
+The preceding 82 proofs retain matching host/header/config/compiler inputs. Both
+changed digging fragments are freshly rechecked through their actual M_INPUT
+hosts; their first diagnostic now names modal_simple. The **confirmed total is
+110**, leaving **78** files in the old failure set outside those proofs:
+
+| Remaining review group | Files |
+|---|---:|
+| Combat/statistics alternatives not selected by the current default profile | 14 |
+| WWW, contrib and attic files grouped by location; activation not established | 32 |
+| Previously deferred random2 and upstream-disabled suicide | 2 |
+| Failing tools with confirmed source callers | 2 |
+| Further source or host-contract review required | 28 |
+
+These groups do not establish 78 native gaps or 78 broken complete objects.
+The unchanged source set, binaries and configuration are checked against the
+frozen full inventory; only the two adopted digging modules and rock_wall have
+changed since it. The **994/1182** whole-source measurement retains its earlier
+scope rather than becoming a new count by arithmetic.
+
+Next audit the [alias menu][lima-alias-menu-review]. Actual user startup chooses
+player/wizard shells that inherit SHELL; the wizard shell calls its parent setup.
+SHELL registers alias, whose bare form clones ALIASMENU and whose one-name form
+calls its display method. Both reach this failing file. The fresh diagnostic
+rejects its inline function syntax at line 325, so this is a concrete shell path,
+not an unused filename. The secure/cgi/webed wrapper also calls failing
+obj/secure/webed; no HTTP request or editor execution is claimed here. This review
+establishes no new native feature requirement. Evidence:
+/tmp/lima-compile-classification-20261017. Audit/adapt the alias source with normal
+shell/menu cases next, preserving the existing alias API and persistence.
+
+[lima-alias-menu-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/mudlib/aliasmenu.c
 
 [lima-dig-verb]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/dig.c
 [lima-rocky-beach]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/room/beach/Rocky_Beach.c
