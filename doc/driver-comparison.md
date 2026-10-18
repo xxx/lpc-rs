@@ -820,12 +820,38 @@ Two findings remain unresolved and are asserted in the final audit:
   retaining the nominal class and existing save filter; no class reflection is needed.
 
 Audit success records matching observations, not a clean alias lifecycle result.
-Next adopt the menu adapter with the migration removal, then fix quit notification.
+The adoption below addresses the menu/migration; quit notification remains next.
 Same distinct-nil/preserved-player/4000ms profile, binaries, six fixtures and two
 existing loopback address substitutions. Pagination, optional limits, exhaustive
 global administration and player-shell runtime are unqualified here. No full-source
 recount, new Rust gate or closed quest/equipment/TCP/GC work is included. Evidence:
 /tmp/lima-alias-menu-audit-20261017.
+
+#### Lima alias menu and persistence adapter
+
+Reviewed **17 October 2026** at native **5d06ab6d**, dedicated Lima **75047c08**,
+with source/notes edits pending. The dedicated source adopts the exact reviewed
+menu proposal and removes M_ALIAS's obsolete class-size conversion. The existing
+nominal class, save format, access guards and global-default filter remain. No
+native syntax/API/reflection is added. Existing personal overrides and supplied
+stock data are preserved; the patch does not repair past accidental personal copies.
+
+Seven scoped compile checks give five passes (menu, class definition, both complete
+shells and user) and two expected isolated host-part rejections, without timeout or
+crash. **83 first-session + 13 restored inputs / 142.96s** pass the adapter
+checks over two different driver processes with 151 clean preloads each and normal
+saves/logout/shutdown. Normal command inputs match the audit; inspection assertions
+now verify preservation. Custom classes/defaults/xverb flags restore exactly, and
+six shell-save checkpoints exclude player/wizard globals colors/p while retaining
+supplied zero-status defaults. Restored global flags stay 1/2 rather than becoming 0.
+
+No alias proposal override is used at runtime. The same six fixtures and two
+existing loopback address substitutions remain; source/config/binary hashes are
+guarded. The sole remaining finding is !quit's unnotified pop leaving one editor
+clone, still asserted and reserved for the focused body quit patch. This does not
+qualify cancellation cleanup, exhaustive global administration, player-shell runtime,
+pagination or optional limits. No whole-source count, Rust gate, native change or
+closed quest/equipment/TCP/GC scope is added. Evidence: /tmp/lima-alias-menu-20261017.
 
 [lima-alias-module-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/shell/alias.c
 [lima-body-quit-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body.c
