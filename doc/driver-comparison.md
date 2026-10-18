@@ -1053,6 +1053,36 @@ substitutions remain, with no new helper. Native/profile/binaries remain unchang
 Limbs, salvage, all/all quiet, cold-suite performance and full-source inventory
 retain their prior scope. Evidence: /tmp/lima-race-suite-20261018.
 
+#### Lima bundled limbs suite
+
+Reviewed **18 October 2026** at native **66bd5b52**, dedicated Lima **d39f288c**,
+with the following source/notes edits pending. The [limbs suite][lima-limbs-suite-review]
+first aborts on direct destruction of its starting sword. Its one-file adapter uses
+existing object removal methods for setup and captured inventory/actor cleanup,
+checks exactly one wielding limb instead of comparing a nullable array with zero,
+and binds both unwield callbacks to the fixture's actual longsword ID. The sixteen
+cases and expected outcomes, equipment implementations, framework and master policy
+remain unchanged.
+
+Ownership-only completes **9/16**; the explicit wield check reaches **10/16**, while
+the old sword selector leaves the longsword wielded and causes cascading failures.
+The corrected real command passes **16/16**, including both expected refusals.
+Independent item-state controls confirm one/two-hand wielding, unwielding and
+occupied-hand refusal. Natural and repeated cleanup leave player/lab/clone state
+at baseline, with no fallback removal needed for the final suite or controls.
+
+Sixteen scoped source targets compile; the corrected final suite is recompiled,
+alongside original and ownership-only suite checks. The accepted **22 inputs /
+139.25s**, 151 clean preloads and normal saves/logout/shutdown pass without unexpected
+errors. The separate **28-input / 138.99s** diagnostic run retains its non-green
+counts and explicit original residue cleanup. Only disposable suite variants change
+before exact tested-byte adoption. The prior six fixtures/two loopback substitutions
+remain, with no new helper or native/profile/binary change. Salvage, all/all quiet,
+cold-suite performance and full-source inventory retain their prior scope.
+Evidence: /tmp/lima-limbs-suite-20261018.
+
+[lima-limbs-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/limbs.c
+
 [lima-race-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/race.c
 
 [lima-liquids-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/liquids.c
