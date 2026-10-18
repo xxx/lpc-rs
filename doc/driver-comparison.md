@@ -981,6 +981,34 @@ harness pwd assumption, rather than being relabelled as a clean run. Evidence:
 /tmp/lima-item-suite-audit-20261017. No native/config/binary/privilege change or new
 fixture is introduced; closed alias/quit, quest, TCP/GC and optional-service scope remains.
 
+#### Lima item construction and special weapons
+
+Reviewed **17 October 2026** at native **f00de4cd**, dedicated Lima **f9bde8b2**,
+with the following source/notes edits pending. Four Lima files adapt baseball_bat's
+weight and rapier's value to float literals, the [special-weapon mixin][lima-special-weapon-review]
+to a float conditional branch, native callback, class-member dots and direct inherited
+save registration, and the [item fixture][lima-item-suite-discovery-review] to supply
+the stick's required colour. The typed constructor, test framework, master policy,
+equipment APIs and special-weapon selection/bonus policy remain unchanged.
+
+**14/14 scoped real-source targets compile**, plus one temporary canonical-event
+fixture. The complete special_longsword supplies the mixin's host methods; no
+standalone-fragment success is claimed. The real command now passes **26/26**, with
+no actor/item residue. A separate special longsword's actual scheduled roll, five
+saved fields and four event cases pass; a blue stick retains its constructor data.
+The controls remove themselves and all tracked player/lab/clone state is restored.
+
+**63 inputs / 134.21s** pass with 49 positive individual program loads (including
+21 crafting recipes), 151 clean preloads and normal saves/logout/shutdown, with no
+runtime error or failed apply. The disposable runtime copy uses the actual dedicated
+sources, the prior six fixtures/two loopback substitutions and one temporary event
+helper; no proposal overrides replace source. This is prepared-runtime qualification,
+with no new cold-performance, full-source inventory, other-suite/all/all quiet,
+upgrade-distribution or persistence-roundtrip claim. Native/profile/binaries remain
+unchanged. Evidence: /tmp/lima-item-construction-20261017.
+
+[lima-special-weapon-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_special_weapon.c
+
 [lima-item-suite-discovery-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/items.c
 [lima-item-support-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_test_suite.c
 [lima-stone-consumer-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/stone.c
