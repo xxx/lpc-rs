@@ -907,6 +907,53 @@ optional web editor stays on the backlog. Sources/config/binaries/profile remain
 unchanged; no HTTP request or service activation occurs. Evidence:
 /tmp/lima-web-editor-audit-20261017. Closed alias/equipment/quest/TCP/GC scope remains.
 
+#### Lima remaining source consumer classification
+
+Reviewed **17 October 2026** at native **5343469c**, dedicated Lima **a22e3aed**,
+with the preceding optional-editor notes committed. All 28 further source/host
+entries have per-file consumer decisions. **47 scoped compile checks** reproduce
+28 target rejections and pass 19 selected/reference controls, with no timeout or
+crash. Sources/config/binaries remain unchanged. This adds no new whole-source
+count, passing-host proof to the dated 110, gameplay result or native requirement.
+
+| Consumer context | Files |
+|---|---:|
+| Weapon item-suite discovery, including the shared special-weapon mixin | 4 |
+| Relative stone/sword sample | 1 |
+| Legacy service and loaded-object inspection | 1 |
+| Unselected MONEY branch | 1 |
+| Sample/attic inheritance chains | 5 |
+| No configured caller identified within the reviewed mechanisms | 16 |
+
+The [item suite][lima-item-suite-discovery-review] is a concrete caller missed by
+absolute-path-only searches: its weapon-directory glob discovers baseball_bat,
+rapier and special_longsword. [Registered clone helpers][lima-item-support-review]
+prefix /domains/std/. The last weapon inherits M_SPECIAL_WEAPON; its unknown host
+method in isolation is supplied by WEAPON/M_SALVAGEABLE, while the child still
+fails arithmetic checking. Suite/daemon/command and parents compile, without
+executing the suite or qualifying callback invocation. Audit that invocation/clone
+boundary and the three leaves next; established equipment APIs/gameplay stay closed.
+
+The [stone sample][lima-stone-consumer-review] names sword_in_stone relatively,
+resolving through give_new_obj/absolute_path to /domains/std/sword_in_stone. Its
+parent compiles; no fixed stock/preload caller for that parent was identified.
+Legacy socket inspection/service and unselected MONEY retain the earlier decisions.
+The five sample/attic entries have actual inheritance chains but no selected root
+was identified. The final 16 are not declared unreachable: manual, arbitrary or
+saved/user-selected loaders remain possible.
+
+All 1,512 inherit tokens in the `.c`/`.h` sources are accounted for by constant/
+relative resolution and 11 manual macro cases. Fixed stock/data and directory-loader mechanisms were reviewed,
+including text-only scans and the actual selected replacement modules. This is
+source/compile evidence rather than runtime reachability proof or a complete
+preprocessor model. Every filename and first diagnostic remains recorded in
+/tmp/lima-consumer-classification-20261017. No broader equipment, quest, alias/quit,
+TCP/GC or optional-service scope is added.
+
+[lima-item-suite-discovery-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/items.c
+[lima-item-support-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_test_suite.c
+[lima-stone-consumer-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/stone.c
+
 [lima-http-preload-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/data/config/preload
 [lima-webed-source-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/webed.c
 
