@@ -2576,31 +2576,27 @@ No shared object/save/food/healing/decay/loot/state, native, configuration or fi
 change. Evidence: /tmp/lima-meat-20261017. Earlier diagnostic audit remains
 /tmp/lima-meat-audit-20261017. No fresh-driver meat restoration or foreign-data/
 alternate-build claim; prior whole inventory/full replay scopes remain.
-Meat source and notes are committed as Lima **b24a3d7a**, native **59fb3ec6**.
-The exported [ladder template][lima-ladder] audit finds one compatibility blocker:
-more_create declares a third, unused attached parameter while its stairs parent
-calls a two-argument override. Five of six complete targets compile; ladder fails
-that signature. A disposable copy removes only the unused formal and compiles.
-The ladder is byte-identical to original eefaff66 reviewed 17 October 2026; no
-upstream execution comparison or bundled ladder consumer is claimed.
+Ladder audit notes are committed as Lima **78e849ee**, native **32a7e9f9**. The
+[ladder template][lima-ladder] now removes only the unused third more_create formal,
+matching the parent's two-argument override. Its function body, inherited attachment,
+destination forwarding and base callback are unchanged. Original source review
+remains pinned to eefaff66, 17 October 2026, USE_MASS/EVERYTHING_SAVES; no upstream
+execution comparison or bundled ladder consumer is claimed.
 
-**58 audit inputs**, **151 clean preloads** and normal scan/saves/logout/shutdown
-complete in **133.81s**. Singular ladder identity and the parent's attached flag
-remain correct. Relative up/down destinations resolve from its room; moving the
-prop updates its evaluated base. Actual ascend/descend and climb up/down commands
-move the real player to the configured rooms. One-way string/object destinations
-work, while missing directions, bare climb and an unconfigured ladder leave the
-player in place. Taking it produces the existing singular climb suggestion.
-All props/path/variables clean up; the stock plural stairs remain in Grand Hall.
+**All six complete targets compile**. **58 production inputs**, **151 clean
+preloads** and normal scan/account/body saves/logout/shutdown pass in **136.43s**,
+with no diagnostic source/hook control or expected runtime failure. Real climb
+up/down and ascend/descend commands move to configured rooms. Two-way relative and
+one-way string/object destinations, singular identity, attachment, get refusal,
+live base after relocation and no-argument defaults pass. Missing directions leave
+the player in place. Props/path/variables clean up; original plural stairs remain.
 
-Recommend the one-line ladder signature adaptation, retaining its entire body and
-the parent's set_attached(1). No parent/module/registry/native/configuration or
-fixture edit is required. This is a diagnostic source control; dedicated source
-is unchanged and production qualification remains next. Evidence:
-/tmp/lima-ladder-audit-20261017. Existing stairs room-construction/navigation,
-food/loot and whole inventory/full replay evidence retain their scopes. Bundled
-content destinations and climb_challenge's separate injury/skill behavior remain
-outside this audit.
+Only std/ladder.c changes; parent/shared exit/registry/native policy, configuration
+and fixtures stay. Evidence: /tmp/lima-ladder-20261017. Prior diagnostic evidence is
+/tmp/lima-ladder-audit-20261017. Existing room/navigation, food/loot, whole inventory
+and full replay retain their scopes. Bundled content paths are unchanged. Next
+audit the separate exported std/climb_challenge.c constructor/command contract;
+keep its injury/skill policy and native inherited-method design separate.
 
 [lima-ladder]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/ladder.c
 [lima-meat]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/meat.c
