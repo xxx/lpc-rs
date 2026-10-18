@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **6a99ff86** and native **962cd832**.
+qualification notes are committed through Lima **a1984c30** and native **0e87ead9**.
 The checkout's `README.lpc-rs.md` provides startup and prepared-test instructions.
 
 The configured fresh-account lifecycle has passed clean boot, native saves,
@@ -798,21 +798,19 @@ Evidence: /tmp/lima-trailing-defaults-20261018.
 #### Lima source coverage
 
 The dedicated-checkout inventory, refreshed **18 October 2026** at native
-**45648cfb** and Lima **fb3ad0a9**, checks all **1,182 `.c` files**:
-**998 compile, 184 fail, zero regressions, timeouts or crashes**, in **245.587 seconds**.
-All **994** preceding successes remain, with no added or removed targets. The four
-gains are baseball_bat, rapier, special_longsword and aliasmenu. Fifteen library
-sources changed since the preceding inventory; headers, configuration and binary
-hashes match. This is a source status comparison, not a performance benchmark.
-The subsequent [stone/sword adaptation](#lima-on-demand-stone-and-sword-sample)
-has focused compilation/runtime evidence; these totals remain the measured sweep.
+**0e87ead9** and Lima **a1984c30**, checks all **1,182 .c files** with the rebuilt
+release CLI: **999 compile, 183 fail, zero regressions, timeouts or crashes**,
+in **45.643 seconds**. All **998** preceding successes remain;
+the committed sword_in_stone adapter is the one new success. No targets are added
+or removed. Only that child and xterm256_d changed since the measured baseline;
+headers and configuration match. The previous runner selected target/debug and
+this runner selects target/release, so elapsed times are not a performance comparison.
 
 Command counts remain player **65/67** (random2 deferred, suicide disabled upstream),
 wizard **81/81**, guild **4/4**, verbs **90/90**, transitional **49/49** and
 administrator **9/9**. All **17** tracked core objects, **88** school sources,
 **34** standard-room sources, **22** junk examples, **22** std/classes files,
 **eight** Pinto examples, **25** guild sources and **18** consumable examples compile.
-Target constructors do not run in this sweep.
 
 | Source family | Compile | Fail |
 |---|---:|---:|
@@ -820,31 +818,37 @@ Target constructors do not run in this sweep.
 | cmds | 240 | 2 |
 | contrib | 7 | 23 |
 | daemons | 49 | 13 |
-| domains | 348 | 13 |
+| domains | 349 | 12 |
 | obj | 61 | 11 |
 | secure | 37 | 14 |
 | std | 183 | 105 |
 | trans | 66 | 0 |
 
 Of the failed standalone files, **111 fragments have passing complete hosts**.
-The other **73** retain reviewed contexts: **14** unselected combat/statistics
-alternatives, **32** WWW/contrib/attic entries with activation unestablished,
-**two** deferred/upstream-disabled player commands, **one** optional web editor and
-**24** other carried consumer decisions. The last group includes the subsequently
-adapted stone/sword sample. No configured caller found is not proof of unreachability.
-The **32** first diagnostic locations outside their target and **1049** reported
-error lines include secondary errors rather than separate native gaps.
+All 45 distinct complete hosts compile again; fragment/host sources and headers
+match the prior source-composition review. The other **72** retain reviewed
+contexts: **14** unselected combat/statistics alternatives, **32** WWW/contrib/attic
+entries with activation unestablished, **two** deferred/upstream-disabled player
+commands, **one** optional web editor and **23** other carried consumer decisions.
+Those 23 are legacy inspection one, unselected currency one, sample/attic chains
+five and no configured caller identified sixteen. Arbitrary or saved/user-selected
+loaders remain possible for that last group. All remaining first diagnostics match
+the prior inventory; **32** first locations lie outside the checked target and **1048**
+reported error lines include secondary errors rather than separate native gaps.
 
-The sweep uses at most two CLI processes, two Tokio workers each, 4 GiB/40s per
-file and the normal **4,000 ms** task budget. All **1,549** library-file hashes,
-configuration and compiler binary remain unchanged during the run. Distinct nil,
-preserved call-out player and pinned original **eefaff66** remain. No target gameplay,
-upstream-driver execution or Rust gate is repeated. Prior **2367+10-input** full replay,
-room construction and subsequent focused runtime qualifications retain their measured
-scopes. Evidence: /tmp/lima-source-inventory-20261018; preceding inventory:
-/tmp/lima-source-inventory-refresh-20261017. The detailed dated audits below retain
-their original revisions, outcomes and limits; earlier pending-work statements are
-historical rather than a new instruction to repeat completed work.
+The release workspace build succeeds, and two invalid function/closure probes
+confirm trailing-default enforcement in the rebuilt CLI. The sweep uses at most
+two CLI processes, two Tokio workers each, 4GiB/40s per file and the normal
+**4000ms** task budget. All **1549** library-file hashes, profile and rebuilt binary
+hashes remain unchanged during the sweep. Distinct nil and preserved call-out
+player remain configured. Compile-only mode initializes configured simuls for
+other targets but omits target constructors; no new gameplay, cold-performance,
+upstream-driver execution or optional-service qualification is made.
+
+Prior runtime evidence retains its dated scope. The detailed audits below also
+retain their original revisions and outcomes; earlier pending-work statements
+are historical. Evidence: /tmp/lima-source-inventory-defaults-20261018; baseline:
+/tmp/lima-source-inventory-20261018.
 
 #### Lima remaining source classification
 
