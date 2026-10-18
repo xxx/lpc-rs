@@ -1133,6 +1133,38 @@ configuration, binary or native change is needed. Full-source counts and earlier
 host/optional/legacy classifications retain their dated scope; refresh them through
 a separate measured inventory. Evidence: /tmp/lima-bundled-tests-20261018.
 
+#### Lima source inventory after shipped-test qualification
+
+Reviewed **18 October 2026** at native **45648cfb**, dedicated Lima **fb3ad0a9**.
+The fresh complete sweep measures **998/1182 compiling, 184 failing, zero regressions,
+timeouts or crashes in 245.587s**. All 994 previous successes remain; the target set
+is unchanged. Four measured gains are baseball_bat, rapier, special_longsword and
+aliasmenu. Fifteen source files changed since the latest full baseline; all 1549
+library files remain unchanged during this sweep. The same binaries/profile apply;
+no performance conclusion follows from the single wall-clock measurement.
+
+**111 isolated fragment failures have passing real hosts**: 110 carried composition
+proofs plus the special-weapon mixin's actual special_longsword host. Source review
+checks the changed alias fragment and user/body hosts; inheritance/provider contracts
+remain intact. Headers/profile are unchanged and every complete host is freshly
+compiled. The earlier special-weapon runtime packet and its relevant source hashes
+are verified unchanged; this inventory adds no runtime execution.
+
+The other **73** failures retain context: 14 unselected combat/statistics alternatives,
+32 WWW/contrib/attic entries without established activation, two deferred/disabled
+commands, one optional web editor and 24 carried source-consumer decisions. These are
+not 73 established native requirements or an unreachable-file claim. Only the two
+digging fragments change first diagnostics, from modal_pop to their reviewed
+modal_simple host dependency; their actual hosts pass.
+
+All 17 core objects, 14 standard weapons, five ammo sources and the previously passing
+school/room/junk/class/guild/consumable/Pinto sets compile. Command groups retain their
+prior passing counts. Two bounded CLI processes use --check without constructors;
+no driver/Cargo workload overlaps. No implementation, configuration or binary changes
+are made. The combined 59/59 normal/quiet result retains its separate runtime scope.
+The relative stone/sword sample remains a concrete on-demand consumer for the next
+constructor audit. Evidence: /tmp/lima-source-inventory-20261018.
+
 [lima-unittest-command-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/unittest.c
 [lima-test-daemon-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/test_d.c
 
