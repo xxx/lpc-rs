@@ -1108,6 +1108,34 @@ needs combined qualification. No new yield-probability, arbitrary-recipe, player
 credit, cold-suite or full-source inventory claim. Evidence:
 /tmp/lima-salvage-suite-20261018.
 
+#### Lima combined shipped test suites
+
+Reviewed **18 October 2026** at native **70f1812e**, dedicated Lima **52271b44**.
+The real [command][lima-unittest-command-review] and [daemon][lima-test-daemon-review]
+run only items, limbs, liquids, race and salvage. Both `unittest all` and
+`unittest all quiet` report **59 passes / zero failures**, matching aggregate storage
+and the observed per-suite counts: 26, 16, 7, 5 and 5. Normal mode prints all 59
+case results and five suite summaries; quiet prints only the aggregate totals.
+
+Each command replaces all five previously loaded suites; held old references
+expire and fresh objects provide the new results. All seven shared race blueprint
+identities and existing clone groups survive. Player identity/location/inventory/
+pouch, lab contents and tracked object groups match baseline after each command.
+Temporary identity markers are removed; following look and pwd work.
+
+**55 inputs / 138.44s**, 151 clean preloads and normal documentation/account/body
+saves, logout and shutdown pass without unexpected errors. The runtime adds no LPC
+fixture or gameplay replacement; the two existing loopback substitutions remain.
+The intentional-failure framework fixtures are absent from shipped-suite discovery.
+Forty-two individual program loads prepare this integration run under the unchanged
+4000ms budget; no cold-suite performance claim is added. No further implementation,
+configuration, binary or native change is needed. Full-source counts and earlier
+host/optional/legacy classifications retain their dated scope; refresh them through
+a separate measured inventory. Evidence: /tmp/lima-bundled-tests-20261018.
+
+[lima-unittest-command-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/wiz/unittest.c
+[lima-test-daemon-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/test_d.c
+
 [lima-salvage-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/salvage.c
 
 [lima-limbs-suite-review]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/tests/limbs.c
