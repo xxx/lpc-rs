@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **03e1f72f** and native **c027d047**.
+qualification notes are committed through Lima **8a26d8c7** and native **ded2bc3a**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -1132,6 +1132,31 @@ retain their limits. The README now consolidates the remaining decisions from
 the 16-entry source review; no further optional feature is selected or inventory
 total recomputed.
 Evidence: /tmp/lima-port-acceptance-20261019.
+
+#### Lima current cold combined checks
+
+Reviewed **19 October 2026** at native **ded2bc3a**, dedicated Lima **8a26d8c7**.
+Two fresh-driver trials on the current uninstrumented binary pass both combined
+commands at **59/59**, without per-suite warmup or manual target loads:
+
+| First command | First response | Following other mode |
+|---|---:|---:|
+| `unittest all` | 2.330s | 0.185s |
+| `unittest all quiet` | 2.542s | 0.189s |
+
+These are client-send-to-prompt times, including scheduling/network and excluding
+the separate drain. Each boot loads 151 preloads cleanly, preserves world/object
+state, clears its observer marker, saves and logs out normally, and exits zero.
+The earlier deadline failure is not reproduced. Those failures predate the
+lexer/include optimizations and remain historical evidence.
+
+The two-trial check neither guarantees reliability under load nor measures
+successful transaction/compiler phases; OS caches are not flushed. Keep the
+per-suite-first operator recipe and unchanged 4000ms budget. No further compiler
+change is indicated by this result alone. Library/profile/binary hashes remain
+unchanged. The existing loopback runner/helpers are reused without alteration;
+no full scan completion, saved restart or inventory repeat is added.
+Evidence: /tmp/lima-cold-current-20261019.
 
 #### Lima release lifecycle qualification
 
