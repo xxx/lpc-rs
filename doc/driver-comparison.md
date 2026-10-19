@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **05d0590c** and native **4dac077e**.
+qualification notes are committed through Lima **b8cec2d6** and native **cefe9e35**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -826,9 +826,9 @@ evictions at its 64MiB estimated payload bound; actual uncached parsing is only
 count also includes directives other than definitions.
 
 Source review shows a deep replacement clone on each prepared-definition hit.
-Next investigate sharing immutable prepared macro bodies while preserving each
-compile's macro environment, fresh source reads and policy callbacks. This profile
-does not isolate clone cost or demonstrate a speedup. Compiled-parent caching and
+This motivated the [macro-copy audit](#lima-cached-macro-copy-audit), which keeps
+the existing representation after its isolated replay. The stage profile does
+not isolate clone cost or demonstrate a speedup. Compiled-parent caching and
 override-signature policy remain deferred.
 
 The ordinary control/profile cold I/O times are 2.665/2.874s; the diagnostic pair
@@ -839,6 +839,47 @@ temporary collector removed; the restored locked release workspace builds.
 One shared release configuration, two jobs and no symbol override keep the build
 tree near 1.3GiB. No Rust test or whole-source inventory repeat is claimed.
 Evidence: /tmp/lima-compiler-stages-20261018.
+
+#### Lima cached-macro copy audit
+
+Reviewed **18 October 2026** at native **cefe9e35**, dedicated Lima **b8cec2d6**.
+A temporary capture around the first `unittest all` records **545,486 cache
+hits across 36 completed object compilations**, matching the stage profile.
+There are 799 cache entries/797 names, with 1,079,352 replacement tokens and
+311,961 object expressions copied per replay. No capture records are dropped.
+
+After VM shutdown, three runs rotate the order of each operation and replay
+the actual cache-hit sequence, with 10,000 warmup hits. Median wall-clock totals:
+
+| Operation over all captured hits | Median ms |
+|---|---:|
+| Replacement body clone/drop | 16.87 |
+| Shared-reference clone/drop | 6.09 |
+| Macro-name string clone/drop | 2.74 |
+
+The median paired body/reference difference is **10.32ms**. A type probe confirms
+owned `Define`/`String` cloning. Immediate drop differs from live per-program
+environments; the reference operation is an `Arc<Definition>` proxy, not an
+implemented shared binding table. Lookup, insertion, benign-redefinition checks,
+expansion, source I/O and receiver work are excluded. Retained capture references
+also change lifetime during collection. These are isolated operation timings,
+not a measured compiler speedup or a bound on live copy cost.
+
+Source review finds prepared bodies read-only in expansion and conditional
+evaluation, with private bindings inserted/removed per compile. Sharing appears
+feasible without changing public macro types, but this replay does not establish
+a worthwhile whole-compiler gain. Keep the current representation. Further
+preprocessing work should measure lexer/directive handling; `track_slice` stores
+token text and `string_token` copies it again, with no other repository readers
+of `last_slice`. The cost of that work is still unmeasured.
+
+The diagnostic-only 30000ms capture passes normal and quiet combined commands at
+59/59, 151 clean preloads, normal saves/logout and exit zero. The dedicated
+4000ms profile stays unchanged. All three native hooks are restored byte-for-byte,
+the ordinary locked release workspace rebuilds, and the driver matches the
+previously qualified release hash. No sharing optimization, new Rust tests or
+source-inventory repeat is claimed. One shared release configuration keeps target
+near 1.3GB. Evidence: /tmp/lima-macro-copies-20261018.
 
 #### Lima parameter-default positions and colour helpers
 
