@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **e6a538a5** and native **8157cfac**.
+qualification notes are committed through Lima **44399be5** and native **433082f7**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -777,6 +777,47 @@ small aggression/trainer adapters with bounded runtime checks; the controls
 establish compilation only. No new native requirement is established. Existing
 gameplay qualification and the 999/1182 inventory retain their separate scopes.
 Evidence: /tmp/lima-npc-samples-20261019.
+
+#### Lima aggression and trainer adapters
+
+Reviewed **19 October 2026** at native **433082f7**, dedicated Lima **44399be5**,
+with the following two-module changes pending. Aggression callbacks use
+`&start_fight(who)` and `&aggressively_attack(who)` to bind the target;
+`behavior_hooks` uses a bare function value. The earlier compile-only control
+left `who` as the third timer argument and failed at runtime: native
+[`call_out`](efun/call_out.md) reserves that position for the repeat interval.
+The trainer uses native dot syntax for three skill-class fields and documents
+`set_train_restrict(mapping restrictions)`: skill paths map to strings, and
+listed skills are refused. Its existing restriction/training rules are retained.
+
+**14 focused compile checks** give nine passes and five expected rejections:
+both complete hosts, five references and two temporary fixtures compile; the
+standalone host-dependent modules and three deferred attic sources still fail.
+This is not a fresh whole-library inventory.
+
+**48 runtime checks pass in 10.42s**, with **151 clean preloads**, native saves,
+normal account logout and exit-zero shutdown. The real trainer refuses training
+without points. Its skill menu handles rank queries, mapping restrictions, the
+trainer's skill ceiling and eligible training that consumes and clears points.
+Conversation exit restores ordinary shell commands. The derived aggression
+fixture records attack attempts while exercising the real inherited timers:
+hook setup, wizard exemption, delayed ordinary target, both arrival callbacks,
+zero aggression and combat-forbidden rooms. It does not exercise combat damage.
+Player identity, role, inventory, skill records and rank values are restored;
+temporary actors and the room are removed. The accepted run has no runtime
+errors; existing channel compiler warnings remain.
+
+**Tara's default stat menu remains unqualified and fails in the retained control.**
+It calls the body's missing `stat_abrevs()` and then indexes nil in
+`stat_train_cost`. That method is also absent from the pinned original sources;
+this is source review plus native execution, not an upstream-driver test. The
+passing skill-only run calls the existing `set_train_stat(({}))` on the temporary
+trainer. No stat API or sample configuration is changed. A separate stat-contract
+audit is needed before adapting that path. The attic script API remains deferred.
+
+The distinct-nil, preserved-player, 4000ms profile, native code and release
+binaries are unchanged. No shipped suites, broad gameplay or full source sweep
+are repeated. Evidence: /tmp/lima-npc-adapters-20261019.
 
 #### Lima release lifecycle qualification
 
