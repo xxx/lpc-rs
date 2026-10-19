@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **b5580f53** and native **cae3c8cd**.
+qualification notes are committed through Lima **6278c194** and native **f9a0999b**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -693,8 +693,9 @@ native saves, fresh-process restart and saved login, with **151 clean preloads
 per boot**. All five shipped test commands pass separately, followed by
 `unittest all` and `unittest all quiet` at **59/59**, with **zero manual loads**.
 See the [release lifecycle qualification](#lima-release-lifecycle-qualification).
-The original prepared run loaded 42 programs individually. Direct cold combined
-execution has both a pass and a timeout under the unchanged 4000ms deadline. See the
+The original prepared run loaded 42 programs individually. Fresh normal and
+quiet-first combined commands still time out under the unchanged 4000ms deadline;
+an earlier direct normal run passed. See the
 [cold command audit](#lima-cold-shipped-test-commands), original
 [combined qualification](#lima-combined-shipped-test-suites) and
 [source inventory](#lima-source-coverage) for their distinct scopes. Runtime
@@ -756,13 +757,39 @@ The two completed runs preserve preexisting prototypes and player/inventory/lab
 state, clear their observation marker and finish saves/logout/shutdown normally,
 with 151 clean preloads and no unexpected errors. The cold item command remains
 close to the budget. These runs are not a timing distribution or a reliable
-cold-combined guarantee; quiet-first cold execution is unmeasured. Cold here
-means target programs remain unloaded after startup and those observations;
+cold-combined guarantee; quiet-first execution was unmeasured in that run. Cold
+here means target programs remain unloaded after startup and those observations;
 it does not mean no earlier compilation or an empty OS file cache.
 
 The operator recipe now uses those existing per-suite commands before combined
 testing. Native/LPC source, profile, deadline and binaries are unchanged; the
 whole-source inventory is not rerun. Evidence: /tmp/lima-cold-suites-20261018.
+
+The **18 October 2026** follow-up at native **f9a0999b**, Lima **6278c194** uses
+the current release driver in two separate fresh processes, with the same profile
+and no manual loads. Each first combined command times out:
+
+| First command | Attempt ms | Compilation ms | Evaluation/snapshot ms | Conflicts |
+|---|---:|---:|---:|---:|
+| `unittest all` | 4001.073 | 3846.538 | 154.535 | 0 |
+| `unittest all quiet` | 4018.801 | 3867.211 | 151.589 | 0 |
+
+Compilation consumes about **96%** of both attempts. Neither result is a test
+assertion failure or a completed suite run. Both commands roll back the observed
+player, suite, inventory, clone and laboratory state; a following `look` restores
+the prompt. Marker removal, later commands, account/body saves and menu logout
+complete. Both boots have 151 clean preloads and normal exit-zero shutdown.
+These focused runs do not await the unrelated documentation scan or test restart.
+
+Source review confirms `test_all` runs suites synchronously in one dispatch;
+quiet mode changes output, leaving the combined work in the same transaction.
+Object loads already share the parser and macro-definition caches. Fresh
+preprocessing, parent interface collection, receiver checking and code generation
+still run. Aggregate transaction timings do not identify which compiler stage
+dominates; no current stage/CPU profile or new cache optimization is claimed.
+Keep the per-suite-first operator recipe and profile those stages before selecting
+another compiler change. Source/profile are unchanged; driver launch hashes match
+the qualified release binary. Evidence: /tmp/lima-cold-combined-release-20261018.
 
 #### Lima parameter-default positions and colour helpers
 
