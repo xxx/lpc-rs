@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **faeb3896** and native **99cd1e45**.
+qualification notes are committed through Lima **2ca1509c** and native **9dc7b25c**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -1003,6 +1003,26 @@ player gameplay are outside this qualification. Real simuls/providers are used
 with a temporary fixture master. The persistent profile and native binaries are
 unchanged; no whole-library inventory is recomputed.
 Evidence: /tmp/lima-logical-genius-20261019.
+
+#### Lima test dummy example
+
+Reviewed **19 October 2026** at native **9dc7b25c**, dedicated Lima **2ca1509c**.
+The optional `domains/std/monster/test_dummy.c` now uses native class-field
+access, bare arrival/stand-up callbacks, explicit `nil` formatter separators
+and the inherited two-object give-checker signature. Its diagnostic text,
+damage immunity and combat algorithms are preserved.
+
+**Six compile checks and 25 runtime checks pass** with the adopted source.
+An isolated fixture creates a real dummy clone and real sword/jacket: arrival
+hooks wield/wear equipment, incoming damage is reported without hurting the
+dummy, and the actual armour provider reduces damage with the expected message.
+The checks also cover the give checker, target selection, disarm/reclaim and
+cleanup. The stand-up timer is inspected, its actual callback invoked directly,
+then cancelled; elapsed timer delivery is not tested. The fixture runs the normal
+monster-default setup directly because the CLI does not pump deferred timers.
+Real providers/simuls and a temporary master are used without a listener or full
+gameplay run. Native code, binaries and the configured profile are unchanged.
+Evidence: /tmp/lima-test-dummy-20261019.
 
 #### Lima release lifecycle qualification
 
