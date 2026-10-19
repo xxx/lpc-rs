@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **44399be5** and native **433082f7**.
+qualification notes are committed through Lima **3d294c46** and native **2117116a**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -818,6 +818,42 @@ audit is needed before adapting that path. The attic script API remains deferred
 The distinct-nil, preserved-player, 4000ms profile, native code and release
 binaries are unchanged. No shipped suites, broad gameplay or full source sweep
 are repeated. Evidence: /tmp/lima-npc-adapters-20261019.
+
+#### Lima trainer stat-menu audit
+
+Reviewed **19 October 2026** at native **2117116a**, dedicated Lima **3d294c46**,
+with configured `BODY_STATS_LIMA`, distinct nil, preserved players and 4000ms.
+The body already provides `stat_abrev()` (singular), `query_stat(abbreviation)`
+and `inc_mod_stat(abbreviation)`. Tara calls the absent plural name and constructs
+absent per-stat method names. These caller/provider mismatches also exist in the
+pinned original [trainer](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_trainer.c)
+and [stat provider](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/lima.c).
+This is local source review plus native execution, not an upstream-driver test.
+
+A temporary three-call adapter restores the menu and its configured prices,
+but selecting a stat only says "Okay!": the legacy comma-expression callback
+does not invoke `train_stat`. Binding the chosen stat with `&train_stat(s)`
+completes the four-line proposal. No new body method or driver feature is needed.
+An explicit payment cast was considered and compiled, but the successful run
+pays using the original integer cost; that extra change is not recommended.
+
+The four-line prototype passes **43 runtime checks in 7.29s**, with Tara's
+default strength/agility options enabled. Real ordinary-player menus verify
+level/stat-scaled prices, insufficient funds, exhausted spare points, exact
+payment, repeated strength and distinct agility increases, refreshed prices,
+preserved credit balance, refusal after all three points are spent and a
+reopened menu without duplicate choices. Original stat and wallet mappings,
+identity and capacity are restored, actors/room removed, and ordinary input,
+native saves, logout and exit-zero shutdown pass. The accepted boot has
+**151 clean preloads** and no runtime errors; existing channel warnings remain.
+
+All **eight focused compiler checks** pass. The three-call runtime control's
+failed action and an earlier message-wrapping assertion are retained separately.
+The four-line change remains a proposal under `/tmp`; production source,
+profile and binaries are unchanged. Alternate stat models, other configuration
+flags and the previous gameplay/suite qualifications are not retested. Recommend
+adopting the tested trainer-only adapter. Evidence:
+/tmp/lima-trainer-stats-audit-20261019.
 
 #### Lima release lifecycle qualification
 
