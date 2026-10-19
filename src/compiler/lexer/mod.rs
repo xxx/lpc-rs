@@ -45,7 +45,6 @@ impl<'input> LexWrapper<'input> {
         let lexer = Token::lexer_with_extras(
             prog,
             LexState {
-                last_slice: String::new(),
                 current_file_id: file_id,
                 base_offset: base,
                 macro_body: false,
@@ -442,7 +441,6 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
     // last newline is always left as gap for the placement check.
     let end = span.end - usize::from(slice.ends_with('\n'));
 
-    lex.extras.last_slice = slice.to_string();
     Span::new(lex.extras.current_file_id, base + span.start..base + end)
 }
 
@@ -467,14 +465,14 @@ fn int_literal(lex: &mut Lexer<Token>, radix: u32) -> std::result::Result<IntTok
 fn string_token(lex: &mut Lexer<Token>) -> StringToken {
     let span = track_slice(lex);
 
-    StringToken(span, lex.extras.last_slice.clone())
+    StringToken(span, lex.slice().to_owned())
 }
 
 /// Strip off the start and end characters of a string, then store the result in
 /// a [`StringToken`]. Used for processing string literals and include paths.
 fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
     let span = track_slice(lex);
-    let slice: &str = &lex.extras.last_slice;
+    let slice = lex.slice();
 
     let s = if slice.len() < 3 {
         String::from("")

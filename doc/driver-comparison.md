@@ -683,9 +683,9 @@ the adaptations described below.
 
 #### Lima port readiness
 
-As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
+As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **45c04287** and native **40b2acae**.
+qualification notes are committed through Lima **e7713798** and native **fbe898da**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -919,6 +919,39 @@ release dependencies build only the standalone experiment; no Cargo rebuild,
 new target tree, gameplay run or source-inventory repeat occurs. Shared target
 remains about 1.3GB. Evidence: /tmp/lima-lexer-copies-20261018, including the
 unapplied two-file proposal and complete paired results.
+
+#### Lima lexer buffer removal
+
+Reviewed **19 October 2026**, following the audit at native **fbe898da**,
+dedicated Lima **e7713798**. The native lexer removes its redundant text buffer.
+Text tokens retain owned strings and
+all span/escape rules remain unchanged. The applied source matches the prototype
+validated above; macro storage, cache policy and the mudlib profile are unchanged.
+
+Eight fresh driver sessions pass: three alternating old/changed normal-first
+pairs, changed quiet-first and changed per-suite-first. **Sixteen combined
+commands pass 59/59**, and the five individual suites pass **26/16/7/5/5**.
+Every boot has 151 clean preloads, preserved actor/world/prototype state, marker
+cleanup, native saves/menu logout and normal exit. No manual target loads or
+additional LPC fixtures are used. These runs do not repeat saved-login restart.
+
+Normal-first response medians are old **2.301s**, changed **2.263s**; pair changes
+range from a 0.75% slowdown to a 5.04% reduction. A short fresh-process CLI batch
+has a 4.9% slower changed median; longer batches of the same four files instead
+have medians **2.299/2.237s**, 2.7% lower. Their paired changes span a 10.29%
+slowdown to a 12.15% reduction. All 528 CLI invocations, including warmups,
+succeed with identical diagnostics per target. These include process/configuration
+setup and simul initialization; OS inputs are warmed, compiler caches start fresh
+per process, and target constructors are omitted. They differ from the driver's
+shared-cache workload. Mixed directions and overlapping ranges do not establish
+a whole-compiler improvement or a cold-timeout fix; keep the per-suite-first recipe.
+
+The locked release workspace build, **5,161 workspace tests/doctests**, warning-free
+all-targets Clippy and format check pass; two tests remain ignored. After testing,
+the ordinary release workspace rebuilds and driver/CLI hashes match the measured
+executables exactly. Builds use two jobs, incremental off and shared target,
+which remains about 2.2GB under a 12GiB artifact guard. Evidence:
+/tmp/lima-lexer-buffer-removal-20261018.
 
 #### Lima parameter-default positions and colour helpers
 
