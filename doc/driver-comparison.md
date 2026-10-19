@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **f1251a6c** and native **f7522564**.
+qualification notes are committed through Lima **d6534f6f** and native **bc642b2a**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -1084,6 +1084,28 @@ player combat or loot generation is exercised. Earlier loot-provider qualificati
 retains its scope. No configured boss caller is identified or enabled, and no
 mudlib source, profile, native code or binary changes are needed.
 Evidence: /tmp/lima-boss-integration-20261019.
+
+#### Lima legacy exit integration decision
+
+Reviewed **19 October 2026** at native **bc642b2a**, dedicated Lima **d6534f6f**.
+The older [object-exit helper](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_exit_obj.c)
+and [room-exit wrapper](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/room/exits.c)
+remain deferred, with no identified configured consumer. The selected providers
+remain `BASE_ROOM`/`M_EXIT` and `EXIT_OBJ`/`M_COMPLEX_EXIT`.
+
+**Six compile checks and ten runtime checks** show why removing obsolete arguments
+is insufficient. Temporary type/arity edits make complete legacy hosts compile,
+but their raw/default destinations then resolve to nil: current `eval_dest`
+expects a stored direction key. Legacy message callbacks return functions, and
+the old room sends four movement arguments while the selected room sends one
+`move_data` record. The selected complex-exit provider resolves its method
+destination correctly. Four unchanged-source compile rejections are retained.
+
+The fixture records movement arguments without moving a body. No diagnostic
+adapter is adopted, native API is loosened or configured provider is replaced.
+Library sources, profile and binaries are unchanged; earlier exit/gameplay
+qualification retains its scope and no inventory is recomputed.
+Evidence: /tmp/lima-exit-integration-20261019.
 
 #### Lima release lifecycle qualification
 
