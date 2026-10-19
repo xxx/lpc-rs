@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **3d294c46** and native **2117116a**.
+qualification notes are committed through Lima **4727f889** and native **f170d3a3**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -807,7 +807,7 @@ Player identity, role, inventory, skill records and rank values are restored;
 temporary actors and the room are removed. The accepted run has no runtime
 errors; existing channel compiler warnings remain.
 
-**Tara's default stat menu remains unqualified and fails in the retained control.**
+**At that revision, Tara's default stat menu fails in the retained control.**
 It calls the body's missing `stat_abrevs()` and then indexes nil in
 `stat_train_cost`. That method is also absent from the pinned original sources;
 this is source review plus native execution, not an upstream-driver test. The
@@ -854,6 +854,37 @@ profile and binaries are unchanged. Alternate stat models, other configuration
 flags and the previous gameplay/suite qualifications are not retested. Recommend
 adopting the tested trainer-only adapter. Evidence:
 /tmp/lima-trainer-stats-audit-20261019.
+
+#### Lima trainer stat-menu adoption
+
+Reviewed **19 October 2026** at native **f170d3a3**, dedicated Lima **4727f889**,
+with the four-line trainer change pending commit. The adopted module exactly
+matches the qualified audit prototype. It uses the body's existing `stat_abrev`,
+`query_stat` and `inc_mod_stat` methods and binds the selected menu argument with
+`&train_stat(s)`. No body/driver API, payment cast or configuration change is added.
+This resolves the configured Tara sample's earlier default stat-menu gap.
+
+All **four direct compiler checks** pass against the dedicated checkout: trainer,
+human, money daemon and greeter. A fresh driver then passes the audit's same
+**43 runtime checks in 5.66s**, with **151 clean preloads**, native saves, normal
+account logout and exit-zero shutdown. Runtime copies use the actual source;
+there is no trainer-module substitution. Only the established loopback service
+settings and stock `AUTO_WIZ` switch differ in the disposable runtime.
+
+Tara's default strength/agility menu prices and refusals work. Three purchases
+raise strength twice and agility once, debit the exact gold prices, consume the
+three spare points, refresh both prices and preserve the credit balance. Another
+affordable purchase is refused after point exhaustion. Menu reopening retains
+one choice per stat. Complete stat/wallet mappings and identity/capacity are
+restored, temporary actors/room are removed and ordinary shell input works.
+The accepted run has no runtime errors; existing channel warnings remain.
+
+Only `std/modules/m_trainer.c` changes among the 1549 library files. The profile,
+native code and release binaries are unchanged; no Cargo build, whole-source
+inventory, broad gameplay or shipped-suite repeat is needed for this local
+adapter. The preceding dated qualifications retain their separate scopes;
+alternate stat models/configurations and the attic script API remain separate.
+Evidence: /tmp/lima-trainer-stats-adoption-20261019.
 
 #### Lima release lifecycle qualification
 
