@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **ac3f5f47** and native **1edee923**.
+qualification notes are committed through Lima **5845303c** and native **fb668dfd**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -986,6 +986,52 @@ compilation/runtime comparison. Update the existing probe-count test for its
 identical-directory case. This audit changes no production code, mudlib, profile
 or release binary and runs no Cargo build or gameplay session; shared target
 remains about 2.2GB. Evidence: /tmp/lima-include-resolution-20261019.
+
+#### Lima include resolution short-circuit
+
+Reviewed **19 October 2026**, following the audit at native **fb668dfd**, dedicated
+Lima **5845303c**. The native
+resolver now skips metadata checks for absolute inputs or identical local/system
+search bases. Other ordered searches, callbacks and first-read behavior are
+unchanged. Six new tests cover selection/fallback cases and callbacks on memo/once
+reopens. The isolated native include module passes all 17 tests; the original
+resolver fails three no-probe assertions. The language reference also corrects
+its description of the existing angle-include local fallback.
+
+A replay through the rebuilt native compiler reduces metadata calls from
+**13,088 to 785**, over the same 946 program visits. Header reads remain 13,669,
+the 13,088 callback path/from pairs retain their order, and token count remains
+488,217. This capture records/allows callbacks; it does not run the LPC master.
+
+Eight fresh driver sessions pass, including three alternating old/changed
+normal-first pairs, changed quiet-first and changed per-suite-first. All 16
+combined commands pass **59/59**, and the five separate suites pass **26/16/7/5/5**.
+Each boot has 151 clean preloads, checked player/world/prototype preservation,
+marker cleanup, native saves/menu logout and normal exit. No manual target loads,
+new LPC fixtures, profile change or saved-login restart repeat is added.
+
+| Measured workload | Previous median | Changed median | Reduction |
+|---|---:|---:|---:|
+| First normal combined command response, three pairs | 2.238s | 2.181s | 2.5% |
+| Four fresh-process CLI targets, ten repetitions, five pairs | 2.669s | 2.281s | 14.6% |
+
+All 480 CLI compilations succeed with identical diagnostics per target; target
+constructors are omitted and real simul initialization runs. CPU medians improve
+14.4%. Four of five CLI pairs improve, with one slowdown; host variation and the
+different initialization/cache workloads limit generalization. These are observed
+sample improvements, not a cold-timeout reliability guarantee. Keep the qualified
+per-suite-first operator recipe.
+
+The locked release workspace build, **5,167 workspace tests/doctests**, warning-free
+all-targets Clippy and format check pass; two tests remain ignored. The ordinary
+release workspace rebuilds after testing. Its compiler is byte-identical to the
+measured compiler; its driver differs only in a section-header field and GNU build
+ID, with all other bytes identical. Two additional fresh sessions qualify that
+final driver, both combined modes at 59/59 with preserved state, saves/logout,
+151 clean preloads and normal shutdown. Their timings are separate from the paired
+comparison. Builds retain two jobs, incremental off and the shared target guard.
+Evidence:
+/tmp/lima-include-resolution-adoption-20261019.
 
 #### Lima parameter-default positions and colour helpers
 
