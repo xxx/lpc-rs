@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **5214351c** and native **4763637c**.
+qualification notes are committed through Lima **260e20b0** and native **301c90e0**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -916,19 +916,43 @@ Pinned source examples:
 [buffered file helper](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_file.c),
 [WIP paper](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/paper.c).
 
-One inheritance probe also reproduces a compiler input difference. Moving its
-inherit before the global declaration reveals that host-path CLI compilation
-looks for `test.c/node_class.c`; both bare and `./` sibling forms fail, while
-`__DIR__` works. An independent native fixture loads the same relative sibling
-in game successfully. Existing source and a regression test retain the host
-filename base. The [inheritance reference](lpc/inheritance.md) now describes this
-exception. Recommend a focused input-consistency audit before optional example
-adoption, keeping the reserved signature/cache design discussion separate.
+At the reviewed revisions, one inheritance probe also reproduces a compiler
+input difference. Moving its inherit before the global declaration reveals
+that host-path CLI compilation looks for `test.c/node_class.c`; both bare and
+`./` sibling forms fail, while `__DIR__` works. An independent native fixture
+loads the same relative sibling in game successfully. The follow-up correction
+below makes these inputs consistent; the reserved signature/cache design
+discussion remains separate.
 
 The configured distinct-nil, preserved-player, 4000ms profile, all 1549 library
 files and release binaries stay unchanged. No live service or gameplay audit is
 run. Source claims are reviewed against Lima `eefaff66adcae9b01e16059574c925b0d63e70a1`;
 no upstream driver is executed. Evidence: /tmp/lima-remaining-sources-20261019.
+
+#### Lima relative inherit inputs
+
+The follow-up to native **301c90e0** and dedicated Lima **260e20b0** makes
+[relative inherits](lpc/inheritance.md) use the source directory for host-file
+and in-game inputs, including supplied source strings. Each inherited parent
+resolves its own relative paths; an inherit in a header uses its containing
+program's directory. Canonical identities, inheritance permissions and the
+requirement that parents stay under `LIB_DIR` are retained.
+
+Four new regressions and two revised legacy tests cover these inputs, nested
+parents, header inherits and permissions. The locked release workspace suite
+passes **5171 tests/doctests**, with two ignored. Workspace build, warning-free
+all-targets Clippy, formatting and documentation checks also pass.
+
+This corrects the CLI difference without changing Lima source or its configured
+profile. All 12 CLI execute/check/assembly, bare/dot and source-suffix cases
+change from failure to success. Both reordered behavior-example forms compile
+against a disposable copy of the actual Lima library/profile.
+`std/behaviour/test.c` still requires its inherit to precede its global
+declaration; its original diagnostic is unchanged. The other literal relative
+site, contrib's `drunk.c`, now finds its parent and reaches that parent's
+unadapted `set_heart_beat` calls. No optional source is adopted or whole-library
+inventory recomputed.
+Evidence: /tmp/lima-relative-inherits-20261019.
 
 #### Lima release lifecycle qualification
 

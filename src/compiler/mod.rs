@@ -388,6 +388,65 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn relative_inherits_use_the_source_directory_for_file_and_string_inputs() {
+        use crate::{
+            compile_time_config::MAX_CALL_STACK_SIZE,
+            interpreter::vm::Vm,
+            test_support::{initialize_program, lib_holding, temp_lib_config},
+        };
+
+        let root = lib_holding(
+            "relative-inherit-inputs",
+            &[
+                ("base/grand.c", "string grand_file() { return __FILE__; }"),
+                ("zone/value.h", "#define SUFFIX \"|header\"\n"),
+                (
+                    "zone/parent.c",
+                    "#include \"value.h\"\ninherit \"../base/grand\"; string parent_file() { return grand_file() + \"|\" + __FILE__ + SUFFIX; }",
+                ),
+                (
+                    "parent.c",
+                    "string parent_file() { return \"wrong directory\"; }",
+                ),
+            ],
+        );
+        let config: Arc<Config> = temp_lib_config(&root).into();
+        let compiler = Compiler::new(config.clone());
+        for inherit in ["parent", "./parent.c", "../zone/parent"] {
+            let code = format!(
+                "inherit \"{inherit}\"; string create() {{ return parent::parent_file() + \"|\" + __FILE__ + \"|\" + __DIR__; }}"
+            );
+            std::fs::write(root.join("zone/child.c"), &code).unwrap();
+            for path in [
+                LpcPath::from("/zone/child.c"),
+                LpcPath::from("/zone/child"),
+                LpcPath::new_server(root.join("zone/child.c")),
+                LpcPath::new_server(root.join("zone/child")),
+            ] {
+                let from_file = compiler.compile_file(path.clone()).await.unwrap();
+                let from_string = compiler
+                    .compile_string(path.source_file(), &code)
+                    .await
+                    .unwrap();
+                for compiled in [from_file, from_string] {
+                    assert_eq!(*compiled.program.filename, LpcPath::from("/zone/child.c"));
+                    let vm = Vm::new(config.clone());
+                    let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                        compiled.program,
+                        vm.global_state.clone(),
+                    )
+                    .await
+                    .unwrap();
+                    assert_eq!(
+                        task.result().unwrap().to_string(),
+                        "/base/grand.c|/zone/parent.c|header|/zone/child.c|/zone/"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn analysis_retains_declarations_and_scoped_inherited_sources() {
         use crate::test_support::TempLib;
         use lpc_rs_utils::config::ConfigBuilder;
@@ -1310,7 +1369,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn host_and_virtual_sources_keep_their_distinct_inheritance_bases() {
+        async fn host_and_virtual_sources_use_the_same_inheritance_directory() {
             use crate::test_support::TempLib;
 
             let root = TempLib::new("source-inheritance");
@@ -1323,18 +1382,18 @@ mod tests {
                 .unwrap();
             let compiler = Compiler::new(config);
 
-            for (path, expected) in [
-                (LpcPath::from("/room/child.c"), "/room/parent.c"),
-                (
-                    LpcPath::new_server(root.join("room/child.c")),
-                    "/room/child.c/parent.c",
-                ),
+            for path in [
+                LpcPath::from("/room/child.c"),
+                LpcPath::new_server(root.join("room/child.c")),
             ] {
                 let compiled = compiler
                     .compile_string(path, "inherit \"parent\";\n")
                     .await
                     .unwrap();
-                assert_eq!(compiled.program.layout[0].filename.to_string(), expected);
+                assert_eq!(
+                    compiled.program.layout[0].filename.to_string(),
+                    "/room/parent.c"
+                );
             }
         }
 

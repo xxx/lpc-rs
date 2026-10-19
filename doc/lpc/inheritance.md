@@ -3,15 +3,12 @@
 An `inherit` statement imports another program's functions and global variables
 into the current object. Put inherits before other declarations. The path must
 be a constant string expression; adjacent strings and string concatenation work.
-During in-game loading, paths without a leading `/` are relative to the source
-program's directory.
-
-Host filesystem inputs currently have a different base, including files passed
-to `lpc-rs-lpcc`: the compiler retains the source filename as the inheritance
-base. A relative inherit from `/room/child.c` can therefore look under
-`/room/child.c/` instead of `/room/`. For sources under `LIB_DIR`, prefixing an
-inherit with `__DIR__` gives an absolute in-game path that resolves consistently
-across these input forms.
+For sources under `LIB_DIR`, paths without a leading `/` are relative to the
+source program's directory for both host-file and in-game compiler inputs. For
+supplied source strings, the provided source name determines that directory.
+An inherit written in an included header also uses the program's directory.
+Paths starting with `/` are absolute in-game paths. All inherited files must
+remain under `LIB_DIR`.
 
 ```c
 inherit "/std/object";

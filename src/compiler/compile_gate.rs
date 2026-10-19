@@ -207,6 +207,84 @@ mod gate_tests {
         assert_eq!(gate.includes(), pairs(&[("/hdr.h", "/child.c")]));
     }
 
+    #[tokio::test]
+    async fn relative_inherits_in_headers_use_the_program_directory_for_both_input_origins() {
+        let root = TempLib::new("gate-relative-inherit-header");
+        write(&root, "zone/parent.c", "int inherited() { return 7; }");
+        write(&root, "zone/headers/parent.c", "");
+        write(&root, "zone/headers/inherit.h", "inherit \"./parent\";\n");
+        for path in [
+            LpcPath::from("/zone/child.c"),
+            LpcPath::new_server(root.join("zone/child.c")),
+        ] {
+            let gate = Arc::new(RecordingGate::allowing());
+            let compiler = CompilerBuilder::default()
+                .config(config_at(&root))
+                .gate(Some(gate.clone() as Arc<dyn CompileGate>))
+                .build()
+                .unwrap();
+            let (_, context) = compiler
+                .analyze_string(
+                    path,
+                    "#include \"headers/inherit.h\"\nint f() { return inherited(); }",
+                )
+                .await
+                .unwrap();
+            assert_eq!(context.inherits.len(), 1);
+            assert_eq!(
+                gate.inherits(),
+                pairs(&[("/zone/parent.c", "/zone/child.c")])
+            );
+            assert_eq!(
+                gate.includes(),
+                pairs(&[("/zone/headers/inherit.h", "/zone/child.c")])
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn relative_inherits_keep_denials_and_root_checks_for_both_input_origins() {
+        let root = TempLib::new("gate-relative-inherit-refused");
+        for path in [
+            LpcPath::from("/zone/child.c"),
+            LpcPath::new_server(root.join("zone/child.c")),
+        ] {
+            for (target, expected, asked) in [
+                (
+                    "./parent",
+                    "inherit \"/zone/parent.c\": permission denied",
+                    true,
+                ),
+                (
+                    "../../parent",
+                    "attempt to inherit a file outside the root: `../../parent`",
+                    false,
+                ),
+            ] {
+                let gate = Arc::new(RecordingGate::denying());
+                let compiler = CompilerBuilder::default()
+                    .config(config_at(&root))
+                    .gate(Some(gate.clone() as Arc<dyn CompileGate>))
+                    .build()
+                    .unwrap();
+                let error = compiler
+                    .compile_string(path.clone(), format!("inherit \"{target}\";"))
+                    .await
+                    .unwrap_err();
+                assert_eq!(error.message(), expected);
+                assert!(error.span().is_some());
+                assert_eq!(
+                    gate.inherits(),
+                    if asked {
+                        pairs(&[("/zone/parent.c", "/zone/child.c")])
+                    } else {
+                        Vec::new()
+                    }
+                );
+            }
+        }
+    }
+
     /// Each compile asks for its own inherits: the parent asks for the grandparent.
     #[tokio::test]
     async fn a_nested_inherit_asks_from_the_parent() {
