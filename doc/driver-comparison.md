@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **5845303c** and native **fb668dfd**.
+qualification notes are committed through Lima **2fb9a921** and native **ae128006**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -702,9 +702,43 @@ See the
 [source inventory](#lima-source-coverage) for their distinct scopes. Runtime
 qualifications use loopback IMUD fixtures; live I3 remains separate.
 
+A separate [ordinary-player lifecycle audit](#lima-ordinary-player-lifecycle)
+passes creation, player-shell commands, native saves and fresh-process password
+login with stock `AUTO_WIZ` disabled only in a disposable runtime copy. The
+dedicated checkout retains its development setting.
+
 Original-driver saved-data/password import, alternate build options, unselected
 or optional sources and documented upstream defects retain separate decisions.
 The source inventory is not a completion percentage or a missing-feature count.
+
+#### Lima ordinary-player lifecycle
+
+Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
+The existing release driver passes **57 checks across two fresh processes** in
+**9.26s**, with **151 clean preloads per boot** and normal exit-zero shutdown.
+The distinct-nil, preserved-player, 4000ms profile remains unchanged. Only the
+disposable runtime copy disables stock `AUTO_WIZ`, alongside the existing two
+loopback service substitutions; the dedicated source and configuration stay
+unchanged.
+
+The normal first-account bootstrap still creates an administrator. A subsequent
+account remains non-wizard/non-admin and uses `/obj/mudlib/pshell`, named
+`Player Shell`. Real network menus create its human character. `look`,
+`inventory`, `score`, an added alias and east/west movement work. `quit` removes
+the body and returns to the account menu; `q` disconnects. Native account,
+character and player-shell saves are written.
+
+After a fresh driver start, saved-password authentication restores the same
+identity, role, race, capacity, empty inventory, player shell and command path.
+The alias still executes, and `PLAYERS_START_WHERE_THEY_QUIT` restores the
+Example Room rather than the default Grand Hall. Both accounts log out normally.
+No runtime errors, failed preloads or caught modal errors occur; existing channel
+compiler warnings remain. The first observer attempt failed on line-wrapped
+JSON; its evidence is retained separately from the passing run.
+
+This audit adds no source fix or LPC fixture, and does not repeat shipped suites,
+full gameplay coverage, original-driver save import or live services. Evidence:
+/tmp/lima-mortal-entry-20261019.
 
 #### Lima release lifecycle qualification
 
