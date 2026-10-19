@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **2ca1509c** and native **9dc7b25c**.
+qualification notes are committed through Lima **a18182fe** and native **8b1e997a**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -1023,6 +1023,26 @@ monster-default setup directly because the CLI does not pump deferred timers.
 Real providers/simuls and a temporary master are used without a listener or full
 gameplay run. Native code, binaries and the configured profile are unchanged.
 Evidence: /tmp/lima-test-dummy-20261019.
+
+#### Lima character-mode key bindings
+
+Reviewed **19 October 2026** at native **8b1e997a**, dedicated Lima **a18182fe**.
+The optional `obj/secure/shell/bindings.c` now dispatches characters with
+`foreach` and registers the bare `handle_input` callback. The preceding modal
+closure returned a function without invoking it; directly invoking the preceding
+character loop failed native string-map result checking. Both behaviors are
+reproduced in baseline controls. Matching and key-token rules are preserved.
+
+**Four compile checks and 31 runtime checks pass** using the adopted module.
+The wizard shell and input module compile, as do a temporary complete shell
+composition and its fixture master. The real `M_INPUT` provider forwards the
+named callback to a recording user. Checks cover exact/partial matches, fallback,
+state reset, dynamic bind/rebind/unbind, split Escape sequences, control keys,
+Unicode and cleanup. This composition uses a shell blueprint; it does not run
+an owned shell's clone/start lifecycle or the real user's modal stack/network
+input. The helper still requires its host and has no identified configured caller.
+Configured shell input, the profile, native code and binaries are unchanged.
+Evidence: /tmp/lima-key-bindings-20261019.
 
 #### Lima release lifecycle qualification
 
