@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **3b048a06** and native **3efa1fa0**.
+qualification notes are committed through Lima **bdb3a1fd** and native **194fc4f0**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -963,6 +963,22 @@ profile are unchanged. Qualification covers the optional example's inheritance
 contract; behavior-tree algorithms and configured activation retain their earlier
 scope. No whole-library inventory is recomputed.
 Evidence: /tmp/lima-behaviour-example-20261019.
+
+#### Lima navigation passage example
+
+Reviewed **19 October 2026** at native **194fc4f0**, dedicated Lima **bdb3a1fd**.
+The optional `domains/std/object/navigation_passage.c` now explicitly converts
+`MEDIUM` to float for the existing protected `set_mass(float)` API. Its integer
+size branch, providers and configured profile are unchanged.
+
+Four compile checks pass for the adopted source, `OBJ`, copied source and clone
+fixture. **12 runtime checks** cover blueprint initialization, two real clones,
+16.0 mass, both identifiers, attachment/rendering, descriptions, independent state
+and cleanup. `OBJ` invokes `setup` only for clones. The fixture uses the shipped
+simuls/providers and a temporary master for object loading and cleanup; it adds
+no listener or full mudlib startup. No configured activation, navigation gameplay
+or new whole-library total is established. Native code and binaries are unchanged.
+Evidence: /tmp/lima-navigation-passage-20261019.
 
 #### Lima release lifecycle qualification
 
