@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **2fb9a921** and native **ae128006**.
+qualification notes are committed through Lima **e6a538a5** and native **8157cfac**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -739,6 +739,44 @@ JSON; its evidence is retained separately from the passing run.
 This audit adds no source fix or LPC fixture, and does not repeat shipped suites,
 full gameplay coverage, original-driver save import or live services. Evidence:
 /tmp/lima-mortal-entry-20261019.
+
+#### Lima NPC sample-chain audit
+
+Reviewed **19 October 2026** at native **8157cfac**, dedicated Lima **e6a538a5**,
+with the release compiler and unchanged distinct-nil, preserved-player, 4000ms
+profile. **17 scoped compile checks** reproduce seven sample/fragment failures,
+retain five passing references and test five temporary diagnostic controls.
+No source is adopted, constructor executed or full inventory repeated.
+
+The aggressive-monster host compiles after replacing three string-named
+`call_out` callbacks with function values. Its `behavior_hooks` implementation
+comes from ADVERSARY; that declaration is not a missing native efun. The trainer
+host compiles after three class-field accesses use native dot syntax and the
+restriction parameter becomes a mapping. The original setter declares an array,
+but its loop consumes skill/restriction pairs and stores them in a mapping;
+no caller was identified. Recommend a mapping contract before adopting that
+adapter. Standalone trainer-module errors about `add_hook` are host dependencies,
+not evidence of a missing driver feature.
+
+The attic reaction module still fails after a temporary legacy text-literal
+rewrite, exposing class-field syntax next. More significantly, both attic actors
+call `add_script`, whose pinned upstream implementation is a diagnostic
+placeholder. The existing port replaces that placeholder with an explicit
+not-implemented error; the explicit error is not upstream behavior. Its script
+compiler also leaves the parsed `doevery` opcode unimplemented. Retain these
+examples as incomplete rather than implementing a new scripting feature to
+increase compilation totals. Pinned source review:
+[aggression](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_aggressive.c),
+[trainer](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_trainer.c),
+[reaction module](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_react.c).
+
+The earlier activation classification remains: no configured stock/preload root
+was identified for these chains; manual loading remains possible. Five references
+(ADVERSARY, LIVING, goblin, greeter and the skill class) compile. Recommend the
+small aggression/trainer adapters with bounded runtime checks; the controls
+establish compilation only. No new native requirement is established. Existing
+gameplay qualification and the 999/1182 inventory retain their separate scopes.
+Evidence: /tmp/lima-npc-samples-20261019.
 
 #### Lima release lifecycle qualification
 
