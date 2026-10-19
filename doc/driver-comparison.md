@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **bdb3a1fd** and native **194fc4f0**.
+qualification notes are committed through Lima **faeb3896** and native **99cd1e45**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -979,6 +979,30 @@ simuls/providers and a temporary master for object loading and cleanup; it adds
 no listener or full mudlib startup. No configured activation, navigation gameplay
 or new whole-library total is established. Native code and binaries are unchanged.
 Evidence: /tmp/lima-navigation-passage-20261019.
+
+#### Lima Logical Genius and trigger defaults
+
+Reviewed **19 October 2026** at native **99cd1e45**, dedicated Lima **faeb3896**.
+The optional Logical Genius example uses native typed block closures for its
+seven legacy anonymous functions, preserving explicit captures and predicate
+bodies. Its absent pattern/rule references use `nil`.
+
+Runtime qualification also exposes omitted rule references defaulting to numeric
+zero before assignment to `class pattern` string fields. `M_TRIGGERS.add_pattern`
+and `add_sub_pattern` now default those references to `nil`; the listen mask
+remains integer zero. Caller review includes Harry, wolf, pet and NPC-script
+consumers. Explicit numeric-zero rule references still raise the original type
+error; no native type check is relaxed.
+
+**Eight compile checks and 40 runtime checks pass** using the adopted sources:
+five actual complete consumers, copied Genius and two fixtures. Coverage includes
+defaults, equality/negation/prefix/suffix predicates, AND/OR precedence, retained
+captures, named rules, message matching, listen masks, actual clone setup and
+cleanup. The message fixture captures response commands; delayed speech and
+player gameplay are outside this qualification. Real simuls/providers are used
+with a temporary fixture master. The persistent profile and native binaries are
+unchanged; no whole-library inventory is recomputed.
+Evidence: /tmp/lima-logical-genius-20261019.
 
 #### Lima release lifecycle qualification
 
