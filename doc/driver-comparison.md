@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **d6534f6f** and native **bc642b2a**.
+qualification notes are committed through Lima **03e1f72f** and native **c027d047**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -1106,6 +1106,32 @@ adapter is adopted, native API is loosened or configured provider is replaced.
 Library sources, profile and binaries are unchanged; earlier exit/gameplay
 qualification retains its scope and no inventory is recomputed.
 Evidence: /tmp/lima-exit-integration-20261019.
+
+#### Lima port acceptance
+
+Reviewed **19 October 2026** at native **c027d047**, dedicated Lima **03e1f72f**.
+The current checkout passes **30 lifecycle checkpoints in 136.54 seconds** with
+two clean **151-preload** boots and normal exit-zero shutdowns. Fresh account and
+human creation, ordinary commands, native saves, saved-password authentication
+after restart, restored identity/room/inventory and logout pass. The documentation
+scan completes and saves before the first shutdown.
+
+The five shipped suites pass **26/16/7/5/5**, then normal and quiet combined
+commands each pass **59/59**. There are no manual target loads or added LPC
+fixtures. Player/world state, existing object identities and cleanup match the
+baseline after every command; the temporary observer marker is cleared.
+The existing ten channel compiler warnings per boot and five autodoc header
+warnings remain; no runtime errors or failed preloads occur.
+
+The existing release-lifecycle runner is copied unchanged into a new packet.
+Only the established loopback IMUD router/OOB substitutions and fixed service
+frames are used. All 1549 library files, profile and release binaries remain
+unchanged. This refresh covers the documented per-suite-first recipe; direct
+cold combined reliability, foreign saves, live services and optional integrations
+retain their limits. The README now consolidates the remaining decisions from
+the 16-entry source review; no further optional feature is selected or inventory
+total recomputed.
+Evidence: /tmp/lima-port-acceptance-20261019.
 
 #### Lima release lifecycle qualification
 
