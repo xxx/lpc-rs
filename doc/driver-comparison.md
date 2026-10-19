@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **e7713798** and native **fbe898da**.
+qualification notes are committed through Lima **ac3f5f47** and native **1edee923**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -952,6 +952,40 @@ the ordinary release workspace rebuilds and driver/CLI hashes match the measured
 executables exactly. Builds use two jobs, incremental off and shared target,
 which remains about 2.2GB under a 12GiB artifact guard. Evidence:
 /tmp/lima-lexer-buffer-removal-20261018.
+
+#### Lima include path resolution audit
+
+Reviewed **19 October 2026** at native **1edee923**, dedicated Lima **ac3f5f47**.
+The earlier stage profile records 14,034 include resolutions per cold command;
+resolution takes 8.6–9.7% of measured compile-root time. A read-only preprocessing
+replay of the same 946 program visits reproduces 13,088 include callbacks and
+13,669 header reads, with **13,088 metadata checks**. At least **12,302 checks
+(94%) cannot affect selection**: their including directory and sole system
+search directory are both `/include`.
+
+The proposed short-circuit returns the ordinary local path for an absolute input
+or when all system search directories equal the including directory. With no
+system directories, that path is also the only result. Other cases keep the
+existing ordered search. This introduces no file cache: confinement, callbacks,
+once/cycle handling, text memoization and the first read after the callback remain
+in their current order, including transactional edits made by that callback.
+
+Copied current/prototype modules pass **32,640 resolver comparisons** with identical
+selected inputs, plus **84 include-open comparisons** covering callback edits,
+denials/errors, Latin-1 warnings, source IDs/spans, memo reuse and once skips.
+Five alternating timing pairs over 12,302 representative lookups give medians
+**155.85ms current / 37.09ms prototype**, 76.2% lower. A control with distinct
+search/fallback directories has **161.72/164.44ms** medians and mixed directions.
+
+These timings include fresh include-walk setup and resolution, excluding header
+reads and callback execution. The preprocessing capture records/permits callbacks
+instead of running the LPC master; representative paths are reconstructed from
+selected names. No whole-compiler gain or cold-timeout fix is established. Adopt
+the small short-circuit next with native search-order/callback tests and an actual
+compilation/runtime comparison. Update the existing probe-count test for its
+identical-directory case. This audit changes no production code, mudlib, profile
+or release binary and runs no Cargo build or gameplay session; shared target
+remains about 2.2GB. Evidence: /tmp/lima-include-resolution-20261019.
 
 #### Lima parameter-default positions and colour helpers
 
