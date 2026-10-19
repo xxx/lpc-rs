@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **260e20b0** and native **301c90e0**.
+qualification notes are committed through Lima **3b048a06** and native **3efa1fa0**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -931,7 +931,8 @@ no upstream driver is executed. Evidence: /tmp/lima-remaining-sources-20261019.
 
 #### Lima relative inherit inputs
 
-The follow-up to native **301c90e0** and dedicated Lima **260e20b0** makes
+The correction committed as native **3efa1fa0**, with dedicated Lima notes
+**3b048a06**, makes
 [relative inherits](lpc/inheritance.md) use the source directory for host-file
 and in-game inputs, including supplied source strings. Each inherited parent
 resolves its own relative paths; an inherit in a header uses its containing
@@ -943,16 +944,25 @@ parents, header inherits and permissions. The locked release workspace suite
 passes **5171 tests/doctests**, with two ignored. Workspace build, warning-free
 all-targets Clippy, formatting and documentation checks also pass.
 
-This corrects the CLI difference without changing Lima source or its configured
+That native qualification changes neither Lima source nor its configured
 profile. All 12 CLI execute/check/assembly, bare/dot and source-suffix cases
 change from failure to success. Both reordered behavior-example forms compile
 against a disposable copy of the actual Lima library/profile.
-`std/behaviour/test.c` still requires its inherit to precede its global
-declaration; its original diagnostic is unchanged. The other literal relative
-site, contrib's `drunk.c`, now finds its parent and reaches that parent's
+At those revisions, `std/behaviour/test.c` still requires its inherit to precede
+its global declaration; its original diagnostic is unchanged. The other literal
+relative site, contrib's `drunk.c`, now finds its parent and reaches that parent's
 unadapted `set_heart_beat` calls. No optional source is adopted or whole-library
 inventory recomputed.
 Evidence: /tmp/lima-relative-inherits-20261019.
+
+The subsequent mudlib adapter moves that inherit before the global declaration,
+preserving `"./node_class"` and the original line endings. Both actual source
+targets and a child consumer compile; four constructor checks cover the inherited
+global, class defaults, named fields and field writes. The class provider and
+profile are unchanged. Qualification covers the optional example's inheritance
+contract; behavior-tree algorithms and configured activation retain their earlier
+scope. No whole-library inventory is recomputed.
+Evidence: /tmp/lima-behaviour-example-20261019.
 
 #### Lima release lifecycle qualification
 
