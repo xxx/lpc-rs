@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **a18182fe** and native **8b1e997a**.
+qualification notes are committed through Lima **0c84eecd** and native **22181810**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -1043,6 +1043,27 @@ an owned shell's clone/start lifecycle or the real user's modal stack/network
 input. The helper still requires its host and has no identified configured caller.
 Configured shell input, the profile, native code and binaries are unchanged.
 Evidence: /tmp/lima-key-bindings-20261019.
+
+#### Lima flow room module
+
+Reviewed **19 October 2026** at native **22181810**, dedicated Lima **0c84eecd**.
+The optional `std/modules/m_flow_room.c` now retains a named `fall_through`
+pointer for its arrival hook. The preceding closure returned a function without
+invoking it. Retaining the pointer also prevents repeated `set_flow` calls from
+registering distinct callbacks; a bare-name-only control reproduces that duplicate
+registration. The condition, movement, message and delayed-capture bodies remain.
+
+**Five compile checks and 27 runtime checks pass** using the adopted module,
+actual room/message/rock providers and temporary complete room compositions.
+Coverage includes required settings, false conditions, immediate movement,
+rendered messages, inventories, appended flows, stable hook registration and
+cleanup. Delayed callbacks retain their original message/destination captures
+and ignore departed or destroyed objects; the fixture inspects, invokes and
+cancels them directly, without testing elapsed timer delivery. Message capture
+uses the rooms' receive boundary with normal container propagation. No configured
+caller is identified or enabled. The helper retains its host requirement;
+native code, binaries and the configured profile are unchanged.
+Evidence: /tmp/lima-flow-room-20261019.
 
 #### Lima release lifecycle qualification
 
