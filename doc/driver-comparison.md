@@ -377,7 +377,7 @@ across all five drivers; the broader rows describe differences within each area.
 | Process resource usage | [`rusage()`](efun/rusage.md) returns 16 OS process statistics, with CPU times in milliseconds and peak RSS in KiB; failed or unsupported sampling returns an empty mapping. | **Not checked**. | **Not checked**. | Core `rusage()` returns 16 resource fields, with CPU times in milliseconds and other fields in platform units. [Pinned implementation][fl-rusage-audit-source]. | **Not checked**. |
 | Object memory estimates | [`object_memory_info`](efun/object_memory_info.md) returns current object/program/data/total estimates, with transactional reads and sharing/cycle handling. | **Not checked**. | **Not checked**. | Core memory_info(object) includes program, instance data and header; memory_info() uses driver accounting. [Pinned implementation][fl-object-memory-source]. | **Not checked**. |
 | Saving and restarting | [Object and mapping save files, including class records](save-format.md), with [`nosave` globals](lpc/nosave.md); [`save_value`](efun/save_value.md) / [`restore_value`](efun/restore_value.md) serialize individual values as strings. Whole-world snapshot/restart is not implemented. | [Object variable saves][cd-save]. | [Object saves][ld-save] with selectable formats and a serialised-string form. | [Object saves][fl-save] with flags, optional compression and a serialised-string form; [`nosave` globals][fl-nosave-keywords] with `SENSIBLE_MODIFIERS`; individual values through [`save_variable`][fl-save-variable] / [`restore_variable`][fl-restore-variable]. | Object saves plus [whole-system snapshots][dgd-dump] and [restart from a snapshot][dgd-intro]. |
-| Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [Type-sensitive array set matching with destroyed-object normalization](lpc/comparisons.md#collection-matching); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
+| Language features | [Caller inspection](efun/calling_object.md); [Exact int/float comparisons](lpc/comparisons.md); [Configurable zero or distinct nil](lpc/null.md) with [`nilp`](efun/nilp.md); [Type-sensitive array set matching with destroyed-object normalization](lpc/comparisons.md#collection-matching); [`has_key` for mapping membership](efun/has_key.md); [UTF-8 strings, immutable bytes, function values and closures](lpc/types.md); [`evaluate` for values or callbacks](efun/evaluate.md); explicit [value captures](lpc/function_type.md#explicit-value-captures) and [reference parameters](lpc/references.md); [macro argument stringification](lpc/macros.md#stringification) and [predefined source macros](lpc/macros.md#predefined-macros); [warning pragmas and retained function types](lpc/pragmas.md); [inheritance visibility, path bases, basename calls, and checked sibling/child function resolution](lpc/inheritance.md); [reverse indices, slices and array/string writes](lpc/indexing.md); [array literal spreading](lpc/array_spreading.md) and [trailing call commas](lpc/anatomy_of_a_program.md#function-calls); [`foreach` with `in` or `:`](lpc/foreach.md); [expression and block catches](efun/catch.md); [named variadic parameters with `mixed` or array collectors](lpc/variadic_parameters.md) and [unnamed prototype parameters](lpc/anatomy_of_a_program.md#function-prototypes); [nominal classes with declaration visibility, shared instances, guarded members, shallow copying and native persistence](lpc/classes.md); [`deep_copy` of mutable container graphs](efun/deep_copy.md); literal [`strindex`](efun/strindex.md), [`replace_string`](efun/replace_string.md) and [`trim`](efun/trim.md); scalar-based string [`member_array`](efun/member_array.md) and [`map`](efun/map.md). | [Function values and partial application][cd-functions]. | [Unicode strings, bytes, structs, lightweight objects and coroutines][ld-types]; [closures][ld-closures], [reference arguments][ld-refs] and [trimming][ld-trim]. | [Unicode text][fl-strings], mutable [buffers][fl-buffer], [function values and closures][fl-functions], [reference parameters][fl-refs], [class declarations][fl-class-grammar], [named variadic parameters][fl-variadic-declarations], [array literal spreading][fl-parameter-grammar], [promises][fl-async], [`copy` with `PACKAGE_CONTRIB`][fl-copy] and [trimming with `PACKAGE_TRIM`][fl-trim]. | [DGD LPC types and modifiers][dgd-lpc]; function pointers and bound arguments with the [CLOSURES build define][dgd-build]. |
 | Text file writes | [`write_file`](efun/write_file.md) stages append (0/default) or whole-file replacement (1), with pending reads and commit-time delivery. | **Not checked**. | **Not checked**. | Core `write_file` uses bit 1 for overwrite and bit 2 for compression. [Implementation][fluffos-file-write-flags]. | **Not checked**. |
 | File metadata | [`file_size`](efun/file_size.md), [`file_time`](efun/file_time.md) and [`get_dir`](efun/get_dir.md); [`mkdir`](efun/mkdir.md) and [`rm`](efun/rm.md) check pending entry changes, and [`rmdir`](efun/rmdir.md) checks pending directory membership without reading file contents. See [Lima adaptations](#lima-file-metadata). | **Not checked**. | **Not checked**. | Core [`stat`][fl-stat-source] combines metadata with loaded-object information or directory results; [`file_length`][fl-file-length] counts LF bytes with `PACKAGE_CONTRIB`. | **Not checked**. |
 | Updating live objects | [Queued in-place recompilation](efun/request_object_recompile.md) upgrades a prototype and its current clones atomically, preserving globals by declaring source, name and type; system prototypes can also be upgraded. | In-place program migration: **not checked**. | [`replace_program`][ld-replace] selects an already inherited program and drops extra code/data; it does not recompile source. | [`recompile_object`][fl-reload] updates a prototype and its clones in place, carrying globals by name; inheritors need separate updates. | [`compile_object`][dgd-compile] upgrades an existing object and its clones when the object has no inheritors; matching variable names and types retain values. |
@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **4727f889** and native **f170d3a3**.
+qualification notes are committed through Lima **5214351c** and native **4763637c**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -885,6 +885,50 @@ inventory, broad gameplay or shipped-suite repeat is needed for this local
 adapter. The preceding dated qualifications retain their separate scopes;
 alternate stat models/configurations and the attic script API remain separate.
 Evidence: /tmp/lima-trainer-stats-adoption-20261019.
+
+#### Lima remaining-source implementation triage
+
+Reviewed **19 October 2026** at native **4763637c**, dedicated Lima **5214351c**.
+The 16 residual files with no configured caller identified are reviewed as one
+batch. All 16 retain their preceding first diagnostic; six selected reference
+programs compile. **38 compile checks** include these 22 current sources and
+16 temporary adapter/composition controls. No production source is adopted or
+whole-library total recomputed; manual and user-selected loading remain possible.
+
+Temporary adapters compile the optional logical Genius, test dummy and navigation
+passage examples using existing closures, class fields, parser-handler contracts,
+callbacks, explicit formatter defaults and float mass. They need runtime checks
+before adoption. Boss/flow modules and character bindings compile in synthetic
+adversary/room/concrete-shell hosts; those controls are neither shipped-host
+proofs nor runtime qualification. Their missing hook/modal suppliers are mudlib
+methods, not new efuns. Older exit wrappers instead expose changed `M_EXIT`
+signatures, while `state_of_mind` remains an unselected condition alternative.
+
+The clan daemon has blank room selectors and no supplied matching blueprints.
+The buffered file helper mixes text and bytes and never stores its open mode;
+paper declares itself WIP. Portable board has no selected `BOARD_OB` provider,
+the old error formatter is not the configured master's handler, and the duplicate
+hole lacks the relation setup present in selected `std/hole`. Some small type
+controls compile, but completing these features is separate from porting their
+first diagnostic. No new native feature requirement is established by this batch.
+Pinned source examples:
+[clan daemon](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/daemons/clan_d.c),
+[buffered file helper](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/secure/modules/m_file.c),
+[WIP paper](https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/paper.c).
+
+One inheritance probe also reproduces a compiler input difference. Moving its
+inherit before the global declaration reveals that host-path CLI compilation
+looks for `test.c/node_class.c`; both bare and `./` sibling forms fail, while
+`__DIR__` works. An independent native fixture loads the same relative sibling
+in game successfully. Existing source and a regression test retain the host
+filename base. The [inheritance reference](lpc/inheritance.md) now describes this
+exception. Recommend a focused input-consistency audit before optional example
+adoption, keeping the reserved signature/cache design discussion separate.
+
+The configured distinct-nil, preserved-player, 4000ms profile, all 1549 library
+files and release binaries stay unchanged. No live service or gameplay audit is
+run. Source claims are reviewed against Lima `eefaff66adcae9b01e16059574c925b0d63e70a1`;
+no upstream driver is executed. Evidence: /tmp/lima-remaining-sources-20261019.
 
 #### Lima release lifecycle qualification
 
