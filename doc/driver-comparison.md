@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **0c84eecd** and native **22181810**.
+qualification notes are committed through Lima **f1251a6c** and native **f7522564**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -1064,6 +1064,26 @@ uses the rooms' receive boundary with normal container propagation. No configure
 caller is identified or enabled. The helper retains its host requirement;
 native code, binaries and the configured profile are unchanged.
 Evidence: /tmp/lima-flow-room-20261019.
+
+#### Lima boss module host contract
+
+Reviewed **19 October 2026** at native **f7522564**, dedicated Lima **f1251a6c**.
+The unchanged `std/modules/m_boss.c` works with an `ADVERSARY` host supplying
+`query_ghost` and `query_level`; standalone rejection is a host requirement.
+**Five compile checks and 17 runtime checks pass** using temporary complete
+hosts, fixture actors and a recording loot daemon. Coverage includes the actual
+live host, controlled dead-state gates, per-clone/name history, repeated claims,
+the exact slayer/level handoff and cleanup.
+
+The original policies remain: `slain_by` ignores the `boss_loot` flag, and expired
+history is not refreshed, allowing further claims after the first cooldown.
+The module matches the [pinned original source][lima-loot-boss] byte for byte.
+Expiry branches use controlled
+timestamps; the dead-state fixture overrides `query_ghost`. No actual boss death,
+player combat or loot generation is exercised. Earlier loot-provider qualification
+retains its scope. No configured boss caller is identified or enabled, and no
+mudlib source, profile, native code or binary changes are needed.
+Evidence: /tmp/lima-boss-integration-20261019.
 
 #### Lima release lifecycle qualification
 
