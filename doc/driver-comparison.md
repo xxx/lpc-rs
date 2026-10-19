@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **6278c194** and native **f9a0999b**.
+qualification notes are committed through Lima **05d0590c** and native **4dac077e**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -693,9 +693,10 @@ native saves, fresh-process restart and saved login, with **151 clean preloads
 per boot**. All five shipped test commands pass separately, followed by
 `unittest all` and `unittest all quiet` at **59/59**, with **zero manual loads**.
 See the [release lifecycle qualification](#lima-release-lifecycle-qualification).
-The original prepared run loaded 42 programs individually. Fresh normal and
-quiet-first combined commands still time out under the unchanged 4000ms deadline;
-an earlier direct normal run passed. See the
+The original prepared run loaded 42 programs individually. Direct cold combined
+execution has both passes and timeouts under the unchanged 4000ms deadline;
+the later [compiler profile](#lima-cold-compilation-profile) also records passes.
+See the
 [cold command audit](#lima-cold-shipped-test-commands), original
 [combined qualification](#lima-combined-shipped-test-suites) and
 [source inventory](#lima-source-coverage) for their distinct scopes. Runtime
@@ -790,6 +791,54 @@ dominates; no current stage/CPU profile or new cache optimization is claimed.
 Keep the per-suite-first operator recipe and profile those stages before selecting
 another compiler change. Source/profile are unchanged; driver launch hashes match
 the qualified release binary. Evidence: /tmp/lima-cold-combined-release-20261018.
+
+#### Lima cold compilation profile
+
+Reviewed **18 October 2026** at native **4dac077e**, dedicated Lima **05d0590c**.
+Temporary timers measure compiler stages in the actual first `unittest all`
+command after normal startup. One executable runs collection disabled/enabled
+at 4000ms, then disabled/enabled at a diagnostic-only 30000ms allowance. All four
+fresh sessions pass 59/59 in both combined modes with 151 clean preloads, normal
+saves/logout and exit status zero. The longer allowance is not port qualification.
+The restored uninstrumented driver matches the qualified release binary's hash
+and also passes both combined modes at 59/59 in a fresh ordinary-limit run.
+These observations do not establish cold combined-test
+reliability or an optimization: no compiler behavior change is adopted.
+
+The two timed cold commands each perform **36 object compilations, 946 program
+source visits and 145 distinct program sources**. Common object modules are
+prepared 29 times. Timed compiler-root sums are 2312ms and 1975ms; intervals are
+wall-clock measurements and nested subcomponents are not additive to their parent.
+
+| Compiler stage | Share of measured compilation |
+|---|---:|
+| Preprocessing | 61.5–62.8% |
+| Code generation | 16.0–16.5% |
+| Interface passes | 4.2% |
+| Parser-cache work, including parsing/cloning | 3.4–3.5% |
+| Scope and semantic checks combined | 5.0–5.3% |
+
+Within preprocessing, include reads take 10.15–12.34%, include resolution 8.61–9.66%
+and include-policy callbacks 10.12–10.57% of compiler-root time. These are contained
+in the preprocessing row. The parser cache has **782 hits/164 misses** and 156
+evictions at its 64MiB estimated payload bound; actual uncached parsing is only
+1.5–1.7% of compiler time. Macro-preparation lookups have 545,486 hits; their miss
+count also includes directives other than definitions.
+
+Source review shows a deep replacement clone on each prepared-definition hit.
+Next investigate sharing immutable prepared macro bodies while preserving each
+compile's macro environment, fresh source reads and policy callbacks. This profile
+does not isolate clone cost or demonstrate a speedup. Compiled-parent caching and
+override-signature policy remain deferred.
+
+The ordinary control/profile cold I/O times are 2.665/2.874s; the diagnostic pair
+is 2.508/2.521s. They include client drain and are single pairs, not CPU timings,
+statistical overhead bounds or a host-independent guarantee. No timer events are
+dropped. All nine instrumented native files are restored byte-for-byte and the
+temporary collector removed; the restored locked release workspace builds.
+One shared release configuration, two jobs and no symbol override keep the build
+tree near 1.3GiB. No Rust test or whole-source inventory repeat is claimed.
+Evidence: /tmp/lima-compiler-stages-20261018.
 
 #### Lima parameter-default positions and colour helpers
 
