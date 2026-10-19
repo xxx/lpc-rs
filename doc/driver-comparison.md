@@ -685,7 +685,7 @@ the adaptations described below.
 
 As of **18 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **b8cec2d6** and native **cefe9e35**.
+qualification notes are committed through Lima **45c04287** and native **40b2acae**.
 The checkout's `README.lpc-rs.md` provides startup and test instructions.
 
 The rebuilt release driver passes the configured fresh-account lifecycle,
@@ -868,10 +868,9 @@ not a measured compiler speedup or a bound on live copy cost.
 Source review finds prepared bodies read-only in expansion and conditional
 evaluation, with private bindings inserted/removed per compile. Sharing appears
 feasible without changing public macro types, but this replay does not establish
-a worthwhile whole-compiler gain. Keep the current representation. Further
-preprocessing work should measure lexer/directive handling; `track_slice` stores
-token text and `string_token` copies it again, with no other repository readers
-of `last_slice`. The cost of that work is still unmeasured.
+a worthwhile whole-compiler gain. Keep the current representation. The following
+[lexer audit](#lima-lexer-token-text-copy-audit) measures the separate redundant
+token-text buffer identified during this review.
 
 The diagnostic-only 30000ms capture passes normal and quiet combined commands at
 59/59, 151 clean preloads, normal saves/logout and exit zero. The dedicated
@@ -880,6 +879,46 @@ the ordinary locked release workspace rebuilds, and the driver matches the
 previously qualified release hash. No sharing optimization, new Rust tests or
 source-inventory repeat is claimed. One shared release configuration keeps target
 near 1.3GB. Evidence: /tmp/lima-macro-copies-20261018.
+
+#### Lima lexer token-text copy audit
+
+Reviewed **18 October 2026** at native **40b2acae**, dedicated Lima **45c04287**.
+An optimized standalone comparison uses copies of the current lexer and a
+prototype without `LexState.last_slice`. Span tracking stops copying token text;
+text tokens still own their strings, copied directly from the lexer slice, and
+literal conversion borrows that slice. Lexer state shrinks **48 to 24 bytes**;
+token size remains 48 bytes. The proposal changes two native files and is not
+adopted in this audit.
+
+Differential validation passes **3,984 comparisons covering 1,997,791 tokens and
+errors**. Inputs comprise 1,312 real Lima/native fixture files, four synthetic
+workloads and 12 edge cases, each at two ordinary offsets and in macro-body mode.
+Token values, error messages and typed source spans are identical, including
+continuations, Unicode/escapes, integer boundaries and malformed input.
+
+Five alternating timing pairs replay resident decoded inputs with the driver's
+Jemalloc implementation. Visit weights come from the prior cold-command profile:
+946 program visits and 13,669 include-read inputs.
+
+| Raw lexer workload | Current median ms | Prototype median ms | Reduction |
+|---|---:|---:|---:|
+| Program stream | 22.35 | 18.24 | 18.4% |
+| Header stream | 73.79 | 67.10 | 9.1% |
+| Combined stream | 95.83 | 85.63 | 10.6% |
+| Combined, retaining tokens per input | 100.40 | 91.70 | 8.7% |
+
+These measure raw lexing, excluding I/O, include policies, expansion, parsing and
+runtime. The trace omits some macro/conditional fragment lexing and memo reopens;
+neither retention mode reproduces full preprocessing lifetimes. Combined stream
+pairs are noisy, including one slowdown. No whole-compiler gain or cold-timeout
+fix is established. The small buffer removal merits adoption with native
+workspace validation and a fresh ordinary-limit runtime comparison.
+
+Production source, library, profile and release driver remain unchanged. Cached
+release dependencies build only the standalone experiment; no Cargo rebuild,
+new target tree, gameplay run or source-inventory repeat occurs. Shared target
+remains about 1.3GB. Evidence: /tmp/lima-lexer-copies-20261018, including the
+unapplied two-file proposal and complete paired results.
 
 #### Lima parameter-default positions and colour helpers
 
