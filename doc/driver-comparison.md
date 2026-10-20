@@ -1290,6 +1290,47 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima selected coin denomination adaptation
+
+The **20 October 2026** local port follows the audit committed as Lima
+**0ccf6e78** / native **d9dbf8f5** with a two-file fix in
+[COINS][lima-coins] and the [drop verb][lima-drop-verb]. Piles retain float
+base-currency balances. Drop converts denomination counts through the current
+money daemon before storing/merging, then debits the wallet in those same units.
+Missing pile balances initialize to 0.0. Existing get dispatch now reaches a
+pile method that resolves each requested denomination to its currency and factor.
+
+Named `all` transfers the wallet's or addressed pile's entire balance for that
+currency, including fractions; other currencies are retained. Generic numeric
+`coin`/`coins` keeps its base-unit meaning and requires a single currency.
+Whole-object pickup explicitly iterates float balances. Existing
+`sufficient_money` tolerance handles repeated decimal transfers and removes
+rounding-only residue. Invalid quantities leave balances intact. Refused new-pile
+placement cleans up without a debit; a pre-mutation merge refusal also occurs
+before the wallet debit. This changes operation ordering within existing
+transactions, without adding arbitrary callback compensation or rollback rules.
+
+The maintained `tests/coins/test_coins.py` passes **ten compiler checks and
+55 runtime assertions in 1.150s**. The original source fails its new denomination
+storage regression. Actual get/drop, pile, money-daemon and body/pockets code
+run with an OBJ actor at the user/capacity/message boundary and a permissive
+master. Fixed wallet totals and recovery of seeded piles check value conservation
+across new/existing and mixed-currency piles, aliases, partial/whole/all transfer,
+decimal repetition, refusals, placement cleanup and a caught merge refusal.
+Parser dispatch, live login, concurrency, account restart and callbacks that
+mutate before failing are outside this fixture. Existing wallet/payment/report
+qualification is not rerun.
+
+A fresh sweep measures **1019/1182 compiling, 163 failures** in **43.474s**, with
+no new compilation gains, regressions, timeouts or crashes. All 113 existing
+fragment proofs retain compiling hosts; 50 other consumers retain their recorded
+dispositions. Constructors are omitted in that inventory; runtime fixes are
+qualified by the focused suite rather than inferred from compile counts.
+The optional USE_MONEY branch remains unselected and its legacy logic is retained.
+Current wallets, daemon, native APIs, profile, binaries and save formats stay
+unchanged. Lima remains distinct nil, preserved player, 4000ms and USE_MASS.
+Evidence: `/tmp/lima-coin-units-20261020-a2ehvl3x`.
+
 #### Lima legacy money and selected coin interfaces
 
 Reviewed **20 October 2026** at native **1f08597c**, Lima **13368100**. The older
