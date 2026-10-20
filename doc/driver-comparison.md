@@ -931,6 +931,57 @@ Pending-file and negative/zero-length reads can still materialize whole contents
 directory listings are also unchanged. The last source inventory remains
 **1011/1182 compiling**, with 113 hosted fragments and **58 open consumers**.
 
+#### Lima contributed transient-effect audit
+
+Reviewed **20 October 2026** against the pinned [contributed base][lima-contrib-transient]
+and [drunkenness example][lima-contrib-drunk]; both files still match upstream
+`eefaff66adcae9b01e16059574c925b0d63e70a1`. Tests use native **b9640171**, Lima
+**48f570b6**, distinct nil, preserved call-out players and the 4000ms limit.
+Upstream drivers were not executed. These files are separate from the already
+adapted `/std/transient` and its poison/speed/spell consumers.
+
+Both first fail on `set_heart_beat`. A temporary no-op declaration exposes the
+example's string argument to an integer effect-type setter; correcting the type
+then exposes undeclared `existing_drunkeness`. These are source defects rather
+than new efun requirements. The [reviewed heartbeat configuration][lima-heartbeat-config]
+uses two seconds; replacing this base with the selected stateful transient would
+instead use its default minute interval.
+
+Nine runtime controls confirm that a matching move returns nil without moving,
+extending or removing the incoming effect. Declaring `another_effect_exists`
+does not register a [hook][lima-object-hooks]; registering it alone still fails
+because `call_hooks` consumes the third argument as its reduction value. The
+example also omits inherited duration merging and can make alcohol strength
+negative when its addition should clamp to zero. Stored duration two permits
+three applications because effects run before expiry checking and decrementing.
+
+A temporary adapter retains the contributed base, uses a private nosave native
+`call_out(heart_beat, 2, 2)` timer, and calls the virtual merge method directly.
+It guards detached/nonliving environments, cancels idle/removed timers, skips
+self during duplicate selection, fixes the example's variable/type/clamp defects,
+and composes strength merging with the inherited duration callback. **Eighteen
+prototype assertions pass**, including real elapsed repeating callbacks,
+three-application expiry, pause/restart, cancellation, merging and duration-only
+save registration. Thirteen compiler controls give nine passes and four expected
+rejections; the selected transient and poison remain compiling references.
+
+The example still needs a body integration decision. The selected body has
+`heal_us`, but no `stun_us`; its [condition module][lima-combat-condition] instead
+requires `stun(limb, period)`, clamps the period and performs skill checks. That
+is not a direct spelling replacement. Its [command API][lima-contrib-effect-commands]
+takes one string; the prototype removes the example's obsolete second argument.
+Actual drunkenness
+effect delivery, player callback context and complete restoration are unqualified;
+the prototype exercises its merge and clamp methods only. Identity and strength
+are not added to its original duration-only save registration in this audit.
+
+No production source adapter or driver change is adopted. Recommend the small
+generic timer/merge adapter, with the example's missing body contract explicit.
+No fixed library caller of this contributed pair was found; that does not prove
+unreachability. The measured inventory remains **1011/1182 compiling**, 113 hosted
+fragments and 58 other consumers. Evidence:
+`/tmp/lima-contributed-effects-20261020-4i1ra9b_`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
@@ -26814,3 +26865,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-contrib-tar]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/tar.c
 [gnu-tar-basic-format]: https://www.gnu.org/software/tar/manual/html_node/Standard.html
 [python-tar-close]: https://docs.python.org/3.12/library/tarfile.html#tarfile.TarFile.close
+
+[lima-contrib-transient]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/transient_effect/transient_effect.c
+[lima-contrib-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/transient_effect/drunk.c
+[lima-contrib-effect-commands]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/cmd.c
