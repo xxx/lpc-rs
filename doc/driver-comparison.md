@@ -982,6 +982,45 @@ unreachability. The measured inventory remains **1011/1182 compiling**, 113 host
 fragments and 58 other consumers. Evidence:
 `/tmp/lima-contributed-effects-20261020-4i1ra9b_`.
 
+#### Lima contributed transient-effect adapter
+
+Adopted and checked **20 October 2026**, following audit notes native **d8eb0124**
+and Lima **94cdb6c8**. The two contributed programs now use the audited native
+two-second repeating timer and direct virtual merge callback. Removal cancels
+the timer; detached/nonliving hosts pause without applying or decrementing, and
+an ordinary living move restarts it. A self move does not merge the object into
+itself. Effects still apply before expiry checking, so stored duration two gives
+three applications. String effect types match the example and its documented API.
+
+The example corrects its merge variable, invokes inherited duration merging,
+clamps negative strength and calls the one-argument command API. Its older
+`stun_us` receiver contract remains explicit; the selected body is unchanged.
+This adapter does not substitute limb stun or integrate the contributed example
+with the selected modern intoxication system. Existing effect save registration
+still includes duration only; the new timer is nosave.
+
+The permanent `tests/transient_effects/test_transient_effects.py` passes **36 LPC
+assertions and eight compiler checks** in **6.961s** using the actual adapted
+source. It runs native elapsed repeating callbacks, movement and removal through
+a temporary master and real simuls/includes. Extra checks cover nil destinations,
+different identities, zero/negative duration, removal inside the effect callback,
+strength bounds and configured player capture. The latter uses a fixture player
+identity; drunkenness dispatch uses a fixture implementing `stun_us`, bounded
+healing and one-argument command/action sinks. Random branches are validated
+when selected, without requiring a particular sequence. Full player combat,
+command execution and restoration are not established by these sinks. The
+selected transient/poison/speed programs compile as references, without repeating
+their earlier runtime audits. Lima remains distinct nil, preserved player, 4000ms.
+
+A fresh whole-source sweep measures **1013/1182 compiling, 169 failures** in
+**39.723s**, with zero regressions, timeouts or crashes. The only gains are the
+two contributed files. All **113 hosted fragments** retain compiling shipped
+hosts; **56 other standalone consumers** remain. The example's missing selected
+body contract remains an additional runtime integration limit despite its new
+compile success. No native Rust, binary, profile or original-checkout change.
+The whole port remains in progress. Evidence:
+`/tmp/lima-contributed-effects-adoption-20261020-rhust1bo`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
