@@ -1290,6 +1290,47 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima contributed board-provider interface audit
+
+Reviewed **20 October 2026** at native **cdf98dbf**, Lima **7125f573**, against
+the pinned [portable sample][lima-portable-board],
+[switchable board][lima-contrib-board], [older board][lima-contrib-older-board]
+and [other board interface][lima-contrib-bboard]. Only `contrib/board.c` matches
+the sample's three-argument `mudlib_setup(name, group, switchable)` and switching
+API. The older package uses two-argument `create` and requires absent
+`boarddata.c`; the other uses `set_board_name`/`init_board` and its example
+inherits an absent personal path. Recommend the matching provider, but no
+provider selection or production source change is adopted by this audit.
+
+The matching provider still expects body highwater counters. Neither current
+body nor user supplies them: current [user news state][lima-news-user-state]
+stores sets of read article IDs. Simply moving the calls to the user is
+insufficient. The sample's `lima.bugs` group is also absent from a fresh selected
+daemon; the configured `BUG_NEWSGROUP` exists. Its old `a_short` expression
+compiles after provider binding but returns a function value instead of text.
+An override of public `query_in_room_desc` can retain a private description
+helper and avoid passing functions to the string-only description setter.
+
+**Sixteen compiler controls give ten passes and six expected rejections. Eight
+legacy contract checks and nineteen temporary read-adapter checks pass** in
+two fresh processes, **0.486s** combined. Actual portable/OBJ/gettable/readable
+code, selected NEWS_D and the actual user news module verify empty/removed/
+out-of-order reads, numeric bounds, dynamic headers/descriptions and shared
+user read sets. A fixture user counts save calls; account persistence, login,
+parser dispatch and upstream execution are not qualified. One initially
+expected error instead renders misleading legacy description text; its failed
+assertion is retained with corrected final controls.
+
+The exercised patch is deliberately limited to reading and descriptions.
+Adoption still requires native editor callbacks, current unread/group switching,
+post/followup result handling and a deliberate reply route: the previously
+reviewed user-mailer ownership and NEWSREADER-only sender guard still apply.
+Keep the selected news daemon/user state and other board packages unselected;
+no new native API, relaxed type rule or mailer permission change is established.
+Lima stays distinct nil, preserved player, 4000ms. No build or full sweep is run;
+the last measured inventory remains **1017/1182 compiling**. Evidence:
+`/tmp/lima-board-provider-audit-20261020-oliiknry`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
@@ -26663,6 +26704,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-body-mail-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/cmd.c
 [lima-portable-board]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/object/portable_board.c
 [lima-contrib-board]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/board.c
+[lima-contrib-older-board]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/boards/board.c
+[lima-contrib-bboard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/bboard/bboard.c
 [lima-contrib-replynote]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/boards/replynote.c
 [lima-contrib-board-installation]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/boards/installation
 [lima-mailer-standard]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/mailers/standard.c
