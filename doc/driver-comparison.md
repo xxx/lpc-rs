@@ -1217,6 +1217,36 @@ the measured inventory stays **1016/1182 compiling**, 113 hosted fragments and
 53 other standalone consumers. No fresh sweep or inferred source gain. Evidence:
 `/tmp/lima-web-editor-continuation-20261020-h2bzspmw`.
 
+#### Lima web-editor backend adapter
+
+Adopted and checked **20 October 2026**, following audit notes native **b46f58c1**
+and Lima **d2476299**. The backend now uses the audited parameter rename, nil
+reference arguments and native write-error catch. Failed saves use the existing
+message and retain the draft; overwrite, CRLF normalization and existing empty/
+new-file rendering stay. The CGI wrapper, account/role/crypt helpers, markup,
+credential policy and optional HTTP preload setting are unchanged.
+
+The permanent `tests/web_editor/test_web_editor.py` passes **20 LPC assertions,
+seven compiler checks and seven physical-file checks** in **0.494s**, against
+actual source. Direct CGI form calls exercise load/reload/new/empty/directory,
+save/overwrite/CRLF/empty output, failed-save recovery, ordinary login refusal
+and UTF-8/entity text through actual helpers and a synthetic offline wizard
+account. Four exact output byte sequences and three absent unsaved/refused
+targets verify after shutdown. No backend or account helper is replaced. The
+fixture master permits the file operations; browser/HTTP transport, live login,
+real path policy, admin-specific and malformed-form flows remain unqualified.
+The driver has no apply/transaction failures and uses loopback port zero without
+HTTP requests or external connections. Lima stays distinct nil, preserved player,
+4000ms. The configured HTTP daemon remains disabled.
+
+A fresh full sweep measures **1017/1182 compiling, 165 failures** in **42.281s**,
+with zero regressions, timeouts or crashes. The sole gain is this backend. All
+**113 hosted fragments** retain compiling shipped hosts; **52 other standalone
+consumers** remain. The original drunk body requirement and missing attic town
+content remain separate runtime limits. No native Rust, release binary, profile
+or original-checkout change. The port remains in progress. Evidence:
+`/tmp/lima-web-editor-adoption-20261020-7hj_s_yu`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
