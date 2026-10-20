@@ -1290,6 +1290,46 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima attic openable and lockable wrappers
+
+Reviewed **20 October 2026** at native **f6b394dc**, Lima **eb8e0d1a**. The two
+[openable][lima-attic-openable] and [lockable][lima-attic-lockable] wrappers are
+unchanged from the pinned upstream revision. They need an OBJ host for flags,
+descriptions and hooks; the lock wrapper also needs M_OPENABLE. Selected macros
+still name the current modules, and no shipped consumer of the attic paths was
+found. This does not establish that arbitrary user-selected paths are unreachable.
+
+Complete temporary hosts compile with the original wrappers. The one-argument
+`set_locked` override is accepted, while a direct two-argument call rejects.
+Forwarding both arguments preserves an explicit key type but is insufficient:
+the wrappers' advertised state comes from the blueprint while local descriptions,
+key types and open-prevention hooks remain unsynchronized. A clone can report
+locked yet permit its ordinary open action; after another clone unlocks it, the
+original can report unlocked yet retain a hook refusing to open. Creating a new
+openable clone also resets earlier clones' shared open state. These omissions
+are visible in pinned source and reproduced on the current port, without
+upstream-driver execution.
+
+**Twelve compiler controls give nine passes and three expected rejections;
+23 runtime assertions pass in 0.203s.** These are diagnostic assertions reproducing
+the inconsistencies and checking selected-module controls, not qualification of
+the old wrappers as correct. They use actual OBJ/flag/description/hook and
+open/lock modules in temporary complete hosts, with a recording actor and
+permissive master. The ordinary per-instance composition keeps queries, key
+types and hooks consistent. Selected chest/door references compile; their
+previous room/sibling qualification is not rerun.
+
+Keep selected [door/sibling][lima-door] and [openable][lima-openable]/
+[lockable][lima-lockable] providers. The attic wrappers require an explicit
+shared-state host/lifecycle integration covering storage, hooks and descriptions.
+Adding OBJ or forwarding a second argument alone is insufficient; no provider
+replacement, compiler relaxation or new native feature is adopted. Temporary
+hosts are not shipped-host proofs and do not alter inventory classification.
+Production source/profile/binaries stay unchanged; the last measured inventory
+remains **1019/1182 compiling**, 163 failures and 113 documented hosted fragments.
+No new full sweep or inferred gain. Lima stays distinct nil, preserved player,
+4000ms and USE_MASS. Evidence: `/tmp/lima-attic-state-audit-20261020-f833ie33`.
+
 #### Lima portable-board adaptation
 
 The **20 October 2026** local port, following the interface audit committed as
@@ -27277,6 +27317,8 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-attic-container]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/container.c
 [lima-attic-table-reference]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/table.c
 [lima-attic-town]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/attic/town.c
+[lima-attic-openable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/attic/openable.c
+[lima-attic-lockable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/attic/lockable.c
 
 [lima-marriage-install]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/marriage/SPOUSE_CHANGES
 [lima-marriage-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/marriage/marry.c
