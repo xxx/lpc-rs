@@ -778,6 +778,39 @@ the two helpers. All 113 documented fragments retain compiling shipped hosts;
 constructors are omitted and source/profile/compiler preservation checks pass.
 This is source/helper qualification rather than a new full gameplay run.
 
+#### Lima contributed tar audit
+
+Reviewed on **19 October 2026** at the pinned [tar source][lima-contrib-tar]. Its
+`buffer` spelling is unsupported, but mutable bytes are unnecessary: a native
+integer-array header can be converted with `to_bytes`, with payloads retained as
+immutable bytes. A 2560-byte control archive using the source's basic GNU header
+magic is accepted by Python tarfile 3.12.3 and GNU tar 1.35, preserving an exact
+binary payload and an empty member. This is a separate feasibility control;
+`contrib/tar.c` remains unported.
+
+The audit confirms a native `write_bytes` transaction-visibility bug: bounds and
+negative offsets use physical metadata rather than the attempt's file view.
+Writing after a pending creation returns zero; a second append is rejected after
+`file_size` reports the pending growth. A negative offset after growth overwrites
+the old disk-relative position, while pending truncation can wrongly permit a
+write past the visible end. Correct current-view kind/size/bounds handling before
+adapting the writer; preserve the normal missing-file zero result.
+
+The utility also skips empty files, can index an empty work list after an empty
+directory, omits terminating zero records and masks off full-record bytes at
+16MiB. Replace string callbacks/argument passing with bound native functions,
+create the output explicitly and bound large-file work across continuations.
+Its existing 100-byte filename clipping and lack of archive extensions need an
+explicit supported-format contract. The [GNU tar format][gnu-tar-basic-format]
+and [Python close contract][python-tar-close] describe two finishing zero blocks;
+GNU tar's permissive reader is not evidence that an unfinished writer is correct.
+
+Thirteen isolated LPC controls record the observed write bug, binary/header
+feasibility, arithmetic mask and callback binding/cancellation. They do not run
+the original tar utility or qualify elapsed timer delivery. Library/profile and
+native binaries are unchanged. The last source sweep remains **1010/1182** with
+113 hosted fragments and **59 open consumers**; this audit closes no source entry.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
@@ -26657,3 +26690,7 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-contrib-last-queue]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/last_queue.c
 [lima-contrib-stack]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/stack.c
+
+[lima-contrib-tar]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/tar.c
+[gnu-tar-basic-format]: https://www.gnu.org/software/tar/manual/html_node/Standard.html
+[python-tar-close]: https://docs.python.org/3.12/library/tarfile.html#tarfile.TarFile.close
