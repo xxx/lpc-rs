@@ -1021,6 +1021,50 @@ compile success. No native Rust, binary, profile or original-checkout change.
 The whole port remains in progress. Evidence:
 `/tmp/lima-contributed-effects-adoption-20261020-rhust1bo`.
 
+#### Lima contributed room-maker audit
+
+Reviewed **20 October 2026** at native **e3eb3703**, Lima **f8e579ff**, against
+the pinned [command][lima-roommaker-command], [menu/generator][lima-roommaker-menu]
+and [mudlib definitions][lima-roommaker-definitions]. Existing source changes
+relative to upstream are only the earlier `clone_object` and mapping-helper
+adaptations. Lima remains distinct nil, preserved player, 4000ms; upstream
+drivers were not executed. The selected old-menu and text-editor modules already
+compile and are not new implementation work here.
+
+The command needs the existing protected variadic `dispatch_main` adapter. That
+alone compiles, but its `/trans/obj/buildmenu` target does not exist; the actual
+menu is its contributed sibling. Bare function names and bound `&callback(key)`
+values are needed throughout that consumer: the legacy closures currently return
+functions rather than invoke edit/quit actions. These are port adaptations.
+
+The generator also retains source defects: `ROOM` is undefined in the pinned
+headers, switching weather to zero leaves its outdoor inherit selected, the
+weather value is never emitted, and interpolated short descriptions can produce
+invalid source when they contain quotes. A temporary proposal chooses the shipped
+indoor/outdoor providers according to the existing prompt, emits the outdoor
+weather flag and quotes integer/string fields using native `save_value`. It
+keeps editing text raw until emission, and accepts nil editor-abort results
+without replacing existing fields. This uses the source-compatible integer/string
+subset, not a general conversion from the native save format to LPC source.
+
+**Nineteen compiler controls give 16 passes and three expected rejections**.
+**Thirty-one runtime assertions pass**: seven baseline controls, 15 command/menu/
+editor proposal checks and nine generated-room checks. The proposal runs actual
+`CMD.call_main`, old-menu callbacks, text editing and file writes with fixture
+user/body/shell identities, a recording modal stack and a permissive temporary
+master. A separate process compiles and constructs four generated rooms, checking
+indoor/outdoor/reset behavior, exact quoted/backslashed descriptions and item
+text, an exit destination, one simple item and two configured objects. Real
+users, native network input, the full shell parser, permission policy, every
+menu action and weather-daemon output are not qualified by these controls.
+
+Recommend adopting the two-file adapter with permanent regression tests. No
+production source, driver, binary or profile changes are adopted by this audit;
+the last inventory stays **1013/1182 compiling**, with 113 hosted fragments and
+56 other standalone consumers. No full sweep is repeated or inferred gain counted.
+The contributed drunkenness body requirement remains separate. Evidence:
+`/tmp/lima-roommaker-audit-20261020-n3fe_m5k`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
@@ -26908,3 +26952,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-contrib-transient]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/transient_effect/transient_effect.c
 [lima-contrib-drunk]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/transient_effect/drunk.c
 [lima-contrib-effect-commands]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/body/cmd.c
+
+[lima-roommaker-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/roommaker/makeroom.c
+[lima-roommaker-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/roommaker/buildmenu.c
+[lima-roommaker-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/mudlib.h
