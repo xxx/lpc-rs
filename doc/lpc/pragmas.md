@@ -33,6 +33,7 @@ produce no pragma warnings or errors.
 | [`warnings`, `no_warnings`](#warnings-and-no_warnings) | Enable or suppress compiler warnings. | From the directive onward, across textual includes, until the next switch. |
 | [`save_types`](#save_types) | Accepted silently; function type information is always retained. | Compatibility spelling only. |
 | [`once`](#once) | Skip later includes of the same file. | The file containing it, for the current compilation. |
+| [`no_include`](#no_include) | Reject textual inclusion of this file. | The file containing it, including when used as the configured auto-include. |
 | [`no_clone`](#no_clone) | Reject cloning and virtual instantiation of this program. | The compiled program; not propagated to inheriting programs. |
 | [`no_inherit`](#no_inherit) | Reject explicit inheritance of this program. | The compiled program. |
 | [`no_shadow`](#no_shadow) | Reject attaching a shadow to this program's objects. | The compiled program and programs that inherit it. |
@@ -42,7 +43,8 @@ produce no pragma warnings or errors.
 `no_clone`, `no_inherit`, `no_shadow`, and `resident` apply to the whole
 compiled program, regardless of where the directive appears. Declaring one
 in an included header also enables it for the program including that header.
-`strict_types` and `once` instead apply to the file containing the directive.
+`strict_types`, `once`, and `no_include` instead apply to the file containing
+the directive.
 
 An `inherit` compiles the parent separately. Of the program flags, only
 `no_shadow` propagates to the child; including a header and inheriting a
@@ -249,6 +251,26 @@ configured interval and exemptions for the master and simul-efun objects.
 Live [object recompilation](../efun/request_object_recompile.md) rejects
 changes that add or remove cleanup eligibility. Adding or removing `resident`
 on a program with a `clean_up` hook changes that eligibility.
+
+## no_include
+
+```lpc
+#pragma no_include
+```
+
+The file may be compiled as a program or inherited, but cannot be textually
+included. Encountering this pragma while processing a quoted, system, nested,
+or configured auto-include fails compilation:
+
+```text
+`#pragma no_include` forbids including this file
+```
+
+The diagnostic points to the pragma and shows the explicit include chain.
+The marked file can still include other headers. The restriction applies only
+to the file containing the directive; it does not propagate to those headers
+or to inheriting programs. An inactive conditional branch ignores the pragma.
+Compiling the marked file normally emits no warning for this pragma.
 
 ## save_binary
 

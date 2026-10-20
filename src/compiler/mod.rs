@@ -1098,6 +1098,39 @@ mod tests {
                 assert!(error.message().contains("type"), "{error:?}");
             }
         }
+
+        #[tokio::test]
+        async fn no_include_allows_compilation_and_inheritance_but_rejects_inclusion() {
+            let root = lib_holding(
+                "no-include-program",
+                &[(
+                    "parent.c",
+                    "#pragma no_include\nint value() { return 7; }\n",
+                )],
+            );
+            let compiler = Compiler::new(temp_lib_config(&root));
+            let compiled = compiler
+                .compile_file(LpcPath::new_server(root.join("parent.c")))
+                .await
+                .unwrap();
+            assert!(messages(&compiled).is_empty());
+            let child = compiler
+                .compile_string(
+                    "/child.c",
+                    "inherit \"/parent\"; int result() { return value(); }",
+                )
+                .await
+                .unwrap();
+            assert!(child.program.lookup_function("value").is_some());
+            let error = compiler
+                .compile_string("/include.c", "#include \"/parent.c\"\n")
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.message(),
+                "`#pragma no_include` forbids including this file"
+            );
+        }
     }
 
     mod test_rendered_diagnostics {

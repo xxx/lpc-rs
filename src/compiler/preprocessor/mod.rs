@@ -29,7 +29,7 @@ use crate::{
 };
 use conditional::Conditionals;
 use directive::{Directive, DirectiveKind};
-use include::{IncludeSource, IncludeWalk, ONCE};
+use include::{IncludeSource, IncludeWalk, NO_INCLUDE, ONCE};
 use predefined::Predefined;
 
 mod conditional;
@@ -773,6 +773,14 @@ impl Preprocessor {
         for arg in names {
             match arg.as_str() {
                 ONCE => self.includes.mark_once(),
+                NO_INCLUDE => {
+                    if !self.includes.at_root() {
+                        return Err(lpc_error!(
+                            Some(span),
+                            "`#pragma no_include` forbids including this file"
+                        ));
+                    }
+                }
                 NO_CLONE => self.context.pragmas.set_no_clone(true),
                 NO_INHERIT => self.context.pragmas.set_no_inherit(true),
                 NO_SHADOW => self.context.pragmas.set_no_shadow(true),
@@ -3057,8 +3065,10 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn no_include_is_an_unknown_pragma() {
-            test_invalid("#pragma no_include\n", "unknown pragma `no_include`").await;
+        async fn no_include_is_silent_when_compiling_the_marked_file() {
+            let code = "#pragma no_include, no_include\nint value;\n";
+            test_valid(code, &["int", "value", ";"]).await;
+            assert!(warnings_of(code).await.is_empty());
         }
     }
 
@@ -3625,6 +3635,83 @@ mod tests {
 
         async fn rendered_of(root: &TempLib, code: &str) -> String {
             error_of(root, code).await.diagnostic_string()
+        }
+
+        #[tokio::test]
+        async fn no_include_rejects_local_and_system_includes() {
+            let root = TempLib::new("no-include-direct");
+            std::fs::write(root.join("sealed.c"), "#pragma no_include\n").unwrap();
+            for code in ["#include \"/sealed.c\"\n", "#include </sealed.c>\n"] {
+                let error = error_of(&root, code).await;
+                assert_eq!(
+                    error.message(),
+                    "`#pragma no_include` forbids including this file"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn no_include_reports_the_nested_include_chain() {
+            let root = TempLib::new("no-include-chain");
+            std::fs::write(root.join("outer.h"), "#include \"sealed.c\"\n").unwrap();
+            std::fs::write(root.join("sealed.c"), "#pragma no_include\n").unwrap();
+            assert_eq!(
+                rendered_of(&root, "#include \"outer.h\"\n").await,
+                "error: `#pragma no_include` forbids including this file\n  ┌─ /sealed.c:1:1\n  │\n1 │ #pragma no_include\n  │ ^^^^^^^^^^^^^^^^^^\n  │\n  ┌─ /outer.h:1:1\n  │\n1 │ #include \"sealed.c\"\n  │ ------------------- included from here\n  │\n  ┌─ /main.c:1:1\n  │\n1 │ #include \"outer.h\"\n  │ ------------------ included from here\n\n"
+            );
+        }
+
+        #[tokio::test]
+        async fn no_include_rejects_the_configured_auto_include() {
+            let root = TempLib::new("no-include-auto");
+            std::fs::write(root.join("auto.h"), "#pragma no_include\n").unwrap();
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .auto_include_file("/auto.h")
+                .build()
+                .unwrap();
+            let context = CompilationContextBuilder::default()
+                .source(CompilerSource::new("/main.c", &config))
+                .config(config)
+                .build()
+                .unwrap();
+            let error = Preprocessor::new(context)
+                .scan("/main.c", "int value;\n")
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.message(),
+                "`#pragma no_include` forbids including this file"
+            );
+            assert!(error.diagnostic_string().contains("/auto.h:1:1"));
+        }
+
+        #[tokio::test]
+        async fn no_include_allows_the_marked_file_to_include_headers() {
+            let root = TempLib::new("no-include-own-headers");
+            std::fs::write(root.join("ordinary.h"), "int from_header;\n").unwrap();
+            assert_eq!(
+                tokens_of(
+                    &root,
+                    "#pragma no_include\n#include \"ordinary.h\"\nint from_root;\n"
+                )
+                .await,
+                ["int", "from_header", ";", "int", "from_root", ";"]
+            );
+        }
+
+        #[tokio::test]
+        async fn an_inactive_no_include_allows_inclusion() {
+            let root = TempLib::new("no-include-inactive");
+            std::fs::write(
+                root.join("ordinary.h"),
+                "#if 0\n#pragma no_include\n#endif\nint value;\n",
+            )
+            .unwrap();
+            assert_eq!(
+                tokens_of(&root, "#include \"ordinary.h\"\n").await,
+                ["int", "value", ";"]
+            );
         }
 
         #[tokio::test]

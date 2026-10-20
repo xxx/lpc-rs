@@ -30,6 +30,9 @@ pub(super) const MAX_INCLUDE_DEPTH: usize = 64;
 /// The pragma name that marks the current file include-once.
 pub(super) const ONCE: &str = "once";
 
+/// The pragma name that forbids textual inclusion of the current file.
+pub(super) const NO_INCLUDE: &str = "no_include";
+
 /// One entry form of an include.
 #[derive(Debug)]
 pub(super) enum IncludeSource<'a> {
