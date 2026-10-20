@@ -683,6 +683,10 @@ the adaptations described below.
 
 #### Lima port readiness
 
+**The overall Lima port remains in progress.** Configured startup and shipped
+tests are qualified milestones. The [CGI helper update](#lima-cgi-helpers) records
+the current source inventory and outstanding consumer count.
+
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
 qualification notes are committed through Lima **8a26d8c7** and native **ded2bc3a**.
@@ -710,6 +714,38 @@ dedicated checkout retains its development setting.
 Original-driver saved-data/password import, alternate build options, unselected
 or optional sources and documented upstream defects retain separate decisions.
 The source inventory is not a completion percentage or a missing-feature count.
+
+#### Lima CGI helpers
+
+Reviewed on **19 October 2026** against the pinned Lima [autodoc helper][lima-cgi-autodoc],
+[mud information helper][lima-cgi-mudinfo] and [finger helper][lima-cgi-who]. The
+source adaptations use the configured distinct-nil profile; no driver API change
+is needed. The malformed block-string delimiters and spaced HTML closing tags
+are present in the reviewed upstream autodoc source as well.
+
+Use ordinary string literals and native bare callbacks for the documentation
+indexes/tree, and nil for absent route parts. Supply explicit nil parameter
+defaults for omitted GET queries and handle empty queries before indexing.
+For mud information, use `mixed *`, native mapping `filter`, and the size of an
+array-based `regexp` result as its predicate. The finger CGI must supply all four
+arguments required by Lima's colour wrapper and initialize an absent userid to
+the empty string so the index route works.
+
+The maintained Lima regression runner, `python3 tests/cgi/test_cgi.py`, compiles
+the three actual helper sources and passes **55 LPC runtime assertions** in an
+isolated copy. It checks documentation bodies/links, an actual inheritance tree,
+mud-list sorting/filtering and Unicode, nil/empty queries, colour stripping,
+optional finger fields, idle/mail formatting, and the HTTP form caller's two
+arguments. Real class definitions, grammar, glob and ANSI translations remain;
+controlled IMUD/finger records replace external data providers. This qualifies
+helper output, without starting HTTP transport or testing live IMUD/account policy.
+
+The full sweep after adaptation measures **1008/1182 compile, 174 standalone
+failures, zero regressions/timeouts/crashes**. Its three gains are the CGI helpers.
+Of the remaining failures, 113 documented fragments have currently compiling
+shipped hosts; **61 other consumers remain open for porting or explicit review**.
+The sweep omits target constructors and retains source/profile hashes. It is
+not a new lifecycle or live-service qualification.
 
 #### Lima ordinary-player lifecycle
 
@@ -26583,3 +26619,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-mailbox-prop]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/lima/small_mailbox.c
 
 [lima-mailbox-leaflet]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/lima/leaflet.c
+
+[lima-cgi-autodoc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/autodoc.c
+[lima-cgi-mudinfo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/mudinfo.c
+[lima-cgi-who]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/who.c
