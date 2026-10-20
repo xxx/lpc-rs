@@ -785,8 +785,9 @@ Reviewed on **19 October 2026** at the pinned [tar source][lima-contrib-tar]. It
 integer-array header can be converted with `to_bytes`, with payloads retained as
 immutable bytes. A 2560-byte control archive using the source's basic GNU header
 magic is accepted by Python tarfile 3.12.3 and GNU tar 1.35, preserving an exact
-binary payload and an empty member. This is a separate feasibility control;
-`contrib/tar.c` remains unported.
+binary payload and an empty member. This was a separate feasibility control;
+`contrib/tar.c` remained unported at this audit. Its later
+[adoption](#lima-contributed-tar-writer) is qualified below.
 
 The audit confirms a native `write_bytes` transaction-visibility bug: bounds and
 negative offsets use physical metadata rather than the attempt's file view.
@@ -808,8 +809,9 @@ GNU tar's permissive reader is not evidence that an unfinished writer is correct
 Thirteen isolated LPC controls record the observed write bug, binary/header
 feasibility, arithmetic mask and callback binding/cancellation. They do not run
 the original tar utility or qualify elapsed timer delivery. Library/profile and
-native binaries are unchanged. The last source sweep remains **1010/1182** with
-113 hosted fragments and **59 open consumers**; this audit closes no source entry.
+native binaries were unchanged during the audit. Its source sweep was
+**1010/1182** with 113 hosted fragments and **59 open consumers**; the audit
+closed no source entry.
 
 #### Lima transactional byte writes
 
@@ -842,8 +844,50 @@ The temporary master allows file access; this is a file-operation control, witho
 executing the tar utility or a gameplay/service run. Library/profile preservation
 checks pass.
 
-This is a driver correction; `contrib/tar.c` remains unported and the last source
-inventory remains **1010/1182**, with 113 hosted fragments and **59 open consumers**.
+That driver correction did not adapt `contrib/tar.c`; its accompanying inventory
+was **1010/1182**, with 113 hosted fragments and **59 open consumers**.
+
+#### Lima contributed tar writer
+
+Reviewed on **20 October 2026**, with native **29f120c2** and dedicated Lima
+**e9a5cc59**. The actual `contrib/tar.c` now builds headers
+in integer arrays, converts them with `to_bytes` and copies immutable payloads
+with `read_bytes` / `write_bytes`. Explicit creation/truncation precedes bound
+one-shot callbacks. Independent job state replaces the shared mutable header;
+each callback queues at most ten entries or 1 MiB of payload, with a one-second
+continuation delay. Empty files/directories, final zero records, archive exclusion
+and the old 16MiB record-mask bug are corrected.
+
+The existing basic GNU header and fixed mode/UID/GID/owner names remain. Member
+paths are normalized relative to the mudlib root without a leading slash. Names
+must fit 100 UTF-8 bytes, including a directory slash; overlong names fail instead
+of clipping. The 11-octal-digit size field fits 8GiB minus one, a format limit
+rather than a qualified operating size. There are no link, prefix or long-name
+extensions. Inputs must stay stable, and callers coordinate jobs sharing an
+output; asynchronous errors can leave a partial archive.
+
+The permanent Lima runner `python3 tests/tar/test_tar.py` passes **21 LPC
+assertions** and produces **six archives** through actual elapsed callbacks in
+**16.54s**, using real simuls/includes and the unchanged distinct-nil,
+preserved-player, 4000ms profile with a temporary permissive master. Python
+tarfile and GNU tar accept the files and verify binary contents and metadata;
+padding and both footer blocks are checked. Coverage includes empty roots,
+hidden/nested entries, 1/511/512/513-byte boundaries, exact 100-byte ASCII/UTF-8
+names, a source tree containing its output and a **16MiB + 513-byte** payload.
+The large archive has **17 observed growths**; other jobs finish while it is
+pending. This qualifies the helper, without a player command or full gameplay run.
+
+The fresh full sweep measures **1011/1182 compile, 171 standalone failures**,
+with **zero regressions, timeouts or crashes**. Its sole gain is `contrib/tar.c`.
+All **113 hosted fragments** retain compiling shipped hosts; **58 other
+consumers remain open**. Source/profile/compiler preservation checks pass.
+
+One native performance follow-up remains: `read_bytes` materializes the whole
+source before slicing each requested range. The callback budget therefore bounds
+queued archive payload, not physical read memory or I/O; directory listings are
+also collected in full. Optimize ordinary byte-range reads while preserving
+authorization, negative offsets, EOF behavior and pending-file visibility before
+claiming bounded physical large-file work. No driver API was added for this port.
 
 #### Lima ordinary-player lifecycle
 
