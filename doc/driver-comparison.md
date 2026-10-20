@@ -1290,6 +1290,44 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima optional legacy money adaptation
+
+The **20 October 2026** local port, after the selected coin fix committed as
+Lima **3538045e** / native **a39e0521**, adapts the optional
+[legacy MONEY object][lima-legacy-money]. It retains integer denomination counts,
+with canonical aliases and explicit zero for missing entries. A mixed argument
+collector supplies zero/two-argument get forms without changing native method
+policy. A bare long callback returns text, and pickup explicitly converts counts
+to floats when crediting the existing wallet API. Insufficient, zero/negative
+and absent-denomination pickup leave the stored value intact.
+
+Named `all` takes only the requested denomination. Generic numeric `coin`/`coins`
+counts the sole stored denomination; multiple denominations remain ambiguous
+even within one currency. Generic `all` consumes that sole denomination's count,
+and whole-object get credits all denominations. This differs from COINS'
+currency-balance model and does not replace the selected provider. USE_MONEY
+stays unselected; default drop/loot still use COINS.
+
+The maintained `tests/legacy_money/test_legacy_money.py` passes **eight compiler
+checks and 39 runtime assertions in 1.136s**. Original std/money fails at its
+fixed get override. Actual MONEY, get verb methods, money daemon and current
+wallet module run in temporary rooms with an OBJ actor and permissive master.
+Cases check callback text, count merges, aliases, partial/all/whole pickup,
+ambiguity, refused requests, decimal credits and recovered totals across two
+currencies. The fixture rejects USE_MONEY. Alternate-profile drop, mixed-provider
+drop/merge interoperability, parser routing, login, concurrency and account
+restart are outside the suite; existing wallet/payment/report work is not rerun.
+
+A fresh sweep measures **1020/1182 compiling, 162 failures** in **41.625s**, with
+no regressions, timeouts or crashes. std/money is the sole compilation gain.
+All 113 existing fragment proofs retain compiling hosts, leaving 49 other
+standalone consumers with their recorded dispositions. The gain is not feature
+activation or whole-port completion; target constructors are omitted in the
+inventory and explicitly exercised in the focused suite. Native Rust, profile,
+binaries, selected coin/wallet/daemon code and saved formats stay unchanged.
+Lima remains distinct nil, preserved player, 4000ms and USE_MASS. Upstream
+drivers were not run. Evidence: `/tmp/lima-legacy-money-20261020-eg5aryoo`.
+
 #### Lima selected coin denomination adaptation
 
 The **20 October 2026** local port follows the audit committed as Lima
