@@ -1290,6 +1290,51 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima remaining-source disposition reconciliation
+
+Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
+legacy money adapter. The last measured inventory remains **1020/1182 compiling,
+162 standalone failures**: 113 documented shipped-host fragments and 49 other
+consumer files. All 1549 library hashes, those 49 source/log records and release
+binary/profile inputs match that sweep; no count is inferred from this review.
+
+| Disposition of the 49 residual files | Count |
+|---|---:|
+| Previously qualified optional host compositions | 3 |
+| Retained alternative providers/configurations | 20 |
+| Unselected board packages/backend | 10 |
+| Body/schema or shared-state integration required | 6 |
+| Unfinished subsystems and dependent examples | 5 |
+| Deferred or upstream-disabled commands | 2 |
+| Incomplete legacy service/backend ports | 3 |
+
+The three optional compositions are bindings, boss and flow room; their dated
+qualifications are retained without adding synthetic hosts to the 113 shipped-
+host proofs. The other 46 are limitations or unselected work, not completed
+implementations or 46 established native-feature gaps. A new compiler-only
+selection control verifies the configured LIMA statistics and combat providers,
+USE_MASS and unselected USE_MONEY. The fourteen unselected combat/statistics
+alternatives remain outside this profile; existing provider, board, marriage,
+attic-state, reaction-script and command decisions are retained. Classification
+does not qualify every alternate configuration or arbitrary user-selected path.
+
+The [HTTP connection contribution][lima-legacy-http-connection] requires replacing
+the selected HTTP daemon/master path; that alternative is unselected. The
+[deprecated socket backend][lima-legacy-socket] retains legacy FluffOS signatures
+and optional UDP/process-launch branches. Netstat inspects loaded instances
+without loading an absent prototype, and the old SMTP connector is commented.
+The [NNTP contribution][lima-legacy-nntp] still constructs that backend, while
+NNTP_OB names an absent destination file. These are activation/API classifications,
+not completed consumer ports or live protocol qualifications.
+
+The next bounded audit is NNTP's source interface against the existing SOCKET
+provider, keeping the deprecated backend retired if possible. No endpoint contact,
+service activation, transport reimplementation or security work is included.
+One selection program compiles; no driver session, gameplay replay, Cargo build
+or full sweep is run. Production source/profile/binaries stay unchanged. Lima
+remains distinct nil, preserved player, 4000ms and USE_MASS; the port remains in
+progress. Evidence: `/tmp/lima-source-dispositions-20261020-f0s4ipq7`.
+
 #### Lima optional legacy money adaptation
 
 The **20 October 2026** local port, after the selected coin fix committed as
@@ -27031,6 +27076,9 @@ semantics. Leave unresolved questions explicitly not checked.
 
 [lima-coins]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/coins.c
 [lima-legacy-money]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/money.c
+[lima-legacy-http-connection]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/http_connection.c
+[lima-legacy-socket]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/old_socket.c
+[lima-legacy-nntp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/nntp.c
 [fluffos-loot-integer-scaling]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/ops/ops.cc#L385-L405
 
 [lima-wear-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wear.c
