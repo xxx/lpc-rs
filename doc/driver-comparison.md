@@ -1290,6 +1290,50 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima legacy money and selected coin interfaces
+
+Reviewed **20 October 2026** at native **1f08597c**, Lima **13368100**. The older
+[MONEY pile][lima-legacy-money] stores integer denomination counts; selected
+[COINS][lima-coins] renders base-currency balances. Current
+[body wallets][lima-body-pockets] convert denomination quantities through the
+[money daemon][lima-money-daemon]. `USE_MONEY` is unselected: ordinary drop uses
+COINS, as does loot creation. No alternate profile or provider is activated.
+
+The legacy pile's first rejection is its fixed two-argument `get` override of
+zero-argument M_GETTABLE.get. A temporary argument collector, matching the
+existing COINS adaptation, compiles without native method-policy changes. A bare
+long callback restores text where the old expression returns a function value.
+Temporary denomination-count piles transfer the correct fractional value into
+the current wallet, including whole-pile pickup. These controls establish a
+small source adapter, not qualification of alternate `USE_MONEY` operation.
+
+The selected [get][lima-get-verb]/[drop][lima-drop-verb] path has a separate unit
+mismatch. A valid fractional-denomination drop debits the correct wallet value,
+but constructs a pile keyed by denomination; its renderer expects a base
+currency and throws. Merging that denomination into an existing currency pile
+raises a missing-entry nil-addition error in the distinct-nil port. The fixture
+catches that exception, retaining the preceding wallet debit while the pile is
+unchanged; this is not an uncaught-transaction loss claim. Denomination pickup
+likewise misses an existing matching base-currency pile. Ordinary base-currency
+drop/get and fractional whole-pile pickup pass. The unit conflict is visible in
+pinned source; upstream drivers were not executed.
+
+**Thirteen compiler controls give twelve passes/one expected rejection; 23 final
+diagnostic assertions pass in 0.918s.** They use actual piles, wallet module,
+daemon and verb methods in a temporary OBJ actor/room with a permissive master.
+They reproduce the selected failures rather than qualify those workflows as
+correct. Parser dispatch, live login, concurrent players and account save/restart
+are outside the fixture; prior wallet/payment/report qualification is not rerun.
+
+Keep COINS/current wallets. Next normalize denomination quantities at the
+selected coin/get/drop boundaries, initialize missing balances explicitly and
+add maintained value-conservation tests for creation, merging and partial/all
+pickup. Keep the legacy provider unselected; no native nil/number/override
+relaxation or replacement wallet is needed. Production source/profile/binaries
+stay unchanged. The last measured inventory remains **1019/1182 compiling**;
+no fresh sweep or inferred gain. Lima stays distinct nil, preserved player,
+4000ms and USE_MASS. Evidence: `/tmp/lima-money-interface-audit-20261020-5lp0jr1m`.
+
 #### Lima attic openable and lockable wrappers
 
 Reviewed **20 October 2026** at native **f6b394dc**, Lima **eb8e0d1a**. The two
@@ -26907,6 +26951,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [fl-pirate-preprocessor]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/compiler/internal/lex.cc
 
 [lima-coins]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/coins.c
+[lima-legacy-money]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/money.c
 [fluffos-loot-integer-scaling]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/ops/ops.cc#L385-L405
 
 [lima-wear-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wear.c
