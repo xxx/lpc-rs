@@ -1147,6 +1147,36 @@ inventory remains **1014/1182 compiling**, 113 hosted fragments and 55 other
 standalone consumers; no new sweep or inferred gain. Evidence:
 `/tmp/lima-attic-examples-audit-20261020-3t5g6b2r`.
 
+#### Lima attic table and town-room adapter
+
+Adopted and checked **20 October 2026**, following audit notes native **44ea614b**
+and Lima **64f26775**. The two examples now use the audited source corrections:
+float `LARGE` mass and an explicit `on` relation/default for the coffee table;
+the actual direction count and nil format separator for the town-room helper.
+The table's surface capacity matches the existing shipped table examples.
+Identity, attachment, text, argument/display ordering, outdoor provider and exit
+path prefix remain. Zero directions retain the existing intersection wording.
+
+The permanent `tests/attic_examples/test_attic_examples.py` passes **60 LPC
+assertions and eight compiler checks** in **1.198s** against actual source.
+It checks real table construction, identity and attachment, default placement,
+capacity accounting/refusal/release, unsupported placement and clone cleanup.
+All 16 direction subsets verify exact titles, descriptions and included/omitted
+exit paths. Actual containers, rooms, movement and simuls execute with a typed
+weighted fixture item under a permissive temporary master. No production example
+or shared framework is substituted. The accepted run has no apply or transaction
+failures. Distinct nil, preserved player, `USE_MASS` and 4000ms remain; real parser/
+player commands, alternate configurations and town traversal are unqualified.
+The missing attic town destinations and TODO content remain explicit.
+
+A fresh full sweep measures **1016/1182 compiling, 166 failures** in **52.687s**,
+with zero regressions, timeouts or crashes. Its only gains are these two examples.
+All **113 hosted fragments** retain compiling shipped hosts; **53 other standalone
+consumers** remain. The contributed drunkenness body requirement stays an extra
+runtime limit. No native Rust, release binary, profile or original-checkout change.
+The whole port remains in progress. Evidence:
+`/tmp/lima-attic-examples-adoption-20261020-y8e10d0x`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
