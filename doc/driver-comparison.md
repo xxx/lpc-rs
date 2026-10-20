@@ -1290,6 +1290,52 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima NNTP source-interface audit
+
+Reviewed **20 October 2026** at native **4068f486**, Lima **8d8a9597**. The
+[NNTP contribution][lima-legacy-nntp] uses only an outgoing text connection from
+OLD_SOCKET. The current SOCKET constructor/read/send/remove interface can cover
+that use, retaining its existing creator ownership and outgoing privilege policy.
+The old backend's UDP/process-launch branches are not dependencies. Bare callback
+names are needed where the old functionals return the named function value.
+No new transport interface is established as necessary by this audit.
+
+**Seven compile-only controls give six passes/one expected rejection.** Original
+NNTP rejects its numeric response-code array declared string *; changing that
+declaration to int * alone makes the complete client compile. Selected SOCKET,
+NEWS_D and newsreader references pass. Explicit GROUP number conversions and
+SOCKET/bare-callback controls also compile. These temporary controls are not an
+adopted or runtime-qualified client, and production source remains unchanged.
+
+Source review finds further consumer work. The text provider delivers UTF-8
+pieces rather than complete lines, while the client keeps no unfinished-line
+tail. Its pending-body queue mixes POST filenames with IHAVE line arrays; POST
+never consumes its entry. Reply/body continuation state, bounded output production
+and terminal cleanup need explicit handling. Removal may drain asynchronously
+without a close callback; client state cannot rely on immediate object destruction.
+Preserve current raw ARTICLE callbacks: public methods queue ARTICLE and the
+special handler has a different label, but the source header explicitly notes
+removal of the older ARTICLE handling. XHDR's explicit not-implemented result
+also remains a limitation rather than a new feature selected here.
+
+The included [FluffOS time header][lima-nntp-time-header] places GMTOFF at index 8;
+native [localtime](efun/localtime.md) has the DST flag there. The client adds that
+slot before local ctime formatting and then labels requests GMT. Native
+[strftime](efun/strftime.md) also uses local time and has no UTC selector. A
+client/library UTC formatter needs fixed date/zone vectors before adoption;
+do not assume the old index or invent a UTC argument. Existing player-time
+qualification and native time policy are not reopened.
+
+Next qualify a temporary adapter offline with a recording transport: retained
+CRLF framing, consistent request/body state, bounded output, cleanup and UTC
+formatting, preserving documented callback choices. No client constructor,
+socket call, driver session, endpoint contact, service activation or protocol
+conformance test occurs in this audit. NNTP_OB still names an absent installed
+path, and local news/mail selection is unchanged. The last measured inventory
+stays **1020/1182 compiling**, without a new sweep or inferred gain. Native Rust,
+profile/binaries and original source stay unchanged; Lima retains distinct nil,
+preserved player and 4000ms. Evidence: `/tmp/lima-nntp-interface-audit-20261020-osw_bt76`.
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
@@ -27079,6 +27125,7 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-legacy-http-connection]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/http_connection.c
 [lima-legacy-socket]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/obj/secure/old_socket.c
 [lima-legacy-nntp]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/nntp.c
+[lima-nntp-time-header]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/driver/localtime.h
 [fluffos-loot-integer-scaling]: https://github.com/fluffos/fluffos/blob/44532e0228f34be2184c701a361df4079371b8b0/src/packages/ops/ops.cc#L385-L405
 
 [lima-wear-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wear.c
