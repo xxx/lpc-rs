@@ -79,6 +79,18 @@ impl FileAccess {
             .map_err(|e| self.error(context, e))
     }
 
+    /// Read an unchanged regular file's range, or select the full content view.
+    pub(crate) async fn read_disk_range<const N: usize>(
+        &self,
+        context: &EfunContext<'_, N>,
+        start: i64,
+        length: Option<u64>,
+    ) -> Result<Option<Vec<u8>>> {
+        file_view::read_disk_range(context.txn(), self.path.server(), start, length)
+            .await
+            .map_err(|e| self.error(context, e))
+    }
+
     /// Save text is UTF-8 or Latin-1; an unreadable path is treated as absent.
     pub(crate) async fn read_save<const N: usize>(
         &self,

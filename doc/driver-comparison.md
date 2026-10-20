@@ -882,12 +882,54 @@ with **zero regressions, timeouts or crashes**. Its sole gain is `contrib/tar.c`
 All **113 hosted fragments** retain compiling shipped hosts; **58 other
 consumers remain open**. Source/profile/compiler preservation checks pass.
 
-One native performance follow-up remains: `read_bytes` materializes the whole
-source before slicing each requested range. The callback budget therefore bounds
-queued archive payload, not physical read memory or I/O; directory listings are
-also collected in full. Optimize ordinary byte-range reads while preserving
-authorization, negative offsets, EOF behavior and pending-file visibility before
-claiming bounded physical large-file work. No driver API was added for this port.
+At that qualification, native `read_bytes` materialized the whole source before
+slicing each requested range, so the callback budget bounded queued payload
+rather than read memory or I/O. The [range-read correction below](#lima-byte-range-reads)
+addresses ordinary regular-file reads. Directory listings remain full `get_dir`
+operations. No driver API was added for this port.
+
+#### Lima byte-range reads
+
+Reviewed on **20 October 2026**, after tar adoption at Lima **e9a5cc59** and native
+notes **8fd4c59b**. Native [`read_bytes`](efun/read_bytes.md) now reads nonnegative
+ranges of unchanged regular files in one blocking filesystem operation. A
+supplied length bounds the read and allocation hint; an omitted length reads the
+remaining tail. Metadata supplies only an allocation hint, not EOF bounds.
+Authorization still precedes the path/view check, with no extra permission apply.
+Negative starts, zero-length requests, pending target changes, nonregular inputs
+and failed seeks retain the original content view. EOF still returns the
+configured null value; zero length before EOF returns empty bytes.
+
+Controlled native-API measurements use a **64MiB sparse input**, five fresh
+release-CLI processes per case, identical validated data and a saved baseline
+executable. Times include startup; RSS is the median process peak. These are
+neither physical disk-throughput measurements nor whole-mudlib speedups.
+
+| Request | Before (ms) | After (ms) | Before peak RSS (MiB) | After peak RSS (MiB) |
+|---|---:|---:|---:|---:|
+| 32 reads of 512 bytes | 970.2 | 11.0 | 87.1 | 22.8 |
+| Whole file | 62.0 | 39.1 | 150.3 | 86.6 |
+| 32MiB tail | 51.4 | 26.4 | 118.8 | 54.4 |
+| Negative start, 512 bytes | 37.8 | 39.0 | 86.6 | 86.6 |
+| Zero length | 38.6 | 37.9 | 86.6 | 86.6 |
+
+The range workload uses a 512MiB address-space cap; whole-file comparisons use
+1GiB for both versions. A separate **1GiB sparse-input control** reads at byte
+1048576 under the **512MiB cap**, validates all 32 requested 512-byte results and
+peaks near **23MiB RSS**. This qualifies bounded reads without loading the input.
+
+Ten new native regressions cover sparse offsets, huge requested lengths,
+configured null/empty bytes, permission-apply creation, pending append/rename/
+removal, unreadable EOF/zero-length requests and directories. The full workspace
+passes **5198 tests**, two ignored; all-target warning-free Clippy, formatting and
+the ordinary optimized workspace build pass. The actual Lima tar runner also
+passes **21 LPC assertions and six archives**, with real elapsed callbacks and
+the unchanged distinct-nil, preserved-player, 4000ms profile. Its large output
+retains 17 observed growths and exact externally verified binary data.
+
+Pending-file and negative/zero-length reads can still materialize whole contents;
+directory listings are also unchanged. The last source inventory remains
+**1011/1182 compiling**, with 113 hosted fragments and **58 open consumers**.
 
 #### Lima ordinary-player lifecycle
 
