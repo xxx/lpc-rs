@@ -1102,6 +1102,51 @@ drunkenness body requirement remains an additional runtime limit. No native Rust
 binary, profile or original-checkout change. The port remains in progress.
 Evidence: `/tmp/lima-roommaker-adoption-20261020-l1srxywi`.
 
+#### Lima attic table and town-room audit
+
+Reviewed **20 October 2026** at native **58676fa7**, Lima **8b127109**, against the
+pinned [coffee table][lima-attic-coffee-table], [town-room helper][lima-attic-townroom],
+[container][lima-attic-container] and [shipped table reference][lima-attic-table-reference].
+The two attic examples still match upstream `eefaff66adcae9b01e16059574c925b0d63e70a1`.
+Tests use distinct nil, preserved call-out players, `USE_MASS` and 4000ms;
+upstream drivers were not executed.
+
+The table first rejects integer `LARGE` at the float mass setter. Conversion
+alone compiles, but construction still fails: the placeholder `set_preposition`
+registers no relation, leaving `set_objects` to access a missing relation record.
+A temporary proposal uses `to_float(LARGE)`, `add_relation("on", LARGE)` and
+`set_default_relation("on")`, following the existing table's 64-unit surface
+capacity. Identity, attachment, description and empty stock remain unchanged.
+No global implementation of the obsolete setter is needed.
+
+The town-room first needs the explicit nil separator for `format_list`. That
+alone compiles, but its unassigned string `i` never selects integer cases one
+and two. Switch on `sizeof(d)` instead. The proposal retains the existing
+north/south/east/west display order, argument order, sibling-town path prefix and
+outdoor provider. Zero directions retain the existing intersection title and
+`The road leads .` wording; this audit invents no additional room-description
+policy or destination content.
+
+**Thirteen compiler controls give 11 passes and two expected rejections**.
+Three baseline runtime controls confirm the table constructor failure and dead
+town-room branches. **Sixty temporary-proposal assertions pass**: table mass,
+attachment, identity, relation/default/capacity, real movement and capacity/refusal
+behavior; all 16 direction combinations with exact titles, descriptions and exit
+paths; and clone cleanup. Actual examples, containers, rooms, movement and simuls
+run through a permissive temporary master with a fixture weighted item. The
+caught baseline constructor failure logs one expected apply error. The proposal
+run has no unexpected runtime failures. Full parser/player interaction and
+alternate build options are not checked.
+
+The [attic town source][lima-attic-town] is a TODO and supplies no sibling town
+destination files, so matching exit paths does not establish traversal. No fixed
+caller of the two examples was found; that is not an unreachability claim.
+Recommend the small two-file source adapter with permanent tests. No production
+adapter or native/profile/binary change is adopted in this audit. Last measured
+inventory remains **1014/1182 compiling**, 113 hosted fragments and 55 other
+standalone consumers; no new sweep or inferred gain. Evidence:
+`/tmp/lima-attic-examples-audit-20261020-3t5g6b2r`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
@@ -26993,3 +27038,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-roommaker-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/roommaker/makeroom.c
 [lima-roommaker-menu]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/roommaker/buildmenu.c
 [lima-roommaker-definitions]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/include/mudlib.h
+
+[lima-attic-coffee-table]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/attic/coffee_table.c
+[lima-attic-townroom]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/attic/townroom.c
+[lima-attic-container]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/container.c
+[lima-attic-table-reference]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/table.c
+[lima-attic-town]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/attic/town.c
