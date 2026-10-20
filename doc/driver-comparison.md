@@ -1290,6 +1290,53 @@ The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
 standalone consumers; no fresh sweep or inferred gain. Evidence:
 `/tmp/lima-marriage-audit-20261020-srkbxa99`.
 
+#### Lima portable-board adaptation
+
+The **20 October 2026** local port, following the interface audit committed as
+Lima **5bc6509f** / native **03689cfa**, explicitly selects
+[contrib/board.c][lima-contrib-board] for the [portable sample][lima-portable-board].
+It uses `BUG_NEWSGROUP`, the current user's article read sets and subscription
+list, native bound editor callbacks and a public description method. Removed
+articles and invalid visible ordinals are handled without indexing past the
+available articles; reading a later article preserves earlier unread entries.
+The old size constant becomes explicit float mass in the selected profile.
+
+Post/followup callbacks capture the starting group and source article. Switching
+the shared board during editing cannot redirect completion. Failed completion
+retains the text in another editor and asks the user to check before resending;
+explicit abort creates no article. Removal uses the account userid stored in
+the article. The provider also supplies the implicit-post checker expected by
+the shipped verb.
+
+Replies enter the current user's [mailer][lima-mailer-base] through the new
+library method `begin_news_reply(group, id)`, which validates the article and
+captures its subject/destination before opening the existing reply editor and
+draft/Cc flow. Both standard and Mh inherit this entry. Its direct
+`send_news_reply` method keeps the existing NEWSREADER-only guard unchanged.
+Cancellation keeps an older draft; failed delivery follows existing mailer
+draft retention rather than reporting unconditional success from the board.
+Other board packages and their duplicate news daemon remain unselected.
+
+The maintained `tests/boards/test_boards.py` passes **eight compiler checks and
+54 runtime assertions** in **3.043s**. It uses actual board/news/editor/mailbox/
+mailer components and current user news/mail modules, with a recording user at
+the modal/body boundary. Cases cover reading, descriptions, prompts, cancellation,
+empty posts, quoted/plain followups, group changes, removal, failed completion,
+manual recovery and replies through both mailers. Native message saves and
+receipts are exercised; Python independently checks saved files and retained
+draft bytes. News save calls are counted rather than persisting a real account.
+Parser routing, live login, real-master path policy, concurrent players, remote
+mail and upstream execution are outside this fixture.
+
+A fresh full sweep measures **1019/1182 compiling, 163 standalone failures** in
+**46.217s**, with **no regressions/timeouts/crashes**. The two board files are the
+only gains; all 113 existing fragment proofs retain compiling hosts, leaving 50
+other standalone consumers with their recorded dispositions. Inventory checks
+omit target constructors; the focused runtime fixture constructs the board.
+No native Rust, profile or binary change is made. Lima stays distinct nil,
+preserved player, 4000ms and USE_MASS; no new native feature is established.
+Evidence: `/tmp/lima-portable-board-adoption-20261020-uxl2cwb2`.
+
 #### Lima contributed board-provider interface audit
 
 Reviewed **20 October 2026** at native **cdf98dbf**, Lima **7125f573**, against
