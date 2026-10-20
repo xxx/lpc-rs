@@ -1247,6 +1247,49 @@ content remain separate runtime limits. No native Rust, release binary, profile
 or original-checkout change. The port remains in progress. Evidence:
 `/tmp/lima-web-editor-adoption-20261020-7hj_s_yu`.
 
+#### Lima contributed marriage integration audit
+
+Reviewed **20 October 2026** at native **e4b98193**, Lima **43edad7f**, against
+the pinned [installation list][lima-marriage-install], [command][lima-marriage-command],
+[contributed schema][lima-marriage-class], [finger daemon][lima-marriage-finger-daemon]
+and [user daemon][lima-marriage-user-daemon]. The contribution is a set of core-file
+replacements, not an independently installed module: its list names five core
+paths, including a body change that is absent from the bundle. The selected
+[body][lima-body] and [finger class][lima-finger-class] also lack spouse support
+at the pinned upstream revision.
+The only preceding contribution edit is the string-repetition adaptation.
+
+Six supplied C files give two passes and four expected rejections. Command
+dispatch, nil references, parenthesized negated assignments, reduction and old
+data-access calls need translation. Those source changes alone cannot supply
+the integration: global `CLASS_FINGER`, `FINGER_D` and `USER_D` still select the
+current providers. The selected class has a character `bodies` mapping; the old
+replacement has `spouse` instead. Current finger producer and consumer both use
+that character mapping, so copying the old class over it would lose current
+support. Importing the contributed class locally instead cannot mix nominal
+records from the selected producer.
+
+**Twenty-one compiler controls give 13 passes and eight expected rejections**.
+They include all six contributed files, six selected references, class/dispatch
+controls and existing native data operations. **Eight runtime contract checks
+pass** through actual selected body, class and user-data APIs with a permissive
+temporary master. The body has no spouse declaration/accessors; a direct missing
+setter returns nil without creating storage. Current user-data queries/setters
+reject unregistered `spouse`, while an ordinary missing-account query retains
+its nil result. The current character mapping survives, and a local contributed
+class rejects the selected nominal record. No marriage ceremony or persistence
+is qualified by these controls. Lima stays distinct nil, preserved player, 4000ms;
+upstream drivers were not run.
+
+Keep the selected providers and record this kit as **integration-required**.
+Working spouse support needs the omitted body/accessor/persistence work and a
+merge into current class/account/finger behavior. This audit establishes no need
+for new `bind`/`fetch_variable` aliases, class-type relaxation or core replacements.
+No production source/profile/binary changes or feature activation are made.
+The inventory stays **1017/1182 compiling**, 113 hosted fragments and 52 other
+standalone consumers; no fresh sweep or inferred gain. Evidence:
+`/tmp/lima-marriage-audit-20261020-srkbxa99`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
@@ -27144,3 +27187,9 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-attic-container]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/container.c
 [lima-attic-table-reference]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/table.c
 [lima-attic-town]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/domains/std/attic/town.c
+
+[lima-marriage-install]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/marriage/SPOUSE_CHANGES
+[lima-marriage-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/marriage/marry.c
+[lima-marriage-class]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/marriage/class_finger.c
+[lima-marriage-finger-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/marriage/finger_d.c
+[lima-marriage-user-daemon]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/marriage/user_d.c
