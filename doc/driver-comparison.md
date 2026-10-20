@@ -1177,6 +1177,46 @@ runtime limit. No native Rust, release binary, profile or original-checkout chan
 The whole port remains in progress. Evidence:
 `/tmp/lima-attic-examples-adoption-20261020-y8e10d0x`.
 
+#### Lima web-editor backend continuation audit
+
+Reviewed **20 October 2026** at native **58aa75bd**, Lima **82f89dbd**, continuing
+the [earlier first-error review](#lima-optional-web-editor-and-consumer-selection)
+of the pinned [backend][lima-webed-source-review] and [CGI wrapper][lima-http-webed].
+The existing `mappingp` and optional wrapper-header adaptations remain. HTTP is
+still commented out in the configured preload; no HTTP request or external
+connection is made. Lima stays distinct nil, preserved player, 4000ms.
+
+Renaming the macro-colliding `error` parameter exposes eight typed-reference
+errors in two `format_editor(0, 0, 0, 0)` calls. Use nil there; the complete
+backend then compiles without a new native API. A runtime control confirms that
+native `write_file` errors escape its zero-result check. A temporary proposal
+catches that write call and uses the existing failed-save page, retaining the
+draft and earlier files. Other rendering and empty-file branches stay unchanged:
+empty strings are truthy here, so they already support empty and new files.
+
+**Ten source/reference compiler controls give eight passes and two expected
+rejections**, with a separate passing fixture-master preparation check. Eight
+runtime controls reproduce existing behavior and the save-error mismatch.
+**Twenty proposal assertions pass** through the actual CGI wrapper, backend,
+`M_ACCESS`, security/user daemons and `crypt`, using a synthetic offline wizard
+account in the disposable library. They cover initial presentation, ordinary/
+empty/new/directory loads, reload and retained inherited-file action, save,
+CRLF normalization, overwrite, empty output, failed-save recovery, normal missing/
+incorrect login refusal and UTF-8/entity text. Seven external filesystem checks
+verify committed output bytes and absent unsaved/refused targets. Accepted
+processes exit zero without apply/transaction failures. The first fixture wrongly
+assumed empty strings were false; that failed expectation was corrected without
+changing the existing empty-file code.
+
+These are direct form/file checks under a permissive temporary master, not browser,
+HTTP transport, logged-in user, real path-policy or deployment qualification.
+Existing markup, credential policy and optional service activation are unchanged;
+the upstream driver was not executed. Recommend the small backend-only adapter
+with permanent functional tests. No production source proposal is adopted here;
+the measured inventory stays **1016/1182 compiling**, 113 hosted fragments and
+53 other standalone consumers. No fresh sweep or inferred source gain. Evidence:
+`/tmp/lima-web-editor-continuation-20261020-h2bzspmw`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
