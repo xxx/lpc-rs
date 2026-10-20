@@ -684,8 +684,8 @@ the adaptations described below.
 #### Lima port readiness
 
 **The overall Lima port remains in progress.** Configured startup and shipped
-tests are qualified milestones. The [CGI helper update](#lima-cgi-helpers) records
-the current source inventory and outstanding consumer count.
+tests are qualified milestones. The [collection helper update](#lima-contributed-collections)
+records the current source inventory and outstanding consumer count.
 
 As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
@@ -740,12 +740,43 @@ arguments. Real class definitions, grammar, glob and ANSI translations remain;
 controlled IMUD/finger records replace external data providers. This qualifies
 helper output, without starting HTTP transport or testing live IMUD/account policy.
 
-The full sweep after adaptation measures **1008/1182 compile, 174 standalone
+The full sweep immediately after the CGI adaptations measured **1008/1182 compile, 174 standalone
 failures, zero regressions/timeouts/crashes**. Its three gains are the CGI helpers.
 Of the remaining failures, 113 documented fragments have currently compiling
 shipped hosts; **61 other consumers remain open for porting or explicit review**.
 The sweep omits target constructors and retains source/profile hashes. It is
 not a new lifecycle or live-service qualification.
+
+#### Lima contributed collections
+
+Reviewed on **19 October 2026** against the pinned [last-item queue][lima-contrib-last-queue]
+and [stack][lima-contrib-stack]. The queue accessor returns an element despite
+its upstream `void` declaration; give `lqueue_member` a `mixed` return type.
+At write index zero, return a fresh shallow copy of the backing array rather
+than concatenating it with `elems[0..-1]`, which denotes the whole array under
+native negative-index rules. A declaration-only control reproduces six elements
+for a three-slot queue both initially and after a full wrap. Rewrite the stack
+pop's arrow member access as native class dot access.
+
+The queue keeps its fixed-capacity window, including nil padding, newest-first
+member ranks and oldest-first listing. Result arrays remain independent while
+nested values stay shared. The stack keeps its existing LIFO and explicit
+capacity/underflow errors. No driver API or collection representation changes.
+The upstream sources were inspected; no upstream-driver execution is claimed.
+
+The permanent Lima runner `python3 tests/collections/test_collections.py` compiles
+both actual helpers and passes **37 LPC runtime assertions** in a temporary
+library using the configured distinct-nil profile. Coverage includes partial/full
+windows, repeated wraparound, capacity one, shallow-copy behavior, mixed values,
+independent instances, zero-capacity behavior and stack depth after errors. The
+fixture inherits the shipped helpers without replacement implementations.
+
+The fresh full sweep measures **1010/1182 compile, 172 standalone failures,
+zero regressions/timeouts/crashes**. Its only gains over the CGI inventory are
+the two helpers. All 113 documented fragments retain compiling shipped hosts;
+**59 other consumers remain open for porting or explicit review**. Target
+constructors are omitted and source/profile/compiler preservation checks pass.
+This is source/helper qualification rather than a new full gameplay run.
 
 #### Lima ordinary-player lifecycle
 
@@ -26623,3 +26654,6 @@ semantics. Leave unresolved questions explicitly not checked.
 [lima-cgi-autodoc]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/autodoc.c
 [lima-cgi-mudinfo]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/mudinfo.c
 [lima-cgi-who]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/WWW/cgi/who.c
+
+[lima-contrib-last-queue]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/last_queue.c
+[lima-contrib-stack]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/contrib/stack.c
