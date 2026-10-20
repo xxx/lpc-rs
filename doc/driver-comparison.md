@@ -1065,6 +1065,43 @@ the last inventory stays **1013/1182 compiling**, with 113 hosted fragments and
 The contributed drunkenness body requirement remains separate. Evidence:
 `/tmp/lima-roommaker-audit-20261020-n3fe_m5k`.
 
+#### Lima contributed room-maker adapter
+
+Adopted and checked **20 October 2026**, following audit notes native **5526b1a5**
+and Lima **51ac9196**. The two-file adapter gives the command its established
+dispatch hook and sibling menu target, uses bare/bound callbacks, and generates
+the shipped indoor/outdoor rooms with their selected weather flag. Description
+and mapping values remain raw while editing; integer/string fields are quoted
+when emitted. Nil editor aborts preserve existing text.
+
+The permanent menu routes exposed two additional integration details. Empty
+item/exit text must reach the editor as nil, since native `explode("")` preserves
+one empty field; otherwise a fresh entry starts with a blank line. Catch native
+`write_file` errors so the existing failed-save message can run and the menu stays
+usable. Successful writes still use overwrite mode. No shared menu/editor or
+native implementation changes are needed.
+
+`tests/roommaker/test_roommaker.py` passes **63 LPC assertions and 15 compiler
+checks** in **1.870s**, against actual source. Forty-six assertions exercise
+command dispatch, menu/submenu prompts and views, long/item/exit editors and
+completion/abort, object quantity/edit/delete callbacks, file paths/names, saves,
+overwrite, failed-write recovery, two independent owners and clone cleanup.
+Six generated rooms compile; a fresh driver runs 17 further assertions on actual
+room construction, exact quoted/backslashed descriptions and item identifiers,
+weather/light, exits and object counts. Python checks output names, include
+de-duplication and overwrite. User/body/shell identities and the modal receiver
+are fixtures; logged-in inputsys/full-shell routing, permission policy, completion/
+pager interactions, live weather output and logout remain outside this test.
+Lima stays distinct nil, preserved player, 4000ms. Upstream drivers were not run.
+
+A fresh bounded whole-source sweep measures **1014/1182 compiling, 168 failures**
+in **43.180s**, with zero regressions, timeouts or crashes. Its sole gain is the
+command; the menu already compiled. All **113 hosted fragments** retain compiling
+shipped hosts; **55 other standalone consumers** remain. The contributed
+drunkenness body requirement remains an additional runtime limit. No native Rust,
+binary, profile or original-checkout change. The port remains in progress.
+Evidence: `/tmp/lima-roommaker-adoption-20261020-l1srxywi`.
+
 #### Lima ordinary-player lifecycle
 
 Reviewed **19 October 2026** at native **ae128006**, dedicated Lima **2fb9a921**.
