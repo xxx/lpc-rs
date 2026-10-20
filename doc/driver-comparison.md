@@ -1336,6 +1336,43 @@ stays **1020/1182 compiling**, without a new sweep or inferred gain. Native Rust
 profile/binaries and original source stay unchanged; Lima retains distinct nil,
 preserved player and 4000ms. Evidence: `/tmp/lima-nntp-interface-audit-20261020-osw_bt76`.
 
+#### Lima offline NNTP prototype
+
+Reviewed **20 October 2026**, after committing the interface audit as native
+**85cfff4b** / Lima **285cff0b**. A temporary client uses selected SOCKET, bare
+callbacks, retained CRLF framing, serialized requests and bounded body production.
+The recording version changes only the constructor's transport path. Production
+source is unchanged; this is qualification before adoption.
+
+**Six compile controls and 463 assertions across seven CLI executions pass.**
+These cover every existing command family, arbitrary character splits of a fixed
+reply, multiline/dot handling, callback shapes, numeric GROUP/STAT fields,
+POST/IHAVE sequencing, removal/EOF and callback/write failures. A UTF-8 article
+streams through more than 64 frames, each at most 1024 characters. Final replies
+may precede drain notification once the complete body has been queued; subsequent
+commands still wait for that final reply. The continuation/framing expectations
+come from [RFC 3977](https://www.rfc-editor.org/rfc/rfc3977.html), source-reviewed
+on that date, without server execution or a complete conformance claim.
+
+The library UTC formatter passes **53 fixed epoch vectors in each of three
+zones**: UTC, America/Los_Angeles and Asia/Kathmandu. It computes Gregorian dates
+directly, preserving the legacy two-digit date/GMT interface and its century
+ambiguity. No native time API or comparison-table capability changes.
+
+Preserve raw ARTICLE arrays and continuation/final status callbacks. XHDR remains
+explicitly unimplemented: the prototype reports that result in request order
+without sending the unsupported command. Terminal failure clears all requests
+before one connection-level error callback; explicit removal is silent.
+
+The next work is adoption in optional contrib/nntp with maintained offline tests.
+NNTP_OB and local NEWS_D/newsreader remain unchanged. The real provider's
+ownership, privilege, native events and backpressure are not newly exercised by
+the recording transport. No real sockets, listeners, driver session or service
+activation occurs. All 1549 production library hashes, profile and release
+binaries remain unchanged. Inventory stays **1020/1182**, without a fresh sweep
+or inferred gain; the port remains in progress. Evidence:
+`/tmp/lima-nntp-prototype-20261020-fviw2x_u`.
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
