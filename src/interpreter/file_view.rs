@@ -16,9 +16,11 @@ use crate::{
 
 mod directory;
 mod entry;
+mod metadata;
 
 pub(crate) use directory::{PendingDirectoryView, directory_is_empty};
 pub(crate) use entry::{EntryKind, PendingEntryView, entry_kind};
+pub(crate) use metadata::{FileMetadata, metadata_through};
 
 /// Compiler inputs include the loading attempt's pending file changes.
 #[derive(Debug)]

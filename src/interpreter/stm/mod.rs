@@ -13,7 +13,7 @@ use lpc_rs_errors::{LpcError, Result, span::Span};
 use crate::{
     command::registry::RuleList,
     interpreter::{
-        file_view::{PendingDirectoryView, PendingEntryView},
+        file_view::{FileMetadata, PendingDirectoryView, PendingEntryView},
         function_type::function_ptr::{FunctionPtr, ResolvedCall},
         lpc_array::LpcArray,
         lpc_class::LpcClass,
@@ -545,6 +545,15 @@ impl Transaction {
             .iter()
             .filter_map(|e| e.pending_file_op(server))
             .collect()
+    }
+
+    /// Inspect this attempt's size effects without cloning file payloads.
+    pub(crate) fn pending_file_metadata(
+        &self,
+        server: &std::path::Path,
+        disk: FileMetadata,
+    ) -> Option<FileMetadata> {
+        disk.after_effects(&self.effects, server)
     }
 
     /// Snapshot entry changes without copying file contents or performing IO.

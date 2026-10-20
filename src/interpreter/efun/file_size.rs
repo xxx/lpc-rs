@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     VALID_READ,
     efun::{efun_context::EfunContext, file_access::authorize_or_deny},
-    file_view::Seen,
+    file_view::FileMetadata,
     lpc_ref::LpcRef,
 };
 
@@ -16,19 +16,11 @@ pub async fn file_size<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         context.return_efun_result(LpcRef::from(-1));
         return Ok(());
     };
-    let server = access.path().server();
-    let size = if context.txn().with(|t| t.has_pending_file_ops(server)) {
-        match access.read(context).await? {
-            Seen::Dir => -2,
-            Seen::File(bytes) => LpcIntInner::try_from(bytes.len()).unwrap_or(LpcIntInner::MAX),
-            Seen::Missing => -1,
-        }
-    } else {
-        match tokio::fs::metadata(server).await {
-            Ok(metadata) if metadata.is_dir() => -2,
-            Ok(metadata) => LpcIntInner::try_from(metadata.len()).unwrap_or(LpcIntInner::MAX),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => -1,
-            Err(error) => return Err(access.error(context, error)),
+    let size = match access.metadata(context).await? {
+        FileMetadata::Missing => -1,
+        FileMetadata::Directory => -2,
+        FileMetadata::File(size) | FileMetadata::Other(size) => {
+            LpcIntInner::try_from(size).unwrap_or(LpcIntInner::MAX)
         }
     };
     context.return_efun_result(LpcRef::from(size));
@@ -157,10 +149,36 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn pending_changes_retain_content_read_errors() {
+    async fn pending_appends_do_not_require_reading_the_file() {
         use std::os::unix::fs::PermissionsExt;
 
-        let root = TempLib::new("size-pending-unreadable");
+        let root = TempLib::new("size-pending-write-only");
+        let path = root.join("write-only");
+        std::fs::write(&path, "contents").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o200)).unwrap();
+        let vm = allowing_vm(&root).await;
+        let result = vm
+            .initialize_process_from_code(
+                "/sizer.c",
+                indoc! { r#"
+                    int create() {
+                        write_file("/write-only", "append");
+                        return file_size("/write-only");
+                    }
+                "# },
+            )
+            .await;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(result.unwrap().result(), Some(LpcRef::from(14)));
+        assert_eq!(std::fs::read(&path).unwrap(), b"contentsappend");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn pending_renames_retain_content_read_errors() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = TempLib::new("size-pending-rename-unreadable");
         let path = root.join("unreadable");
         std::fs::write(&path, "contents").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
@@ -170,17 +188,18 @@ mod tests {
                 "/sizer.c",
                 indoc! { r#"
                     int create() {
-                        write_file("/unreadable", "append");
-                        return file_size("/unreadable");
+                        rename("/unreadable", "/renamed");
+                        return file_size("/renamed");
                     }
                 "# },
             )
             .await;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
         let error = result.unwrap_err().to_string();
-        assert!(error.contains("file_size: /unreadable:"), "{error}");
+        assert!(error.contains("file_size: /renamed:"), "{error}");
         assert!(!error.contains(root.to_str().unwrap()), "{error}");
         assert_eq!(std::fs::read(&path).unwrap(), b"contents");
+        assert!(!root.join("renamed").exists());
     }
 
     #[tokio::test]

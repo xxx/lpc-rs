@@ -9,7 +9,7 @@ use lpc_rs_errors::{LpcError, Result};
 use crate::interpreter::{
     apply::valid_apply,
     efun::efun_context::EfunContext,
-    file_view::{self, EntryKind, Seen},
+    file_view::{self, EntryKind, FileMetadata, Seen},
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -44,6 +44,16 @@ impl FileAccess {
     /// The path's contents after this task's earlier file effects.
     pub(crate) async fn read<const N: usize>(&self, context: &EfunContext<'_, N>) -> Result<Seen> {
         file_view::read_through(context.txn(), self.path.server())
+            .await
+            .map_err(|e| self.error(context, e))
+    }
+
+    /// The followed target's kind and size after this task's pending effects.
+    pub(crate) async fn metadata<const N: usize>(
+        &self,
+        context: &EfunContext<'_, N>,
+    ) -> Result<FileMetadata> {
+        file_view::metadata_through(context.txn(), self.path.server())
             .await
             .map_err(|e| self.error(context, e))
     }

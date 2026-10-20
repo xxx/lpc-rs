@@ -10,11 +10,12 @@ one that leaves the lib, is an error. A write, removal or `mkdir` of the
 path earlier in the same task is already measured, though it lands on disk
 only when the task commits.
 
-With no pending changes to that path, this reads filesystem metadata without
-opening or reading the contents. Pending changes use the task's existing file
-view, which can require reading contents. Other filesystem errors are runtime
-errors naming the in-game path. A nonnegative size does not guarantee that a
-later content read will be permitted or succeed.
+This reads filesystem metadata and applies pending text replacements, appends,
+byte writes, removals and directory creation without opening or reading the
+contents. Pending character replacements or renames use the task's content view
+and can require reading contents. Other filesystem errors are runtime errors
+naming the in-game path. A nonnegative size does not guarantee that a later
+content read will be permitted or succeed.
 
 ### Examples
 

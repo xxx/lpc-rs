@@ -793,8 +793,8 @@ negative offsets use physical metadata rather than the attempt's file view.
 Writing after a pending creation returns zero; a second append is rejected after
 `file_size` reports the pending growth. A negative offset after growth overwrites
 the old disk-relative position, while pending truncation can wrongly permit a
-write past the visible end. Correct current-view kind/size/bounds handling before
-adapting the writer; preserve the normal missing-file zero result.
+write past the visible end. The [native correction below](#lima-transactional-byte-writes)
+addresses this prerequisite; the writer still needs adaptation.
 
 The utility also skips empty files, can index an empty work list after an empty
 directory, omits terminating zero records and masks off full-record bytes at
@@ -810,6 +810,40 @@ feasibility, arithmetic mask and callback binding/cancellation. They do not run
 the original tar utility or qualify elapsed timer delivery. Library/profile and
 native binaries are unchanged. The last source sweep remains **1010/1182** with
 113 hosted fragments and **59 open consumers**; this audit closes no source entry.
+
+#### Lima transactional byte writes
+
+Reviewed on **19 October 2026**. The native [`write_bytes`](efun/write_bytes.md)
+now checks file kind and byte length after the calling attempt's pending effects
+and the `valid_write` apply.
+Pending creation, growth, truncation, removal and renaming therefore affect its
+offset bounds; negative offsets use the pending end. An ordinary missing file
+still returns zero. This corrects the driver issue exposed by the tar audit.
+
+[`file_size`](efun/file_size.md) shares this metadata view. Text replacements,
+appends and byte writes derive the size without copying their payloads or reading
+the file, preserving write-only-file support. Character writes and renames fall
+back to the existing content view. Permission applies retain their existing efun
+names; `write_bytes` does not add a `valid_read` call.
+
+Ten new byte-write regressions cover the pending operations, UTF-8 byte lengths,
+permission-apply creation and write-only files. File-size tests also check pending
+text appends without read permission and content-read errors during a rename.
+All **29 byte-efun tests and 19 file-size tests pass**. The full workspace passes
+**5188 tests**, with two ignored; all-target warning-free Clippy, formatting and
+the ordinary optimized workspace build also pass.
+
+Seven isolated controls using the real Lima simuls/includes and its unchanged
+distinct-nil, preserved-player, 4000ms profile pass with the rebuilt release CLI.
+They verify committed binary bytes, creation, repeated appends, negative offsets,
+truncation and UTF-8 byte sizes. A five-write archive created in one task retains
+its exact binary payload and empty member when read by Python tarfile and GNU tar.
+The temporary master allows file access; this is a file-operation control, without
+executing the tar utility or a gameplay/service run. Library/profile preservation
+checks pass.
+
+This is a driver correction; `contrib/tar.c` remains unported and the last source
+inventory remains **1010/1182**, with 113 hosted fragments and **59 open consumers**.
 
 #### Lima ordinary-player lifecycle
 

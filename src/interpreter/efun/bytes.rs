@@ -6,6 +6,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     VALID_READ, VALID_WRITE,
     efun::{efun_context::EfunContext, file_access::authorize},
+    file_view::FileMetadata,
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -80,17 +81,14 @@ pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
     let contents = contents.to_vec();
     let access = authorize(context, "write_bytes", VALID_WRITE, 0).await?;
-    let size = match tokio::fs::metadata(access.path().server()).await {
-        Ok(m) if m.is_file() => m.len(),
-        Ok(_) => {
+    let size = match access.metadata(context).await? {
+        FileMetadata::File(size) => size,
+        FileMetadata::Directory | FileMetadata::Other(_) => {
             return Err(context.runtime_error(format!("write_bytes: {} is not a file", access)));
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+        FileMetadata::Missing => {
             context.return_efun_result(LpcRef::from(0));
             return Ok(());
-        }
-        Err(e) => {
-            return Err(access.error(context, e));
         }
     };
     let from = offset(start, size);
@@ -338,6 +336,208 @@ mod tests {
         .await;
         assert_eq!(got, LpcRef::from(0));
         assert!(!root.join("nope.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn write_bytes_sees_a_pending_creation() {
+        let (root, vm) = lib("wb-pending-create").await;
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    write_file("/new.bin", "", 1);
+                    return write_bytes("/new.bin", 0, to_bytes(({0, 255, 65})));
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(std::fs::read(root.join("new.bin")).unwrap(), [0, 255, 65]);
+    }
+
+    #[tokio::test]
+    async fn write_bytes_appends_repeatedly_at_the_pending_end() {
+        let (root, vm) = lib("wb-pending-append").await;
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    return write_bytes("/d.txt", file_size("/d.txt"), to_bytes("A", "UTF-8"))
+                        && write_bytes("/d.txt", file_size("/d.txt"), to_bytes("B", "UTF-8"))
+                        && file_size("/d.txt") == 14;
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(
+            std::fs::read(root.join("d.txt")).unwrap(),
+            b"hello world\nAB"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_bytes_negative_offsets_use_the_pending_end() {
+        let (root, vm) = lib("wb-pending-negative").await;
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    return write_bytes("/d.txt", 12, to_bytes("A", "UTF-8"))
+                        && write_bytes("/d.txt", -1, to_bytes("B", "UTF-8"));
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(
+            std::fs::read(root.join("d.txt")).unwrap(),
+            b"hello world\nB"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_bytes_rejects_offsets_past_a_pending_truncation() {
+        let (root, vm) = lib("wb-pending-truncate").await;
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    write_file("/d.txt", "", 1);
+                    return write_bytes("/d.txt", 1, to_bytes("x", "UTF-8"));
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(0)));
+        assert_eq!(std::fs::read(root.join("d.txt")).unwrap(), b"");
+    }
+
+    #[tokio::test]
+    async fn write_bytes_treats_a_pending_removal_as_missing() {
+        let (root, vm) = lib("wb-pending-remove").await;
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    rm("/d.txt");
+                    return write_bytes("/d.txt", 0, to_bytes("x", "UTF-8"));
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(0)));
+        assert!(!root.join("d.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn write_bytes_sees_a_pending_rename_destination() {
+        let (root, vm) = lib("wb-pending-rename").await;
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    rename("/u.txt", "/renamed.bin");
+                    return write_bytes("/renamed.bin", 3, to_bytes(({0})));
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(
+            std::fs::read(root.join("renamed.bin")).unwrap(),
+            [0xc3, 0xa9, 0xff, 0]
+        );
+    }
+
+    #[tokio::test]
+    async fn write_bytes_sees_byte_length_after_a_character_write() {
+        let (root, vm) = lib("wb-after-characters").await;
+        std::fs::write(root.join("d.txt"), "é").unwrap();
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    write_chars("/d.txt", 1, "猫");
+                    return write_bytes("/d.txt", 5, to_bytes(({0, 255})));
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(
+            std::fs::read(root.join("d.txt")).unwrap(),
+            [0xc3, 0xa9, 0xe7, 0x8c, 0xab, 0, 255]
+        );
+    }
+
+    #[tokio::test]
+    async fn write_bytes_refuses_a_pending_directory() {
+        let (root, vm) = lib("wb-pending-directory").await;
+        let process = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"string problem;
+                    void create() {
+                        mkdir("/folder");
+                        problem = catch(write_bytes("/folder", 0, to_bytes("x", "UTF-8")));
+                    }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let problem = committed_string(&vm, &process, 0);
+        assert!(
+            problem.contains("write_bytes: /folder is not a file"),
+            "{problem}"
+        );
+        assert!(root.join("folder").is_dir());
+    }
+
+    #[tokio::test]
+    async fn write_bytes_sees_creation_by_its_permission_apply() {
+        let root = TempLib::new("wb-permission-create");
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            r#"int valid_write(string path, string func, object caller, string program) {
+                if (func == "write_bytes") write_file(path, "", 1);
+                return 1;
+            }
+            int valid_read(string path, string func, object caller, string program) { return 0; }"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            value_of(&vm, r#"write_bytes("/new.bin", 0, to_bytes(({0, 255})))"#).await,
+            LpcRef::from(1)
+        );
+        assert_eq!(std::fs::read(root.join("new.bin")).unwrap(), [0, 255]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn write_bytes_and_file_size_do_not_read_pending_binary_payloads() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (root, vm) = lib("wb-write-only").await;
+        let path = root.join("d.txt");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o200)).unwrap();
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"int create() {
+                    return write_bytes("/d.txt", 12, to_bytes("A", "UTF-8"))
+                        && write_bytes("/d.txt", 13, to_bytes("B", "UTF-8"))
+                        && file_size("/d.txt") == 14;
+                }"#,
+            )
+            .await
+            .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(std::fs::read(&path).unwrap(), b"hello world\nAB");
     }
 
     #[tokio::test]
