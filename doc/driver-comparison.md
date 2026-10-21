@@ -689,11 +689,11 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **4a583f3e** and native **dc7d742a**,
+qualification notes are committed through Lima **ccb986d2** and native **ac577893**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
-The [non-heartbeat pulse audit](#lima-non-heartbeat-pulse-audit) records the next
-timer-lifecycle adaptation; its notes are pending commit.
+The tested [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation)
+and maintained regressions are pending commit.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -1889,8 +1889,50 @@ native API addition is demonstrated. No production source, profile, binary,
 Cargo build or full inventory changes; all 1549 library hashes match the latest
 inventory, still **1021/1182**. Evidence:
 `/tmp/lima-non-heartbeat-audit-20261021-3n676z85`.
+The following adapter implements that bounded recommendation; elapsed scheduling
+and complete combat remain unqualified.
 
 [lima-non-heartbeat-pulse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/pulse/non_heart_beat.c
+
+#### Lima non-heartbeat pulse adaptation
+
+Reviewed **21 October 2026**, after audit commits native **ac577893** / Lima
+**ccb986d2**. The optional module now stores one private `nosave` timer ID and
+guards arming with `query_call_out`. An invoking one-shot callback clears the
+consumed handle, checks automatic state and establishes the actor as the player,
+restoring incoming context on success/error before propagating a failure.
+Immediate swings retain their incoming context. Stop and entry to manual speed
+zero cancel only the owned pulse. The obsolete `remove` override is retired so
+normal object hooks/cleanup and native destruction can run.
+
+Manual mode retains its existing target/swing/flag policy. A nonzero speed change
+keeps a pending deadline and affects the next interval; it rearms an active actor
+if no pulse remains. Default interval, jitter, penalty and native handling of
+nonpositive delays stay. Production remains heartbeat/typed blows/limb health,
+with distinct nil, preserved player, USE_MASS and the unchanged 4000ms profile.
+
+Maintained `tests/non_heartbeat/test_non_heartbeat.py` passes **14 compiler checks
+and 37 assertions**, 1.911s. Actual OBJ-plus-pulse fixtures record attacks and
+exercise continuation, stop/restart, manual transitions, actor context and
+restoration, caught failures, normal removal hooks/destruction and timer cleanup.
+An unrelated timer survives stopping combat and is cancelled by destruction.
+Six negative controls detect duplicate arming, missing cancellation, return-only
+callbacks, a shadowing removal override and either context-wrapper omission.
+The existing simple-damage regression passes **22 compiler checks / 65 assertions**,
+2.526s. No listener or Cargo build is started.
+
+These CLI tests remove a pending one-shot row and explicitly invoke its callback
+in one transaction; they do not run the scheduler or qualify elapsed timing,
+fresh callback transactions, uncaught-error/retry behavior, full adversary/body
+combat, death or saves. Caught fixture errors retain writes and do not prove
+rescheduling after an uncaught callback failure. No new retry policy is added.
+
+A fresh inventory stays **1021/1182**, 161 failures, with identical pass/fail
+membership and no gains/regressions/timeouts/crashes in **39.918s**. Only this
+module changes among 1549 library files; its isolated failure now lists expected
+receiving methods instead of obsolete cancellation arity. Profile, headers,
+native source/binaries and original remain unchanged. No native API addition.
+Evidence: `/tmp/lima-non-heartbeat-runtime-20261021-du4dg3od`.
 
 #### Lima remaining-source disposition reconciliation
 
