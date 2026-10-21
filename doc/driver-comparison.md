@@ -1602,6 +1602,49 @@ inventory remains **1021/1182**, without a new sweep or inferred gain; these
 alternative hosts do not add selected-profile fragment proofs. The port remains
 in progress. Evidence: `/tmp/lima-body-stats-runtime-20261020-ujvuh9pb`.
 
+#### Lima wound-health compilation audit
+
+Reviewed **20 October 2026** at native **4f5b1ca2** / Lima **d2b156e0**, after
+committing the alternative body-stat fixes. Only HEALTH_STYLE changes in a
+disposable library, from HEALTH_LIMBS to HEALTH_WOUNDS. BODY_STATS_LIMA, limb
+armour/wielding, simple advancement, USE_MASS, distinct nil, preserved players
+and 4000ms remain fixed; shields stay disabled. Production remains HEALTH_LIMBS.
+
+The pinned [wound provider][lima-health-wounds] adds an optional limb argument
+to inherited zero-argument `diagnose()`, which the native compiler rejects.
+After a temporary wrapper adaptation, complete hosts expose five legacy timer
+argument errors and `format_list(types, 0)`'s incompatible string argument.
+Standalone compilation instead exposes the limb module's receiving-object
+requirements; those are not missing efuns. Successful user/menu/master compilation
+does not load their dynamically selected bodies; the greeter inherits LIVING
+and does not exercise this health provider.
+
+The temporary proposal preserves `diagnose()` and adds
+`diagnose_wounds(string limb = nil)` for whole-body or named-limb output. Its
+private wound formatter has a separate name, retaining the inherited
+[integer-based `diagnose_msg`][lima-health-diagnosis]. A compiler control reproduces
+that helper's type conflict if the rename is omitted. Timers use a bare function
+callback and one stored ID, with cancellation/rearming and empty-wound cleanup;
+the list formatter receives nil. No driver API or signature-rule change is needed.
+
+All **54 compile controls** match: **41 pass, 13 reject as expected**. The proposed
+provider compiles in complete adversary, body, human and trainer hosts. A receiving
+host also checks zero-argument diagnosis, optional/explicit limb diagnosis and the
+inherited generic formatter. Both default/proposed configurations retain passing
+selection and representative consumer controls. Public pinned source responses
+match the clean original checkout.
+
+Recommend bounded runtime qualification of damage/healing and diagnosis, one
+pending timer, firing/rearming, cancellation and cleanup before adopting this
+mudlib adaptation. This audit omits target constructors and establishes no wound
+model, timer or game-entry behavior. No production library, profile, binary or
+native code changes; inventory stays last measured **1021/1182**, with 113
+selected-profile host fragments and 48 other consumers. No sweep or inferred gain.
+Evidence: `/tmp/lima-wounds-audit-20261020-eea1jaz8`. The port remains in progress.
+
+[lima-health-wounds]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/wounds.c
+[lima-health-diagnosis]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/diagnose_msg.c
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
