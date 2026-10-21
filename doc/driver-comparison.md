@@ -689,10 +689,12 @@ records the current source inventory and outstanding consumer count.
 
 As of **20 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **6f575c2a** and native **427d4363**.
-The verified [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
-are pending commit. The checkout's `README.lpc-rs.md` provides startup and test
-instructions. The latest full inventory remains **1021/1182**, with unchanged
+qualification notes are committed through Lima **545562fe** and native **c0c7fe8b**,
+including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation).
+The [HP composition audit](#lima-hit-point-health-composition-audit) records its
+remaining mudlib integration requirements. The checkout's `README.lpc-rs.md`
+provides startup and test instructions. The latest full inventory remains
+**1021/1182**, with unchanged
 success/failure membership; the whole port remains in progress.
 
 The earlier release qualification passes the configured fresh-account lifecycle,
@@ -1703,6 +1705,57 @@ selected-profile fragment proofs and 48 other source dispositions remain separat
 Only the unselected wound provider changes in the library during this adaptation;
 profile and original Lima remain unchanged. This qualifies the bounded adapter,
 not a new account/login acceptance run or full combat/death conformance.
+
+#### Lima hit-point health composition audit
+
+Reviewed **20 October 2026** at native **c0c7fe8b** / Lima **545562fe**, after
+committing the indexed compound-assignment fix and wound adapter. A disposable
+library selects HEALTH_HITPOINTS, WIELD_SINGLE and ARMOUR_SIMPLE_SLOTS, using
+non-limb equipment to satisfy the [configuration checks][lima-combat-config].
+Other providers remain selected, including BODY_STATS_LIMA and simple advancement,
+with distinct nil, preserved player, 4000ms and USE_MASS. Production remains limb
+health/equipment.
+
+The [HP provider][lima-health-hitpoints], [single-wield provider][lima-wield-single]
+and [simple armour slots][lima-armour-simple] have small typing/API adaptations:
+nil for absent strings/objects/arrays, and ordinary mapping literals for the fixed
+slot sets currently built through `allocate_mapping`. A temporary patch compiles
+simple armour slots and the HP component with its three expected host methods.
+It does not make the shipped complete HP composition compile.
+
+The selected non-limb composition lacks nine mudlib methods used by current
+consumers:
+
+| Missing methods | Consumer contract |
+|---|---|
+| `very_wounded`, `update_max_health` | Combat healing decisions and monster health refresh. |
+| `query_drunk_percent`, `query_abuse_percent` | Condition and advancement state. |
+| `query_vital_limbs`, `query_mobile_limbs`, `query_wielding_limbs` | Stun, movement and disarm classification. |
+| `query_body_style`, `update_body_style` | Advancement's body-shape refresh. |
+
+Single wielding also defines zero-argument `do_unwield`, while condition code
+passes a limb and wieldable objects pass the weapon. Simple slots define
+zero-argument `event_get_armours`, while the blow handler passes an event record.
+Prompts, spells and climbing additionally call reflex-resource methods through
+objects; those dynamic calls are not qualified by successful compilation.
+
+The audit runs **30 direct source/configuration checks and 18 diagnostic probes**.
+Receivers containing nine throwing method markers and two throwing ABI markers
+can compile, establishing the missing interfaces without implementing policies.
+These are diagnostic results, not working hosts or runtime qualification. No
+constructor, driver session, gameplay test or full inventory runs. Public pinned
+sources match the clean original checkout; upstream execution is unchecked.
+
+Retain this optional composition as **integration-required**. It needs a coherent
+mudlib health/condition/equipment interface before activation; no new driver API
+is demonstrated. Continue independent combat-selector audits with the existing
+limb providers. All 1549 library hashes, profile and binaries remain unchanged;
+inventory stays the last measured **1021/1182**, with 113 selected-profile fragments
+and 48 other dispositions. Evidence: `/tmp/lima-hitpoints-audit-20261020-ijou5ia1`.
+
+[lima-health-hitpoints]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/hit_points.c
+[lima-wield-single]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/single.c
+[lima-armour-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/simple_slots.c
 
 #### Lima remaining-source disposition reconciliation
 
