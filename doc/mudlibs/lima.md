@@ -7,8 +7,10 @@ between driver APIs, use the [driver comparison](../driver-comparison.md).
 The port incorporates Lima release tag **`1.1a4`**, at
 [`733f2d05b339472262619ea55509fefcab65b04f`](https://github.com/limalib/lima/tree/733f2d05b339472262619ea55509fefcab65b04f),
 reviewed and tested on **21 October 2026**.
-Source changes live in a dedicated Lima checkout on `lpc-rs-port`, paired with
-the native driver's `lima-support` branch. The port checkout's
+Source changes live in a dedicated, independent Lima clone on `lpc-rs-port`,
+paired with the native driver's `lima-support` branch. The fork is
+[xxx/lima](https://github.com/xxx/lima); its `origin` remote targets that fork
+and `upstream` targets `limalib/lima`. The port checkout's
 `README.lpc-rs.md` contains build, startup and test instructions.
 
 Upstream now uses `main` for releases and `develop` for integration; its default
