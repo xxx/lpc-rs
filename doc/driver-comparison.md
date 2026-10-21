@@ -689,15 +689,16 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **e3d3a378** and native **c8b9bbaf**,
+qualification notes are committed through Lima **15fadbf4** and native **53613260**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
 The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
 maintained regressions are committed. The
 [alternate-formula audit](#lima-alternate-formula-audit) records an integration
 boundary. The tested [NPC vaporize adapter](#lima-npc-vaporize-adaptation) and
-maintained tests are committed as Lima **15fadbf4**; player routing remains
-integration-required.
+maintained tests are committed; player routing remains integration-required.
+The [multiple-slot wielding audit](#lima-multiple-slot-wielding-audit) leaves that
+optional provider integration-required, with limb wielding retained.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -2063,6 +2064,53 @@ module changes among 1549 library files. Profile, headers, native source/binarie
 original Lima and the 113 host-fragment/48 residual dispositions remain unchanged.
 No Cargo build or listener runs. Evidence:
 `/tmp/lima-vaporize-runtime-20261021-bo0zn2op`.
+
+#### Lima multiple-slot wielding audit
+
+Reviewed **21 October 2026**, after NPC vaporize commits Lima **15fadbf4** / native
+**53613260**. Keep WIELD_LIMBS selected. The unselected
+[multiple-slot provider][lima-multiple-wield-provider] still needs mapping/nil,
+weapon-marker and shared command/health integration; no native API is indicated.
+Its source matches original Lima at the reviewed revision. This audits a different
+provider rather than reopening the qualified default equipment implementation.
+
+There are **21 compiler checks: 14 passes and seven expected rejections**. Four
+selected hosts compile; selecting unchanged WIELD_MULTIPLE rejects the fragment
+and five hosts at `allocate_mapping` and an integer-zero return from a string
+function. A temporary mapping loop, distinct-nil empties and current marker calls
+compile actual adversary/body/human/trainer/troll plus master. Only the isolated fragment still
+needs receiving `simple_action`; successful hosts use their real implementations.
+
+Two synchronous CLI runs verify **24 assertions** against actual NPC/container
+and stock weapon constructors. The legacy scalar slot is accepted by the dynamic
+call, then misread as multiple limbs and formatted as character codes; clearing
+stores integer zero. Array slot markers and `(nil, nil)` clearing fix that bounded
+interface. Full slots still report success, unknown names add slots, and replacing
+slots orphans active weapon markers. Default hand slots differ from health arm
+names; arm disable leaves a hand-slot weapon wielded. Matching arm slots allow
+disable to unwield, but the provider allows rewielding the disabled arm.
+
+Current [wield commands][lima-multiple-wield-command] also expect absent
+`find_an_open_limb`/`can_wield` helpers; a direct two-handed request is accepted as
+one slot. Choosing independent slots versus health-bound limbs, reconfiguration
+and two-handed policy needs deliberate mudlib integration. No provider change is
+adopted. Public source inspection is separate from native execution and does not
+establish behavior on another driver; all six pinned source responses match the
+clean original, including the current [marker contract][lima-multiple-wield-marker].
+
+Delayed setup is cancelled and owned fixtures explicitly destructed in one
+initializer transaction. No parser/connected-player command, attack/death,
+progression, hook-refusal/reentrancy, elapsed scheduler, equipment-removal or save
+qualification is claimed. No Cargo build, listener or service runs. All 1549
+library hashes, profile and binaries match the last **1021/1182** inventory;
+no full sweep or unrelated regression suite is rerun. Original remains clean,
+production providers/distinct nil/preserved player/4000ms remain fixed, and no
+standalone or selected-host proof count changes. Evidence:
+`/tmp/lima-wield-multiple-audit-20261021-pg0toblw`.
+
+[lima-multiple-wield-provider]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/multiple.c
+[lima-multiple-wield-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wield.c
+[lima-multiple-wield-marker]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wieldable.c
 
 #### Lima remaining-source disposition reconciliation
 
