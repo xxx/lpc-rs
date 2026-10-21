@@ -689,10 +689,11 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **24e28fd1** and native **9dc47924**,
+qualification notes are committed through Lima **4a583f3e** and native **dc7d742a**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
-and HP/simple-blow audit notes. The tested
-[core simple-blow adapter](#lima-core-simple-blow-adaptation) is pending commit.
+and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
+The [non-heartbeat pulse audit](#lima-non-heartbeat-pulse-audit) records the next
+timer-lifecycle adaptation; its notes are pending commit.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -1844,6 +1845,52 @@ configuration and original checkout stay unchanged. This qualifies the bounded
 core adapter, not full simple combat, death, wearing, saves or the type-specific
 special-weapon/spell callbacks identified above. No native type relaxation or
 driver API is added. Evidence: `/tmp/lima-simple-blows-runtime-20261021-ahiz0bal`.
+
+#### Lima non-heartbeat pulse audit
+
+Reviewed **21 October 2026** at native **dc7d742a** / Lima **4a583f3e** against the
+pinned [optional pulse module][lima-non-heartbeat-pulse]. A disposable library
+selects PULSE_NON_HEART_BEAT while retaining typed blows, limb health/equipment,
+LIMA stats, skills formulas, simple advancement, USE_MASS, distinct nil, preserved
+player and 4000ms. Production retains PULSE_HEART_BEAT.
+
+The module's zero-argument `remove_call_out()` fails native arity checking. A
+temporary throwing cancellation marker gets adversary/body/human/trainer past
+that blocker; the isolated module still requires its receiving methods. Its
+`(: do_something :)` timers return a function pointer without attacking or
+rearming. Bare `do_something` callbacks invoke it, but that change alone exposes
+duplicate registration through `continue_fight` and stop/restart. Stop does not
+cancel a pending pulse; switching to zero-speed manual mode and stopping can
+leave a callback that attacks once when invoked. Stopping inside an attack also
+leaves the successor registered before that attack.
+
+Source review finds that the pulse-local `remove` omits normal
+[inherited object cleanup][lima-renew-removal]. Native
+[`destruct`](efun/destruct.md) already cancels owned timers; the adapter should
+retire this override and preserve normal removal. Retain manual mode's existing
+target/immediate-swing behavior, five-second default with jitter and penalty
+calculation. A scheduled actor-context wrapper should follow the selected
+[heartbeat adapter](#lima-combat-pulse); preserved scheduling-player context alone
+does not establish the combat actor. Scheduled context is not exercised here.
+
+There are **42 compiler checks**: 40 actual source/configuration checks and two
+fixture checks, with 34 passes/eight expected rejections. Two CLI runs verify
+**40 assertions** using recording target/attack methods and a throwing removal
+marker. They inspect pending timers and explicitly consume/invoke callbacks in
+the same transaction; every fixture timer is cancelled before commit. They do
+not run the scheduler, start a listener, execute a complete host or qualify
+elapsed timing, callback transactions/errors, destruction or player context.
+Four public pinned files match original source; upstream driver execution is
+unchecked. A caught synchronous attack failure is not a scheduled-error test.
+
+Recommend one private owned timer ID, invoking callbacks and an arming guard,
+with cancellation on stop/manual transition and normal inherited removal. No
+native API addition is demonstrated. No production source, profile, binary,
+Cargo build or full inventory changes; all 1549 library hashes match the latest
+inventory, still **1021/1182**. Evidence:
+`/tmp/lima-non-heartbeat-audit-20261021-3n676z85`.
+
+[lima-non-heartbeat-pulse]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/pulse/non_heart_beat.c
 
 #### Lima remaining-source disposition reconciliation
 
