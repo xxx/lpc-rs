@@ -689,11 +689,13 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **ccb986d2** and native **ac577893**,
+qualification notes are committed through Lima **33466547** and native **f50eb5da**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
-The tested [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation)
-and maintained regressions are pending commit.
+The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
+maintained regressions are committed. The
+[alternate-formula audit](#lima-alternate-formula-audit) records the next
+integration boundary; its notes are pending commit.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -1933,6 +1935,53 @@ module changes among 1549 library files; its isolated failure now lists expected
 receiving methods instead of obsolete cancellation arity. Profile, headers,
 native source/binaries and original remain unchanged. No native API addition.
 Evidence: `/tmp/lima-non-heartbeat-runtime-20261021-du4dg3od`.
+
+#### Lima alternate-formula audit
+
+Reviewed **21 October 2026** at native **f50eb5da** / Lima **33466547** against the
+pinned [simple][lima-simple-formula] and [stats][lima-stats-formula] providers.
+Only FORMULA_STYLE changes in a disposable library. LIMA stats, typed blows,
+heartbeat, limb providers, simple advancement, USE_SKILLS, USE_MASS, distinct nil,
+preserved player and 4000ms remain. Production retains FORMULA_SKILLS.
+
+Both alternatives leave adversary/body/human/trainer unable to resolve the
+[combat main's][lima-effect-combat] `defend_chance`. A throwing defense marker
+then exposes `should_cap_skill`, used by current health/condition code. Supplying
+both throwing markers permits diagnostic adversary/body hosts to compile; these
+are interface probes, not implementations. The selected
+[skills formula][lima-skill-formula] also provides `level_skill_cap`, called
+dynamically by throwable code. Switching combat arithmetic does not supply those
+shared skill-cap contracts.
+
+The alternatives call a foreign weapon's one-argument `chance_to_hit(target)`.
+An actual stock weapon has no such method: its
+[damage-source interface][lima-combat-damage-source] provides hit bonuses instead.
+Native execution reaches integer-plus-nil arithmetic in both formulas. Controlled
+legacy receivers do provide the expected percentage and calculate successfully;
+stock weapon-class damage calculation also works. Simple's nil-weapon hit branch
+fails separately, while stats treats nil as unarmed. Current limb wielding uses
+the actor itself for unarmed combat, so that nil-input difference is not a stock
+unarmed-path failure.
+
+There are **40 compiler checks**: 30 actual source/configuration checks, six
+throwing-contract probes and four component-fixture checks. Outcomes are 24 passes
+and 16 expected rejections. Two CLI processes verify **28 assertions** with fixed
+receiving values and a constructed stock weapon, including expected failures.
+Integer averages, signed disarm differences and damage bounds work without type
+relaxation. No full adversary/body constructor, combat loop or service runs. Five
+public pinned files match original source; both alternatives and the damage-source
+interface also match the port. Upstream driver execution is unchecked.
+
+Keep both optional configurations **integration-required**, retaining selected
+skills combat. Reconcile active defense, common skill caps and legacy weapon
+result handling in the mudlib rather than adding native gameplay APIs or filling
+contracts with placeholder values. No production source/profile/binary change,
+Cargo build or new inventory run. All 1549 library hashes still match the latest
+measured **1021/1182** inventory; no gain is inferred from diagnostic receivers.
+Evidence: `/tmp/lima-formula-audit-20261021-n5ojd592`.
+
+[lima-simple-formula]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/formula/simple.c
+[lima-stats-formula]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/formula/stats.c
 
 #### Lima remaining-source disposition reconciliation
 
