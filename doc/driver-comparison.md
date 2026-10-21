@@ -1478,6 +1478,44 @@ socket/listener, endpoint, driver session or service activation occurs. Profile,
 native code/binaries and original source remain unchanged; the port remains in
 progress. Evidence: `/tmp/lima-http-framing-20261020-77kr0f1k`.
 
+#### Lima configured acceptance and coin parser integration
+
+Refreshed **20 October 2026** at native **16aedb39** / Lima **e5c79c04**, after
+the HTTP framing fix. The current configured source passes **30 lifecycle
+checkpoints across two fresh processes and 69 coin/parser/save checks** in
+**137.15s**. Both boots have **151 clean preloads** and exit normally. Actual
+saved-password login restores account/character identity and the seeded gold
+and credit balances. The synthetic seed is removed before final logout.
+
+The unchanged per-suite-first recipe passes items/limbs/liquids/race/salvage at
+**26/16/7/5/5**, then normal and quiet combined commands each pass **59/59**.
+Existing prototypes, player/world state and suite cleanup remain verified,
+without manual target loads. The added coin checks run afterward, preserving
+that suite setup. Fourteen command strings exercise the real shell/parser and
+configured silver/halo denominations: partial pickup, merging, mixed currencies,
+whole-pile pickup, refusal and balance conservation. No verb methods or production
+LPC sources are substituted.
+
+Command routing matters: `get coins` and `get all coins` select whole-object
+pickup and collect all currencies in the pile; `get all silver` exercises the
+named-denomination path. The first harness expected the direct generic helper's
+ambiguity behavior for `get all coins`; that assumption was corrected without
+changing the mudlib. The initial failed control remains recorded separately.
+
+The real master/login/body/shell/providers run in one disposable library, with
+only the established loopback router/OOB substitutions. HTTP and other disabled
+services stay disabled; no external service is contacted. The normal documentation
+scan completes before shutdown, with **116.396s** of waiting. Existing channel
+and autodoc warnings match the prior run; no runtime/apply/evaluation errors or
+forced kills occur in the accepted run.
+
+All 1549 library files, profile and binaries remain unchanged. Inventory stays
+the last measured **1021/1182**, with 113 host fragments and 48 other consumers;
+no new sweep or inferred gain. This qualifies the configured administrator
+lifecycle and native saves, not alternate configurations or foreign saved-data
+import. The whole port remains in progress. Evidence:
+`/tmp/lima-current-acceptance-20261020-gqjqnj5q`.
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
