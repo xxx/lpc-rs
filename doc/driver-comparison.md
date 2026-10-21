@@ -689,12 +689,14 @@ records the current source inventory and outstanding consumer count.
 
 As of **20 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **545562fe** and native **c0c7fe8b**,
-including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation).
+qualification notes are committed through Lima **782bfd8a** and native **105ef5ee**,
+including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
+and HP audit notes.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
-remaining mudlib integration requirements. The checkout's `README.lpc-rs.md`
-provides startup and test instructions. The latest full inventory remains
-**1021/1182**, with unchanged
+remaining mudlib integration requirements; the following
+[simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
+integration work. The checkout's `README.lpc-rs.md` provides startup and test
+instructions. The latest full inventory remains **1021/1182**, with unchanged
 success/failure membership; the whole port remains in progress.
 
 The earlier release qualification passes the configured fresh-account lifecycle,
@@ -1756,6 +1758,54 @@ and 48 other dispositions. Evidence: `/tmp/lima-hitpoints-audit-20261020-ijou5ia
 [lima-health-hitpoints]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/hit_points.c
 [lima-wield-single]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/single.c
 [lima-armour-simple]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/simple_slots.c
+
+#### Lima simple-blow composition audit
+
+Reviewed **20 October 2026** at native **105ef5ee** / Lima **782bfd8a**. Only
+BLOW_STYLE changes to BLOW_SIMPLE in a disposable library; limb health/equipment,
+BODY_STATS_LIMA, skills formulas, simple advancement, USE_MASS, distinct nil,
+preserved player and 4000ms remain. Production retains BLOW_TYPES.
+
+The [simple event class][lima-event-info-simple] declares the limb field
+`target_extra` as an object. Actual adversary/body/human/trainer/dummy compilation
+rejects its object value where limb armour requires a string. The
+[simple producer][lima-simple-event-producer] also rejects a limb-name string at
+runtime when constructing that class. A temporary string-field adaptation fixes
+both, without relaxing native class checks.
+
+That adaptation does not qualify the event pipeline. The simple producer keeps
+numeric damage scalar, and its helper and ordinary damage dispatch handle it.
+The shared [blows handler][lima-combat-blows] nevertheless indexes `evt.data[1]`
+when natural armour is nonzero, and the [armour sink][lima-combat-damage-sink]
+indexes it on entry. Isolated native executions reproduce invalid-index errors
+for scalar damage in both functions, while BLOW_TYPES controls pass. Direct
+resistance/vulnerability helpers also assume arrays; ordinary scalar attacker
+dispatch skips those helpers. Type-specific special weapons, the pacifist sword,
+shield and true-strike effects have further array-payload assumptions found by
+source review. Successful compilation does not exercise their callbacks.
+
+The simple class additionally lacks `event_to_str`, required by the shield
+effect's debug call. A throwing formatter marker permits compilation solely to
+identify that interface; it is not an implementation or a working-effect claim.
+
+There are **48 compiler checks**: 39 checks of actual sources under the selected,
+simple and string-field-adapted configurations, plus nine fixture/interface
+checks. Six isolated runtime processes verify **30 component assertions and two
+producer scenarios**, including expected rejections. Fixtures record health and
+durability calls and throw for unused gameplay dependencies; they do not load a
+complete body or establish combat/effect conformance. An initial fixture wrongly
+expected successful `catch` to return nil; corrected controls expect native zero.
+No upstream driver execution is claimed; eight public pinned source files match
+the clean original checkout, with existing port deltas recorded separately.
+
+Recommend a bounded mudlib adapter for the simple class/formatter, shared natural
+armour and damage sink, preserving scalar damage and the selected typed behavior.
+Keep type-specific callbacks explicitly unqualified until separately integrated;
+no native API addition or type relaxation is demonstrated. No production source,
+profile or binary changes. The last full inventory stays **1021/1182**; this audit
+does not infer gains. Evidence: `/tmp/lima-simple-blows-audit-20261020-qhp14j3x`.
+
+[lima-simple-event-producer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/class_simple.c
 
 #### Lima remaining-source disposition reconciliation
 
@@ -19456,9 +19506,11 @@ arbitrary longer arrays do not have an established shared contract.
 
 A separate `BLOW_SIMPLE`/`HEALTH_LIMBS` producer check finds that its
 [class][lima-event-info-simple] declares `target_extra` as an object; passing a
-limb-name string fails the declared type check. That configuration needs its
-own field adaptation. These checks do not establish full combat, body entry, or support
-for all combat configurations.
+limb-name string fails the declared type check. The later
+[simple-blow composition audit](#lima-simple-blow-composition-audit) confirms that
+correcting the field also exposes scalar/array assumptions in shared damage
+consumers. These checks do not establish full combat, body entry, or support for
+all combat configurations.
 
 #### Lima combat main
 
