@@ -4,11 +4,23 @@ Lima is an LPC mudlib. This guide describes its port from the reviewed FluffOS
 configuration to lpc-rs and the configuration covered by that work. For differences
 between driver APIs, use the [driver comparison](../driver-comparison.md).
 
-The port is based on Lima revision
-[`eefaff66adcae9b01e16059574c925b0d63e70a1`](https://github.com/limalib/lima/tree/eefaff66adcae9b01e16059574c925b0d63e70a1).
+The port incorporates Lima release tag **`1.1a4`**, at
+[`733f2d05b339472262619ea55509fefcab65b04f`](https://github.com/limalib/lima/tree/733f2d05b339472262619ea55509fefcab65b04f),
+reviewed and tested on **21 October 2026**.
 Source changes live in a dedicated Lima checkout on `lpc-rs-port`, paired with
 the native driver's `lima-support` branch. The port checkout's
 `README.lpc-rs.md` contains build, startup and test instructions.
+
+Upstream now uses `main` for releases and `develop` for integration; its default
+branch is `develop`. The port follows the pinned release rather than the newer
+development branch. See the [release's branching instructions](https://github.com/limalib/lima/blob/733f2d05b339472262619ea55509fefcab65b04f/README.md).
+
+The release merge preserves the existing port commits. It adopts upstream's
+demo-site CGI removal and retains the native troll description syntax, which
+already fixes the upstream formatting problem. The FluffOS build scripts and
+PCRE2 flags header remain upstream material; they do not select lpc-rs's build
+configuration or add PCRE efuns to the native driver. The supported profile below
+is unchanged, and this update requires no native driver changes.
 
 ## Supported profile
 
@@ -72,10 +84,26 @@ different things.
 
 | Qualification | Recorded result | Scope |
 |---|---|---|
+| Release update, 21 October 2026 | Six maintained runners pass 3,401 LPC assertions | CGI, body statistics, collections, non-heartbeat combat, HTTP framing and NNTP. Temporary libraries and controlled providers; no live services or fresh login/restart qualification. |
 | Configured lifecycle, 20 October 2026 | 30 lifecycle checkpoints and 69 coin/parser/native-save checks; 151 clean preloads per boot | Fresh account and character creation, ordinary commands, native saves, saved-password restart and wallet restoration across two processes. |
 | Shipped suites in that acceptance | Items 26, limbs 16, liquids 7, race 5, salvage 5; normal and quiet combined runs each 59/59 | Per-suite commands first, with no manual program loads. |
-| Whole-source inventory, 21 October 2026 | 1021/1182 compile; 161 standalone failures; no regressions, timeouts or crashes | Compile-only sweep after the handoff's two EOF blank-line removals; target constructors omitted. |
+| Whole-source inventory at `1.1a4`, 21 October 2026 | 1020/1181 compile; 161 standalone failures; no regressions, timeouts or crashes | 38.621s compile-only sweep; target constructors omitted. Every retained target has the same status and diagnostics as the preceding inventory. |
 | Native implementation at `c0c7fe8b` | 5198 serial workspace tests pass, two ignored; ten doctests and build/Clippy/docs/fmt pass | Later native commits through the handoff change comparison documentation; release binary hashes match this record. |
+
+The preceding inventory was 1021/1182. Upstream removed the compiling
+`WWW/cgi/mudinfo.c`, accounting for the one-file reduction in both totals.
+Its 13 CGI assertions were retired with it; the two retained helpers pass 42
+assertions. The other runners pass 240, 37, 37, 2,582 and 463 respectively.
+Run them from the dedicated port checkout:
+
+```sh
+python3 tests/cgi/test_cgi.py
+python3 tests/body_stats/test_body_stats.py
+python3 tests/collections/test_collections.py
+python3 tests/non_heartbeat/test_non_heartbeat.py
+python3 tests/http/test_http.py
+python3 tests/nntp/test_nntp.py
+```
 
 The inventory's 161 failures are all classified:
 
