@@ -689,7 +689,7 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **a0351b5e** and native **6e2b378d**,
+qualification notes are committed through Lima **680ee6a1** and native **e20fbaac**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
 The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
@@ -701,6 +701,8 @@ The [multiple-slot wielding audit](#lima-multiple-slot-wielding-audit) leaves th
 optional provider integration-required, with limb wielding retained.
 The [complex armour-slot audit](#lima-complex-armour-slot-audit) also retains limb
 armour, identifying size, event-target and slot-state integration requirements.
+The [Rifts advancement audit](#lima-rifts-advancement-audit) identifies a bounded
+compatibility adapter and records PE/stat-pairing and original HP-cache limits.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -2162,6 +2164,54 @@ remain. No standalone or selected-host proof count changes. Evidence:
 [lima-complex-armour-provider]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/complex_slots.c
 [lima-complex-armour-size]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/size.c
 [lima-complex-armour-wearable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wearable.c
+
+#### Lima Rifts advancement audit
+
+Reviewed **21 October 2026**, after complex-armour notes Lima **680ee6a1** /
+native **e20fbaac**. The unselected [Rifts advancement][lima-rifts-advancement]
+needs the karma conversions and dynamic receiver calls already used in simple
+advancement. A temporary six-line adapter compiles real hosts without fake
+receiver methods or a new native API. No library change is adopted in this audit;
+production retains ADVANCEMENT_SIMPLE/BODY_STATS_LIMA.
+
+**36 compiler checks** give 24 passes and 12 expected rejections. The unchanged
+fragment lacks stat/body-style receivers; complete hosts expose direct NPC
+command/save calls or int/float karma assignments. Karma conversion compiles
+body/human; dynamic receiver calls also compile adversary/trainer/troll. The same
+adapter paired with BODY_STATS_RIFTS compiles human/dragon and the other hosts.
+The isolated provider still requires actual stat and body-style implementations.
+
+Two synchronous CLI runs pass **34 assertions**, 17 each with Lima or Rifts stats.
+Actual NPC and caller-guarded human constructors, stat initialization, level/XP,
+karma and limb-health refresh execute. [Rifts stats][lima-rifts-advancement-stats]
+supply PE; Lima stats return zero for that absent stat. Pairing Rifts stats gives
+the model's PE contribution without changing production or enforcing a selector
+guard. First HP rolls use PE plus d6; later rolls use d6, retained across levels.
+
+The original HP cache has a separate bookkeeping issue: after caching four rolls,
+`hp_for_level(1)` sums the first two through its inclusive `hp[0..level]` slice.
+It initially summed only the first roll. Actual `set_level(1)` retains the cache
+and applies that extra roll to limb health; reset plus body-style refresh returns
+to one roll. The proposed adapter preserves this existing mudlib behavior for a
+separate decision. Karma conversion uses the complete sum; XP, ambient
+`set_experience`, command/save, SDC and cache policies remain unchanged. The shared
+`skill_xp_plus` limitation stays in the earlier simple-advancement record.
+
+Five pinned public responses match clean original bytes, including Rifts/simple
+advancement, Rifts/Lima stats and limb health; Rifts advancement also matches the
+current port. Source review and native execution are separate; no other driver
+runs. Delayed setup is cancelled and fixtures use native destruction in one
+initializer transaction. No complete XP-command/linked-save path, ambient setter,
+account/login/logout, persistence, combat/rewards, elapsed scheduling or concurrent
+player qualification is claimed. Shield adjustment is checked as arithmetic with
+LIMB_SHIELDS still disabled. No sweep, unrelated suite, Cargo build, listener or
+service runs. All 1549 library hashes/profile/binaries match the last
+**1021/1182** inventory; original, selected providers, distinct nil, preserved
+player and 4000ms remain. No standalone or selected-host proof count changes.
+Evidence: `/tmp/lima-rifts-advancement-audit-20261021-vvcxp28d`.
+
+[lima-rifts-advancement]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/advancement/rifts.c
+[lima-rifts-advancement-stats]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/rifts.c
 
 #### Lima remaining-source disposition reconciliation
 
