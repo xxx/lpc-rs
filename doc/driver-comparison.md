@@ -690,7 +690,7 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **c6e323d0** and native **6cec6767**,
+qualification notes are committed through Lima **81548fcc** and native **9e6777e2**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
 The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
@@ -707,6 +707,8 @@ and maintained tests are committed. PE/stat-pairing, original HP-cache and
 broader gameplay limits remain explicit. The
 [current remaining-source ledger](#lima-current-remaining-source-ledger) accounts
 for every standalone failure and records the outstanding integration choices.
+The [configured-profile handoff](#lima-configured-profile-review-handoff) records
+the current review inputs and fresh post-cleanup inventory.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -2307,6 +2309,33 @@ suite, Cargo build, listener or service runs. Source/profile/binaries/original,
 distinct nil, preserved player, USE_MASS and 4000ms remain unchanged. Exact per-file
 hashes/diagnostics, host records and evidence links are retained in
 `/tmp/lima-remaining-work-review-20261021-rfsfkq_k`.
+
+#### Lima configured-profile review handoff
+
+Reviewed **21 October 2026** after scope commits Lima **81548fcc** / native
+**9e6777e2**. The agreed target remains the configured profile; the 48 optional
+residual files remain follow-ups. The handoff maps paired source changes and
+validation evidence for review, with a local proposed PR description and granular
+commit exports. It does not select another optional feature or claim an
+independent whole-branch code-review verdict.
+
+Two final empty lines are removed, one from `secure/user.c` and one from
+`trans/obj/wish.c`, preserving all earlier bytes and upstream line-ending styles.
+Fresh inventory: **1021/1182**, 161 failures, no membership/diagnostic changes,
+timeouts/crashes/regressions, **44.567s**. The 113 host-dependent sources retain
+47 passing complete hosts and the same 48 residual follow-ups. Native whitespace
+checks pass; the Lima branch passes with preserved CRLF endings recognized.
+
+Native implementation/manifests/tests are unchanged since **c0c7fe8b**, whose
+recorded validation passes 5198 serial workspace tests, two ignored, ten doctests,
+release build, warning-free Clippy/docs and formatting. Current release binary
+hashes match it. Dated configured lifecycle/suite qualification remains separate
+from the fresh compile inventory. No new Cargo/runtime suite, listener, service
+or endpoint test runs. GitHub PR #124 remains open/draft at **2109d59c**, with
+45 later native commits locally; no remote update is made. Native implementation,
+profile, selected providers, distinct nil/preserved player/4000ms and original remain.
+The EOF-only cleanup and review documentation are pending commit. Evidence:
+`/tmp/lima-configured-profile-handoff-20261021-71k1q2a2`.
 
 #### Lima remaining-source disposition reconciliation
 
