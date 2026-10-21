@@ -687,11 +687,12 @@ the adaptations described below.
 tests are qualified milestones. The [collection helper update](#lima-contributed-collections)
 records the current source inventory and outstanding consumer count.
 
-As of **20 October 2026**, the active port is the dedicated `lima-lpc-rs`
+As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **782bfd8a** and native **105ef5ee**,
+qualification notes are committed through Lima **24e28fd1** and native **9dc47924**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
-and HP audit notes.
+and HP/simple-blow audit notes. The tested
+[core simple-blow adapter](#lima-core-simple-blow-adaptation) is pending commit.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -1804,8 +1805,45 @@ Keep type-specific callbacks explicitly unqualified until separately integrated;
 no native API addition or type relaxation is demonstrated. No production source,
 profile or binary changes. The last full inventory stays **1021/1182**; this audit
 does not infer gains. Evidence: `/tmp/lima-simple-blows-audit-20261020-qhp14j3x`.
+The following core adaptation implements that bounded recommendation; the audit's
+type-specific callback limits remain.
 
 [lima-simple-event-producer]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/blows/class_simple.c
+
+#### Lima core simple-blow adaptation
+
+Reviewed **21 October 2026**, after audit commits native **9dc47924** / Lima
+**24e28fd1**. Three mudlib files now adapt the core BLOW_SIMPLE path with existing
+limb health/equipment. The simple class uses a string limb field and supplies a
+diagnostic `event_to_str`. Shared natural armour reduces/clamps scalar damage;
+the sink uses its existing untyped calculation, integer `armour_class / 2` plus
+`random(armour_class / 2)`. Damage stays scalar, and named resistance/weakness maps
+do not give untyped damage a type. Existing typed calculations remain unchanged.
+The common sink also checks action strings before indexing damage, preserving
+empty and one-character actions as well as ordinary combat action names.
+
+Maintained `tests/simple_blows/test_simple_blows.py` passes **22 compiler checks
+and 65 runtime assertions**: 33 under BLOW_TYPES and 32 under BLOW_SIMPLE, in
+2.080s. Both use distinct nil, preserved player and the unchanged 4000ms profile.
+Actual producer, natural-armour, sink, dispatch and M_DURABILITY code exercise
+limb-field guards, formatting, reduction/clamping, actions and armour/weapon wear.
+Fixtures record receiving health callbacks; they are not full characters or
+inventory equipment. Four negative controls detect a reverted limb field,
+missing formatter, and absent scalar natural-armour/sink handling.
+
+The existing listener-free body-stat regression passes **18 compiler checks /
+240 assertions**, 3.649s. The wound runner passes its 14 compiler checks, but its
+listener-based runtime cannot start under the environment permissions; no new
+46-assertion wound runtime result is claimed. No native build is needed or run.
+
+A fresh full inventory measures **1021/1182**, 161 failures, no gains/regressions,
+timeouts or crashes in **36.234s**. All preceding pass/fail membership is retained;
+113 host-fragment and 48 residual dispositions stay separate. Exactly three of
+1549 library files change; profile, release binaries, selected BLOW_TYPES/limb
+configuration and original checkout stay unchanged. This qualifies the bounded
+core adapter, not full simple combat, death, wearing, saves or the type-specific
+special-weapon/spell callbacks identified above. No native type relaxation or
+driver API is added. Evidence: `/tmp/lima-simple-blows-runtime-20261021-ahiz0bal`.
 
 #### Lima remaining-source disposition reconciliation
 
