@@ -689,13 +689,14 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **33466547** and native **f50eb5da**,
+qualification notes are committed through Lima **b8519d58** and native **5c6de539**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
 The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
 maintained regressions are committed. The
-[alternate-formula audit](#lima-alternate-formula-audit) records the next
-integration boundary; its notes are pending commit.
+[alternate-formula audit](#lima-alternate-formula-audit) records an integration
+boundary. The following [vaporize audit](#lima-vaporizing-death-audit) identifies
+an NPC callback/unwear adapter and a separate player-routing gap; notes are pending.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -1982,6 +1983,50 @@ Evidence: `/tmp/lima-formula-audit-20261021-n5ojd592`.
 
 [lima-simple-formula]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/formula/simple.c
 [lima-stats-formula]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/formula/stats.c
+
+#### Lima vaporizing-death audit
+
+Reviewed **21 October 2026** at native **5c6de539** / Lima **b8519d58** against the
+pinned [vaporize provider][lima-vaporize-provider]. A disposable library selects
+DEATH_VAPORIZE with current heartbeat, skills formula, typed blows, limb providers,
+LIMA stats, simple advancement, USE_MASS, distinct nil, preserved player and 4000ms.
+Production retains DEATH_CORPSES.
+
+Complete adversary/body/human/trainer/troll hosts compile. Native execution of the
+registered `(: vaporize :)` callback returns a function instead of removing the
+NPC; inventory and its combat timer remain. A temporary bare `vaporize` callback
+does remove it, but `remove_it()` is absent from current stock armour. Worn armour
+refuses direct movement through the [drop hook][lima-container-move] and is
+destroyed during the current port's remaining-contents cleanup. Replacing that
+call with the [wearable's `do_remove`][lima-wearable] preserves the tested armour,
+clears its worn flag and drops it alongside ordinary inventory, without a corpse.
+These are native-port observations, not upstream driver execution results.
+
+There is a separate player integration boundary. The [body death hook][lima-body]
+calls `drop_corpse`, and the selected [loot path][lima-loot-daemon] also relocates
+the ghost to its destination. Vaporize supplies an empty `drop_corpse`, so that
+path is omitted; no live player-death test is performed here. The NPC hook also
+leaves combat registered during its delay, unlike the selected corpse provider.
+No combat-stop, effects or player-death policy change is proposed by the prototype.
+
+There are **29 compiler checks**: 20 actual source/configuration checks and nine
+fixture checks, with 27 passes/two expected standalone receiver rejections. Three
+CLI runs verify **43 assertions** in real adversary/container/armour/item objects,
+including reproductions of callback and armour-loss failures. Delayed monster
+setup is cancelled to isolate the death hook. The fixture explicitly consumes
+and invokes the one-second callback in the same transaction; it does not run the
+scheduler or health `kill_us`, reward/party, player ghost, effects or save flows.
+Six public pinned sources match the original; current port deltas are retained.
+
+Recommend a small NPC adapter: an invoking callback and current unwearing for
+worn armour before inventory transfer. Retain the delay and corpse-free NPC
+disposition; keep player vaporization integration-required and production corpse
+death selected. No new driver API is demonstrated. No production source/profile/
+binary changes, Cargo build or new inventory. All 1549 library hashes match the
+latest measured **1021/1182**. Evidence:
+`/tmp/lima-vaporize-audit-20261021-16wwbivy`.
+
+[lima-vaporize-provider]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/death/vaporize.c
 
 #### Lima remaining-source disposition reconciliation
 
