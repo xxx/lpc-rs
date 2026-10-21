@@ -689,7 +689,7 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **15fadbf4** and native **53613260**,
+qualification notes are committed through Lima **a0351b5e** and native **6e2b378d**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
 The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
@@ -699,6 +699,8 @@ boundary. The tested [NPC vaporize adapter](#lima-npc-vaporize-adaptation) and
 maintained tests are committed; player routing remains integration-required.
 The [multiple-slot wielding audit](#lima-multiple-slot-wielding-audit) leaves that
 optional provider integration-required, with limb wielding retained.
+The [complex armour-slot audit](#lima-complex-armour-slot-audit) also retains limb
+armour, identifying size, event-target and slot-state integration requirements.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -2111,6 +2113,55 @@ standalone or selected-host proof count changes. Evidence:
 [lima-multiple-wield-provider]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/wield/multiple.c
 [lima-multiple-wield-command]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/cmds/verbs/wield.c
 [lima-multiple-wield-marker]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wieldable.c
+
+#### Lima complex armour-slot audit
+
+Reviewed **21 October 2026**, after multiple-wield audit notes Lima **a0351b5e** /
+native **6e2b378d**. Keep ARMOUR_LIMBS selected. The optional
+[complex-slot provider][lima-complex-armour-provider] needs integration with
+current size, health and equipment contracts; no native API is demonstrated.
+The module and its slot class match the pinned original. No library change is
+adopted, and the qualified default equipment implementation stays closed.
+
+**29 compiler checks** give 17 passes and 12 expected rejections. Unchanged
+complex slots first reject arrow class-field syntax. Dot fields expose
+integer-zero returns from string/array functions; distinct nil fixes those.
+The standalone provider then compiles, but five real hosts reject the old
+zero-argument `event_get_armours`. Importing the event class and accepting the
+argument compiles adversary/body/human/trainer/troll, master and the provider.
+This temporary signature change retains the original selection algorithm.
+
+Two synchronous CLI runs pass **26 assertions**. Stock USE_MASS armour has no
+size getter; missing `get_size` returns nil and silently bypasses its limit.
+The separate [size module][lima-complex-armour-size] supplies `query_size`, while
+mass-based objects supply neither size method. A controlled legacy getter in an
+armour child isolates capacity/size checks without inventing a mass conversion.
+
+Actual wear/remove and damage-sink methods show that a multi-item slot returns
+one item, repeated wear can duplicate entries, and reset can orphan worn flags.
+Head armour protects a torso event, and a slot labelled non-armour also reduces
+damage from 17 to 12. The accepted event argument remains unused. Grouped `arms`
+is not a health limb; passing that selected target to actual `do_damage_event`
+fails on absent health data. Current NPC equipment inspection also expects an
+absent `query_armours`. Choosing slot-to-limb targets, armour coverage, size under
+USE_MASS and safe reconfiguration needs deliberate mudlib integration.
+
+Public source review is distinct from native execution: seven pinned responses
+match clean original bytes, including the provider, slot class,
+[wearable methods][lima-complex-armour-wearable], combat, health and size/mass
+modules. No other driver is executed. Delayed setup is cancelled and owned
+fixtures explicitly destructed in one initializer transaction; no parser,
+connected-player command, complete attack/death loop, progression, elapsed
+scheduler, hook refusal/reentrancy, general removal or save qualification is
+claimed. All 1549 library hashes/profile/binaries match the last **1021/1182**
+inventory. No sweep, unrelated regression suite, Cargo build, listener or service
+runs; original, selected providers, distinct nil, preserved player and 4000ms
+remain. No standalone or selected-host proof count changes. Evidence:
+`/tmp/lima-complex-armour-audit-20261021-l79b3x7k`.
+
+[lima-complex-armour-provider]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/armour/complex_slots.c
+[lima-complex-armour-size]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/object/size.c
+[lima-complex-armour-wearable]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/modules/m_wearable.c
 
 #### Lima remaining-source disposition reconciliation
 
