@@ -1562,6 +1562,46 @@ snapshots and proposed diff: `/tmp/lima-body-stats-audit-20261020-xmr0gy3q`.
 [lima-stats-dnd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/dnd.c
 [lima-stats-rifts]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/rifts.c
 
+#### Lima alternative body-stat adaptation
+
+The **20 October 2026** adaptation follows the compile audit committed as native
+**a42a55ca** / Lima **afc94b54**. DND and Rifts now protect their CLASS_STATMODS
+inheritance, allowing descendants to name the class returned by race overrides.
+Rifts delegates its three stat/modifier getters and missing-modifier increment
+to the already adapted shared base. Both alternatives calculate spare points
+through the modifier getter. These are mudlib adaptations to native class
+visibility and distinct nil; no driver API, class schema, dice formula or racial
+adjustment policy changes.
+
+Before the default handling changes, Rifts returns nil for absent stats and
+incrementing an absent modifier fails. Both alternatives' pre-roll spare-point
+calculations also fail by adding nil mapping entries. The temporary visibility
+fix alone therefore does not qualify their runtime behavior. With the original
+private imports, actual menu discovery silently skips failed race loads and
+advertises no compatible choices; compile-only menu success hid that problem.
+
+The maintained Lima runner, `python3 tests/body_stats/test_body_stats.py`, passes
+**18 compiler checks and 240 runtime assertions**: **124/56/60** for Lima/DND/Rifts.
+The actual menu discovers races and the actual race/body constructors run for
+all five/two/two advertised choices. Checks cover absent defaults, spare points,
+modifier increments, sixteen initialization rounds per race, existing roll
+bounds, class overrides, display, query-copy isolation, bonus hooks, resets and
+clone cleanup. Five negative controls reproduce private-import, missing-default
+and spare-point failures; no native change is needed.
+
+The runner uses a disposable library with a permissive fixture master and a small
+constructor caller at USER_OB, preserving the body's caller-path check. It does
+not perform authentication, account registration, game entry or save/restart;
+deferred call-outs do not execute in these CLI tasks. Distinct nil, preserved
+players, 4000ms, USE_MASS and the selected combat/simple-advancement choices stay
+fixed. Production remains `BODY_STATS_LIMA`. Introductions, alternate saves and
+other combat/advancement configurations remain separate.
+
+Only the two unselected provider sources change in the library. The last measured
+inventory remains **1021/1182**, without a new sweep or inferred gain; these
+alternative hosts do not add selected-profile fragment proofs. The port remains
+in progress. Evidence: `/tmp/lima-body-stats-runtime-20261020-ujvuh9pb`.
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
