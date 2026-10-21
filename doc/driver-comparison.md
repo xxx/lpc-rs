@@ -1443,6 +1443,41 @@ service activation changes here. Inventory stays **1021/1182**, without another
 sweep or inferred gain. Evidence:
 `/tmp/lima-http-connection-audit-20261020-lcp1ekd_`.
 
+#### Lima HTTP request framing fix
+
+Adopted **20 October 2026**, after audit notes native **197b863a** / Lima
+**05b99c2f**. The selected HTTP daemon now retains unfinished request/header lines
+across callbacks and recognizes only completed header lines. It waits for the
+header terminator and declared body length before dispatching. Content-Length
+applies independently of the Connection header and is established once, so later
+body chunks do not reset the remaining count. Separate fragments avoid repeated
+concatenation of the whole request. EOF clears pending input/output bookkeeping;
+read-handler errors close the connection instead of leaving a stalled request.
+
+The maintained `tests/http/test_http.py` passes **seven compiler checks and
+2,582 LPC assertions in three CLI executions**, **0.780s total**. The old source
+fails all three runtime fixtures. Coverage includes every split of ordinary GET
+and close/keep-alive POST requests, byte-by-byte input, CRLF splits, coalesced
+headers/body, exact body boundaries, empty bodies, interleaved peers and EOF.
+Large aggregate headers and a thousand-field form exercise fragment assembly;
+individual values retain existing native limits.
+
+Actual static binary output, UTF-8 CGI byte lengths/CRLF conversion and the
+existing body-only POST reply are checked. The suite reads actual source and
+changes only its SOCKET constructor path in a disposable copy. A CGI recorder
+observes form/header arguments without executing web-editor operations. No
+production test interface, new native API or persistent-connection support is
+added; the daemon still serves one request and closes.
+
+The fresh inventory stays **1021/1182 compiling, 161 failures in 44.630s**, with
+no gains, regressions, timeouts, crashes or changed remaining diagnostics. All
+113 fragment proofs retain passing hosts; 48 other consumers retain dispositions.
+This fixes runtime behavior in an already compiling source. HTTP remains disabled;
+the older connection handler/master replacement stays unselected. No real
+socket/listener, endpoint, driver session or service activation occurs. Profile,
+native code/binaries and original source remain unchanged; the port remains in
+progress. Evidence: `/tmp/lima-http-framing-20261020-77kr0f1k`.
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
