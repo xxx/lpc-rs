@@ -166,7 +166,8 @@ and troubleshooting, see [transaction diagnostics](doc/transaction-diagnostics.m
 |---|---|
 | Write LPC for the first time | [Learn LPC](doc/lpc/README.md): a first program, then objects and player commands |
 | Run and adapt a tiny mudlib | [ulib guide](ulib/README.md), [add a command](ulib/doc/add-a-command.md), [apply examples](ulib/doc/applies.md) |
-| Compare drivers or port a mudlib | [Driver comparison and porting notes](doc/driver-comparison.md) |
+| Compare LPC drivers | [Driver comparison and porting notes](doc/driver-comparison.md) |
+| Port Lima | [Lima mudlib guide](doc/mudlibs/lima.md) and [port history](doc/mudlibs/lima-port-history.md) |
 | Learn the project's LPC terminology | [Glossary](doc/glossary.md) |
 | Look up compiler pragmas and their scope | [Pragma reference](doc/lpc/pragmas.md) |
 | Understand values and callable functions | [Types](doc/lpc/types.md), [functions and closures](doc/lpc/function_type.md), [references](doc/lpc/references.md), [argument spreading](doc/lpc/argument_spreading.md) |

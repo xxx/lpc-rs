@@ -125,6 +125,12 @@ Keep driver-specific porting notes in the comparison's per-driver sections.
 Efun, apply, and language references describe native behavior; link to them from
 the comparison instead of duplicating migration advice in individual references.
 
+Mudlib-specific guides belong under `doc/mudlibs/`, with configuration, adaptation
+requirements, qualification and limitations. Keep mudlib port status and history
+out of the driver comparison. Personal investigation notes and handoffs belong
+under `local/`; the archived Lima port history preserves existing records rather
+than serving as a log for new work.
+
 ## Architecture facts that constrain changes
 
 - **The STM committer is the sole serialization control.** There is no GIL, no
