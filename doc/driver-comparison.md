@@ -683,13 +683,14 @@ the adaptations described below.
 
 #### Lima port readiness
 
-**The overall Lima port remains in progress.** Configured startup and shipped
-tests are qualified milestones. The [collection helper update](#lima-contributed-collections)
+**The port targets the configured Lima profile.** Configured startup and shipped
+tests have recorded qualifications; remaining optional integrations are follow-up
+work. The [collection helper update](#lima-contributed-collections)
 records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **467db3d5** and native **a6b5dc29**,
+qualification notes are committed through Lima **c6e323d0** and native **6cec6767**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
 The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
@@ -702,14 +703,16 @@ optional provider integration-required, with limb wielding retained.
 The [complex armour-slot audit](#lima-complex-armour-slot-audit) also retains limb
 armour, identifying size, event-target and slot-state integration requirements.
 The [Rifts advancement adapter](#lima-rifts-advancement-compatibility-adaptation)
-and maintained tests are pending commit. PE/stat-pairing, original HP-cache and
-broader gameplay limits remain explicit.
+and maintained tests are committed. PE/stat-pairing, original HP-cache and
+broader gameplay limits remain explicit. The
+[current remaining-source ledger](#lima-current-remaining-source-ledger) accounts
+for every standalone failure and records the outstanding integration choices.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
 integration work. The checkout's `README.lpc-rs.md` provides startup and test
 instructions. The latest full inventory remains **1021/1182**, with unchanged
-success/failure membership; the whole port remains in progress.
+success/failure membership; this is not a claim that every optional feature works.
 
 The earlier release qualification passes the configured fresh-account lifecycle,
 native saves, fresh-process restart and saved login, with **151 clean preloads
@@ -2250,6 +2253,60 @@ files changes; headers/profile/native implementation/binaries/original and the
 113 selected-host/48 residual dispositions remain. No new standalone or host
 proof count is inferred. Evidence:
 `/tmp/lima-rifts-advancement-runtime-20261021-ls6pv3ji`.
+
+#### Lima current remaining-source ledger
+
+Reviewed **21 October 2026** after Rifts adoption commits Lima **c6e323d0** / native
+**6cec6767**. The last actual inventory remains **1021/1182**, 161 standalone
+failures, no timeouts/crashes/regressions, **39.030s**. All 1549 library hashes,
+profile and release binaries still match it; no new sweep is run. Every failure
+has exactly one disposition: **113 host-dependent sources** with **47 actual
+complete hosts** passing in that inventory, and **48 residual files**.
+
+The 113 source-composition records retain the 111 earlier proofs plus the already
+qualified aggression/trainer hosts. All direct host files and headers match the
+older inputs. Trigger nil defaults and shared blow handling are the only changes
+to the original 111 fragments; their reviewed diff retains host composition and
+current hosts compile. No proof or runtime qualification is newly added here.
+
+| Current residual disposition | Files |
+|---|---:|
+| Qualified optional complete-host compositions | 3 |
+| Alternative providers with bounded adaptations | 7 |
+| Alternative combat providers needing integration | 7 |
+| Retained older provider choices | 6 |
+| Unselected board packages | 10 |
+| Contributed body/schema/shared-state integration | 6 |
+| Unfinished subsystems/dependent examples | 5 |
+| Deferred or upstream-disabled commands | 2 |
+| Unselected incomplete legacy backends | 2 |
+| Total | 48 |
+
+The 7/7/6 split refines the earlier 20-provider category; NNTP's adopted source
+is no longer a residual failure. Bounded adaptations retain their limits: NPC
+vaporization still lacks player ghost routing, scalar blows do not qualify all
+type-specific consumers, and Rifts retains its stat/cache/gameplay limits. The
+dated wound qualification is distinct from its later denied listener recheck;
+that recheck is not rerun. HP/equipment and alternate formulas need deliberate
+model integration. Marriage needs coordinated body/schema/account/save work;
+attic wrappers need consistent shared state. Older board/socket/HTTP/exit/paper
+alternatives and unfinished clan/file/reaction features retain their decisions.
+
+No failure is unclassified, but this does not qualify every optional configuration
+or establish absence of latent defects. The user selected the configured profile
+as the port target and the residual features as follow-up work. The 48 residual
+files are outside that target and no longer an automatic audit queue. This review
+introduces no native requirement or optional feature selection. Further expansion
+should name its model/feature and acceptance contract. Existing-world import is
+unselected, and inherited-signature/cache design remains separate. Prior configured
+acceptance keeps its dated scope; the ledger supports handoff/review without
+reopening closed gameplay/equipment work.
+
+One compile-only selector control passes in **0.056s**. No new runtime/regression
+suite, Cargo build, listener or service runs. Source/profile/binaries/original,
+distinct nil, preserved player, USE_MASS and 4000ms remain unchanged. Exact per-file
+hashes/diagnostics, host records and evidence links are retained in
+`/tmp/lima-remaining-work-review-20261021-rfsfkq_k`.
 
 #### Lima remaining-source disposition reconciliation
 
