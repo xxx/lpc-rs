@@ -1408,6 +1408,41 @@ service activation occurs. Profile, binaries and original source are unchanged;
 the port remains in progress. Evidence:
 `/tmp/lima-nntp-adoption-20261020-14ig0qen`.
 
+#### Lima HTTP input compatibility audit
+
+Reviewed **20 October 2026**, after committing NNTP as native **c235f94c** /
+Lima **30476902**. The [legacy HTTP connection][lima-legacy-http-connection]
+expects a binary user port, a master hook selecting that listening port, and
+`process_input(buffer)`/`receive` I/O. Native
+[connect](apply/master/connect.md) receives the peer address/port;
+[process_input](apply/living/process_input.md) handles command lines. The selected
+[HTTP daemon][lima-http] already uses the binary SOCKET provider. Keep the older
+replacement unselected; this audit establishes no need for binary login-port
+compatibility or another transport API.
+
+Nine compiler controls give **three reference passes and six retained
+rejections**. Parenthesizing the legacy conditional assignments or using if/else
+removes its syntax error; native bytes and explicit text/file conversion still
+leave its output routing unresolved. Ten pure-expression checks confirm those
+assignment alternatives, GET scanning and the legacy reversed CGI-suffix range.
+They do not constitute a port or execution of the legacy service.
+
+A recording transport also reproduces a concrete gap in the selected HTTP
+daemon, whose earlier qualification covered complete headers only. Its source
+changes only the constructor's SOCKET path in the disposable copy. The
+complete-header baseline serves the fixture file. Splitting after `GET ` loses
+the prefix and produces no response; a request-line newline can instead dispatch
+before the blank header terminator, including when CR and LF arrive separately.
+Eight observations confirm the baseline and these defects, not successful
+fragmented-request support.
+
+Next fix retained input and header/body boundaries in the selected daemon, using
+offline regressions while preserving its existing API and disabled preload.
+No production source, profile, binary, real socket/listener, driver session or
+service activation changes here. Inventory stays **1021/1182**, without another
+sweep or inferred gain. Evidence:
+`/tmp/lima-http-connection-audit-20261020-lcp1ekd_`.
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
