@@ -1373,6 +1373,41 @@ binaries remain unchanged. Inventory stays **1020/1182**, without a fresh sweep
 or inferred gain; the port remains in progress. Evidence:
 `/tmp/lima-nntp-prototype-20261020-fviw2x_u`.
 
+#### Lima NNTP adapter adoption
+
+Reviewed **20 October 2026**, after prototype notes were committed as native
+**1da97132** / Lima **00a55586**. The dedicated checkout now adopts the optional
+[NNTP contribution][lima-legacy-nntp] adapter. Its executable source matches the
+qualified prototype; public documentation annotations are retained and XHDR's
+annotation now describes its explicit limitation. Selected SOCKET and bare
+callbacks replace OLD_SOCKET, without a native driver or time-policy change.
+
+The maintained `tests/nntp/test_nntp.py` passes **six compiler checks and 463 LPC
+assertions in seven CLI executions**, **1.051s total**. It reads the actual client
+source and substitutes only the constructor's transport path in the disposable
+runtime copy. Framing, command/callback shapes, POST/IHAVE ordering and bounded
+output, cleanup and UTC date vectors retain the preceding prototype coverage.
+There is no separately maintained client implementation in the tests. The native
+string API remains UTF-8 text; article files are read into memory, while encoded
+output is produced in bounded pieces.
+
+Raw ARTICLE arrays, numeric GROUP/STAT fields and upload continuation/final
+callbacks retain the reviewed choices. XHDR reports not implemented in request
+order without sending a command. The UTC helper preserves the two-digit date
+format and century ambiguity. Recording callbacks do not establish live server
+interoperability or newly qualify provider privilege, ownership, backpressure
+or native event ordering; prior transport qualifications retain their scopes.
+
+The fresh full inventory measures **1021/1182 compiling, 161 failures in
+42.431s**. NNTP is the sole gain; no regressions, timeouts or crashes. All 113
+existing fragment proofs retain compiling hosts and unchanged sources; **48**
+other consumers retain their recorded dispositions. Remaining diagnostics are
+unchanged. NNTP_OB still names the absent installed path, and local NEWS_D/reader
+remain selected. No real socket/listener, driver session, endpoint contact or
+service activation occurs. Profile, binaries and original source are unchanged;
+the port remains in progress. Evidence:
+`/tmp/lima-nntp-adoption-20261020-14ig0qen`.
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
