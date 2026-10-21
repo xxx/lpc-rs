@@ -689,7 +689,7 @@ records the current source inventory and outstanding consumer count.
 
 As of **21 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **680ee6a1** and native **e20fbaac**,
+qualification notes are committed through Lima **467db3d5** and native **a6b5dc29**,
 including the [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
 and the [core simple-blow adapter](#lima-core-simple-blow-adaptation).
 The [non-heartbeat pulse adapter](#lima-non-heartbeat-pulse-adaptation) and
@@ -701,8 +701,9 @@ The [multiple-slot wielding audit](#lima-multiple-slot-wielding-audit) leaves th
 optional provider integration-required, with limb wielding retained.
 The [complex armour-slot audit](#lima-complex-armour-slot-audit) also retains limb
 armour, identifying size, event-target and slot-state integration requirements.
-The [Rifts advancement audit](#lima-rifts-advancement-audit) identifies a bounded
-compatibility adapter and records PE/stat-pairing and original HP-cache limits.
+The [Rifts advancement adapter](#lima-rifts-advancement-compatibility-adaptation)
+and maintained tests are pending commit. PE/stat-pairing, original HP-cache and
+broader gameplay limits remain explicit.
 The [HP composition audit](#lima-hit-point-health-composition-audit) records its
 remaining mudlib integration requirements; the following
 [simple-blow audit](#lima-simple-blow-composition-audit) identifies scalar-payload
@@ -2212,6 +2213,43 @@ Evidence: `/tmp/lima-rifts-advancement-audit-20261021-vvcxp28d`.
 
 [lima-rifts-advancement]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/advancement/rifts.c
 [lima-rifts-advancement-stats]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/rifts.c
+
+#### Lima Rifts advancement compatibility adaptation
+
+Reviewed **21 October 2026**, after audit commits Lima **467db3d5** / native
+**a6b5dc29**. The exact six-line adapter now changes only
+`std/adversary/advancement/rifts.c`: initialize the karma float with `0.0`, convert
+the complete sum to int, and dispatch two level-change commands and two
+conditional saves through `this_object()`. This matches the existing simple
+provider's adaptation. No new native API or host stub is introduced.
+
+The maintained `tests/rifts_advancement/test_rifts_advancement.py` passes
+**25 compiler checks and 34 runtime assertions**, **3.552s**. It checks four
+default-simple hosts, then real alternate hosts and fixtures with Lima or Rifts
+stats. Actual NPC and caller-guarded human constructors, stat initialization,
+karma rounding/clamping, XP/level conversion, cached HP bounds/reuse/reset,
+torso-health refresh and SDC arithmetic execute. Five negative controls detect
+the old initializer, float assignment, direct command/save calls and converting
+only the karma increment (97 instead of 96).
+
+Production retains ADVANCEMENT_SIMPLE/BODY_STATS_LIMA. Rifts supplies PE; Lima
+supplies zero for that absent stat. The original inclusive lower-level HP-cache
+issue remains documented in the [audit](#lima-rifts-advancement-audit). HP/XP/SDC,
+cache and ambient setter/command/save policies remain unchanged. Delayed setup is
+cancelled; native destruction cleans owned fixtures in one synchronous initializer
+transaction. No complete XP-command/linked-save path, account/login/logout,
+persistence, combat/rewards, elapsed scheduling, retry, concurrent-player or full
+Rifts-ruleset qualification is claimed. Shields remain disabled. No listener,
+service, unrelated suite or Cargo build runs.
+
+A fresh inventory remains **1021/1182**, 161 failures, identical membership and
+no gains/regressions/timeouts/crashes in **39.030s**. Only the Rifts fragment's
+diagnostics change: its six adapted errors disappear, leaving body-style/stat
+receiving requirements. All other failure messages stay. One of 1549 library
+files changes; headers/profile/native implementation/binaries/original and the
+113 selected-host/48 residual dispositions remain. No new standalone or host
+proof count is inferred. Evidence:
+`/tmp/lima-rifts-advancement-runtime-20261021-ls6pv3ji`.
 
 #### Lima remaining-source disposition reconciliation
 
