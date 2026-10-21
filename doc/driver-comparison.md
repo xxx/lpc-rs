@@ -1516,6 +1516,52 @@ lifecycle and native saves, not alternate configurations or foreign saved-data
 import. The whole port remains in progress. Evidence:
 `/tmp/lima-current-acceptance-20261020-gqjqnj5q`.
 
+#### Lima alternative body-stat compilation
+
+Reviewed **20 October 2026** at native **deac6825** / Lima **a9fd1c36**, after
+committing the configured acceptance notes. Compile-only checks select Lima,
+DND and Rifts statistics in a disposable library; all retain distinct nil,
+preserved players, 4000ms, USE_MASS and the selected combat/simple-advancement
+modules. This tests the body-stat selector, not complete DND/Rifts rulesets.
+Production remains `BODY_STATS_LIMA`; target constructors do not run.
+
+Complete adversary/body hosts compile under all three selectors, as do user/menu,
+greeter/trainer, score/hp and master targets. Each stat provider still rejects
+standalone compilation at the base module's host-supplied `call_hooks`; these
+are inherited components, not missing efuns. However, DND human/elf and Rifts
+human/dragon reject `stat_roll_mods`. Those races advertise compatibility with
+the selected alternative and override `query_roll_mods()`. Compiling the user
+menu alone does not execute its dynamic race discovery.
+
+The pinned [DND][lima-stats-dnd] and [Rifts][lima-stats-rifts] providers privately
+inherit CLASS_STATMODS, hiding its definitions from descendants under native
+[class visibility](lpc/classes.md#identity-and-visibility). The default Lima
+provider uses protected inheritance. A temporary change to protected inheritance in each
+alternative makes all its advertised races compile. Explicitly importing the
+class in human also passes, but exposing the provider's overridable return type
+matches the default provider and avoids repeated leaf imports. The private
+imports are present upstream; this is a porting gap, with no upstream driver
+execution or native visibility change implied. Public pinned sources match the
+clean original checkout byte-for-byte.
+
+All **54 compile controls** match: **47 successes and seven expected rejections**
+(three standalone providers and four race/class failures). The protected-provider
+controls cover both host chains and every advertised race. Recommend the two
+visibility changes followed by bounded stat initialization/rolling and race
+creation checks before adoption. Neither alternative's `init_stats()` consumes
+its `query_roll_mods()` result; no new racial modifier policy is inferred. Runtime
+nil defaults, alternate saves, USE_INTRODUCTIONS and other combat/advancement
+selections remain unqualified.
+
+No production source, profile or binary changes. All 1549 library hashes still
+match the last measured **1021/1182** inventory; no sweep or new selected-profile
+host proof is claimed. The 113 fragment proofs and 48 residual dispositions
+remain unchanged. The port remains in progress. Logs, exact selectors, source
+snapshots and proposed diff: `/tmp/lima-body-stats-audit-20261020-xmr0gy3q`.
+
+[lima-stats-dnd]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/dnd.c
+[lima-stats-rifts]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/stats/rifts.c
+
 #### Lima remaining-source disposition reconciliation
 
 Reviewed **20 October 2026** at native **0ffb372a**, Lima **32133de7**, after the
