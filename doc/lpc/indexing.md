@@ -139,6 +139,13 @@ Out-of-bounds writes raise an error and do not change an element. Writes use
 transactional array storage with shared array references. Indexed string and
 bytes writes have different rules, described below.
 
+For an indexed compound assignment such as `items[next_index()] += amount()`,
+the container and index expressions run once, in that order. The old element is
+read before the right-hand side runs; the result is stored using the captured
+container and index values. Reassigning their variables in the right-hand side
+does not redirect the write. Indexed mapping updates follow the same rule.
+`&&=` and `||=` evaluate the right-hand side only when required by the old value.
+
 ### String element assignment
 
 `text[index] = scalar` replaces one Unicode scalar and assigns the new string

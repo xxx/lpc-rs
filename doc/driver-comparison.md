@@ -687,12 +687,15 @@ the adaptations described below.
 tests are qualified milestones. The [collection helper update](#lima-contributed-collections)
 records the current source inventory and outstanding consumer count.
 
-As of **19 October 2026**, the active port is the dedicated `lima-lpc-rs`
+As of **20 October 2026**, the active port is the dedicated `lima-lpc-rs`
 checkout on `lpc-rs-port`, paired with native branch `lima-support`. Source and
-qualification notes are committed through Lima **8a26d8c7** and native **ded2bc3a**.
-The checkout's `README.lpc-rs.md` provides startup and test instructions.
+qualification notes are committed through Lima **6f575c2a** and native **427d4363**.
+The verified [wound-health adaptation and compiler fix](#lima-wound-health-runtime-adaptation)
+are pending commit. The checkout's `README.lpc-rs.md` provides startup and test
+instructions. The latest full inventory remains **1021/1182**, with unchanged
+success/failure membership; the whole port remains in progress.
 
-The rebuilt release driver passes the configured fresh-account lifecycle,
+The earlier release qualification passes the configured fresh-account lifecycle,
 native saves, fresh-process restart and saved login, with **151 clean preloads
 per boot**. All five shipped test commands pass separately, followed by
 `unittest all` and `unittest all quiet` at **59/59**, with **zero manual loads**.
@@ -1644,6 +1647,62 @@ Evidence: `/tmp/lima-wounds-audit-20261020-eea1jaz8`. The port remains in progre
 
 [lima-health-wounds]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/wounds.c
 [lima-health-diagnosis]: https://github.com/limalib/lima/blob/eefaff66adcae9b01e16059574c925b0d63e70a1/lib/std/adversary/health/diagnose_msg.c
+
+#### Lima wound-health runtime adaptation
+
+The **20 October 2026** adaptation follows the compile audit committed as native
+**427d4363** / Lima **6f575c2a**. The wound provider now retains zero-argument
+`diagnose()`, provides `diagnose_wounds(string limb = nil)`, and keeps its wound
+formatter separate from the inherited generic integer formatter. It uses a bare
+periodic callback, one nosave timer ID, cancellation/rearming and nil for the
+absent list separator. Production remains HEALTH_LIMBS and BODY_STATS_LIMA.
+
+Runtime qualification exposed a native compiler bug in the retained
+`wounds[limb][random(n)] += ret`: the target was evaluated again for the store,
+which could update a different wound and lose damage. A deterministic standalone
+`items[next()] += 1` control called `next()` twice. The compiler now captures the
+container and index once, retaining class checks and logical short-circuiting.
+The [indexing reference](lpc/indexing.md#writes) documents this native rule; the
+wound model and dice/random formulas are unchanged.
+
+Ten new native regressions cover target evaluation, ordering/capture, arithmetic
+and bitwise results, short-circuiting, mapping/reverse indices, RHS exceptions and
+class guards. All **19 compiled workspace test executables pass serially: 5198
+tests, two ignored**. An initial concurrent run missed a captured warning in an
+existing command-timeout test; that test passes in isolation and in the serial
+workspace replay. Its implementation is unchanged.
+
+The actual driver passes **46 runtime assertions in 15.533s**, including the real
+fifteen-second wound callback, one pending timer, firing/rearming, configured
+player context and cancellation. Checks cover diagnosis, partial/full healing,
+coalescing and damage totals, maximum-health reset, limb disable, manual periodic/
+reincarnation updates, the death cancellation boundary and clone cleanup. Two
+negative controls reproduce missing last-heal and callback-entry cancellation.
+
+The maintained Lima runner is `python3 tests/wounds/test_wounds.py`. It retains
+four default-health host compile controls and ten wound-health/fixture controls.
+The adopted checkout passes all **14 compiler checks and 46 assertions** in
+**18.278s** with the final release binaries. The body-stat regression also passes
+**18 compiler checks and 240 assertions**. Workspace release build, warning-free
+Clippy/docs, **ten doctests**, and formatting pass.
+It uses actual human/body/limb/wound code with a permissive fixture master and
+USER_OB constructor caller. A leaf wrapper records periodic calls; its death hook
+stops after the real death-state/cancellation boundary, leaving corpse/reward and
+account processing outside the check. Natural elapsed healing is held at zero
+for deterministic accounting; explicit healing and original random wound updates
+run. Authentication, saved-data migration and full combat/death policy remain
+separate. The ephemeral loopback listener accepts no test connections or external
+requests. Distinct nil, preserved player, 4000ms, USE_MASS and other module choices
+remain fixed. Evidence: `/tmp/lima-wounds-runtime-20261020-qz1cfddk`.
+
+A fresh full inventory measures **1021/1182 compiling, 161 failures in 53.977s**,
+with no gains, regressions, timeouts or crashes. The sole changed failure diagnostic
+is standalone wounds: the repaired signatures now expose its expected receiving-
+object requirements. All previously passing source targets still pass; the 113
+selected-profile fragment proofs and 48 other source dispositions remain separate.
+Only the unselected wound provider changes in the library during this adaptation;
+profile and original Lima remain unchanged. This qualifies the bounded adapter,
+not a new account/login acceptance run or full combat/death conformance.
 
 #### Lima remaining-source disposition reconciliation
 

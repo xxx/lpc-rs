@@ -694,6 +694,76 @@ impl CodegenWalker {
         }
     }
 
+    async fn emit_compound_index_assignment(
+        &mut self,
+        lhs: &mut ExpressionNode,
+        rhs: &mut ExpressionNode,
+        op: BinaryOperation,
+        span: Option<Span>,
+    ) -> Result<()> {
+        let target = node_type(lhs, &self.context)?;
+        let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            l: container,
+            r: index,
+            ..
+        }) = lhs
+        else {
+            return Err(lpc_bug!(span, "compound target must be indexed"));
+        };
+        container.visit(self).await?;
+        let saved_container = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::Copy(self.current_result, saved_container),
+            span
+        );
+        let index = self.emit_index(saved_container, index).await?;
+        let saved_index = self.register_counter.next().unwrap().as_local();
+        push_instruction!(self, Instruction::Copy(index, saved_index), span);
+        let old = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::Load(saved_container, saved_index, old),
+            span
+        );
+        self.guard_class(old, target, span)?;
+        let result = self.register_counter.next().unwrap().as_local();
+        let short = matches!(op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
+        let end = self.new_label("indexed-assignment-end");
+        if short {
+            let initial = if op == BinaryOperation::AndAnd {
+                self.constant(LpcConstant::Int(0), span)?
+            } else {
+                old
+            };
+            push_instruction!(self, Instruction::Copy(initial, result), span);
+            self.schedule_backpatch(&end, self.current_address())?;
+            let jump = if op == BinaryOperation::AndAnd {
+                Instruction::Jz(old, Address(0))
+            } else {
+                Instruction::Jnz(old, Address(0))
+            };
+            push_instruction!(self, jump, span);
+        }
+        rhs.visit(self).await?;
+        if short {
+            push_instruction!(self, Instruction::Copy(self.current_result, result), span);
+            self.insert_label(end, self.current_address());
+        } else {
+            let instruction = self.choose_op_instruction(op, old, self.current_result, result);
+            push_instruction!(self, instruction, span);
+        }
+        self.guard_class(result, target, span)?;
+        push_instruction!(
+            self,
+            Instruction::Store(result, saved_container, saved_index),
+            span
+        );
+        self.current_result = result;
+        Ok(())
+    }
+
     fn bound_may_mutate(expr: &ExpressionNode) -> bool {
         match expr {
             ExpressionNode::Int(_) | ExpressionNode::Var(_) => false,
@@ -1640,6 +1710,21 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        if node.is_compound
+            && matches!(
+                &*node.lhs,
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    op: BinaryOperation::Index,
+                    ..
+                })
+            )
+            && let ExpressionNode::BinaryOp(binary) = &mut *node.rhs
+        {
+            // The desugared RHS contains another copy of the target expression.
+            return self
+                .emit_compound_index_assignment(&mut node.lhs, &mut binary.r, binary.op, node.span)
+                .await;
+        }
         if let ExpressionNode::BinaryOp(BinaryOpNode {
             op: BinaryOperation::Index,
             l,
