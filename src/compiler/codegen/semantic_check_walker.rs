@@ -1141,7 +1141,6 @@ mod tests {
     use std::{collections::HashMap, default::Default, sync::Arc};
 
     use claims::*;
-    use factori_imp::create;
     use indoc::indoc;
     use lpc_rs_core::{
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,

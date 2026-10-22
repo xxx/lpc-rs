@@ -382,7 +382,7 @@ impl SocketAccess<'_> {
             let previous = self
                 .sockets
                 .next_handle
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                     value.checked_add(1)
                 })
                 .map_err(|_| error("handle range exhausted"))?;

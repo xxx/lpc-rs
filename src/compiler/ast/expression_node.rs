@@ -282,7 +282,6 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-    use factori_imp::create;
     use lpc_rs_core::LpcFloatInner;
 
     use super::*;

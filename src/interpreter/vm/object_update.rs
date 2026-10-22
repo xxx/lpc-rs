@@ -62,7 +62,7 @@ pub(crate) struct Updates {
 impl Updates {
     pub(crate) fn mint_id(&self) -> Result<i64> {
         self.next
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .map(|n| n + 1)
             .map_err(|_| LpcError::runtime("object update request IDs exhausted"))
     }

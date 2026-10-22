@@ -3403,7 +3403,6 @@ mod tests {
     use std::sync::Arc;
 
     use claims::assert_some;
-    use factori_imp::create;
     use lpc_rs_asm::instruction::Comparison;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};

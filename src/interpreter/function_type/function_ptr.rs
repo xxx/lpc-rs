@@ -444,7 +444,6 @@ impl Display for FunctionPtr {
 #[cfg(test)]
 mod tests {
     use crate::interpreter::lpc_ref::NULL;
-    use factori_imp::create;
     use thin_vec::thin_vec;
 
     use super::*;
