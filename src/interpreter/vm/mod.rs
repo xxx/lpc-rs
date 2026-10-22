@@ -155,7 +155,7 @@ impl Vm {
                     let global_state = self.global_state.clone();
                     tokio::spawn(async move {
                         match global_state.gc_when_quiet(20, Duration::from_millis(100)).await {
-                            Ok(Ok(report)) => info!("gc pass reclaimed {} vars", report.reclaimed),
+                            Ok(Ok(_)) => {},
                             Ok(Err(refused)) => debug!("gc pass skipped this period: {refused}"),
                             Err(e) => error!("gc pass failed: {e}"),
                         }
