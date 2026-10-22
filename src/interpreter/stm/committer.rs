@@ -476,7 +476,7 @@ impl Committer {
             scan_ms,
             sweep_ms,
             pause_ms = started.elapsed().as_secs_f64() * 1000.0,
-            "world collection completed"
+            "gc pass completed"
         );
         reclaimed
     }

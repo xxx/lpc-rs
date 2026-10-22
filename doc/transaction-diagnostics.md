@@ -29,8 +29,8 @@ Compare these failures with GC activity as well as evaluation and compilation.
 
 ## Collector diagnostics
 
-Accepted quiescent collections emit a `lpc_rs::gc` info event, `world collection
-completed`, with these fields:
+Accepted quiescent collections emit a `lpc_rs::gc` info event, `gc pass completed`,
+with these fields:
 
 | Field | Meaning |
 |---|---|
