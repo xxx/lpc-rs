@@ -120,6 +120,26 @@ pub struct Config {
     #[builder(setter(into), default = "DEFAULT_CLEAN_UP_INTERVAL")]
     pub clean_up_interval: u64,
 
+    /// Idle seconds before compiler-cache entries expire; zero disables both caches.
+    #[builder(default = "300")]
+    pub compiler_cache_idle_time: u64,
+
+    /// Maximum retained parsed programs; zero disables the parser cache.
+    #[builder(default = "256")]
+    pub parser_cache_max_entries: usize,
+
+    /// Conservative byte budget for parsed syntax; zero disables the parser cache.
+    #[builder(default = "67108864")]
+    pub parser_cache_max_bytes: usize,
+
+    /// Maximum retained prepared macro definitions; zero disables the definition cache.
+    #[builder(default = "4096")]
+    pub definition_cache_max_entries: usize,
+
+    /// Conservative byte budget for macro preparation; zero disables the definition cache.
+    #[builder(default = "8388608")]
+    pub definition_cache_max_bytes: usize,
+
     /// The simul-efun file, as an in-game path with or without its `.c`.
     #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
@@ -183,15 +203,18 @@ fn in_game_include_dirs(dirs: &[Ustr], lib_dir: &str) -> Result<Vec<Ustr>> {
         .collect()
 }
 
-fn socket_setting(
+fn numeric_setting<T: std::str::FromStr>(
     env: &HashMap<String, String>,
     key: &str,
-    current: Option<usize>,
-) -> Result<Option<usize>> {
+    current: Option<T>,
+) -> Result<Option<T>>
+where
+    T::Err: std::fmt::Display,
+{
     crate::tls::setting(env, key)
         .map(|value| {
             value
-                .parse::<usize>()
+                .parse::<T>()
                 .map_err(|e| lpc_error!("invalid {key}: {e}"))
         })
         .transpose()
@@ -269,33 +292,58 @@ impl ConfigBuilder {
         let lib_dir_str = lib_dir.map(|d| d.to_string()).unwrap_or_default();
 
         Ok(Self {
-            max_sockets: socket_setting(&env, "MAX_SOCKETS", self.max_sockets)?,
-            max_pending_socket_input: socket_setting(
+            compiler_cache_idle_time: numeric_setting(
+                &env,
+                "COMPILER_CACHE_IDLE_TIME",
+                self.compiler_cache_idle_time,
+            )?,
+            parser_cache_max_entries: numeric_setting(
+                &env,
+                "PARSER_CACHE_MAX_ENTRIES",
+                self.parser_cache_max_entries,
+            )?,
+            parser_cache_max_bytes: numeric_setting(
+                &env,
+                "PARSER_CACHE_MAX_BYTES",
+                self.parser_cache_max_bytes,
+            )?,
+            definition_cache_max_entries: numeric_setting(
+                &env,
+                "DEFINITION_CACHE_MAX_ENTRIES",
+                self.definition_cache_max_entries,
+            )?,
+            definition_cache_max_bytes: numeric_setting(
+                &env,
+                "DEFINITION_CACHE_MAX_BYTES",
+                self.definition_cache_max_bytes,
+            )?,
+            max_sockets: numeric_setting(&env, "MAX_SOCKETS", self.max_sockets)?,
+            max_pending_socket_input: numeric_setting(
                 &env,
                 "MAX_PENDING_SOCKET_INPUT",
                 self.max_pending_socket_input,
             )?,
-            max_pending_socket_accepts: socket_setting(
+            max_pending_socket_accepts: numeric_setting(
                 &env,
                 "MAX_PENDING_SOCKET_ACCEPTS",
                 self.max_pending_socket_accepts,
             )?,
-            socket_connect_timeout: socket_setting(
+            socket_connect_timeout: numeric_setting(
                 &env,
                 "SOCKET_CONNECT_TIMEOUT",
                 self.socket_connect_timeout,
             )?,
-            socket_close_timeout: socket_setting(
+            socket_close_timeout: numeric_setting(
                 &env,
                 "SOCKET_CLOSE_TIMEOUT",
                 self.socket_close_timeout,
             )?,
-            max_pending_socket_output: socket_setting(
+            max_pending_socket_output: numeric_setting(
                 &env,
                 "MAX_PENDING_SOCKET_OUTPUT",
                 self.max_pending_socket_output,
             )?,
-            max_pending_socket_writes: socket_setting(
+            max_pending_socket_writes: numeric_setting(
                 &env,
                 "MAX_PENDING_SOCKET_WRITES",
                 self.max_pending_socket_writes,
@@ -531,6 +579,53 @@ where
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn compiler_cache_settings_load_with_prefix_precedence_and_report_invalid_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("compiler-caches.env");
+        fs::write(&path, "COMPILER_CACHE_IDLE_TIME=10\nLPC_COMPILER_CACHE_IDLE_TIME=20\nPARSER_CACHE_MAX_ENTRIES=3\nPARSER_CACHE_MAX_BYTES=100\nDEFINITION_CACHE_MAX_ENTRIES=5\nDEFINITION_CACHE_MAX_BYTES=200\n").unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (
+                config.compiler_cache_idle_time,
+                config.parser_cache_max_entries,
+                config.parser_cache_max_bytes,
+                config.definition_cache_max_entries,
+                config.definition_cache_max_bytes
+            ),
+            (20, 3, 100, 5, 200)
+        );
+        for name in [
+            "COMPILER_CACHE_IDLE_TIME",
+            "PARSER_CACHE_MAX_ENTRIES",
+            "PARSER_CACHE_MAX_BYTES",
+            "DEFINITION_CACHE_MAX_ENTRIES",
+            "DEFINITION_CACHE_MAX_BYTES",
+        ] {
+            for value in ["-1", "typo", "18446744073709551616"] {
+                fs::write(&path, format!("LPC_{name}={value}\n")).unwrap();
+                let error = ConfigBuilder::default()
+                    .load_env(Some(&path))
+                    .await
+                    .err()
+                    .unwrap();
+                assert!(error.message().contains(name));
+            }
+            fs::write(&path, format!("LPC_{name}=0\n")).unwrap();
+            ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .unwrap()
+                .build()
+                .unwrap();
+        }
+    }
+
     #[test]
     fn native_socket_limits_reject_zero() {
         for builder in [
@@ -623,12 +718,12 @@ mod tests {
             "MAX_PENDING_SOCKET_ACCEPTS",
         ] {
             let mut env = HashMap::from([(key.to_string(), "10".to_string())]);
-            assert_eq!(socket_setting(&env, key, Some(3)).unwrap(), Some(10));
+            assert_eq!(numeric_setting(&env, key, Some(3)).unwrap(), Some(10));
             env.insert(format!("LPC_{key}"), "20".to_string());
-            assert_eq!(socket_setting(&env, key, Some(3)).unwrap(), Some(20));
+            assert_eq!(numeric_setting(&env, key, Some(3)).unwrap(), Some(20));
             for value in ["bad", "-1", "99999999999999999999999999999999"] {
                 env.insert(format!("LPC_{key}"), value.to_string());
-                assert!(socket_setting(&env, key, None).is_err());
+                assert!(numeric_setting::<usize>(&env, key, None).is_err());
             }
         }
     }

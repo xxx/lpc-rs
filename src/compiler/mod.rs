@@ -23,6 +23,7 @@ use crate::{
 };
 
 pub mod ast;
+pub mod cache;
 pub mod callee;
 pub mod codegen;
 pub mod compilation_context;
@@ -46,10 +47,14 @@ pub struct Compiler {
     #[builder(default)]
     code_pool: Arc<crate::interpreter::program::code_pool::CodePool>,
     /// Prepared macro definitions shared with recursive compiles.
-    #[builder(default)]
+    #[builder(
+        default = "Arc::new(preprocessor::definition_cache::DefinitionCache::new(self.config.as_deref().unwrap_or(&Config::default())))"
+    )]
     definition_cache: Arc<preprocessor::definition_cache::DefinitionCache>,
     /// Raw syntax shared with recursive compiles.
-    #[builder(default)]
+    #[builder(
+        default = "Arc::new(parser_cache::ParserCache::new(self.config.as_deref().unwrap_or(&Config::default())))"
+    )]
     parser_cache: Arc<parser_cache::ParserCache>,
     /// The configuration to be used for this instance of the compiler
     #[builder(setter(into))]
@@ -101,8 +106,13 @@ impl Compiler {
     where
         C: Into<Arc<Config>>,
     {
+        let config = config.into();
         Self {
-            config: config.into(),
+            definition_cache: Arc::new(preprocessor::definition_cache::DefinitionCache::new(
+                &config,
+            )),
+            parser_cache: Arc::new(parser_cache::ParserCache::new(&config)),
+            config,
             ..Default::default()
         }
     }
@@ -385,6 +395,31 @@ impl Compiler {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn compiler_constructors_honor_disabled_cache_configuration() {
+        use lpc_rs_utils::config::ConfigBuilder;
+        let config = std::sync::Arc::new(
+            ConfigBuilder::default()
+                .compiler_cache_idle_time(0)
+                .build()
+                .unwrap(),
+        );
+        for compiler in [
+            Compiler::new(config.clone()),
+            CompilerBuilder::default()
+                .config(config.clone())
+                .build()
+                .unwrap(),
+        ] {
+            compiler
+                .compile_string("/cache.c", "#define VALUE 1\nint value() { return VALUE; }")
+                .await
+                .unwrap();
+            assert_eq!(compiler.parser_cache.stats().entries, 0);
+            assert_eq!(compiler.definition_cache.stats().entries, 0);
+        }
+    }
+
     use super::*;
 
     #[tokio::test]

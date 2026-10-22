@@ -2,31 +2,26 @@ use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     mem::{discriminant, size_of},
-    num::NonZeroUsize,
     sync::Arc,
+    time::Duration,
 };
 
 use lpc_rs_errors::{LpcError, Result, source_map::DiagnosticSources, span::HasSpan};
-use lru::LruCache;
-use parking_lot::Mutex;
+use lpc_rs_utils::config::Config;
 
 use super::{
     ast::{ast_node::AstNode, expression_node::ExpressionNode, program_node::ProgramNode},
+    cache::{CacheStats, RetainedCache},
     compilation_context::CompilationContext,
     lexer::{Token, TokenTriples},
 };
 
-const MAX_ENTRIES: usize = 256;
-const MAX_BYTES: usize = 64 * 1024 * 1024;
-
 /// Bounded reuse of pristine syntax trees after each fresh preprocessing walk.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ParserCache {
-    entries: Mutex<Entries>,
+    entries: RetainedCache<u64, Parsed>,
     #[cfg(test)]
     disabled: std::sync::atomic::AtomicBool,
-    #[cfg(test)]
-    hits: std::sync::atomic::AtomicUsize,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -64,18 +59,9 @@ struct Parsed {
     cost: usize,
 }
 
-#[derive(Debug)]
-struct Entries {
-    values: LruCache<u64, Arc<Parsed>>,
-    bytes: usize,
-}
-
-impl Default for Entries {
+impl Default for ParserCache {
     fn default() -> Self {
-        Self {
-            values: LruCache::new(NonZeroUsize::new(MAX_ENTRIES).unwrap()),
-            bytes: 0,
-        }
+        Self::new(&Config::default())
     }
 }
 
@@ -131,6 +117,28 @@ fn retained_cost(
 }
 
 impl ParserCache {
+    /// Construct a cache using this compiler or VM's fixed configuration.
+    pub fn new(config: &Config) -> Self {
+        Self {
+            entries: RetainedCache::new(
+                config.parser_cache_max_entries,
+                config.parser_cache_max_bytes,
+                Duration::from_secs(config.compiler_cache_idle_time),
+            ),
+            #[cfg(test)]
+            disabled: Default::default(),
+        }
+    }
+
+    pub(crate) fn expire(&self) -> usize {
+        self.entries.expire()
+    }
+
+    /// Current retention charges and cumulative lookup counts.
+    pub fn stats(&self) -> CacheStats {
+        self.entries.stats()
+    }
+
     #[cfg(test)]
     pub(crate) fn disable(&self) {
         self.disabled
@@ -144,27 +152,14 @@ impl ParserCache {
         policy: &Policy,
         sources: &DiagnosticSources,
     ) -> Option<Arc<Parsed>> {
-        let entry = self.entries.lock().values.get(&key).cloned()?;
-        (entry.sources.same_storage(sources) && entry.policy == *policy && entry.tokens == tokens)
-            .then_some(entry)
+        self.entries.get_if(&key, |entry| {
+            entry.sources.same_storage(sources) && entry.policy == *policy && entry.tokens == tokens
+        })
     }
 
     fn insert(&self, key: u64, entry: Arc<Parsed>) {
-        if entry.cost > MAX_BYTES {
-            return;
-        }
-        let mut entries = self.entries.lock();
-        if let Some(old) = entries.values.pop(&key) {
-            entries.bytes -= old.cost;
-        }
-        while entries.bytes + entry.cost > MAX_BYTES || entries.values.len() == MAX_ENTRIES {
-            let Some((_, old)) = entries.values.pop_lru() else {
-                break;
-            };
-            entries.bytes -= old.cost;
-        }
-        entries.bytes += entry.cost;
-        entries.values.put(key, entry);
+        let cost = entry.cost;
+        self.entries.insert(key, entry, cost);
     }
 
     pub(crate) fn parse(
@@ -176,14 +171,12 @@ impl ParserCache {
         let enabled = !self.disabled.load(std::sync::atomic::Ordering::Relaxed);
         #[cfg(not(test))]
         let enabled = true;
-        if !enabled {
+        if !enabled || !self.entries.accepts(0) {
             return parse_uncached(&tokens, context);
         }
         let policy = Policy::new(context);
         let key = fingerprint(&tokens, &policy);
         if let Some(entry) = self.get(key, &tokens, &policy, &context.diagnostic_sources) {
-            #[cfg(test)]
-            self.hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             context.closure_count = entry.closure_count;
             context.capture_count = entry.capture_count;
             for warning in &entry.warnings {
@@ -195,7 +188,7 @@ impl ParserCache {
         let node = parse_uncached(&tokens, context)?;
         let warnings = &context.diagnostics.errors()[warning_start..];
         let cost = retained_cost(&tokens, tokens.capacity(), &policy, warnings);
-        if cost <= MAX_BYTES {
+        if self.entries.accepts(cost) {
             self.insert(
                 key,
                 Arc::new(Parsed {
@@ -264,7 +257,7 @@ mod tests {
                 "function prototypes are ignored; the definition declares the function"
             );
         }
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 4);
+        assert_eq!(cache.stats().hits, 4);
     }
 
     #[tokio::test]
@@ -295,7 +288,7 @@ mod tests {
             error.message().contains("unexpected argument type"),
             "{error}"
         );
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
+        assert_eq!(cache.stats().hits, 1);
     }
 
     #[tokio::test]
@@ -312,7 +305,7 @@ mod tests {
             error.message(),
             "initializer `value` expects string, found int"
         );
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
+        assert_eq!(cache.stats().hits, 1);
     }
 
     #[tokio::test]
@@ -334,9 +327,9 @@ mod tests {
         let path = LpcPath::from("/main.c");
         first.parse_string(&path, "int a;").await.unwrap();
         second.parse_string(&path, "int a;").await.unwrap();
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 0);
+        assert_eq!(cache.stats().hits, 0);
         second.parse_string(&path, "int a;").await.unwrap();
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
+        assert_eq!(cache.stats().hits, 1);
     }
 
     #[tokio::test]
@@ -360,7 +353,7 @@ mod tests {
                 .message()
                 .contains("Missing type for argument")
         );
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 0);
+        assert_eq!(cache.stats().hits, 0);
         context.strict_types_from.clear();
         let mut preprocessor = Preprocessor::new(context);
         let tokens = preprocessor
@@ -372,7 +365,7 @@ mod tests {
         assert_eq!((context.closure_count, context.capture_count), (1, 1));
         cache.parse(tokens, &mut context).unwrap();
         assert_eq!((context.closure_count, context.capture_count), (2, 2));
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 0);
+        assert_eq!(cache.stats().hits, 0);
     }
 
     #[tokio::test]
@@ -386,11 +379,11 @@ mod tests {
             let compiled = compiler.compile_string("/main.c", code).await.unwrap();
             assert_eq!(compiled.warnings.last().unwrap().warnings.len(), 1);
         }
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
+        assert_eq!(cache.stats().hits, 1);
         std::fs::write(root.join("value.h"), "#define VALUE \"text\"\n").unwrap();
         let error = compiler.compile_string("/main.c", code).await.unwrap_err();
         assert!(error.message().contains("type"), "{error}");
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
+        assert_eq!(cache.stats().hits, 1);
     }
 
     #[derive(Debug, Default)]
@@ -433,7 +426,7 @@ mod tests {
         for _ in 0..2 {
             compiler.compile_string("/main.c", code).await.unwrap();
         }
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 2);
+        assert_eq!(cache.stats().hits, 2);
         assert_eq!(gate.includes.load(Ordering::Relaxed), 2);
         assert_eq!(gate.inherits.load(Ordering::Relaxed), 2);
         assert_eq!(gate.overrides.load(Ordering::Relaxed), 2);
@@ -474,7 +467,7 @@ mod tests {
                     .message()
                     .contains("permission denied")
             );
-            assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
+            assert_eq!(cache.stats().hits, 1);
         }
     }
 
@@ -491,14 +484,37 @@ mod tests {
                     .is_err()
             );
         }
-        assert!(cache.entries.lock().values.is_empty());
+        assert_eq!(cache.stats().entries, 0);
         let code = "int value;";
         let path = LpcPath::from("/good.c");
         let expected = compiler.parse_string(&path, code).await.unwrap().0;
         cache.disable();
         let actual = compiler.parse_string(&path, code).await.unwrap().0;
         assert_eq!(actual, expected);
-        assert_eq!(cache.hits.load(Ordering::Relaxed), 0);
+        assert_eq!(cache.stats().hits, 0);
+    }
+
+    #[tokio::test]
+    async fn expired_syntax_is_parsed_again_with_identical_results() {
+        let root = TempLib::new("parser-expiration");
+        let cache = Arc::new(ParserCache::default());
+        let compiler = compiler(&root, cache.clone());
+        let path = LpcPath::from("/cached.c");
+        let code = "function make(int value) { return (: $(value) + 1 :); }";
+        let first = compiler.parse_string(&path, code).await.unwrap();
+        compiler.parse_string(&path, code).await.unwrap();
+        assert_eq!(cache.stats().hits, 1);
+        tokio::time::pause();
+        tokio::time::advance(Duration::from_secs(300)).await;
+        assert_eq!(cache.expire(), 1);
+        tokio::time::resume();
+        let rebuilt = compiler.parse_string(&path, code).await.unwrap();
+        assert_eq!(first.0, rebuilt.0);
+        assert_eq!(
+            (first.1.closure_count, first.1.capture_count),
+            (rebuilt.1.closure_count, rebuilt.1.capture_count)
+        );
+        assert_eq!(cache.stats().hits, 1);
     }
 
     #[tokio::test]
@@ -529,36 +545,5 @@ mod tests {
                 .get(key, &changed, &policy, &context.diagnostic_sources)
                 .is_none()
         );
-    }
-
-    #[test]
-    fn cache_evicts_by_recency_and_estimated_bytes_and_rejects_oversized_entries() {
-        let cache = ParserCache::default();
-        let entry = |cost| {
-            Arc::new(Parsed {
-                tokens: vec![],
-                policy: Policy::new(&CompilationContext::default()),
-                sources: DiagnosticSources::default(),
-                node: ProgramNode::default(),
-                closure_count: 0,
-                capture_count: 0,
-                warnings: vec![],
-                cost,
-            })
-        };
-        for i in 0..MAX_ENTRIES {
-            cache.insert(i as u64, entry(1));
-        }
-        cache.entries.lock().values.get(&0);
-        cache.insert(MAX_ENTRIES as u64, entry(1));
-        assert!(cache.entries.lock().values.contains(&0));
-        assert!(!cache.entries.lock().values.contains(&1));
-        cache.insert(999, entry(MAX_BYTES));
-        assert_eq!(cache.entries.lock().values.len(), 1);
-        assert_eq!(cache.entries.lock().bytes, MAX_BYTES);
-        cache.insert(1000, entry(MAX_BYTES + 1));
-        assert_eq!(cache.entries.lock().values.len(), 1);
-        cache.insert(999, entry(1));
-        assert_eq!(cache.entries.lock().bytes, 1);
     }
 }

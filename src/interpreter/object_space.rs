@@ -25,6 +25,13 @@ use crate::{
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
 
+/// Native compiler-cache retention and cumulative lookup counters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompilerCacheStats {
+    pub parser: crate::compiler::cache::CacheStats,
+    pub definitions: crate::compiler::cache::CacheStats,
+}
+
 /// A wrapper around a [`DashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
 /// uses.
@@ -91,10 +98,27 @@ impl ObjectSpace {
     where
         T: Into<Arc<Config>>,
     {
+        let config = config.into();
         Self {
-            config: config.into(),
+            definition_cache: Arc::new(
+                crate::compiler::preprocessor::definition_cache::DefinitionCache::new(&config),
+            ),
+            parser_cache: Arc::new(crate::compiler::parser_cache::ParserCache::new(&config)),
+            config,
             ..Default::default()
         }
+    }
+
+    /// Current cache charges and cumulative lookups; charges are not allocator measurements.
+    pub fn compiler_cache_stats(&self) -> CompilerCacheStats {
+        CompilerCacheStats {
+            parser: self.parser_cache.stats(),
+            definitions: self.definition_cache.stats(),
+        }
+    }
+
+    pub(crate) fn expire_compiler_caches(&self) -> usize {
+        self.parser_cache.expire() + self.definition_cache.expire()
     }
 
     /// The [`Config`] this space (and every compile into it) runs under.

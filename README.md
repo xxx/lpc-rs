@@ -127,6 +127,8 @@ your configuration when starting the driver from another directory.
 
 See [default.env](default.env) for configuration options, including include
 paths, simulated efuns, execution limits and logging.
+The [compiler cache guide](doc/compiler-caches.md) covers retention budgets,
+idle expiration and native usage counters.
 
 `NULL_MODE=zero` preserves zero-as-null behavior; `NULL_MODE=distinct` enables
 a separate `nil` value. See [null values](doc/lpc/null.md) for defaults, type

@@ -128,6 +128,11 @@ impl Vm {
         cleanup_ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         cleanup_ticks.tick().await;
         let mut cleanup_tasks = tokio::task::JoinSet::new();
+        let cache_idle = self.global_state.config.compiler_cache_idle_time;
+        let mut cache_ticks = tokio::time::interval(Duration::from_secs(cache_idle.clamp(1, 30)));
+        cache_ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        cache_ticks.tick().await;
+        let mut cache_tasks = tokio::task::JoinSet::new();
 
         // Process managers stop a server with TERM first; it must reach the
         // same clean shutdown as Ctrl-C.
@@ -161,6 +166,19 @@ impl Vm {
                         error!("cleanup sweep failed: {error}");
                     }
                 }
+                Some(result) = cache_tasks.join_next(), if !cache_tasks.is_empty() => {
+                    match result {
+                        Ok(released) if released > 0 => debug!(released, "expired compiler-cache entries"),
+                        Err(error) => error!("compiler-cache expiration failed: {error}"),
+                        _ => {}
+                    }
+                }
+                _ = cache_ticks.tick(), if cache_idle > 0 => {
+                    if cache_tasks.is_empty() {
+                        let space = self.global_state.object_space.clone();
+                        cache_tasks.spawn_blocking(move || space.expire_compiler_caches());
+                    }
+                }
                 _ = cleanup_ticks.tick(), if clean_up_interval > 0 => {
                     if cleanup_tasks.is_empty() {
                         let state = self.global_state.clone();
@@ -191,6 +209,7 @@ impl Vm {
 
         // Only the VM shuts down on its own. Everything else shuts down only at the behest of the VM.
         cleanup_tasks.shutdown().await;
+        while cache_tasks.join_next().await.is_some() {}
         self.shutdown().await?;
         Ok(exit_code)
     }
@@ -270,6 +289,49 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn idle_compiler_caches_expire_without_gc_cleanup_or_further_compilation() {
+        let config = lpc_rs_utils::config::ConfigBuilder::default()
+            .compiler_cache_idle_time(1)
+            .gc_interval(0u64)
+            .clean_up_interval(0u64)
+            .build()
+            .unwrap();
+        let mut vm = super::Vm::new(config);
+        let context = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                "#define VALUE 123\nint value() { return VALUE; }",
+            )
+            .await
+            .unwrap();
+        let process = context.context.process;
+        let state = vm.global_state.clone();
+        let before = state.object_space.compiler_cache_stats();
+        assert!(before.parser.entries > 0 && before.definitions.entries > 0);
+        let program = process.initial_program().clone();
+        let objects = state.object_space.len();
+        let (result, ()) = tokio::join!(vm.run(), async {
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                loop {
+                    let stats = state.object_space.compiler_cache_stats();
+                    if stats.parser.entries == 0 && stats.definitions.entries == 0 {
+                        assert_eq!(stats.parser.estimated_bytes, 0);
+                        assert_eq!(stats.definitions.estimated_bytes, 0);
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+            assert_eq!(state.object_space.len(), objects);
+            assert!(std::sync::Arc::ptr_eq(process.initial_program(), &program));
+            state.tx.send(super::VmOp::Shutdown(0)).await.unwrap();
+        });
+        assert_eq!(result.unwrap(), 0);
+    }
+
     use indoc::indoc;
 
     use super::*;

@@ -1,19 +1,18 @@
-use std::{mem::size_of, num::NonZeroUsize, sync::Arc};
+use std::{mem::size_of, sync::Arc, time::Duration};
 
 use lpc_rs_errors::{source_map::DiagnosticSources, span::Span};
-use lru::LruCache;
-use parking_lot::Mutex;
+use lpc_rs_utils::config::Config;
 
 use super::{define::Define, preprocessor_node::PreprocessorNode};
-use crate::compiler::lexer::Token;
-
-const MAX_ENTRIES: usize = 4096;
-const MAX_BYTES: usize = 8 * 1024 * 1024;
+use crate::compiler::{
+    cache::{CacheStats, RetainedCache},
+    lexer::Token,
+};
 
 /// Reuses pure macro preparation without retaining a compile's macro environment.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DefinitionCache {
-    entries: Mutex<Entries>,
+    entries: RetainedCache<Span, Definition>,
     #[cfg(test)]
     disabled: std::sync::atomic::AtomicBool,
 }
@@ -23,25 +22,37 @@ pub(super) struct Definition {
     pub name: String,
     pub replacement: Define,
     sources: DiagnosticSources,
-    cost: usize,
 }
 
-#[derive(Debug)]
-struct Entries {
-    values: LruCache<Span, Arc<Definition>>,
-    bytes: usize,
-}
-
-impl Default for Entries {
+impl Default for DefinitionCache {
     fn default() -> Self {
-        Self {
-            values: LruCache::new(NonZeroUsize::new(MAX_ENTRIES).unwrap()),
-            bytes: 0,
-        }
+        Self::new(&Config::default())
     }
 }
 
 impl DefinitionCache {
+    /// Construct a cache using this compiler or VM's fixed configuration.
+    pub fn new(config: &Config) -> Self {
+        Self {
+            entries: RetainedCache::new(
+                config.definition_cache_max_entries,
+                config.definition_cache_max_bytes,
+                Duration::from_secs(config.compiler_cache_idle_time),
+            ),
+            #[cfg(test)]
+            disabled: Default::default(),
+        }
+    }
+
+    pub(crate) fn expire(&self) -> usize {
+        self.entries.expire()
+    }
+
+    /// Current retention charges and cumulative lookup counts.
+    pub fn stats(&self) -> CacheStats {
+        self.entries.stats()
+    }
+
     #[cfg(test)]
     pub(crate) fn disable(&self) {
         self.disabled
@@ -53,12 +64,11 @@ impl DefinitionCache {
         if self.disabled.load(std::sync::atomic::Ordering::Relaxed) {
             return None;
         }
+        if !self.entries.accepts(0) {
+            return None;
+        }
         self.entries
-            .lock()
-            .values
-            .get(&span)
-            .filter(|entry| entry.sources.same_storage(sources))
-            .cloned()
+            .get_if(&span, |entry| entry.sources.same_storage(sources))
     }
 
     pub(super) fn insert(
@@ -71,6 +81,9 @@ impl DefinitionCache {
     ) {
         #[cfg(test)]
         if self.disabled.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        if !self.entries.accepts(0) {
             return;
         }
         let (tokens, argument_bytes) = match replacement {
@@ -93,30 +106,18 @@ impl DefinitionCache {
                     .len()
                     .saturating_mul(2 * size_of::<PreprocessorNode>()),
             );
-        if cost > MAX_BYTES {
+        if !self.entries.accepts(cost) {
             return;
         }
-        let mut entries = self.entries.lock();
-        if let Some(old) = entries.values.pop(&span) {
-            entries.bytes -= old.cost;
-        }
-        while entries.bytes + cost > MAX_BYTES || entries.values.len() == MAX_ENTRIES {
-            let (_, old) = entries
-                .values
-                .pop_lru()
-                .expect("nonempty cache exceeds its bound");
-            entries.bytes -= old.cost;
-        }
-        entries.values.put(
+        self.entries.insert(
             span,
             Arc::new(Definition {
                 name: name.to_owned(),
                 replacement: replacement.clone(),
                 sources: sources.clone(),
-                cost,
             }),
+            cost,
         );
-        entries.bytes += cost;
     }
 }
 
@@ -270,34 +271,5 @@ mod tests {
         let error = compiler.compile_string("/main.c", code).await.unwrap_err();
         assert!(error.message().contains("permission denied"));
         assert_eq!(gate.calls.load(Ordering::Relaxed), 3);
-    }
-
-    #[test]
-    fn definitions_are_evicted_by_recency_and_retained_size() {
-        let cache = DefinitionCache::default();
-        let sources = DiagnosticSources::default();
-        let span = |i| Span::new(0, i..i + 1);
-        let insert = |i, bytes| {
-            cache.insert(
-                span(i),
-                bytes,
-                "VALUE",
-                &Define::new_object(vec![], None),
-                &sources,
-            )
-        };
-        for i in 0..MAX_ENTRIES {
-            insert(i, 1);
-        }
-        assert!(cache.get(span(0), &sources).is_some());
-        insert(MAX_ENTRIES, 1);
-        assert!(cache.get(span(0), &sources).is_some());
-        assert!(cache.get(span(1), &sources).is_none());
-        for i in MAX_ENTRIES + 1..MAX_ENTRIES + 100 {
-            insert(i, MAX_BYTES / 8);
-        }
-        let entries = cache.entries.lock();
-        assert!(entries.bytes <= MAX_BYTES);
-        assert!(entries.values.len() < MAX_ENTRIES);
     }
 }

@@ -121,6 +121,14 @@ impl CompilationContextBuilder {
     /// Build the context, resolving an omitted source against the selected configuration.
     pub fn build(&self) -> lpc_rs_errors::Result<CompilationContext> {
         let mut context = self.build_context()?;
+        if self.definition_cache.is_none() {
+            context.definition_cache = Arc::new(
+                super::preprocessor::definition_cache::DefinitionCache::new(&context.config),
+            );
+        }
+        if self.parser_cache.is_none() {
+            context.parser_cache = Arc::new(super::parser_cache::ParserCache::new(&context.config));
+        }
         if self.source.is_none() {
             context.source = Arc::new(CompilerSource::new(LpcPath::default(), &context.config));
         }
