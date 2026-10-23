@@ -264,6 +264,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
   array detection, type compatibility and signature mangling.
 - [`Visibility`](lpc-rs-core/src/visibility.rs): inheritance restrictions and
   declaration modifier names.
+- [`GlobalVarFlags`](lpc-rs-core/src/global_var_flags.rs): modifier validation,
+  visibility precedence, storage aliases and canonical display.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
