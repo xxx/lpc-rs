@@ -579,6 +579,89 @@ where
 mod tests {
     use super::*;
 
+    #[test]
+    fn pending_output_defaults_to_sixty_four_kibibytes() {
+        assert_eq!(Config::default().max_pending_output, 65_536);
+    }
+
+    #[test]
+    fn listener_ports_collide_only_when_both_listeners_use_the_same_fixed_port() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = dir.path().join("lib");
+        fs::create_dir(&lib).unwrap();
+        for (telnet, port, tls_port, valid) in [
+            (true, 4040, 4040, false),
+            (true, 4040, 4041, true),
+            (false, 4040, 4040, true),
+            (true, 0, 0, true),
+        ] {
+            let result = ConfigBuilder::default()
+                .lib_dir(lib.to_string_lossy().into_owned())
+                .telnet_enabled(telnet)
+                .port(port)
+                .tls(TlsConfig {
+                    port: tls_port,
+                    files: crate::tls::CertificateFiles {
+                        certificate: dir.path().join("keys/cert.pem"),
+                        private_key: dir.path().join("keys/key.pem"),
+                    },
+                })
+                .build();
+
+            assert_eq!(result.is_ok(), valid, "{telnet} {port} {tls_port}");
+        }
+    }
+
+    #[tokio::test]
+    async fn configured_debug_logs_receive_forwarded_messages() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("debug.log");
+        let log = DebugLog::from_str(path.to_str().unwrap()).await;
+        let config = ConfigBuilder::default().debug_log(log).build().unwrap();
+
+        config.debug_log("forwarded message").await;
+        config.debug_log.as_ref().unwrap().flush().await;
+
+        assert_eq!(fs::read_to_string(path).unwrap(), "forwarded message");
+    }
+
+    #[test]
+    fn tracing_initialization_writes_to_the_selected_file() {
+        const CHILD_LOG: &str = "LPC_RS_MUTATION_TRACING_CHILD_LOG";
+        if let Some(path) = std::env::var_os(CHILD_LOG) {
+            let config = ConfigBuilder::default()
+                .server_log_file(path.to_str().unwrap())
+                .log_filter("info")
+                .build()
+                .unwrap();
+            config.init_tracing_subscriber();
+            tracing::info!("selected log destination");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("server.log");
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "config::tests::tracing_initialization_writes_to_the_selected_file",
+            ])
+            .env(CHILD_LOG, &path)
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            fs::read_to_string(path)
+                .unwrap()
+                .contains("selected log destination")
+        );
+    }
+
     #[tokio::test]
     async fn compiler_cache_settings_load_with_prefix_precedence_and_report_invalid_values() {
         let dir = tempfile::tempdir().unwrap();

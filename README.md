@@ -270,6 +270,8 @@ The reviewed scope includes:
   newline preservation.
 - [`DebugLog`](lpc-rs-utils/src/debug_log.rs): queued writes, flush barriers and
   runtime-safe shutdown/drop behavior.
+- [Configuration](lpc-rs-utils/src/config.rs): defaults, environment precedence,
+  validation, listener combinations and log destinations.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
