@@ -37,6 +37,7 @@ examine_globs = [
     "src/interpreter/lpc_float.rs",
     "src/interpreter/lpc_mapping.rs",
     "src/interpreter/lpc_array.rs",
+    "lpc-rs-telnet/src/opt.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
