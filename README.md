@@ -276,6 +276,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
   identities and safe source diagnostics.
 - [Classes](lpc-rs-core/src/class.rs): nominal identities, definition lookup,
   visibility and mangling.
+- [`CallNamespace`](lpc-rs-core/src/call_namespace.rs): lookup keys and displayed
+  qualifiers for local, parent and named calls.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

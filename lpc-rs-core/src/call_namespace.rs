@@ -29,3 +29,20 @@ impl Display for CallNamespace {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lookup_and_display_distinguish_local_parent_and_named_namespaces() {
+        for (namespace, lookup, display) in [
+            (CallNamespace::Local, "", ""),
+            (CallNamespace::Parent, "::", "::"),
+            (CallNamespace::Named("base".into()), "base", "base::"),
+        ] {
+            assert_eq!(namespace.as_str(), lookup);
+            assert_eq!(namespace.to_string(), display);
+        }
+    }
+}
