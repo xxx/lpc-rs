@@ -182,9 +182,123 @@ impl AsRef<OsStr> for LpcString {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::hash_map::DefaultHasher;
+
     use ustr::ustr;
 
     use super::*;
+
+    fn values(text: &str) -> [LpcString; 2] {
+        [
+            LpcString::Static(ustr(text)),
+            LpcString::Dynamic(text.to_owned()),
+        ]
+    }
+
+    fn hash_value<T: Hash + ?Sized>(value: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn string_views_preserve_bytes_scalars_and_borrowed_identity() {
+        for (text, bytes, characters) in [
+            ("", 0, 0),
+            ("hello", 5, 5),
+            ("é", 2, 1),
+            ("a\u{301}", 3, 2),
+            ("😀", 4, 1),
+            ("a\0b", 3, 3),
+        ] {
+            for value in values(text) {
+                assert_eq!(value.to_str(), text);
+                assert_eq!(value.len(), bytes);
+                assert_eq!(value.char_count(), characters);
+                assert_eq!(value.is_empty(), text.is_empty());
+                assert_eq!(value.chars().collect::<String>(), text);
+                assert_eq!(value.to_string(), text);
+                let borrowed = &value;
+                let string = <&LpcString as AsRef<str>>::as_ref(&borrowed);
+                let path = <&LpcString as AsRef<Path>>::as_ref(&borrowed);
+                let native: &OsStr = value.as_ref();
+                assert_eq!(string, text);
+                assert_eq!(path, Path::new(text));
+                assert_eq!(native, OsStr::new(text));
+            }
+        }
+    }
+
+    #[test]
+    fn equality_overloads_compare_contents_for_both_string_representations() {
+        let same = "é".to_owned();
+        let different = "other".to_owned();
+        for value in values("é") {
+            assert!(<LpcString as PartialEq<String>>::eq(&value, &same));
+            assert!(!<LpcString as PartialEq<String>>::eq(&value, &different));
+            assert!(<LpcString as PartialEq<&String>>::eq(&value, &&same));
+            assert!(!<LpcString as PartialEq<&String>>::eq(&value, &&different));
+            assert!(<LpcString as PartialEq<&str>>::eq(&value, &same.as_str()));
+            assert!(!<LpcString as PartialEq<&str>>::eq(
+                &value,
+                &different.as_str()
+            ));
+            let borrowed = &value;
+            assert!(<&LpcString as PartialEq<&str>>::eq(
+                &borrowed,
+                &same.as_str()
+            ));
+            assert!(!<&LpcString as PartialEq<&str>>::eq(
+                &borrowed,
+                &different.as_str()
+            ));
+            for other in values("é") {
+                assert_eq!(value, other);
+            }
+            for other in values("other") {
+                assert_ne!(value, other);
+            }
+        }
+    }
+
+    #[test]
+    fn ordering_and_hashing_match_native_string_contents() {
+        for left in ["", "a", "b", "é", "a\u{301}"] {
+            for right in ["", "a", "b", "é", "a\u{301}"] {
+                for left_value in values(left) {
+                    for right_value in values(right) {
+                        assert_eq!(left_value.cmp(&right_value), left.cmp(right));
+                        assert_eq!(left_value.partial_cmp(&right_value), Some(left.cmp(right)));
+                    }
+                    assert_eq!(hash_value(&left_value), hash_value(left));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn owned_and_borrowed_conversions_preserve_the_payload() {
+        let text = "é\0value".to_owned();
+        let owned = LpcString::from(text.clone());
+        let borrowed = LpcString::from(&text);
+        let slice = LpcString::from(text.as_str());
+
+        for value in [owned, borrowed, slice] {
+            assert_eq!(value.to_str(), text);
+            assert!(matches!(value, LpcString::Dynamic(_)));
+        }
+    }
+
+    #[test]
+    fn concatenation_accepts_the_exact_byte_cap_and_rejects_one_more_scalar() {
+        let prefix = "é".repeat(MAX_STRING_LENGTH / 2 - 1);
+        let full = LpcString::concat(&prefix, "é").unwrap();
+
+        assert_eq!(full.len(), MAX_STRING_LENGTH);
+        assert_eq!(full.char_count(), MAX_STRING_LENGTH / 2);
+        assert!(LpcString::concat(full.to_str(), "é").is_err());
+        assert_eq!(LpcString::concat("", full.to_str()).unwrap(), full);
+    }
 
     #[test]
     fn a_static_string_is_its_literal() {

@@ -264,6 +264,8 @@ The reviewed scope includes:
   concatenation.
 - [String helpers](lpc-rs-utils/src/string.rs): repetition limits, concatenation
   and closure argument numbers.
+- [`LpcString`](lpc-rs-utils/src/lpc_string.rs): static/dynamic contents, Unicode
+  lengths, comparison/hash consistency, borrowed views and concatenation.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
