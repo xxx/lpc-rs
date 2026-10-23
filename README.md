@@ -254,43 +254,14 @@ for repository conventions and profiling commands.
 
 ### Mutation testing
 
-Mutation testing covers these reviewed modules:
+The reviewed scope includes:
 
-- [`RegisterCounter`](lpc-rs-core/src/register_counter.rs): register allocation
-  counts and nested scopes.
-- [`FunctionFlags`](lpc-rs-core/src/function_flags.rs): visibility queries,
-  declaration modifiers and signature mangling.
-- [`LpcTypeUnion`](lpc-rs-core/src/lpc_type_union.rs): primitive membership,
-  array detection, type compatibility and signature mangling.
-- [`Visibility`](lpc-rs-core/src/visibility.rs): inheritance restrictions and
-  declaration modifier names.
-- [`GlobalVarFlags`](lpc-rs-core/src/global_var_flags.rs): modifier validation,
-  visibility precedence, storage aliases and canonical display.
-- [`Register`](lpc-rs-core/src/register.rs): operand banks, index conversions and
-  display across the full register width.
-- [`LpcType`](lpc-rs-core/src/lpc_type.rs): primitive names, nil compatibility,
-  array projection, nominal identities and unions.
-- [`LpcPath`](lpc-rs-core/src/lpc_path.rs): clone suffixes, source/object names,
-  path transformations and host versus in-game identity.
-- [`LibRoot`](lpc-rs-core/src/lpc_path/root.rs): path confinement, paired source
-  identities and safe source diagnostics.
-- [Classes](lpc-rs-core/src/class.rs): nominal identities, definition lookup,
-  visibility and mangling.
-- [`CallNamespace`](lpc-rs-core/src/call_namespace.rs): lookup keys and displayed
-  qualifiers for local, parent and named calls.
-- [`FunctionReceiver`](lpc-rs-core/src/function_receiver.rs): receiver roles and
-  the register banks that carry objects or function values.
-- [`NullMode`](lpc-rs-core/src/null_mode.rs): mode names, parsing and defaults.
-- [String escapes](lpc-rs-core/src/lib.rs): literal decoding, unknown escapes,
-  trailing backslashes and multibyte characters.
-- [`FunctionPrototype`](lpc-rs-function-support/src/function_prototype.rs): call
-  arity, reference parameters, function kinds and signature formatting.
-- [`LpcConstant`](lpc-rs-function-support/src/constant.rs): typed defaults in both
-  null modes and literal display.
-- [`Symbol`](lpc-rs-function-support/src/symbol.rs): scope classification,
-  inheritance visibility and callable symbol metadata.
-- [`ProgramFunction`](lpc-rs-function-support/src/program_function.rs): metadata
-  access, instruction/span alignment, labels and register renaming.
+- [Core types](lpc-rs-core/src/lib.rs): registers, types and unions, paths and
+  confinement, flags, nominal classes, call metadata, null modes and escapes.
+- [Function support](lpc-rs-function-support/src/lib.rs): prototypes, constants,
+  symbol scope, instruction metadata and register renaming.
+- [Byte helpers](lpc-rs-utils/src/lpc_bytes.rs): literal encoding and capped
+  concatenation.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
