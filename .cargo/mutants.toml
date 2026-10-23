@@ -29,6 +29,7 @@ examine_globs = [
     "lpc-rs-asm/src/instruction.rs",
     "lpc-rs-errors/src/span.rs",
     "lpc-rs-errors/src/error_frames.rs",
+    "lpc-rs-errors/src/source_map.rs",
 ]
 additional_cargo_args = ["--locked"]
 minimum_test_timeout = 20

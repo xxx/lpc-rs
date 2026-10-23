@@ -282,6 +282,8 @@ The reviewed scope includes:
   source extraction and file-position rendering.
 - [Error frames](lpc-rs-errors/src/error_frames.rs): rendered byte accounting,
   trace merging, omissions and snapshot budgets.
+- [Source maps](lpc-rs-errors/src/source_map.rs): registry identity, version reuse,
+  hash-collision fallback, retained storage and diagnostic lookup.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
