@@ -280,6 +280,8 @@ The reviewed scope includes:
   comparison semantics, range directions and opcode metadata.
 - [Diagnostic spans](lpc-rs-errors/src/span.rs): packed locations, warning policy,
   source extraction and file-position rendering.
+- [Error frames](lpc-rs-errors/src/error_frames.rs): rendered byte accounting,
+  trace merging, omissions and snapshot budgets.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

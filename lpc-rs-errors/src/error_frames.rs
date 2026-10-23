@@ -89,6 +89,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn text_budget_counts_every_rendered_field_as_utf8_bytes() {
+        let frame = ErrorFrame {
+            function: "f".into(),
+            program: "/p".into(),
+            object: "/o#1".into(),
+            file: "/é.c".into(),
+            arguments: vec![ErrorVariable {
+                name: "a".into(),
+                type_: "int".into(),
+                value: "42".into(),
+                truncated: false,
+            }],
+            locals: vec![ErrorVariable {
+                name: "é".into(),
+                type_: "string".into(),
+                value: "λ".into(),
+                truncated: false,
+            }],
+            ..Default::default()
+        };
+
+        assert_eq!(frame.text_bytes(), 28);
+    }
+
+    #[test]
     fn nested_traces_keep_the_innermost_frames_in_order() {
         let frame = |n: usize| ErrorFrame {
             function: n.to_string(),
