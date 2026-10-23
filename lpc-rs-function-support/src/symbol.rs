@@ -101,3 +101,81 @@ impl Default for Symbol {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use indextree::Arena;
+    use lpc_rs_core::lpc_path::LpcPath;
+
+    use super::*;
+    use crate::function_prototype::FunctionPrototypeBuilder;
+
+    #[test]
+    fn globals_have_no_scope_or_the_root_scope() {
+        let mut scopes = Arena::new();
+        let root = scopes.new_node(());
+        let local = scopes.new_node(());
+        root.append(local, &mut scopes);
+
+        for (scope_id, expected) in [(None, true), (Some(root), true), (Some(local), false)] {
+            let mut symbol = Symbol::new("value", LpcType::Int(false));
+            symbol.scope_id = scope_id;
+
+            assert_eq!(symbol.is_global(), expected);
+        }
+    }
+
+    #[test]
+    fn inherited_globals_exclude_only_private_visibility() {
+        for (visibility, expected) in [
+            (Visibility::Public, true),
+            (Visibility::Protected, true),
+            (Visibility::Private, false),
+        ] {
+            let mut symbol = Symbol::new("value", LpcType::Int(false));
+            symbol.flags.set_visibility(visibility);
+
+            assert_eq!(symbol.visible_to_children(), expected);
+        }
+    }
+
+    #[test]
+    fn function_symbols_keep_the_name_span_and_callable_type() {
+        let span = Some(Span::new(0, 4..9));
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("work")
+            .filename(Arc::new(LpcPath::from("/work.c")))
+            .return_type(LpcType::Int(false))
+            .span(span)
+            .build()
+            .unwrap();
+
+        let symbol = Symbol::from(&prototype);
+
+        assert_eq!(symbol.name, "work");
+        assert_eq!(symbol.type_, LpcType::Function(false));
+        assert_eq!(symbol.span, span);
+        assert_eq!(symbol.location, None);
+    }
+
+    #[test]
+    fn borrowed_symbol_equality_uses_the_symbol_metadata() {
+        let symbol = Symbol::new("value", LpcType::Int(false));
+        let same = symbol.clone();
+        let other = Symbol::new("other", LpcType::Int(false));
+        let borrowed = &symbol;
+
+        assert!(<&Symbol as PartialEq<Symbol>>::eq(&borrowed, &same));
+        assert!(!<&Symbol as PartialEq<Symbol>>::eq(&borrowed, &other));
+    }
+
+    #[test]
+    fn display_includes_the_symbol_name_and_type() {
+        assert_eq!(
+            Symbol::new("value", LpcType::Int(false)).to_string(),
+            "value: int"
+        );
+    }
+}

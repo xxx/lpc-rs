@@ -287,6 +287,8 @@ Mutation testing covers these reviewed modules:
   arity, reference parameters, function kinds and signature formatting.
 - [`LpcConstant`](lpc-rs-function-support/src/constant.rs): typed defaults in both
   null modes and literal display.
+- [`Symbol`](lpc-rs-function-support/src/symbol.rs): scope classification,
+  inheritance visibility and callable symbol metadata.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

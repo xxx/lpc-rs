@@ -16,6 +16,7 @@ examine_globs = [
     "lpc-rs-core/src/lib.rs",
     "lpc-rs-function-support/src/function_prototype.rs",
     "lpc-rs-function-support/src/constant.rs",
+    "lpc-rs-function-support/src/symbol.rs",
 ]
 additional_cargo_args = ["--locked"]
 minimum_test_timeout = 20

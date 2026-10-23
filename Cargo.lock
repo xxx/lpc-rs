@@ -1719,6 +1719,7 @@ name = "lpc-rs-function-support"
 version = "0.1.0"
 dependencies = [
  "derive_builder",
+ "indextree",
  "itertools 0.15.0",
  "lpc-rs-asm",
  "lpc-rs-core",
