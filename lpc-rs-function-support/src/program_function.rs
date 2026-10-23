@@ -280,7 +280,9 @@ impl AsRef<FunctionPrototype> for Arc<ProgramFunction> {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, register::Register};
+    use lpc_rs_core::{
+        lpc_path::LpcPath, lpc_type::LpcType, register::Register, visibility::Visibility,
+    };
 
     use lpc_rs_utils::lpc_string::LpcString;
     use ustr::ustr;
@@ -301,6 +303,145 @@ mod tests {
 
     fn local(i: RegisterSize) -> RegisterVariant {
         RegisterVariant::Local(Register(i))
+    }
+
+    #[test]
+    fn metadata_accessors_preserve_the_prototype() {
+        for (visibility, public) in [
+            (Visibility::Public, true),
+            (Visibility::Protected, false),
+            (Visibility::Private, false),
+        ] {
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("work")
+                .filename(Arc::new(LpcPath::from("/work.c")))
+                .return_type(LpcType::Int(false))
+                .arity(FunctionArity {
+                    num_args: 3,
+                    num_default_args: 1,
+                })
+                .arg_types(vec![LpcType::Int(false); 3])
+                .flags(
+                    lpc_rs_core::function_flags::FunctionFlags::default()
+                        .with_visibility(visibility),
+                )
+                .build()
+                .unwrap();
+            let function = ProgramFunction::new(prototype.clone(), 2);
+
+            assert_eq!(function.public(), public);
+            assert_eq!(function.name().as_ref(), "work");
+            assert_eq!(function.return_type(), LpcType::Int(false));
+            assert_eq!(function.arity(), prototype.arity);
+            assert_eq!(function.mangle(), prototype.mangle());
+            assert_eq!(function.to_string(), "work");
+            assert_eq!(AsRef::<FunctionPrototype>::as_ref(&function), &prototype);
+            let shared = Arc::new(function);
+            assert_eq!(AsRef::<FunctionPrototype>::as_ref(&shared), &prototype);
+        }
+    }
+
+    #[test]
+    fn pushed_instructions_keep_their_debug_spans_aligned() {
+        let mut function = function(FunctionKind::Local);
+        let span = Some(Span::new(0, 3..8));
+        function.push_instruction(Instruction::Jmp(Address(1)), span);
+        function.push_instruction(Instruction::Ret, None);
+
+        assert_eq!(
+            function.instructions,
+            vec![Instruction::Jmp(Address(1)), Instruction::Ret]
+        );
+        assert_eq!(function.debug_spans, vec![span, None]);
+    }
+
+    #[test]
+    fn labels_share_addresses_and_can_be_discarded_after_compilation() {
+        let mut function = function(FunctionKind::Local);
+        function.push_instruction(Instruction::Ret, None);
+        function.insert_label("entry", Address(0));
+        function.insert_label("alias", Address(0));
+
+        let listing = function.listing();
+        assert!(listing.contains(&"  entry:".to_owned()));
+        assert!(listing.contains(&"  alias:".to_owned()));
+        function.labels = None;
+        function.insert_label("discarded", Address(0));
+        assert_eq!(function.labels, None);
+    }
+
+    #[test]
+    fn renaming_maps_instruction_operands_and_shared_lists_once() {
+        let mut function = function(FunctionKind::Local);
+        function.instructions = vec![
+            Instruction::Copy(local(1), local(2)),
+            Instruction::CallOther(local(3), local(4), ArgList(0)),
+            Instruction::Call(ustr("f"), ArgList(0)),
+        ];
+        function.arg_lists = vec![vec![
+            Arg::Value(local(5)),
+            Arg::Ref(local(6)),
+            Arg::Spread(local(7)),
+        ]];
+
+        function.rename_registers(|register| local(register.index() + 10));
+
+        assert_eq!(
+            function.instructions,
+            vec![
+                Instruction::Copy(local(11), local(12)),
+                Instruction::CallOther(local(13), local(14), ArgList(0)),
+                Instruction::Call(ustr("f"), ArgList(0)),
+            ]
+        );
+        assert_eq!(
+            function.arg_lists,
+            vec![vec![
+                Arg::Value(local(15)),
+                Arg::Ref(local(16)),
+                Arg::Spread(local(17))
+            ]]
+        );
+    }
+
+    #[test]
+    fn targeted_renaming_preserves_other_instructions_and_lists() {
+        let mut function = function(FunctionKind::Local);
+        function.instructions = vec![
+            Instruction::Copy(local(1), local(2)),
+            Instruction::CallOther(local(3), local(4), ArgList(0)),
+            Instruction::Call(ustr("f"), ArgList(1)),
+        ];
+        function.arg_lists = vec![
+            vec![
+                Arg::Value(local(5)),
+                Arg::Ref(local(6)),
+                Arg::Spread(local(7)),
+            ],
+            vec![Arg::Value(local(8))],
+        ];
+
+        function.rename_registers_at(1, |register| local(register.index() + 10));
+
+        assert_eq!(
+            function.instructions,
+            vec![
+                Instruction::Copy(local(1), local(2)),
+                Instruction::CallOther(local(13), local(14), ArgList(0)),
+                Instruction::Call(ustr("f"), ArgList(1)),
+            ]
+        );
+        assert_eq!(
+            function.arg_lists,
+            vec![
+                vec![
+                    Arg::Value(local(15)),
+                    Arg::Ref(local(16)),
+                    Arg::Spread(local(17))
+                ],
+                vec![Arg::Value(local(8))],
+            ]
+        );
     }
 
     #[test]

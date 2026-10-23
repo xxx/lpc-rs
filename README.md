@@ -289,6 +289,8 @@ Mutation testing covers these reviewed modules:
   null modes and literal display.
 - [`Symbol`](lpc-rs-function-support/src/symbol.rs): scope classification,
   inheritance visibility and callable symbol metadata.
+- [`ProgramFunction`](lpc-rs-function-support/src/program_function.rs): metadata
+  access, instruction/span alignment, labels and register renaming.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
