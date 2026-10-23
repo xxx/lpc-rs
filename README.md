@@ -299,7 +299,8 @@ The reviewed scope includes:
 - [Array values](src/interpreter/lpc_array.rs): comparison lengths and contents,
   construction, capacity, formatting, mutable access, iteration and concatenation.
 - [Telnet protocol](lpc-rs-telnet/src/lib.rs): option-byte conversions, input
-  framing, split feeds and malformed subnegotiation handling.
+  framing, split feeds, malformed subnegotiations, outbound escaping and newline
+  handling, and reservation growth.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -326,9 +327,11 @@ logs are written under
 Review `missed.txt` for changes the tests did not detect, and add tests for the
 missing observable behaviour. Check `timeout.txt` and `unviable.txt` separately:
 a timeout or compilation failure does not establish that an assertion caught the
-change. Reviewed equivalent mutations have specific regexes and explanations:
+change. Reviewed exclusions have specific regexes and explanations:
 `<` and `<=` assign the same value at equality in `RegisterCounter::set`; OR and
 XOR set the same warning flag after `Span::file_id` clears that bit.
+Telnet framing permits different linear reservation hints while preserving wire
+bytes; a growth check catches the quadratic reservation mutation.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out
