@@ -280,6 +280,7 @@ Mutation testing covers these modules in `lpc-rs-core`:
   qualifiers for local, parent and named calls.
 - [`FunctionReceiver`](lpc-rs-core/src/function_receiver.rs): receiver roles and
   the register banks that carry objects or function values.
+- [`NullMode`](lpc-rs-core/src/null_mode.rs): mode names, parsing and defaults.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
