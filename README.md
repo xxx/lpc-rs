@@ -281,6 +281,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
 - [`FunctionReceiver`](lpc-rs-core/src/function_receiver.rs): receiver roles and
   the register banks that carry objects or function values.
 - [`NullMode`](lpc-rs-core/src/null_mode.rs): mode names, parsing and defaults.
+- [String escapes](lpc-rs-core/src/lib.rs): literal decoding, unknown escapes,
+  trailing backslashes and multibyte characters.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
