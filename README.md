@@ -266,6 +266,8 @@ The reviewed scope includes:
   and closure argument numbers.
 - [`LpcString`](lpc-rs-utils/src/lpc_string.rs): static/dynamic contents, Unicode
   lengths, comparison/hash consistency, borrowed views and concatenation.
+- [Source decoding](lpc-rs-utils/src/lib.rs): UTF-8/Latin-1 contents and trailing
+  newline preservation.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
