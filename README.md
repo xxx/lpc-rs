@@ -285,6 +285,8 @@ Mutation testing covers these reviewed modules:
   trailing backslashes and multibyte characters.
 - [`FunctionPrototype`](lpc-rs-function-support/src/function_prototype.rs): call
   arity, reference parameters, function kinds and signature formatting.
+- [`LpcConstant`](lpc-rs-function-support/src/constant.rs): typed defaults in both
+  null modes and literal display.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
