@@ -246,6 +246,80 @@ mod tests {
     }
 
     #[test]
+    fn distinct_nil_fits_only_nullable_types() {
+        for (type_, nullable) in [
+            (LpcType::Void, false),
+            (LpcType::Nil, true),
+            (LpcType::Int(false), false),
+            (LpcType::Float(false), false),
+            (LpcType::String(false), true),
+            (LpcType::Bytes(false), true),
+            (LpcType::Object(false), true),
+            (LpcType::Mapping(false), true),
+            (LpcType::Function(false), true),
+            (LpcType::Mixed(false), true),
+            (LpcType::Int(true), true),
+            (LpcType::Float(true), true),
+            (LpcType::String(true), true),
+            (LpcType::Bytes(true), true),
+            (LpcType::Object(true), true),
+            (LpcType::Mapping(true), true),
+            (LpcType::Function(true), true),
+            (LpcType::Mixed(true), true),
+            (class("/shape.h", "point"), true),
+            (class("/shape.h", "point").as_array(true), true),
+            (LpcType::Int(false) | LpcType::Float(false), false),
+            (LpcType::Int(false) | LpcType::String(false), true),
+            (LpcType::Union(LpcTypeUnion::new()), false),
+        ] {
+            assert_eq!(
+                (type_.accepts_nil(), type_.matches_type(LpcType::Nil)),
+                (nullable, nullable),
+                "{type_}"
+            );
+        }
+    }
+
+    #[test]
+    fn array_projection_preserves_each_element_type() {
+        for scalar in [
+            LpcType::Int(false),
+            LpcType::Float(false),
+            LpcType::String(false),
+            LpcType::Bytes(false),
+            LpcType::Object(false),
+            LpcType::Mapping(false),
+            LpcType::Function(false),
+            LpcType::Mixed(false),
+            class("/shape.h", "point"),
+        ] {
+            let array = scalar.as_array(true);
+
+            assert!(!scalar.is_array(), "{scalar}");
+            assert!(array.is_array(), "{array}");
+            assert_eq!(array.as_array(false), scalar);
+            assert_eq!(array.as_array(true), array);
+        }
+    }
+
+    #[test]
+    fn primitive_type_names_resolve_to_their_scalar_types() {
+        for (name, expected) in [
+            ("void", LpcType::Void),
+            ("int", LpcType::Int(false)),
+            ("float", LpcType::Float(false)),
+            ("string", LpcType::String(false)),
+            ("bytes", LpcType::Bytes(false)),
+            ("object", LpcType::Object(false)),
+            ("mapping", LpcType::Mapping(false)),
+            ("function", LpcType::Function(false)),
+            ("mixed", LpcType::Mixed(false)),
+        ] {
+            assert_eq!(LpcType::from(name), expected, "{name}");
+        }
+    }
+
+    #[test]
     fn nominal_classes_match_only_their_own_identity_or_mixed() {
         let record = class("/record.h", "record");
         assert!(record.matches_type(record));
