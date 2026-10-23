@@ -13,6 +13,7 @@ pub enum LogOp {
 
 /// A struct to handle the simple requirements of the in-game debug log,
 /// which is where unreceived `write`s go.
+/// Dropping the sender closes the queue so its writer can drain and flush while the runtime runs.
 pub struct DebugLog {
     handle: Option<tokio::task::JoinHandle<()>>,
     tx: mpsc::Sender<LogOp>,
@@ -94,6 +95,7 @@ impl DebugLog {
     }
 
     /// Shut down the task, and flush the log.
+    /// Repeated calls are harmless, and a cancelled call can be awaited again.
     pub async fn shutdown(&mut self) {
         if let Some(handle) = self.handle.as_mut() {
             let _ = self.tx.send(LogOp::Shutdown).await;
