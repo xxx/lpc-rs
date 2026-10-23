@@ -24,6 +24,397 @@ fn default_compiler() -> Compiler {
     CompilerBuilder::default().config(config).build().unwrap()
 }
 
+mod callable_visibility {
+    use lpc_rs::{
+        compile_time_config::MAX_CALL_STACK_SIZE,
+        interpreter::{process::Process, task::task_template::TaskTemplate},
+        util::process_builder::process_insert_and_initialize_program,
+    };
+    use lpc_rs_core::null_mode::NullMode;
+
+    use super::*;
+
+    async fn result(code: &str, mode: NullMode) -> LpcRef {
+        let config: Arc<Config> = test_config_builder()
+            .null_mode(mode)
+            .build()
+            .unwrap()
+            .into();
+        let program = Compiler::new(config.clone())
+            .compile_string("/child.c", code)
+            .await
+            .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()))
+            .program;
+        let vm = Vm::new(config);
+        process_insert_and_initialize_program::<MAX_CALL_STACK_SIZE>(
+            Arc::new(Process::new(program)),
+            TaskTemplate::from(vm.global_state.clone()),
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()))
+        .context
+        .result()
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn hidden_fields_do_not_displace_inherited_methods() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            for expression in ["token()", "evaluate(&token(1))", "evaluate((: token() :))"] {
+                let code = format!(
+                    "inherit \"/callable_private\"; int create() {{ return {expression}; }}"
+                );
+                let expected = if expression == "evaluate(&token(1))" {
+                    43
+                } else {
+                    42
+                };
+                assert_eq!(result(&code, mode).await, LpcRef::from(expected));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn hidden_callable_fields_cannot_be_called_or_partially_applied() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            for name in ["hidden", "hidden_mixed"] {
+                for expression in [
+                    format!("{name}()"),
+                    format!("evaluate(&{name}())"),
+                    format!("evaluate((: {name}() :))"),
+                ] {
+                    let code = format!(
+                        "inherit \"/callable_private\"; int create() {{ return {expression}; }}"
+                    );
+                    let compiler =
+                        Compiler::new(test_config_builder().null_mode(mode).build().unwrap());
+                    let error = compiler.compile_string("/child.c", code).await.unwrap_err();
+                    assert!(
+                        error.to_string().contains(&format!(
+                            "private variable `{name}` accessed outside of its file"
+                        )),
+                        "{expression}: {error}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn inherited_methods_keep_access_to_their_own_private_callbacks() {
+        let code = r#"
+            inherit "/callable_private";
+            int create() { return parent_private() + parent_partial() + parent_closure()(); }
+        "#;
+        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(1281));
+    }
+
+    #[tokio::test]
+    async fn visible_callable_globals_win_in_either_inherit_order() {
+        for parents in [
+            "inherit \"/callable_private\"; inherit \"/callable_visible\";",
+            "inherit \"/callable_visible\"; inherit \"/callable_private\";",
+        ] {
+            let code =
+                format!("{parents} int create() {{ return shared() + evaluate(&shared()); }}");
+            assert_eq!(result(&code, NullMode::Distinct).await, LpcRef::from(14));
+        }
+    }
+
+    #[tokio::test]
+    async fn local_callbacks_shadow_methods_and_capture_in_closures() {
+        for type_ in ["function", "mixed"] {
+            let code = format!(
+                r#"
+                inherit "/callable_private";
+                int create() {{
+                    {type_} token = (: $1 * 2 :);
+                    function direct = (: token(3) :);
+                    function partial = (: evaluate(&token(4)) :);
+                    return token(2) + direct() + partial();
+                }}
+            "#
+            );
+            assert_eq!(result(&code, NullMode::Distinct).await, LpcRef::from(18));
+        }
+    }
+
+    #[tokio::test]
+    async fn qualified_and_receiver_calls_ignore_callable_variables() {
+        let code = r#"
+            inherit "/callable_private" base;
+            int create() {
+                function token = (: 999 :);
+                return ::token() + base::token() + callable_private::token()
+                    + this_object()->token() + evaluate(&(this_object())->token());
+            }
+        "#;
+        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(210));
+    }
+
+    #[tokio::test]
+    async fn method_signatures_are_checked_when_a_same_named_field_is_hidden() {
+        for (expression, diagnostic) in [
+            ("token(1, 2)", "incorrect argument count"),
+            ("token(\"wrong\")", "unexpected argument type"),
+            ("token()", "invalid return type"),
+        ] {
+            let code =
+                format!("inherit \"/callable_private\"; string f() {{ return {expression}; }}");
+            let error = default_compiler()
+                .compile_string("/child.c", code)
+                .await
+                .unwrap_err();
+            assert!(
+                error.to_string().contains(diagnostic),
+                "{expression}: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn callable_variables_do_not_use_shadowed_function_signatures() {
+        for type_ in ["function", "mixed"] {
+            let code = format!(
+                r#"
+                private void callback(int ref n) {{ n++; }}
+                {type_} callback = (: $1 + $2 :);
+                int create() {{ return callback(2, 3) + callback(4, 5); }}
+            "#
+            );
+            assert_eq!(result(&code, NullMode::Distinct).await, LpcRef::from(14));
+        }
+    }
+
+    #[tokio::test]
+    async fn callbacks_named_after_output_efuns_keep_value_arguments() {
+        let code = r#"
+            class Value { int n; }
+            int create() {
+                function sscanf = (: $3 + 1 :);
+                int *values = ({ 3 });
+                class Value value = new(class Value, n: 4);
+                return sscanf("", "", values[0]) + sscanf("", "", value.n);
+            }
+        "#;
+        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(9));
+    }
+
+    #[tokio::test]
+    async fn visible_callbacks_can_shadow_private_inherited_methods() {
+        let code = r#"
+            inherit "/std/object";
+            function private_function = (: 12 :);
+            int create() { return private_function() + evaluate(&private_function()); }
+        "#;
+        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(24));
+    }
+
+    #[tokio::test]
+    async fn qualified_calls_keep_the_method_return_type() {
+        for expression in [
+            "::token()",
+            "callable_private::token()",
+            "efun::sizeof(\"x\")",
+        ] {
+            let code = format!(
+                r#"
+                inherit "/callable_private";
+                string f() {{
+                    function token = (: "text" :);
+                    function sizeof = (: "text" :);
+                    return {expression};
+                }}
+            "#
+            );
+            let error = default_compiler()
+                .compile_string("/child.c", code)
+                .await
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("invalid return type int"),
+                "{expression}: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn private_imports_allow_callbacks_in_the_importing_source() {
+        let code = r#"
+            private inherit "/callable_visible";
+            int create() { return shared() + evaluate(&shared()); }
+        "#;
+        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(14));
+    }
+
+    #[tokio::test]
+    async fn callback_shadowing_does_not_allow_reference_arguments() {
+        let error = default_compiler()
+            .compile_string(
+                "/child.c",
+                r#"
+            void callback(int ref n) { n++; }
+            void create() {
+                function callback = (: $1 :);
+                int n = 1;
+                callback(ref n);
+            }
+        "#,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("a function pointer cannot take an argument by reference"),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn trailing_call_commas_preserve_argument_checks() {
+    for (definition, call, diagnostic) in [
+        (
+            "int f(int a, int b) { return a+b; }",
+            "f(1,)",
+            "incorrect argument count",
+        ),
+        (
+            "int f(int a) { return a; }",
+            "f(1,2,)",
+            "incorrect argument count",
+        ),
+        (
+            "int f(int a) { return a; }",
+            r#"f("wrong",)"#,
+            "unexpected argument type",
+        ),
+        (
+            "void f(int ref a) { a++; }",
+            "f(n,)",
+            "must be passed by reference",
+        ),
+    ] {
+        let code = format!("{definition} void create() {{ int n; {call}; }}");
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains(diagnostic), "{call}: {error}");
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_allow_forward_calls_to_named_definitions() {
+    let code = indoc! { r#"
+        #pragma strict_types
+        class Record { int value; }
+        void increment(int ref);
+        int add(int, int);
+        int total(int, int *...);
+        int read(class Record);
+
+        int create() {
+            int n = 2;
+            increment(ref n);
+            return add(n) + total(1, 2, 3) + read(new(class Record, value: 7));
+        }
+
+        void increment(int ref value) { value++; }
+        int add(int left, int right = 4) { return left + right; }
+        int total(int first, int *rest...) { return first + rest[0] + rest[1]; }
+        int read(class Record record) { return record.value; }
+    "# };
+    let task = run_prog(code).await;
+    assert_eq!(task.context.result().unwrap(), LpcRef::from(20));
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_do_not_declare_missing_functions() {
+    let error = default_compiler()
+        .compile_string("foo.c", "void missing(int); void create() { missing(1); }")
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("unknown function `missing`"));
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_definition_argument_counts() {
+    for call in ["f()", "f(1, 2)"] {
+        let code = format!("void f(int); void create() {{ {call}; }} void f(int n) {{}}");
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("incorrect argument count in call to `f`"),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_definition_argument_types() {
+    for (prototype, definition, argument) in [
+        ("int", "int n", r#""wrong""#),
+        ("int *", "int *values", "1"),
+        ("class Record", "class Record record", "new(class Other)"),
+        ("int, string", "int n", r#""wrong""#),
+    ] {
+        let code = format!(
+            "class Record {{ int n; }} class Other {{ int n; }}
+             void f({prototype}); void create() {{ f({argument}); }} void f({definition}) {{}}"
+        );
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("unexpected argument type to `f`"),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_definition_reference_requirements() {
+    for (prototype, definition, argument, message) in [
+        ("int ref", "int ref n", "n", "must be passed by reference"),
+        (
+            "int",
+            "int n",
+            "ref n",
+            "does not take argument 1 by reference",
+        ),
+        ("int", "int ref n", "n", "must be passed by reference"),
+    ] {
+        let code = format!(
+            "void f({prototype}); void create() {{ int n = 1; f({argument}); }} void f({definition}) {{}}"
+        );
+        let error = default_compiler()
+            .compile_string("foo.c", code)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains(message), "{error}");
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototype_signatures_do_not_override_definitions() {
+    let code = indoc! { r#"
+        string f(string, object);
+        int create() { return f(5); }
+        int f(int value) { return value + 1; }
+    "# };
+    let task = run_prog(code).await;
+    assert_eq!(task.context.result().unwrap(), LpcRef::from(6));
+}
+
 #[tokio::test]
 async fn minimum_int_macro_compiles_and_runs() {
     for minus in ["-", "−"] {

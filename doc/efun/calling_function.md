@@ -36,4 +36,4 @@ void check() {
 
 ### See also
 
-`calling_object`, `calling_program`, `previous_object`, `call_other`
+`calling_object`, `calling_program`, `previous_object`, `call_other`, [`origin`](origin.md)

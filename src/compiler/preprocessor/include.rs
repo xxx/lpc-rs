@@ -3,6 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    io::ErrorKind,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -28,6 +29,9 @@ pub(super) const MAX_INCLUDE_DEPTH: usize = 64;
 
 /// The pragma name that marks the current file include-once.
 pub(super) const ONCE: &str = "once";
+
+/// The pragma name that forbids textual inclusion of the current file.
+pub(super) const NO_INCLUDE: &str = "no_include";
 
 /// One entry form of an include.
 #[derive(Debug)]
@@ -166,17 +170,18 @@ impl IncludeWalk {
         let (file_id, content) = match self.memo.get(&canon) {
             Some((file_id, content)) => (*file_id, content.clone()),
             None => {
-                let is_dir = reader.kind(&canon).await.ok() == Some(SourceKind::Directory);
-                if is_dir {
-                    return Err(lpc_error!(
-                        span,
-                        "attempt to include a directory: `{}`",
-                        path
-                    ));
-                }
                 let source = match reader.read(&canon).await.map(LpcSource::from_bytes) {
                     Ok(source) => source,
                     Err(e) => {
+                        if e.kind() == ErrorKind::IsADirectory
+                            || reader.kind(&canon).await.ok() == Some(SourceKind::Directory)
+                        {
+                            return Err(lpc_error!(
+                                span,
+                                "attempt to include a directory: `{}`",
+                                path
+                            ));
+                        }
                         return Err(lpc_error!(
                             span,
                             "unable to read include file `{}`: {}",
@@ -230,6 +235,19 @@ impl IncludeWalk {
         config: &Config,
         reader: &dyn SourceReader,
     ) -> LpcPath {
+        let path = match &source {
+            IncludeSource::Configured(path) => return (*path).clone(),
+            IncludeSource::Local { path } | IncludeSource::System { path } => *path,
+        };
+        if Path::new(path).is_absolute()
+            || config
+                .system_include_dirs
+                .iter()
+                .all(|dir| Path::new(dir.as_str()) == self.cwd())
+        {
+            return LpcPath::new_in_game(path, self.cwd(), &*config.lib_dir);
+        }
+
         match source {
             IncludeSource::Configured(path) => path.clone(),
             IncludeSource::Local { path } => {
@@ -300,7 +318,12 @@ impl IncludeWalk {
 #[cfg(test)]
 mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
-    use std::path::Path;
+    use std::{
+        path::Path,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    use async_trait::async_trait;
 
     use super::*;
     use crate::compiler::source_reader::DiskSourceReader;
@@ -325,6 +348,354 @@ mod tests {
         walk
     }
 
+    #[derive(Debug, Default)]
+    struct CountingReader {
+        probes: AtomicUsize,
+        reads: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl SourceReader for CountingReader {
+        async fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            DiskSourceReader.read(path).await
+        }
+
+        async fn kind(&self, path: &Path) -> std::io::Result<SourceKind> {
+            self.probes.fetch_add(1, Ordering::Relaxed);
+            DiskSourceReader.kind(path).await
+        }
+    }
+
+    #[tokio::test]
+    async fn unambiguous_headers_do_not_need_resolution_probes() {
+        let root = TempLib::new("include-probes");
+        std::fs::write(root.join("a.h"), "1\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/"])
+            .build()
+            .unwrap();
+        let configured = LpcPath::new_server(root.join("a.h"));
+        for (source, probes) in [
+            (IncludeSource::Local { path: "a.h" }, 0),
+            (IncludeSource::System { path: "a.h" }, 0),
+            (IncludeSource::Configured(&configured), 0),
+        ] {
+            let reader = CountingReader::default();
+            let opened = rooted(&config)
+                .open(
+                    source,
+                    None,
+                    &config,
+                    None,
+                    &reader,
+                    &mut Diagnostics::default(),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                (
+                    opened.content.as_ref(),
+                    reader.probes.load(Ordering::Relaxed),
+                    reader.reads.load(Ordering::Relaxed),
+                ),
+                ("1\n", probes, 1),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn absolute_headers_do_not_search_distinct_system_directories() {
+        let root = TempLib::new("absolute-header-resolution");
+        std::fs::write(root.join("a.h"), "absolute\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/first", "/second"])
+            .build()
+            .unwrap();
+        for source in [
+            IncludeSource::Local { path: "/a.h" },
+            IncludeSource::System { path: "/a.h" },
+        ] {
+            let reader = CountingReader::default();
+            let opened = rooted(&config)
+                .open(
+                    source,
+                    None,
+                    &config,
+                    None,
+                    &reader,
+                    &mut Diagnostics::default(),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                (
+                    opened.content.as_ref(),
+                    reader.probes.load(Ordering::Relaxed),
+                    reader.reads.load(Ordering::Relaxed),
+                ),
+                ("absolute\n", 0, 1),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn local_headers_precede_distinct_system_directories() {
+        let root = TempLib::new("local-header-precedence");
+        std::fs::create_dir(root.join("include")).unwrap();
+        std::fs::write(root.join("pick.h"), "local\n").unwrap();
+        std::fs::write(root.join("include/pick.h"), "system\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/include"])
+            .build()
+            .unwrap();
+        let reader = CountingReader::default();
+        let opened = rooted(&config)
+            .open(
+                IncludeSource::Local { path: "pick.h" },
+                None,
+                &config,
+                None,
+                &reader,
+                &mut Diagnostics::default(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (
+                opened.content.as_ref(),
+                reader.probes.load(Ordering::Relaxed),
+                reader.reads.load(Ordering::Relaxed),
+            ),
+            ("local\n", 1, 1),
+        );
+    }
+
+    #[tokio::test]
+    async fn a_missing_local_header_uses_the_first_existing_system_directory() {
+        let root = TempLib::new("local-header-system-fallback");
+        for name in ["first", "second"] {
+            std::fs::create_dir(root.join(name)).unwrap();
+            std::fs::write(root.join(name).join("pick.h"), format!("{name}\n")).unwrap();
+        }
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/missing", "/first", "/second"])
+            .build()
+            .unwrap();
+        let reader = CountingReader::default();
+        let opened = rooted(&config)
+            .open(
+                IncludeSource::Local { path: "pick.h" },
+                None,
+                &config,
+                None,
+                &reader,
+                &mut Diagnostics::default(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (
+                opened.content.as_ref(),
+                reader.probes.load(Ordering::Relaxed),
+                reader.reads.load(Ordering::Relaxed),
+            ),
+            ("first\n", 3, 1),
+        );
+    }
+
+    #[tokio::test]
+    async fn system_headers_fall_back_to_the_including_directory() {
+        let root = TempLib::new("system-header-local-fallback");
+        std::fs::write(root.join("pick.h"), "fallback\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/missing", "/also_missing"])
+            .build()
+            .unwrap();
+        let reader = CountingReader::default();
+        let opened = rooted(&config)
+            .open(
+                IncludeSource::System { path: "pick.h" },
+                None,
+                &config,
+                None,
+                &reader,
+                &mut Diagnostics::default(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (
+                opened.content.as_ref(),
+                reader.probes.load(Ordering::Relaxed),
+                reader.reads.load(Ordering::Relaxed),
+            ),
+            ("fallback\n", 2, 1),
+        );
+    }
+
+    #[tokio::test]
+    async fn a_later_system_directory_is_checked_after_the_including_directory() {
+        let root = TempLib::new("later-system-header");
+        std::fs::create_dir(root.join("include")).unwrap();
+        std::fs::write(root.join("include/pick.h"), "later\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/", "/include"])
+            .build()
+            .unwrap();
+        for (source, probes) in [
+            (IncludeSource::Local { path: "pick.h" }, 3),
+            (IncludeSource::System { path: "pick.h" }, 2),
+        ] {
+            let reader = CountingReader::default();
+            let opened = rooted(&config)
+                .open(
+                    source,
+                    None,
+                    &config,
+                    None,
+                    &reader,
+                    &mut Diagnostics::default(),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                (
+                    opened.content.as_ref(),
+                    reader.probes.load(Ordering::Relaxed),
+                    reader.reads.load(Ordering::Relaxed),
+                ),
+                ("later\n", probes, 1),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn include_callbacks_still_run_on_unambiguous_memo_and_once_reopens() {
+        #[derive(Debug, Default)]
+        struct CountingGate(AtomicUsize);
+
+        #[async_trait]
+        impl CompileGate for CountingGate {
+            async fn inherit(&self, _: &str, _: &str) -> Result<bool> {
+                Ok(true)
+            }
+
+            async fn include(&self, _: &str, _: &str) -> Result<bool> {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                Ok(true)
+            }
+        }
+
+        let root = TempLib::new("unambiguous-header-callbacks");
+        std::fs::write(root.join("a.h"), "1\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/"])
+            .build()
+            .unwrap();
+        let reader = CountingReader::default();
+        let gate = CountingGate::default();
+        let mut walk = rooted(&config);
+        let mut diagnostics = Diagnostics::default();
+        let first = walk
+            .open(
+                IncludeSource::Local { path: "a.h" },
+                None,
+                &config,
+                Some(&gate),
+                &reader,
+                &mut diagnostics,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        walk.close();
+        let second = walk
+            .open(
+                IncludeSource::Local { path: "a.h" },
+                None,
+                &config,
+                Some(&gate),
+                &reader,
+                &mut diagnostics,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.file_id, second.file_id);
+        assert!(Arc::ptr_eq(&first.content, &second.content));
+        walk.mark_once();
+        walk.close();
+        let third = walk
+            .open(
+                IncludeSource::System { path: "a.h" },
+                None,
+                &config,
+                Some(&gate),
+                &reader,
+                &mut diagnostics,
+            )
+            .await
+            .unwrap();
+        assert!(third.is_none());
+        assert_eq!(
+            (
+                gate.0.load(Ordering::Relaxed),
+                reader.probes.load(Ordering::Relaxed),
+                reader.reads.load(Ordering::Relaxed),
+            ),
+            (3, 0, 1),
+        );
+    }
+
+    #[tokio::test]
+    async fn directory_diagnostics_do_not_depend_on_the_readers_error_kind() {
+        #[derive(Debug)]
+        struct DirectoryReader;
+
+        #[async_trait]
+        impl SourceReader for DirectoryReader {
+            async fn read(&self, _: &Path) -> std::io::Result<Vec<u8>> {
+                Err(std::io::Error::from(ErrorKind::PermissionDenied))
+            }
+
+            async fn kind(&self, _: &Path) -> std::io::Result<SourceKind> {
+                Ok(SourceKind::Directory)
+            }
+        }
+
+        let root = TempLib::new("include-directory-read-error");
+        let config = config_at(&root);
+        let error = rooted(&config)
+            .open(
+                IncludeSource::Local { path: "directory" },
+                None,
+                &config,
+                None,
+                &DirectoryReader,
+                &mut Diagnostics::default(),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.message(),
+            "attempt to include a directory: `/directory`"
+        );
+    }
+
     #[tokio::test]
     async fn system_directories_are_searched_before_the_local_fallback() {
         let parent = TempLib::new("include-search");
@@ -334,7 +705,7 @@ mod tests {
         std::fs::write(root.join("include/pick.h"), "inside\n").unwrap();
         let config = ConfigBuilder::default()
             .lib_dir(root.to_str().unwrap())
-            .system_include_dirs(vec!["/missing", "/include"])
+            .system_include_dirs(vec!["/missing", "/include", "/"])
             .build()
             .unwrap();
         let mut walk = rooted(&config);

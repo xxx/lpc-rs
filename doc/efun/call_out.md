@@ -42,36 +42,55 @@ the ordering and rollback behavior. It does not fix an infinite loop in the
 reset itself. If either transaction times out, its runtime diagnostic names
 the interrupted source location and shows the available LPC stack.
 
-Because call outs are executed outside the user's REPL, `this_player()` will return
-0 when called from within a call out. If you need access to the player, you can either
-freeze it with a partial application, or capture it in a closure. `previous_object()`
-in the called function is the object that owns the function pointer: the one that
-called `call_out`.
+By default, a call out starts with `this_player()` set to `nil`. Set
+`LPC_CALL_OUT_PRESERVE_PLAYER=true` in the environment or the explicit driver
+configuration file to preserve the scheduling player. The unprefixed
+`CALL_OUT_PRESERVE_PLAYER` spelling is also accepted. The setting is fixed for
+the VM's lifetime and is independent of null representation.
+
+When enabled, the timer captures `this_player()` at the `call_out` invocation,
+including an NPC or a value established by `set_this_player`. Each firing and
+transaction retry starts with that captured player. Changes made after
+scheduling or inside an earlier firing do not replace it. A timer scheduled
+inside a callback captures the player current at that new invocation.
+
+A missing or destructed player becomes `nil` (integer zero in zero mode).
+The timer does not keep a destructed player alive and never substitutes its
+owner. `this_interactive()` remains `nil`, even for a captured player with a
+connection. Receiver loading and initialization before the callback still run
+without player context; preservation applies to the callback's transaction.
+
+You can also bind the player with a partial application or capture it in a
+closure, independently of this setting. `previous_object()` in the called
+function is the object that owns the function pointer. This can
+differ from the object that called `call_out`, which owns the timer returned by
+`query_call_out` and `query_call_outs`.
 
 ### Examples
 
 ```c
-int call_out_id = call_out(&dump("i'm on a delay!", 5));
+int call_out_id = call_out(&dump("i'm on a delay!"), 5);
 
 object ob = clone_object("/lib/test/test_object");
 
 // Any function pointer (with a known receiver) can be passed to call_out, including closures.
-int call_out_id1 = call_out(&ob->add_two(4, 6), 1.5));
-int call_out_id3 = call_out(&call_other(ob, "add_two", 4, 6), 1.5));
-int call_out_id2 = call_out((: ob->add_two(4, 6) :), 1.5));
+int call_out_id1 = call_out(&ob->add_two(4, 6), 1.5);
+int call_out_id3 = call_out(&call_other(ob, "add_two", 4, 6), 1.5);
+int call_out_id2 = call_out((: ob->add_two(4, 6) :), 1.5);
 
 // Composed functions work as well.
-int call_out_combo_id = call_out(dump @ (: ob->add_two(4, 6) :), 2.45));
+int call_out_combo_id = call_out(dump @ (: ob->add_two(4, 6) :), 2.45);
 
-// The wrong way to access this_player() in a call out:
-void my_bad_call_out() {
-    this_player()->catch_msg("boo!"); // Wrong! this_player() is not set in call_outs!
+// With CALL_OUT_PRESERVE_PLAYER enabled:
+void notify_player() {
+    object player = this_player();
+    if (player) player->catch_msg("boo!");
 }
-call_out(my_bad_call_out, 1.5);
+call_out(notify_player, 1.5);
 
-// The right way:
+// Explicit capture works with either setting:
 void my_good_call_out(object player) {
-    player->catch_msg("boo!");
+    if (player) player->catch_msg("boo!");
 }
 call_out(&my_good_call_out(this_player()), 1.5);
 // -- OR --

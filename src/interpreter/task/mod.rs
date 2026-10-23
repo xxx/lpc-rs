@@ -1,12 +1,17 @@
 use lpc_rs_core::mangle::Mangle;
+use lpc_rs_core::null_mode::NullMode;
 mod advance;
+mod driver_callback;
+pub(crate) use driver_callback::DriverCallbackError;
 pub mod apply_function;
+mod assign_index;
 pub mod eval_loop;
 mod handle_call;
 mod handle_call_fp;
 mod handle_call_other;
 mod handle_data;
 mod location;
+mod replace_range;
 pub mod task_template;
 
 #[cfg(test)]
@@ -38,6 +43,7 @@ use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
     apply::diagnostics,
     call_frame::{CallFrame, FrameReceiver},
+    call_origin::CallOrigin,
     call_stack::CallStack,
     function_type::function_address::LocalFunction,
     lpc_int::LpcInt,
@@ -72,11 +78,17 @@ pub enum SeedArg {
     Value(LpcRef),
     /// A mapping minted into the attempt's transaction at frame build.
     FreshMapping(LpcMapping),
+    /// An error record whose nested diagnostic cells are minted for each attempt.
+    FreshErrorMapping(Box<crate::interpreter::error_frames::ErrorMapping>),
 }
 
 /// The function a [`TaskSeed`] enters.
 #[derive(Debug, Clone)]
 pub enum SeedEntry {
+    /// A connection observation revalidated against each attempt's world.
+    Snoop(Arc<crate::interpreter::snooping::Registration>),
+    /// Retire a failed observation without entering LPC.
+    RetireSnoop(Arc<crate::interpreter::snooping::Registration>),
     /// An idle apply whose eligibility is checked again in each attempt.
     CleanUp,
     /// A function resolved before the task began.
@@ -95,13 +107,25 @@ pub enum SeedEntry {
         simul: Option<String>,
         local: Option<LocalFunction>,
         name: Option<String>,
+        origin: CallOrigin,
+        /// Restored on every call-out attempt; other callback origins ignore it.
+        call_out_player: Option<std::sync::Weak<Process>>,
     },
 }
 
 impl SeedEntry {
+    fn origin(&self) -> CallOrigin {
+        match self {
+            Self::Callback { origin, .. } => *origin,
+            _ => CallOrigin::Driver,
+        }
+    }
+
     fn name(&self) -> &str {
         match self {
             Self::CleanUp => crate::interpreter::CLEAN_UP,
+            Self::Snoop(_) => crate::interpreter::RECEIVE_SNOOP,
+            Self::RetireSnoop(_) => "snoop_cleanup",
             Self::Function(function)
             | Self::SystemInitializer(function)
             | Self::Callback { function, .. } => function.name().as_ref(),
@@ -135,6 +159,11 @@ impl TaskSeed {
         txn: &TxnHandle,
         upvalue_ptrs: Option<&[VarId]>,
     ) -> Result<CallFrame> {
+        if !function.is_driver_code() && function.null_mode != txn.null_mode() {
+            return Err(LpcError::runtime(
+                "compiled function and VM use different NULL_MODE settings",
+            ));
+        }
         if let Some(i) = function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
                 "argument {} of `{}` must be passed by reference",
@@ -156,8 +185,24 @@ impl TaskSeed {
             }),
             None => FrameReceiver::new(process, txn),
         };
+        if matches!(
+            function.name().as_ref(),
+            lpc_rs_core::INIT_PROGRAM | lpc_rs_core::INIT_GLOBALS
+        ) && txn.null_mode() == NullMode::Distinct
+        {
+            txn.with(|t| {
+                for variable in receiver.image.program.global_variable_info.iter() {
+                    let cell = receiver.image.var_id(variable.slot);
+                    if t.read(cell).is_none() {
+                        t.write(cell, LpcRef::default_for(variable.type_, txn.null_mode()));
+                    }
+                }
+            });
+        }
         let count = RegisterSize::try_from(self.args.len())?;
         let mut frame = CallFrame::with_receiver(receiver, function, count, count, upvalue_ptrs);
+        frame.initialize_parameters(txn);
+        frame.origin = self.entry.origin();
         for (i, arg) in self.args.iter().enumerate() {
             frame.push_arg(txn, i, Self::value_of(arg, txn))?;
         }
@@ -178,6 +223,7 @@ impl TaskSeed {
             SeedArg::FreshMapping(mapping) => {
                 LpcRef::Mapping(txn.with(|t| t.mint_mapping(mapping.clone())))
             }
+            SeedArg::FreshErrorMapping(mapping) => mapping.materialize(txn),
         }
     }
 }
@@ -280,14 +326,26 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// The task is returned unevaluated when another transaction already
     /// initialized the process.
     pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
-        Self::initialize(context, false).await
+        Self::initialize(context, false, &[]).await
+    }
+
+    /// Initialize an object with arguments for its `create` hook.
+    pub(crate) async fn initialize_process_with_args(
+        context: TaskContext,
+        args: &[LpcRef],
+    ) -> Result<Task<STACKSIZE>> {
+        Self::initialize(context, false, args).await
     }
 
     pub(crate) async fn bootstrap_system_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
-        Self::initialize(context, true).await
+        Self::initialize(context, true, &[]).await
     }
 
-    async fn initialize(context: TaskContext, publish: bool) -> Result<Task<STACKSIZE>> {
+    async fn initialize(
+        context: TaskContext,
+        publish: bool,
+        args: &[LpcRef],
+    ) -> Result<Task<STACKSIZE>> {
         let Some(initializer) = context.process.program(context.txn()).initializer.clone() else {
             let msg = format!(
                 "Init function not found for `{}`. This should never happen.",
@@ -300,6 +358,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let max_execution_time = context.config().max_execution_time;
         let mut task = Task::new(context);
+        task.checked_register_count(args.len(), &initializer)?;
         let seed = TaskSeed {
             process: task.context.process().clone(),
             entry: if publish {
@@ -307,7 +366,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             } else {
                 SeedEntry::Function(initializer)
             },
-            args: Vec::new(),
+            args: args.iter().cloned().map(SeedArg::Value).collect(),
             initializes: true,
         };
         task.timed_eval_seed(seed, max_execution_time).await?;
@@ -387,6 +446,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// nothing in the chain defines runs nothing, leaving no result.
     async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
         let (process, function) = match &seed.entry {
+            SeedEntry::Snoop(registration) => {
+                if registration.is_closed() || !self.context.txn().with(|t| registration.valid(t)) {
+                    return Ok(());
+                }
+                let function =
+                    crate::interpreter::snooping::handler(self.context.txn(), &seed.process)?;
+                (seed.process.clone(), function)
+            }
+            SeedEntry::RetireSnoop(registration) => {
+                self.context
+                    .txn()
+                    .with(|t| crate::interpreter::snooping::retire(t, registration));
+                return Ok(());
+            }
             SeedEntry::CleanUp => {
                 let process = &seed.process;
                 let interval = self.context.config().clean_up_interval;
@@ -446,7 +519,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 simul,
                 local,
                 name,
+                origin,
+                call_out_player,
             } => {
+                if *origin == CallOrigin::CallOut {
+                    let player = call_out_player
+                        .as_ref()
+                        .and_then(std::sync::Weak::upgrade)
+                        .filter(|player| player.is_live(&self.context.txn));
+                    self.context.this_player.store(player);
+                    self.context.entry_player.store(None);
+                }
                 if !owner
                     .upgrade()
                     .is_some_and(|owner| owner.is_live(&self.context.txn))
@@ -476,7 +559,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         local.resolve(&image)?
                     } else if let Some(name) = name {
                         let Some(function) = image.program.lookup_function(name) else {
-                            self.context.result.set(NULL)?;
+                            self.context.result.set(self.context.txn.nil())?;
                             return Ok(());
                         };
                         function.clone()
@@ -517,7 +600,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let efun = self.efun_of(&function)?;
             self.refuse_ref_params(efun)?;
             let args = seed.arg_values(&self.context.txn);
-            self.push_entry_frame(process.clone())?;
+            self.push_entry_frame(process.clone(), seed.entry.origin())?;
             self.call_fired_efun(efun, args, process, None).await?;
         } else {
             let cleanup_seed;
@@ -594,7 +677,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 &seed.process,
                 seed.args.iter().map(|arg| match arg {
                     SeedArg::Value(value) => value.type_name(),
-                    SeedArg::FreshMapping(_) => "mapping",
+                    SeedArg::FreshMapping(_) | SeedArg::FreshErrorMapping(_) => "mapping",
                 }),
             );
             let initializes = seed.initializes;
@@ -921,10 +1004,14 @@ impl<const N: usize> Drop for RunningTask<'_, N> {
                 .stack
                 .last()
                 .and_then(CallFrame::current_debug_span);
-            self.task
-                .context
-                .txn()
-                .record_interruption(span, self.task.stack.stack_trace());
+            self.task.context.txn().record_interruption(
+                span,
+                self.task.stack.stack_trace(),
+                crate::interpreter::error_frames::capture(
+                    &self.task.stack,
+                    self.task.context.txn(),
+                ),
+            );
         }
     }
 }
@@ -1001,7 +1088,7 @@ mod stm_retry_tests {
     use std::time::Duration;
 
     use indoc::indoc;
-    use lpc_rs_utils::debug_log::DebugLog;
+    use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog};
 
     use super::*;
     use crate::{
@@ -1202,10 +1289,150 @@ mod stm_retry_tests {
         let _ = handle.join();
     }
 
+    #[tokio::test]
+    async fn callback_origin_survives_a_rejected_attempt() {
+        for origin in [CallOrigin::Driver, CallOrigin::CallOut] {
+            let mut task = run_prog("string probe() { return origin(); }").await;
+            let process = task.context.process().clone();
+            let function = process
+                .initial_program()
+                .lookup_function("probe")
+                .unwrap()
+                .clone();
+            let seed = TaskSeed {
+                entry: SeedEntry::Callback {
+                    function,
+                    owner: Arc::downgrade(&process),
+                    simul: None,
+                    local: None,
+                    name: Some("probe".into()),
+                    origin,
+                    call_out_player: None,
+                },
+                process,
+                args: Vec::new(),
+                initializes: false,
+            };
+            let (tx, rx) = flume::bounded(4);
+            let committer_tx = tx.clone();
+            let handle = std::thread::spawn(move || {
+                Committer::new().run_with_rejections(committer_tx, rx, 1)
+            });
+            let (result, stats) = task.eval_with_committer(&tx, &seed).await;
+            tx.send(CommitProtocol::Close).unwrap();
+            drop(tx);
+            handle.join().unwrap();
+
+            result.unwrap();
+            assert_eq!(stats.attempts, 2);
+            assert_eq!(stats.conflicts, 1);
+            assert_eq!(task.result(), Some(LpcRef::from(origin.as_str())));
+        }
+    }
+
     const SCAN_CODE: &str = indoc! { r##"
         int hits;
         int foo() { int n; sscanf("hits 10", "hits %d", n); hits += n; return hits; }
     "##};
+
+    #[tokio::test]
+    async fn call_out_retry_restores_player_and_discards_the_rejected_schedule() {
+        let config = crate::test_config_builder!()
+            .call_out_preserve_player(true)
+            .build()
+            .unwrap();
+        let mut task = run_prog_with_config(
+            r#"
+            void tick() {}
+            int probe() {
+                int correct_player = this_player() == this_object();
+                call_out(tick, 100);
+                set_this_player(nil);
+                return correct_player;
+            }
+        "#,
+            Arc::new(config),
+        )
+        .await;
+        let process = task.context.process.clone();
+        let seed = TaskSeed {
+            entry: SeedEntry::Callback {
+                function: process
+                    .initial_program()
+                    .lookup_function("probe")
+                    .unwrap()
+                    .clone(),
+                owner: Arc::downgrade(&process),
+                simul: None,
+                local: None,
+                name: Some("probe".into()),
+                origin: CallOrigin::CallOut,
+                call_out_player: Some(Arc::downgrade(&process)),
+            },
+            process: process.clone(),
+            args: Vec::new(),
+            initializes: false,
+        };
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+        let (result, stats) = task.eval_with_committer(&tx, &seed).await;
+        tx.send(CommitProtocol::Close).unwrap();
+        drop(tx);
+        handle.join().unwrap();
+
+        result.unwrap();
+        assert_eq!(stats.attempts, 2);
+        assert_eq!(stats.conflicts, 1);
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        task.context.global_state.with_call_outs(|calls| {
+            assert_eq!(calls.len(), 1);
+            let call = calls.queue().iter().next().unwrap().1;
+            assert!(
+                call.player
+                    .as_ref()
+                    .unwrap()
+                    .ptr_eq(&Arc::downgrade(&process))
+            );
+        });
+    }
+
+    #[tokio::test]
+    async fn a_retried_task_recreates_its_clone_with_constructor_arguments() {
+        let mut task = run_prog(
+            r#"
+            int value;
+            void create(int start) { value = start; }
+            int query_value() { return value; }
+            int foo() {
+                mixed *args = ({ 42 });
+                object copy = clone_object(file_name(this_object()), args...);
+                return copy->query_value();
+            }
+        "#,
+        )
+        .await;
+        let prototype = task.context.process().clone();
+        let path = prototype.filename().to_string();
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+
+        let (result, stats) = eval_foo(&mut task, &tx).await;
+        tx.send(CommitProtocol::Close).unwrap();
+        drop(tx);
+        handle.join().unwrap();
+
+        result.unwrap();
+        assert_eq!(stats.attempts, 2);
+        assert_eq!(stats.conflicts, 1);
+        assert_eq!(task.result(), Some(LpcRef::from(42)));
+        let objects = task.context.object_space();
+        assert!(objects.lookup(format!("{path}#0")).is_none());
+        assert!(objects.lookup(format!("{path}#1")).is_some());
+    }
 
     /// `n` is the `ref` `sscanf` writes each attempt; a leaked first-attempt
     /// `hits += n` would read 20 instead of 10.

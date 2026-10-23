@@ -1,10 +1,17 @@
 # lpc-rs supported types
 
+Named [classes](classes.md) support shared instances, named construction,
+guarded member access, shallow copying with `copy_class()`, and native persistence.
+[Null values and `nil`](null.md) describes the configurable null representation;
+examples on this page use the default `NULL_MODE=zero` unless stated otherwise.
+[Comparisons](comparisons.md) describes exact int/float comparison and the
+type-sensitive matching used by mapping keys and array set operations.
+
 * `int`
   - Run-of-the-mill signed integers, 64 bits by default. This size is ostensibly
     changeable in `lpc-rs-core`, but no testing is done on different sizes. 
-  - `0` doubles as the null value for LPC, meaning it's always valid to assign it to a variable,
-    and it's returned by functions with non-`int` return types to indicate the absence of a value.
+  - In the default zero mode, `0` doubles as null and fits any value type.
+    Distinct mode uses `nil` for absence and treats `0` as an ordinary integer.
   - `1` and `0` are very commonly used as boolean values in the language.
   - `int`s are value types in LPC, meaning they are copied when assigned, or passed to
     functions.
@@ -40,12 +47,16 @@
 
     - `string`s can be indexed with the `[]` operator: `s[i]` is the character code (an
       `int`) at index `i`, and `s[a..b]` is the substring from `a` to `b` inclusive (a
-      `string`). Indexing starts at 0; negative indices count from the end.
-    - `string`s can be repeated with the `*` operator, which will create a new `string` with
-      the contents of the original repeated the given number of times.
-    - `string`s are mutable, and are _value_ types in LPC, meaning they are
-      copied when assigned, or passed to functions. This is a difference from
-      numerous other languages.
+      `string`). Indexing starts at 0; negative indices and explicit `<n` indices
+      count from the end. See [indexing and slices](indexing.md) for bounds and writes.
+    - `string`s can be repeated with the `*` operator and an integer count, in
+      either operand order. Zero and negative counts produce an empty string.
+      The result may not exceed 8,192 UTF-8 bytes; exceeding this limit raises
+      an error. Oversized constant expressions can be rejected during
+      compilation; dynamic overflow raises a catchable runtime error.
+    - `string`s are value types in LPC. Assigning a new string does not change
+      another variable holding the old value. Plain element and slice assignment
+      construct a new string and rebind its owner; see [string writes](indexing.md#string-element-assignment).
     - Examples:
       ```c
       string x = "hello";
@@ -55,7 +66,7 @@
       string hi2 = "hello" ", " "world!";
       string foos = "foo" * 3; // "foofoofoo"
       int i = x[0]; // 104
-      x[1] = 'u'; // x becomes "hullo"
+      x = x[0..0] + "u" + x[2..]; // x becomes "hullo"
       ```
 
 * `bytes`
@@ -70,7 +81,8 @@
     - `bytes` can be indexed with the `[]` operator: `b[i]` is the byte value (an `int`, 0 to 255)
       at index `i` -- 0 when `i` falls outside the buffer -- and `b[a..c]` is the subsequence from
       `a` to `c` inclusive (a `bytes`). Indexing starts at 0; negative indices count from the end,
-      as with `string`s.
+      as with `string`s. Explicit `<n` indices and slice endpoints are also supported;
+      see [indexing and slices](indexing.md).
     - `sizeof(b)` is the number of bytes; `foreach (int c : b)` visits each byte in order.
     - `==`, `!=`, `<` and the other comparisons between two `bytes` values compare them by
       content, byte by byte.
@@ -99,6 +111,7 @@
       (e.g. `"/secure/mail_daemon"->send_all()`).
     - New clones are created with the efun `clone_object`. This is the only way to create them.
     - `object_clones(ob)` lists the live clones sharing `ob`'s compiled program.
+    - [`objects()`](../efun/objects.md) lists all live loaded objects, including prototypes and clones.
     - _Existing_ clones can be found with `find_object`, by using their path, followed by a `#` and
       the clone number. For example, if you have a clone of `/std/goblin` with clone number
       3, you can find it with `find_object("/std/goblin#3")`. This same string syntax
@@ -158,7 +171,12 @@
         
         function g = (: [object pal] some_ob->greet(pal) :); // closure
         g(this_object());
+
+        function h = (: greet($(this_player())) :); // save the player at creation
         ```
+
+    - [`$(expression)` captures a value at closure creation](function_type.md#explicit-value-captures);
+      ordinary closure references continue sharing the original variables.
 
 * `mixed`
     - A `mixed` is a type that can be any other LPC type. It doesn't _change_ the underlying
@@ -197,9 +215,18 @@
 * `<type> *` (array)
     - Arrays are a sequence of values of the same type.
     - Arrays can be created with the `({ <values> })` syntax.
+    - [Array literal spreading](array_spreading.md) inserts another array's elements: `({ 1, xs..., 2 })`.
     - Arrays can be indexed with numeric or range indices.
     - Arrays can be concatenated with the `+` operator.
-    - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates kept; `a - b` removes every occurrence of `b`'s members; `a | b` is `a` as it is, then `b`'s members absent from `a` in `b`'s order, duplicates included. Members are compared by content for strings and `bytes` and by identity for objects and nested arrays or mappings.
+    - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates
+      kept; `a - b` removes every occurrence of `b`'s members; `a | b` is `a` as
+      it is, then `b`'s members absent from `a` in `b`'s order, duplicates included.
+      Members are compared by content for strings and `bytes` and by identity for
+      live objects, nested arrays, mappings, classes and functions. Destroyed
+      objects match the configured null value on either side; numeric matching
+      remains type-sensitive. Each operation makes a fresh outer array without
+      changing the operands or the selected members' stored values. See
+      [collection matching](comparisons.md#collection-matching).
     - `mixed *` indicates an array, where the values can be of any type, including other arrays.
     - `mixed *` is the only way to create a multidimensional array.
     - Arrays are mutable, and are reference types in LPC, meaning it is a pointer to the actual container, and

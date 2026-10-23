@@ -32,4 +32,5 @@ save_map(([ "owner": name, "items": items ]), "/data/chest_" + id);
 
 ### See also
 
+[save_value](save_value.md), [restore_value](restore_value.md),
 `restore_map`, `save_object`, `restore_object`, `valid_write`

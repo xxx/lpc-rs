@@ -5,7 +5,7 @@ use lpc_rs_core::LpcIntInner;
 use crate::compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation};
 
 /// A node type for evaluating preprocessor `#if` expressions
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PreprocessorNode {
     Var(String),
     Int(LpcIntInner),

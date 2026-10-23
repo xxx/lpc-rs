@@ -89,8 +89,8 @@ pub struct Limits {
     /// Derivations enumerated per input before the iterator ends.
     pub max_parses: usize,
     /// Work one parse may do — chart item adds attempted, duplicates
-    /// included, plus derivation levels opened — before it stops; unbounded
-    /// by default.
+    /// included, plus derivation levels opened and suffix feasibility checks
+    /// — before it stops; unbounded by default.
     pub max_steps: usize,
     /// Nonterminal levels a derivation may nest; a deeper one ends the parse,
     /// which `Parses::ending` reports as `TooDeep`. 4096 by default.

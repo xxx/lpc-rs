@@ -3,37 +3,27 @@ use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 use ast::program_node::ProgramNode;
 use codegen::{
     codegen_walker::CodegenWalker,
-    function_prototype_walker::FunctionPrototypeWalker,
-    inheritance_walker::InheritanceWalker,
-    scope_walker::ScopeWalker,
-    semantic_check_walker::SemanticCheckWalker,
-    tree_walker::{ContextHolder, Pass, apply},
+    tree_walker::{Pass, apply},
 };
 use compilation_context::CompilationContext;
 use compile_gate::CompileGate;
 use derive_builder::Builder;
 use educe::Educe;
-use lexer::{Token, TokenTriples};
+use lexer::Token;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{
-    self, LpcError, Result, lpc_error,
-    source_map::DiagnosticSources,
-    span::{HasSpan, Span},
-};
+use lpc_rs_errors::{self, LpcError, Result, lpc_error, source_map::DiagnosticSources, span::Span};
 use lpc_rs_utils::{LpcSource, config::Config};
 use preprocessor::Preprocessor;
 use source::CompilerSource;
 use source_reader::{DiskSourceReader, SourceReader};
 use tracing::instrument;
-use ustr::ustr;
 
 use crate::{
-    compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
-    interpreter::program::Program,
-    lpc_parser,
+    compiler::compilation_context::CompilationContextBuilder, interpreter::program::Program,
 };
 
 pub mod ast;
+pub mod cache;
 pub mod callee;
 pub mod codegen;
 pub mod compilation_context;
@@ -41,7 +31,10 @@ pub mod compile_gate;
 pub mod diagnostics;
 pub mod lexer;
 pub mod parser;
+pub mod parser_cache;
+mod prepared_program;
 pub mod preprocessor;
+mod program_interface;
 pub mod semantic;
 pub mod source;
 pub mod source_reader;
@@ -53,6 +46,16 @@ pub struct Compiler {
     /// Completed code shared by this compiler and its recursive parents.
     #[builder(default)]
     code_pool: Arc<crate::interpreter::program::code_pool::CodePool>,
+    /// Prepared macro definitions shared with recursive compiles.
+    #[builder(
+        default = "Arc::new(preprocessor::definition_cache::DefinitionCache::new(self.config.as_deref().unwrap_or(&Config::default())))"
+    )]
+    definition_cache: Arc<preprocessor::definition_cache::DefinitionCache>,
+    /// Raw syntax shared with recursive compiles.
+    #[builder(
+        default = "Arc::new(parser_cache::ParserCache::new(self.config.as_deref().unwrap_or(&Config::default())))"
+    )]
+    parser_cache: Arc<parser_cache::ParserCache>,
     /// The configuration to be used for this instance of the compiler
     #[builder(setter(into))]
     config: Arc<Config>,
@@ -65,7 +68,7 @@ pub struct Compiler {
     #[builder(default)]
     simul_efuns: Option<Arc<Program>>,
 
-    /// The master's say over inherits and includes; `None` reads freely.
+    /// Compilation permissions; `None` compiles without authorization.
     #[builder(default)]
     gate: Option<Arc<dyn CompileGate>>,
 
@@ -103,8 +106,13 @@ impl Compiler {
     where
         C: Into<Arc<Config>>,
     {
+        let config = config.into();
         Self {
-            config: config.into(),
+            definition_cache: Arc::new(preprocessor::definition_cache::DefinitionCache::new(
+                &config,
+            )),
+            parser_cache: Arc::new(parser_cache::ParserCache::new(&config)),
+            config,
             ..Default::default()
         }
     }
@@ -133,38 +141,38 @@ impl Compiler {
     where
         T: Into<LpcPath> + Debug + Send,
     {
-        Box::pin(async move {
-            let identity = Arc::new(CompilerSource::new(path, &self.config));
-            let name = identity.name();
+        let (identity, source) = self.read_file(path.into()).await?;
+        let warning = source
+            .latin1
+            .then(|| diagnostics::latin1_warning(identity.name().as_str(), None));
+        self.compile_source(identity, &source.text, warning).await
+    }
+
+    async fn read_file(&self, path: LpcPath) -> Result<(Arc<CompilerSource>, LpcSource)> {
+        let mut identity = Arc::new(CompilerSource::new(path, &self.config));
+        loop {
             let absolute = identity.resolved().server();
-
             let reader = self.source_reader.as_deref().unwrap_or(&DiskSourceReader);
-            let source = match reader.read(absolute).await.map(LpcSource::from_bytes) {
-                Ok(source) => source,
-                Err(e) => {
-                    return match e.kind() {
-                        ErrorKind::NotFound => {
-                            if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
-                                return Err(lpc_error!("Cannot read file `{}`: {}", name, e));
-                            }
-
-                            let dot_c = identity.input().with_extension("c");
-                            self.compile_file(dot_c).await
-                        }
-                        _ => Err(lpc_error!("Cannot read file `{}`: {}", name, e)),
-                    };
+            match reader.read(absolute).await.map(LpcSource::from_bytes) {
+                Ok(source) => return Ok((identity, source)),
+                Err(error)
+                    if error.kind() == ErrorKind::NotFound
+                        && absolute.extension().and_then(OsStr::to_str) != Some("c") =>
+                {
+                    identity = Arc::new(CompilerSource::new(
+                        identity.input().with_extension("c"),
+                        &self.config,
+                    ));
                 }
-            };
-
-            // A root file has no preprocessor yet to record its warning, so it is seeded here.
-            let warning = source.latin1.then(|| {
-                let in_game = name.as_str();
-                diagnostics::latin1_warning(in_game, None)
-            });
-
-            self.compile_source(identity, &source.text, warning).await
-        })
-        .await
+                Err(error) => {
+                    return Err(lpc_error!(
+                        "Cannot read file `{}`: {}",
+                        identity.name(),
+                        error
+                    ));
+                }
+            }
+        }
     }
 
     /// Compile the object an in-game path names: its `.c` source
@@ -235,6 +243,8 @@ impl Compiler {
             .source(source.clone())
             .config(self.config.clone())
             .code_pool(self.code_pool.clone())
+            .definition_cache(self.definition_cache.clone())
+            .parser_cache(self.parser_cache.clone())
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
             .gate(self.gate.clone())
@@ -299,8 +309,14 @@ impl Compiler {
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<Compiled> {
-        let (mut program_node, context) = self.analyze_source(source, code, warning).await?;
+        let (program_node, context) = self.analyze_source(source, code, warning).await?;
+        Self::generate(program_node, context).await
+    }
 
+    async fn generate(
+        mut program_node: ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Compiled> {
         let mut asm_walker: CodegenWalker = apply(&mut program_node, context, true).await?;
         let own = asm_walker.diagnostics_mut().finish()?;
         let mut warnings = std::mem::take(&mut asm_walker.context_mut().inherited_warnings);
@@ -336,36 +352,10 @@ impl Compiler {
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<(ProgramNode, CompilationContext)> {
-        let (mut program_node, context) = self.parse_source(source, code, warning).await?;
-
-        // inject the auto-inherit if it's to be used.
-        if let Some(dir) = &self.config.auto_inherit_file {
-            let lpc_dir = LpcPath::new_in_game(dir.as_str(), "/", &*self.config.lib_dir);
-            if lpc_dir.source_file() != context.source.input().source_file() {
-                let node = InheritNode {
-                    path: ustr(dir),
-                    namespace: None,
-                    span: None,
-                };
-
-                program_node.inherits.insert(0, node);
-            }
-        }
-
-        let context = apply::<InheritanceWalker>(&mut program_node, context, true)
-            .await?
-            .into_context();
-        let context = apply::<FunctionPrototypeWalker>(&mut program_node, context, false)
-            .await?
-            .into_context();
-        let context = apply::<ScopeWalker>(&mut program_node, context, false)
-            .await?
-            .into_context();
-        let context = apply::<SemanticCheckWalker>(&mut program_node, context, true)
-            .await?
-            .into_context();
-
-        Ok((program_node, context))
+        let prepared =
+            prepared_program::PreparedProgram::parse(self, source, code, warning).await?;
+        let receiver = prepared.interface.receiver_functions();
+        prepared.analyze(&receiver).await
     }
 
     /// Preprocess, then parse a string of code for the file at `path`
@@ -397,26 +387,99 @@ impl Compiler {
     ) -> Result<(ProgramNode, CompilationContext)> {
         let (tokens, preprocessor) = self.preprocess_source(source, code, warning).await?;
 
-        let wrapper = TokenTriples::new(&tokens);
         let mut context = preprocessor.into_context();
-
-        lpc_parser::ProgramParser::new()
-            .parse(&mut context, wrapper)
-            .map(|p| (p, context))
-            .map_err(|e| {
-                // lalrpop's bare-usize locations carry no file id, so the
-                // EOF/InvalidToken arms arrive span-less; every other arm
-                // — `ParseError::User`'s grammar-action errors included —
-                // already carries one.
-                let last = tokens.last().map(|t| t.span());
-                LpcError::from(e).or_span(last)
-            })
+        let node = self.parser_cache.parse(tokens, &mut context)?;
+        Ok((node, context))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn compiler_constructors_honor_disabled_cache_configuration() {
+        use lpc_rs_utils::config::ConfigBuilder;
+        let config = std::sync::Arc::new(
+            ConfigBuilder::default()
+                .compiler_cache_idle_time(0)
+                .build()
+                .unwrap(),
+        );
+        for compiler in [
+            Compiler::new(config.clone()),
+            CompilerBuilder::default()
+                .config(config.clone())
+                .build()
+                .unwrap(),
+        ] {
+            compiler
+                .compile_string("/cache.c", "#define VALUE 1\nint value() { return VALUE; }")
+                .await
+                .unwrap();
+            assert_eq!(compiler.parser_cache.stats().entries, 0);
+            assert_eq!(compiler.definition_cache.stats().entries, 0);
+        }
+    }
+
     use super::*;
+
+    #[tokio::test]
+    async fn relative_inherits_use_the_source_directory_for_file_and_string_inputs() {
+        use crate::{
+            compile_time_config::MAX_CALL_STACK_SIZE,
+            interpreter::vm::Vm,
+            test_support::{initialize_program, lib_holding, temp_lib_config},
+        };
+
+        let root = lib_holding(
+            "relative-inherit-inputs",
+            &[
+                ("base/grand.c", "string grand_file() { return __FILE__; }"),
+                ("zone/value.h", "#define SUFFIX \"|header\"\n"),
+                (
+                    "zone/parent.c",
+                    "#include \"value.h\"\ninherit \"../base/grand\"; string parent_file() { return grand_file() + \"|\" + __FILE__ + SUFFIX; }",
+                ),
+                (
+                    "parent.c",
+                    "string parent_file() { return \"wrong directory\"; }",
+                ),
+            ],
+        );
+        let config: Arc<Config> = temp_lib_config(&root).into();
+        let compiler = Compiler::new(config.clone());
+        for inherit in ["parent", "./parent.c", "../zone/parent"] {
+            let code = format!(
+                "inherit \"{inherit}\"; string create() {{ return parent::parent_file() + \"|\" + __FILE__ + \"|\" + __DIR__; }}"
+            );
+            std::fs::write(root.join("zone/child.c"), &code).unwrap();
+            for path in [
+                LpcPath::from("/zone/child.c"),
+                LpcPath::from("/zone/child"),
+                LpcPath::new_server(root.join("zone/child.c")),
+                LpcPath::new_server(root.join("zone/child")),
+            ] {
+                let from_file = compiler.compile_file(path.clone()).await.unwrap();
+                let from_string = compiler
+                    .compile_string(path.source_file(), &code)
+                    .await
+                    .unwrap();
+                for compiled in [from_file, from_string] {
+                    assert_eq!(*compiled.program.filename, LpcPath::from("/zone/child.c"));
+                    let vm = Vm::new(config.clone());
+                    let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                        compiled.program,
+                        vm.global_state.clone(),
+                    )
+                    .await
+                    .unwrap();
+                    assert_eq!(
+                        task.result().unwrap().to_string(),
+                        "/base/grand.c|/zone/parent.c|header|/zone/child.c|/zone/"
+                    );
+                }
+            }
+        }
+    }
 
     #[tokio::test]
     async fn analysis_retains_declarations_and_scoped_inherited_sources() {
@@ -644,6 +707,467 @@ mod tests {
         }
     }
 
+    mod test_predefined_macros {
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        use super::*;
+        use crate::{
+            compile_time_config::MAX_CALL_STACK_SIZE,
+            interpreter::{lpc_ref::LpcRef, vm::Vm},
+            test_support::{initialize_program, lib_holding, temp_lib_config},
+        };
+
+        #[tokio::test]
+        async fn configured_port_is_an_integer_fixed_by_compilation() {
+            let root = lib_holding("configured-port-program", &[]);
+            for port in [33100, 44100] {
+                let config = ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .port(port)
+                    .build()
+                    .unwrap();
+                let compiled = Compiler::new(config)
+                    .compile_string("/service.c", "int create() { return __PORT__ + 3; }")
+                    .await
+                    .unwrap();
+                let runtime_config = ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .port(0)
+                    .build()
+                    .unwrap();
+                let vm = Vm::new(runtime_config);
+                let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                    compiled.program,
+                    vm.global_state.clone(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(task.result().unwrap(), LpcRef::from(i64::from(port) + 3));
+            }
+        }
+
+        #[tokio::test]
+        async fn directory_macros_resolve_inherits_and_parent_code_keeps_its_source() {
+            let root = lib_holding(
+                "predefined-inherit",
+                &[
+                    ("zone/parent.c", "string parent_file() { return __FILE__; }"),
+                    (
+                        "zone/child.c",
+                        "inherit __DIR__ \"parent\";\nstring create() { return parent_file() + \"|\" + __FILE__ + \"|\" + __DIR__; }",
+                    ),
+                ],
+            );
+            let config: Arc<Config> = temp_lib_config(&root).into();
+            let compiler = Compiler::new(config.clone());
+            for path in [
+                LpcPath::from("/zone/child.c"),
+                LpcPath::new_server(root.join("zone/child.c")),
+            ] {
+                let compiled = compiler.compile_file(path).await.unwrap();
+                let vm = Vm::new(config.clone());
+                let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                    compiled.program,
+                    vm.global_state.clone(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    task.result().unwrap().to_string(),
+                    "/zone/parent.c|/zone/child.c|/zone/"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn a_reused_compiler_evaluates_predefined_values_for_each_new_source() {
+            let root = lib_holding("predefined-recompile", &[]);
+            let config: Arc<Config> = temp_lib_config(&root).into();
+            let compiler = CompilerBuilder::default()
+                .config(config.clone())
+                .diagnostic_sources(DiagnosticSources::scoped())
+                .build()
+                .unwrap();
+            for (path, code, expected) in [
+                ("/a.c", "string create() { return __FILE__; }", "/a.c"),
+                (
+                    "/zone/b.c",
+                    "string create() { return __FILE__; }",
+                    "/zone/b.c",
+                ),
+                ("/a.c", "string create() { return __DIR__; }", "/"),
+            ] {
+                let compiled = compiler.compile_string(path, code).await.unwrap();
+                let vm = Vm::new(config.clone());
+                let task = initialize_program::<MAX_CALL_STACK_SIZE>(
+                    compiled.program,
+                    vm.global_state.clone(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(task.result().unwrap().to_string(), expected);
+            }
+        }
+    }
+
+    mod test_pragma_diagnostics {
+        use indoc::indoc;
+        use lpc_rs_core::lpc_type::LpcType;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        use super::*;
+        use crate::test_support::{lib_holding, temp_lib_config, test_config};
+
+        fn messages(compiled: &Compiled) -> Vec<&str> {
+            compiled
+                .warnings
+                .iter()
+                .flat_map(|group| &group.warnings)
+                .map(|warning| warning.message())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn warning_switches_follow_source_positions_including_inside_functions() {
+            let code = indoc! { r#"
+                void f() {
+                    int before;
+                #pragma no_warnings
+                    int hidden;
+                #pragma warnings
+                    int after;
+                #pragma no_warnings
+                }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                ["unused variable `before`", "unused variable `after`"]
+            );
+        }
+
+        #[tokio::test]
+        async fn no_warnings_suppresses_all_compiler_warning_categories() {
+            let code = indoc! { r#"
+                #pragma no_warnings
+                int global;
+                int f() { }
+                void g() { int global; return; g(); }
+                #pragma save_binary
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert!(messages(&compiled).is_empty(), "{:?}", messages(&compiled));
+        }
+
+        #[tokio::test]
+        async fn warning_switches_in_pragma_lists_take_effect_left_to_right() {
+            let code = indoc! { r#"
+                #pragma save_binary, no_warnings, save_binary
+                #pragma warnings, save_binary, no_warnings, save_binary
+                #pragma no_warnings, no_warnings
+                void f() { int hidden; }
+                #pragma warnings, warnings
+                void g() { int visible; }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                [
+                    "pragma `save_binary` has no effect in lpc-rs",
+                    "pragma `save_binary` has no effect in lpc-rs",
+                    "unused variable `visible`"
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn inactive_warning_switches_have_no_effect() {
+            let code = indoc! { r#"
+                #if 0
+                #pragma no_warnings
+                #endif
+                void f() { int visible; }
+                #pragma no_warnings
+                #if 0
+                #pragma warnings
+                #endif
+                void g() { int hidden; }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `visible`"]);
+        }
+
+        #[tokio::test]
+        async fn macro_bodies_and_arguments_use_the_invocation_warning_policy() {
+            let code = indoc! { r#"
+                #define DECL(name) int name;
+                #define BODY int body;
+                void f() {
+                #pragma no_warnings
+                    DECL(hidden)
+                    BODY
+                #define QUIET int visible;
+                #pragma warnings
+                    QUIET
+                }
+            "# };
+            let compiled = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `visible`"]);
+        }
+
+        #[tokio::test]
+        async fn warning_switches_flow_into_and_out_of_nested_includes() {
+            let root = lib_holding(
+                "pragma-warning-includes",
+                &[
+                    (
+                        "root.c",
+                        "void before() { int before; }\n#include \"quiet.h\"\nvoid after() { int after; }\n",
+                    ),
+                    (
+                        "quiet.h",
+                        "#pragma no_warnings\nvoid quiet() { int hidden; }\n#include \"loud.h\"\nvoid end() { int end; }\n",
+                    ),
+                    (
+                        "loud.h",
+                        "void nested() { int hidden; }\n#pragma warnings\nvoid loud() { int loud; }\n",
+                    ),
+                ],
+            );
+            let compiled = Compiler::new(temp_lib_config(&root))
+                .compile_file("/root.c")
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                [
+                    "unused variable `before`",
+                    "unused variable `loud`",
+                    "unused variable `end`",
+                    "unused variable `after`"
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn repeated_header_occurrences_keep_independent_warning_policies() {
+            let root = lib_holding(
+                "pragma-warning-repeat",
+                &[
+                    (
+                        "root.c",
+                        "void first() {\n#pragma no_warnings\n#include \"local.h\"\n}\nvoid second() {\n#pragma warnings\n#include \"local.h\"\n}\n",
+                    ),
+                    ("local.h", "int unused;\n"),
+                ],
+            );
+            let compiled = Compiler::new(temp_lib_config(&root))
+                .compile_file("/root.c")
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `unused`"]);
+            let warning = &compiled.warnings.last().unwrap().warnings[0];
+            assert!(warning.diagnostic_string().contains("/local.h:1:"));
+        }
+
+        #[tokio::test]
+        async fn an_auto_include_can_disable_warnings_until_the_root_reenables_them() {
+            let root = lib_holding(
+                "pragma-warning-auto",
+                &[("global.h", "#pragma no_warnings\n")],
+            );
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .auto_include_file("/global.h")
+                .build()
+                .unwrap();
+            let compiled = Compiler::new(config)
+                .compile_string(
+                    "/root.c",
+                    "void f() { int hidden; }\n#pragma warnings\nvoid g() { int visible; }\n",
+                )
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `visible`"]);
+        }
+
+        #[tokio::test]
+        async fn warning_switches_do_not_cross_inheritance_or_reused_compilers() {
+            let root = lib_holding(
+                "pragma-warning-inherit",
+                &[
+                    ("loud.c", "void loud() { int parent; }\n"),
+                    (
+                        "quiet.c",
+                        "#pragma no_warnings\nvoid quiet() { int hidden; }\n",
+                    ),
+                ],
+            );
+            let compiler = Compiler::new(temp_lib_config(&root));
+            let compiled = compiler
+                .compile_string(
+                    "/first.c",
+                    "#pragma no_warnings\ninherit \"/loud\";\nvoid f() { int hidden; }",
+                )
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `parent`"]);
+            assert_eq!(compiled.warnings[0].filename.to_string(), "/loud.c");
+            let compiled = compiler
+                .compile_string("/second.c", "inherit \"/quiet\";\nvoid f() { int child; }")
+                .await
+                .unwrap();
+            assert_eq!(messages(&compiled), ["unused variable `child`"]);
+        }
+
+        #[tokio::test]
+        async fn encoding_warnings_use_the_include_site_and_keep_early_root_warnings() {
+            let root = lib_holding("pragma-warning-encoding", &[]);
+            std::fs::write(root.join("root.c"),
+                b"// caf\xe9\n#pragma no_warnings\n#include \"quiet.h\"\n#pragma warnings\n#include \"loud.h\"\n").unwrap();
+            for name in ["quiet.h", "loud.h"] {
+                std::fs::write(root.join(name), b"// caf\xe9\n").unwrap();
+            }
+            let compiled = Compiler::new(temp_lib_config(&root))
+                .compile_file("/root.c")
+                .await
+                .unwrap();
+            assert_eq!(
+                messages(&compiled),
+                [
+                    "`/root.c` is not UTF-8; read as Latin-1",
+                    "`/loud.h` is not UTF-8; read as Latin-1"
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn disabling_warnings_preserves_preprocessing_parsing_and_type_errors() {
+            let compiler = Compiler::new(test_config());
+            for code in [
+                "#pragma unknown\n",
+                "#pragma no_save_types\n",
+                "int x = ;",
+                "void f() { absent; }",
+                "int x = \"wrong\";",
+                "#pragma strict_types\nf(value) { return value; }",
+            ] {
+                let source = format!("#pragma no_warnings\n{code}");
+                let error = compiler
+                    .compile_string("/error.c", source)
+                    .await
+                    .unwrap_err();
+                assert!(!error.is_warning(), "{code}: {error:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn warning_policy_also_filters_diagnostics_attached_to_errors() {
+            let code = "void f() { int visible;\n#pragma no_warnings\nint hidden; absent; }";
+            let error = Compiler::new(test_config())
+                .compile_string("/w.c", code)
+                .await
+                .unwrap_err();
+            let diagnostics: Vec<_> = error
+                .to_diagnostics()
+                .into_iter()
+                .map(|d| d.message)
+                .collect();
+            assert_eq!(
+                diagnostics,
+                ["undefined variable `absent`", "unused variable `visible`"]
+            );
+        }
+
+        #[tokio::test]
+        async fn save_types_is_silent_and_does_not_require_explicit_types() {
+            let code = "#pragma save_types, save_types\nint typed(string value) { return sizeof(value); }\nuntyped(value) { return value; }";
+            let compiled = Compiler::new(test_config())
+                .compile_string("/types.c", code)
+                .await
+                .unwrap();
+            assert!(messages(&compiled).is_empty());
+            let typed = compiled.program.lookup_function("typed").unwrap();
+            assert_eq!(typed.prototype.return_type, LpcType::Int(false));
+            assert_eq!(typed.prototype.arg_types, [LpcType::String(false)]);
+            let untyped = compiled.program.lookup_function("untyped").unwrap();
+            assert_eq!(untyped.prototype.return_type, LpcType::Mixed(false));
+            assert_eq!(untyped.prototype.arg_types, [LpcType::Mixed(false)]);
+        }
+
+        #[tokio::test]
+        async fn inherited_calls_are_type_checked_with_or_without_save_types() {
+            for pragma in ["", "#pragma save_types\n"] {
+                let parent = format!("{pragma}int typed(int value) {{ return value; }}");
+                let root = lib_holding("pragma-save-types", &[("parent.c", &parent)]);
+                let compiler = Compiler::new(temp_lib_config(&root));
+                compiler
+                    .compile_string(
+                        "/good.c",
+                        "inherit \"/parent\"; int f() { return typed(1); }",
+                    )
+                    .await
+                    .unwrap();
+                let error = compiler
+                    .compile_string(
+                        "/bad.c",
+                        "inherit \"/parent\"; int f() { return typed(\"bad\"); }",
+                    )
+                    .await
+                    .unwrap_err();
+                assert!(error.message().contains("type"), "{error:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn no_include_allows_compilation_and_inheritance_but_rejects_inclusion() {
+            let root = lib_holding(
+                "no-include-program",
+                &[(
+                    "parent.c",
+                    "#pragma no_include\nint value() { return 7; }\n",
+                )],
+            );
+            let compiler = Compiler::new(temp_lib_config(&root));
+            let compiled = compiler
+                .compile_file(LpcPath::new_server(root.join("parent.c")))
+                .await
+                .unwrap();
+            assert!(messages(&compiled).is_empty());
+            let child = compiler
+                .compile_string(
+                    "/child.c",
+                    "inherit \"/parent\"; int result() { return value(); }",
+                )
+                .await
+                .unwrap();
+            assert!(child.program.lookup_function("value").is_some());
+            let error = compiler
+                .compile_string("/include.c", "#include \"/parent.c\"\n")
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.message(),
+                "`#pragma no_include` forbids including this file"
+            );
+        }
+    }
+
     mod test_rendered_diagnostics {
         use indoc::indoc;
 
@@ -729,7 +1253,7 @@ mod tests {
             "# };
             assert_eq!(
                 rendered_error(code).await,
-                "error: Unrecognized Token: ;\n  ┌─ /include/bad_token.h:1:9\n  │\n1 │ int x = ;\n  │         ^\n  │\n  = expected one of: \"-\", \"!\", \"~\", \"&\", \"++\", \"--\", \"operator\", \"efun\", \"(\", \"::\", \"StringLiteral\", \"IntLiteral\", \"FloatLiteral\", \"ID\", \"ClosureArgVar\"\n\n"
+                "error: Unrecognized Token: ;\n  ┌─ /include/bad_token.h:1:9\n  │\n1 │ int x = ;\n  │         ^\n  │\n  = expected one of: \"$\", \"-\", \"!\", \"~\", \"&\", \"++\", \"--\", \"operator\", \"efun\", \"(\", \"::\", \"StringLiteral\", \"nil\", \"IntLiteral\", \"FloatLiteral\", \"ID\", \"ClosureArgVar\"\n\n"
             );
         }
 
@@ -913,7 +1437,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn host_and_virtual_sources_keep_their_distinct_inheritance_bases() {
+        async fn host_and_virtual_sources_use_the_same_inheritance_directory() {
             use crate::test_support::TempLib;
 
             let root = TempLib::new("source-inheritance");
@@ -926,18 +1450,18 @@ mod tests {
                 .unwrap();
             let compiler = Compiler::new(config);
 
-            for (path, expected) in [
-                (LpcPath::from("/room/child.c"), "/room/parent.c"),
-                (
-                    LpcPath::new_server(root.join("room/child.c")),
-                    "/room/child.c/parent.c",
-                ),
+            for path in [
+                LpcPath::from("/room/child.c"),
+                LpcPath::new_server(root.join("room/child.c")),
             ] {
                 let compiled = compiler
                     .compile_string(path, "inherit \"parent\";\n")
                     .await
                     .unwrap();
-                assert_eq!(compiled.program.layout[0].filename.to_string(), expected);
+                assert_eq!(
+                    compiled.program.layout[0].filename.to_string(),
+                    "/room/parent.c"
+                );
             }
         }
 

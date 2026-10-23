@@ -17,8 +17,7 @@ pub struct TaskTemplate {
     /// The [`GlobalState`] from the [`Vm`](crate::interpreter::vm::Vm).
     pub global_state: Arc<GlobalState>,
 
-    /// The command giver: the connected body for `input_to`, possibly an NPC
-    /// for other calls, or `None` for a `call_out`.
+    /// The command giver, which may be an interactive player or an NPC.
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.

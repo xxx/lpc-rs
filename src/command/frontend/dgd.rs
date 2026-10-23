@@ -10,10 +10,10 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use crate::command::{
-    grammar::{Element, Grammar, GrammarBuilder, GrammarError, ProdId, TokenClass, nt, tok},
-    memo::Memo,
+use crate::command::grammar::{
+    Element, Grammar, GrammarBuilder, GrammarError, ProdId, TokenClass, nt, tok,
 };
+use crate::util::memo::Memo;
 
 /// A grammar text compiled for the engine.
 #[derive(Debug)]

@@ -20,6 +20,7 @@ use crate::{
     span::Span,
 };
 
+pub mod error_frames;
 pub mod source_map;
 pub mod span;
 
@@ -105,6 +106,7 @@ struct Inner {
     /// Further diagnostics collected before this one, rendered after it.
     additional_errors: Vec<LpcError>,
     stack_trace: Option<Vec<String>>,
+    frames: Option<error_frames::ErrorFrames>,
     severity: LpcErrorSeverity,
     catch_diagnostics: bool,
 }
@@ -121,6 +123,7 @@ impl LpcError {
             notes: vec![],
             additional_errors: vec![],
             stack_trace: None,
+            frames: None,
             severity,
             catch_diagnostics: false,
         }))
@@ -246,6 +249,20 @@ impl LpcError {
         self.0.stack_trace = Some(stack_trace);
 
         self
+    }
+
+    /// Attach an outer task's immutable runtime snapshot without losing the inner failure.
+    pub fn with_error_frames(mut self, frames: error_frames::ErrorFrames) -> Self {
+        match &mut self.0.frames {
+            Some(inner) => inner.prepend(frames),
+            None => self.0.frames = Some(frames),
+        }
+        self
+    }
+
+    /// Structured runtime data, absent when no active LPC frame was captured.
+    pub fn error_frames(&self) -> Option<&error_frames::ErrorFrames> {
+        self.0.frames.as_ref()
     }
 
     pub fn to_diagnostics(&self) -> Vec<Diagnostic<FileId>> {

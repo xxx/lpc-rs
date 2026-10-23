@@ -13,7 +13,8 @@ clones must be created with `clone_object`.
 
 Loading asks the master's `valid_load` with `func` `"load_object"`. A path
 with no source file is put to `compile_object`, which may name a blueprint
-to run under that path. A refused or failed load returns `0`, including
+to run under that path. A refused or failed load returns the
+[configured null value](../lpc/null.md), including
 invalid paths, missing files, compilation errors, and errors thrown by a
 master hook or initializer. An object whose initializer fails is not left
 resident.

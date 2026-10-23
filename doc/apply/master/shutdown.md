@@ -9,6 +9,8 @@ LPC code.
 
 At the point `shutdown` is applied, new connections have been disabled, 
 players can no longer issue commands, and call outs will no longer run.
+Raw TCP callbacks and workers have also stopped; shutdown does not promise drain
+or terminal callbacks for those sockets. Raw TCP output is unavailable in this hook.
 
 Players _can_, however, still receive output from the game.
 

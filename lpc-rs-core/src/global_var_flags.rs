@@ -11,6 +11,7 @@ use crate::visibility::Visibility;
 pub struct GlobalVarFlags {
     #[bits = 2]
     pub visibility: Visibility,
+    /// Exclude this global from save/restore; set by either `static` or `nosave`.
     pub is_static: bool,
     /// Prevent inheriting programs from redeclaring this variable.
     pub nomask: bool,
@@ -35,7 +36,7 @@ impl GlobalVarFlags {
         let mut invalid = vec![];
         for s in strs.iter() {
             match *s {
-                "public" | "private" | "protected" | "static" | "nomask" => {}
+                "public" | "private" | "protected" | "static" | "nosave" | "nomask" => {}
                 _ => {
                     invalid.push(*s);
                 }
@@ -63,7 +64,7 @@ where
                 "protected" => {
                     flags.set_visibility(Visibility::Protected);
                 }
-                "static" => {
+                "static" | "nosave" => {
                     flags.set_is_static(true);
                 }
                 "nomask" => {

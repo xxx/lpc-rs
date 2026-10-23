@@ -8,7 +8,7 @@ use crate::interpreter::{
     efun::{efun_context::EfunContext, file_access::authorize_save},
     lpc_ref::LpcRef,
     process::Process,
-    save_format::{read_value, split_line},
+    save_format::{read_value_counted, split_line},
     task_context::ObjectLookup,
 };
 
@@ -28,10 +28,11 @@ pub(crate) fn resolve_object<'a, const N: usize>(
 
 /// `restore_object(file)`: the calling object's globals from `<file>.o`,
 /// root-relative, once the master's `valid_read` allows the unsuffixed
-/// path. Unknown and `static` names are ignored, variables absent from the
+/// path. Unknown and `static`/`nosave` names are ignored, variables absent from the
 /// file keep their values. 1 on success, 0 when the file cannot be read,
 /// an error on a corrupt line (earlier lines stay applied).
 pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    let mut collapsed = 0;
     let access = authorize_save(context, "restore_object", VALID_READ, 0).await?;
     let Some(text) = access.read_save(context).await else {
         context.return_efun_result(LpcRef::from(0));
@@ -39,7 +40,7 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
     };
     let process = context.process().clone();
     let image = process.image(context.txn());
-    {
+    let restored = (|| -> Result<()> {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
             let err = |e| access.line_error(context, index + 1, e);
@@ -53,12 +54,21 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
             let Some(RegisterVariant::Global(reg)) = symbol.location else {
                 continue;
             };
-            let value = read_value(value_text, context.txn(), &resolve).map_err(err)?;
+            let (value, count) =
+                read_value_counted(value_text, context.txn(), &resolve).map_err(err)?;
+            collapsed += count;
             context
                 .txn()
                 .with(|t| t.write(image.var_id(reg.index()), value));
         }
+        Ok(())
+    })();
+    if collapsed != 0 {
+        context.record_effect(crate::interpreter::stm::Effect::Warning(format!(
+            "restore_object: {access}: converted {collapsed} nil value(s) to 0 (NULL_MODE=zero)"
+        )));
     }
+    restored?;
     context.return_efun_result(LpcRef::from(1));
     Ok(())
 }
@@ -96,6 +106,181 @@ mod tests {
         int got;
         void create() { got = restore_object("/r"); }
     "# };
+
+    #[tokio::test]
+    async fn a_caught_invalid_class_record_preserves_that_global_and_applies_earlier_lines() {
+        let root = TempLib::new("restore-class-corrupt");
+        std::fs::write(root.join("r.o"), concat!(
+            "before 9\n",
+            "value c(1,\"/r.c\",\"record\",({({\"n\",({\"int\",0,}),\"wrong\",}),}),({({0,}),}))\n",
+            "after 10\n"
+        )).unwrap();
+        let vm = allowing_vm(&root).await;
+        let result = vm.initialize_process_from_code("/r.c", r#"
+            class record { int n; }
+            int before = 1;
+            class record value = new(class record, n: 7);
+            int after = 2;
+            nosave string error;
+            int create() {
+                class record original = value;
+                error = catch(restore_object("/r"));
+                return stringp(error) && before == 9 && after == 2 && value == original && value.n == 7;
+            }
+        "#).await.unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+        let error = string_global(&vm, &result.context.process, "error");
+        assert!(error.contains("restore_object: /r.o line 2"), "{error}");
+        assert!(error.contains("invalid value for"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn restored_class_globals_still_enforce_nominal_identity_when_consumed() {
+        let root = TempLib::new("restore-class-identity");
+        std::fs::write(
+            root.join("r.o"),
+            "value c(1,\"/other.c\",\"record\",({}),({({}),}))\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let result = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"
+            class record {}
+            class record value;
+            int create() {
+                restore_object("/r");
+                mixed error = catch(value);
+                return stringp(error);
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+    }
+
+    #[tokio::test]
+    async fn an_aborted_class_restore_leaves_committed_globals_unchanged() {
+        use crate::interpreter::task::{
+            apply_function::apply_function_by_name, task_template::TaskTemplate,
+        };
+        let root = TempLib::new("restore-class-abort");
+        std::fs::write(
+            root.join("r.o"),
+            "value c(1,\"/r.c\",\"record\",({({\"n\",({\"int\",0,}),99,}),}),({({0,}),}))\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let process = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"
+            class record { int n; }
+            class record value = new(class record, n: 7);
+            int read() { return value.n; }
+            void restore_and_fail() { restore_object("/r"); throw("abort class restore"); }
+        "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let error = apply_function_by_name(
+            "restore_and_fail",
+            &[],
+            process.clone(),
+            TaskTemplate::from(vm.global_state.clone()),
+            Some(5000),
+        )
+        .await
+        .unwrap()
+        .unwrap_err();
+        assert!(error.to_string().contains("abort class restore"));
+        let result = apply_function_by_name(
+            "read",
+            &[],
+            process,
+            TaskTemplate::from(vm.global_state.clone()),
+            Some(5000),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(result, LpcRef::from(7));
+    }
+
+    #[tokio::test]
+    async fn nosave_values_and_their_aliases_survive_restore() {
+        let root = TempLib::new("restore-nosave-values");
+        std::fs::write(
+            root.join("r.o"),
+            "transient malformed\ncache ({99})\nlegacy malformed\nsaved 9\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"
+            nosave int transient = 4;
+            nosave int *cache = ({ 5 });
+            nosave int absent = 6;
+            private int saved = 1;
+            static int legacy = 7;
+            string create() {
+                int *alias = cache;
+                cache[0] = 8;
+                transient = 10;
+                restore_object("/r");
+                return transient + " " + cache[0] + " " + alias[0] + " "
+                    + saved + " " + legacy + " " + absent;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from("10 8 8 9 7 6")));
+    }
+
+    #[tokio::test]
+    async fn inherited_nosave_globals_are_not_restore_targets() {
+        let root = lib_holding(
+            "restore-nosave-inheritance",
+            &[(
+                "base.c",
+                r#"
+            public nosave int public_cache = 1;
+            protected nosave int protected_cache = 2;
+            private nosave int private_cache = 3;
+            int saved = 4;
+            int private_value() { return private_cache; }
+        "#,
+            )],
+        );
+        std::fs::write(
+            root.join("data.o"),
+            "public_cache 100\nprotected_cache 200\nprivate_cache 300\nown_cache 500\nsaved 9\n",
+        )
+        .unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/child.c",
+                r#"
+            inherit "/base";
+            nosave int own_cache = 5;
+            int create() {
+                restore_object("/data");
+                return public_cache + protected_cache + private_value() + own_cache + saved;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(20)));
+    }
 
     #[tokio::test]
     async fn restores_the_named_globals_and_leaves_the_rest() {

@@ -13,10 +13,17 @@ pub fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use crate::{
-        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef},
-        test_support::run_prog,
+        interpreter::{
+            lpc_int::LpcInt,
+            lpc_ref::LpcRef,
+            task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+        },
+        test_config_builder,
+        test_support::{run_prog, run_prog_with_config},
     };
 
     #[tokio::test]
@@ -96,5 +103,113 @@ mod tests {
 
         // The deferred removal flushed.
         global_state.with_call_outs(|co| assert!(co.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn repeated_pending_cancellation_returns_not_found() {
+        let code = r#"
+            void tick() {}
+            int create() {
+                int id = call_out(tick, 3600);
+                if (remove_call_out(id) != 3600000)
+                    throw("first cancellation failed");
+                return remove_call_out(id);
+            }
+        "#;
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = test_config_builder!().null_mode(mode).build().unwrap();
+            let task = run_prog_with_config(code, config.into()).await;
+
+            assert_eq!(task.result(), Some(LpcRef::from(-1)), "{mode}");
+            task.context
+                .global_state
+                .with_call_outs(|calls| assert!(calls.is_empty()));
+        }
+    }
+
+    #[tokio::test]
+    async fn repeated_committed_cancellation_returns_not_found() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            for repeat in [0, 60] {
+                let code = format!(
+                    r#"
+                    int id;
+                    void tick() {{}}
+                    void create() {{ id = call_out(tick, 3600, {repeat}); }}
+                    int cancel_twice() {{
+                        int remaining = remove_call_out(id);
+                        if (remaining < 0 || remaining > 3600000)
+                            throw("first cancellation failed");
+                        if (query_call_out(id) != nil || sizeof(query_call_outs()))
+                            throw("cancelled timer is still visible");
+                        return remove_call_out(id);
+                    }}
+                "#
+                );
+                let config = test_config_builder!().null_mode(mode).build().unwrap();
+                let mut task = run_prog_with_config(&code, config.into()).await;
+                let global_state = task.context.global_state.clone();
+                global_state.with_call_outs(|calls| assert_eq!(calls.len(), 1));
+                let function = task
+                    .context
+                    .process
+                    .initial_program()
+                    .lookup_function("cancel_twice")
+                    .unwrap()
+                    .clone();
+
+                task.timed_eval(function, &[], 500).await.unwrap();
+
+                assert_eq!(task.result(), Some(LpcRef::from(-1)), "{mode}, {repeat}");
+                global_state.with_call_outs(|calls| assert!(calls.is_empty()));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn aborted_cancellation_leaves_timer_cancellable_in_later_transaction() {
+        let code = r#"
+            int id;
+            void tick() {}
+            void create() { id = call_out(tick, 3600); }
+            void cancel_and_fail() {
+                if (remove_call_out(id) < 0 || remove_call_out(id) != -1)
+                    throw("incorrect cancellation results");
+                throw("abort cancellation");
+            }
+            int cancel() { return remove_call_out(id); }
+        "#;
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = test_config_builder!().null_mode(mode).build().unwrap();
+            let task = run_prog_with_config(code, config.into()).await;
+            let global_state = task.context.global_state.clone();
+            let process = task.context.process.clone();
+            let template = TaskTemplate::from(global_state.clone());
+            let error = apply_function_by_name(
+                "cancel_and_fail",
+                &[],
+                process.clone(),
+                template.clone(),
+                Some(500),
+            )
+            .await
+            .unwrap()
+            .unwrap_err();
+            assert!(error.to_string().contains("abort cancellation"), "{error}");
+            global_state.with_call_outs(|calls| assert_eq!(calls.len(), 1));
+
+            let result = apply_function_by_name("cancel", &[], process, template, Some(500))
+                .await
+                .unwrap()
+                .unwrap();
+
+            let LpcRef::Int(remaining) = result else {
+                panic!("expected milliseconds remaining, got {result:?}");
+            };
+            assert!((0..=3600000).contains(&remaining.0), "{mode}, {remaining}");
+            global_state.with_call_outs(|calls| assert!(calls.is_empty()));
+        }
     }
 }

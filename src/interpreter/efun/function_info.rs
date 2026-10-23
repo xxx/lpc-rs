@@ -12,7 +12,7 @@ use crate::interpreter::{
     },
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
     lpc_mapping::LpcMapping,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
 };
 
 /// The public argument slots exclude composition operands and dynamic receivers.
@@ -40,7 +40,7 @@ pub(super) fn receiver<const N: usize>(
                 if Arc::ptr_eq(&function.code, &COMPOSE_EXECUTOR) =>
             {
                 let Some(Some(LpcRef::Function(outer))) = ptr.partial_args().first() else {
-                    return NULL;
+                    return context.txn().nil();
                 };
                 ptr = outer;
                 continue;
@@ -65,7 +65,7 @@ pub(super) fn receiver<const N: usize>(
         return match value {
             Some(value @ LpcRef::String(_)) => value,
             Some(value @ LpcRef::Object(_)) if value.live_object(context.txn()).is_some() => value,
-            _ => NULL,
+            _ => context.txn().nil(),
         };
     }
 }
@@ -86,20 +86,23 @@ pub fn function_info<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         .upgrade()
         .filter(|owner| owner.is_live(context.txn()));
     let args = ptr.partial_args().get(offset..).unwrap_or_default();
-    let arguments = context.mint_array(args.iter().map(|arg| arg.clone().unwrap_or(NULL)));
+    let arguments = context.mint_array(
+        args.iter()
+            .map(|arg| arg.clone().unwrap_or(context.txn().nil())),
+    );
     let bound = context.mint_array(args.iter().map(|arg| LpcRef::from(arg.is_some())));
     let components = context.mint_array(
         ptr.partial_args()
             .iter()
             .take(if offset >= 2 { 2 } else { 0 })
-            .map(|arg| arg.clone().unwrap_or(NULL)),
+            .map(|arg| arg.clone().unwrap_or(context.txn().nil())),
     );
     let fields = [
         ("name", ptr.name().into()),
         ("kind", kind.into()),
         (
             "owner",
-            owner.map_or(NULL, |owner| Arc::downgrade(&owner).into()),
+            owner.map_or(context.txn().nil(), |owner| Arc::downgrade(&owner).into()),
         ),
         ("receiver", receiver(context, &ptr)),
         ("receiver_bound", ptr.receiver_bound().into()),

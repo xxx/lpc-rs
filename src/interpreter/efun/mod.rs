@@ -20,15 +20,19 @@ pub(crate) mod commands;
 pub(crate) mod compile_string;
 pub(crate) mod compose;
 pub(crate) mod conversions;
+pub(crate) mod copy_class;
 pub(crate) mod crypt;
 pub(crate) mod ctime;
 pub(crate) mod debug;
+pub(crate) mod deep_copy;
 pub(crate) mod deep_inventory;
 pub(crate) mod destruct;
 pub(crate) mod disable_commands;
+pub(crate) mod disassemble;
 pub(crate) mod dump;
 pub(crate) mod enable_commands;
 pub(crate) mod environment;
+pub(crate) mod evaluate;
 pub(crate) mod exec;
 pub(crate) mod explode;
 pub(crate) mod file_access;
@@ -43,8 +47,11 @@ pub(crate) mod function_exists;
 pub(crate) mod function_info;
 pub(crate) mod function_name;
 pub(crate) mod function_object;
+pub(crate) mod function_signature;
 pub(crate) mod functions;
+pub(crate) mod get_char;
 pub(crate) mod get_dir;
+pub(crate) mod has_key;
 pub(crate) mod hash_string;
 pub(crate) mod implode;
 pub(crate) mod inherit_list;
@@ -65,8 +72,11 @@ pub(crate) mod mkdir;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod object_clones;
+pub(crate) mod object_memory_info;
 pub(crate) mod object_time;
 pub(crate) mod object_update;
+pub(crate) mod objects;
+pub(crate) mod origin;
 pub(crate) mod papplyv;
 pub(crate) mod parse_add_rule;
 pub(crate) mod parse_add_synonym;
@@ -78,6 +88,7 @@ pub(crate) mod parse_refresh;
 pub(crate) mod parse_remove;
 pub(crate) mod parse_sentence;
 pub(crate) mod parse_string;
+mod parser_context;
 pub(crate) mod present;
 pub(crate) mod previous_object;
 pub(crate) mod query_call_out;
@@ -86,6 +97,8 @@ pub(crate) mod query_command;
 pub(crate) mod query_connection;
 pub(crate) mod query_ip_number;
 pub(crate) mod query_notify_fail;
+pub(crate) mod query_parser_registry;
+pub(crate) mod query_parser_rules;
 pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
 pub(crate) mod random;
@@ -98,23 +111,32 @@ pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
 pub(crate) mod rename;
 pub(crate) mod render_markdown;
+pub(crate) mod replace_string;
 pub(crate) mod request_clean_up;
 pub(crate) mod restore_map;
 pub(crate) mod restore_object;
+pub(crate) mod restore_value;
 pub(crate) mod rm;
 pub(crate) mod rmdir;
+pub(crate) mod rusage;
 pub(crate) mod save_map;
 pub(crate) mod save_object;
+pub(crate) mod save_value;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
 pub(crate) mod shadow;
 pub(crate) mod shutdown;
 pub(crate) mod sizeof;
+pub(crate) mod snoop;
+pub(crate) mod sockets;
 pub(crate) mod sort_array;
 pub(crate) mod source_cache_stats;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
+pub(crate) mod store_variable;
+pub(crate) mod strindex;
+pub(crate) mod syntax_tree;
 pub(crate) mod tell_object;
 pub(crate) mod terminal_colour;
 mod terminal_text;
@@ -125,9 +147,11 @@ pub(crate) mod this_player;
 pub(crate) mod throw;
 pub(crate) mod time;
 pub(crate) mod transaction_stats;
+pub(crate) mod trim;
 pub(crate) mod type_of;
 pub(crate) mod type_predicates;
 pub(crate) mod unique_array;
+pub(crate) mod uptime;
 pub(crate) mod users;
 pub(crate) mod variable_info;
 pub(crate) mod wildmatch;
@@ -153,7 +177,6 @@ use tracing::trace;
 use crate::{
     interpreter::{
         efun::efun_context::EfunContext,
-        lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
         stm::{Effect, TxnHandle},
@@ -383,7 +406,7 @@ efuns! {
     },
     clone_object [async] => {
         returns: LpcType::Object(false),
-        arity: 1,
+        arity: (1, 0, ellipsis),
         args: [LpcType::String(false)],
     },
     command [async] => {
@@ -539,8 +562,10 @@ efuns! {
     parse_init => {
         returns: LpcType::Void,
     },
-    parse_my_rules => {
-        returns: LpcType::String(true),
+    parse_my_rules [async] => {
+        returns: LpcType::Mixed(false),
+        arity: (4, 2),
+        args: [LpcType::Object(false), LpcType::String(false), LpcType::Int(false), LpcType::Object(false)],
     },
     parse_refresh => {
         returns: LpcType::Void,
@@ -552,12 +577,14 @@ efuns! {
     },
     parse_sentence [async] => {
         returns: LpcType::Mixed(false),
-        arity: (4, 3),
+        arity: (6, 5),
         args: [
             LpcType::String(false),
             LpcType::Int(false),
             LpcType::Object(true),
             LpcType::Mapping(false),
+            LpcType::Object(false),
+            LpcType::Object(false),
         ],
     },
     parse_string [async] => {
@@ -577,12 +604,21 @@ efuns! {
     query_call_outs => {
         returns: LpcType::Mixed(true),
         arity: (1, 1),
+        args: [LpcType::Object(false) | LpcType::Int(false)],
     },
     query_command => {
         returns: LpcType::String(false),
     },
     query_notify_fail => {
         returns: LpcType::Mixed(false),
+    },
+    query_parser_registry => {
+        returns: LpcType::Mapping(true),
+        arity: (1, 1),
+        args: [LpcType::Object(false)],
+    },
+    query_parser_rules => {
+        returns: LpcType::String(true),
     },
     query_resident_memory => {
         returns: LpcType::Int(false),
@@ -702,8 +738,8 @@ efuns! {
     },
     write_file [async] => {
         returns: LpcType::Int(false),
-        arity: 2,
-        args: [LpcType::String(false), LpcType::String(false)],
+        arity: (3, 1),
+        args: [LpcType::String(false), LpcType::String(false), LpcType::Int(false)],
     },
     json_encode => {
         returns: LpcType::String(false),
@@ -756,6 +792,9 @@ efuns! {
         args: [LpcType::Int(false)],
     },
     time => {
+        returns: LpcType::Int(false),
+    },
+    uptime => {
         returns: LpcType::Int(false),
     },
     to_float [in conversions] => {
@@ -817,7 +856,7 @@ efuns! {
     member_array => {
         returns: LpcType::Int(false),
         arity: (3, 1),
-        args: [LpcType::Mixed(false), LpcType::Mixed(true), LpcType::Int(false)],
+        args: [LpcType::Mixed(false), LpcType::Mixed(true) | LpcType::String(false), LpcType::Int(false)],
     },
     values [in keys_values] => {
         returns: LpcType::Mixed(true),
@@ -863,7 +902,7 @@ efuns! {
     map => {
         returns: LpcType::Mixed(false),
         arity: (2, 0, ellipsis),
-        args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
+        args: [LpcType::Mixed(true) | LpcType::Mapping(false) | LpcType::String(false), LpcType::Function(false)],
     },
     sort_array => {
         returns: LpcType::Mixed(true),
@@ -951,6 +990,11 @@ efuns! {
         args: [number()],
     },
     ceil [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    round [in math] => {
         returns: LpcType::Float(false),
         arity: 1,
         args: [number()],
@@ -1127,6 +1171,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
+    objects => { returns: LpcType::Object(true) },
     hash_string => {
         returns: LpcType::String(false),
         arity: 2,
@@ -1204,6 +1249,143 @@ efuns! {
     query_object_recompile [async in object_update] => {
         returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
     },
+    copy_class => {
+        returns: LpcType::Mixed(false), arity: 1, args: [LpcType::Mixed(false)],
+    },
+    deep_copy => {
+        returns: LpcType::Mixed(false), arity: 1, args: [LpcType::Mixed(false)],
+    },
+    classp [in type_predicates] => {
+        returns: LpcType::Int(false), arity: 1, args: [LpcType::Mixed(false)],
+    },
+    replace_string => {
+        returns: LpcType::String(false),
+        arity: (5, 2),
+        args: [
+            LpcType::String(false), LpcType::String(false), LpcType::String(false),
+            LpcType::Int(false), LpcType::Int(false),
+        ],
+    },
+    strindex => {
+        returns: LpcType::Int(false),
+        arity: (3, 1),
+        args: [LpcType::String(false), LpcType::String(false) | LpcType::Int(false), LpcType::Int(false)],
+    },
+    trim => {
+        returns: LpcType::String(false),
+        arity: (3, 2),
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false) | LpcType::Int(false)],
+    },
+    evaluate => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 0, ellipsis),
+        args: [LpcType::Mixed(false)],
+    },
+    origin => {
+        returns: LpcType::String(false),
+        arity: (0, 0),
+        args: [],
+    },
+    has_key => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [LpcType::Mapping(false), LpcType::Mixed(false)],
+    },
+    save_value => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    restore_value => {
+        returns: LpcType::Mixed(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    store_variable [async] => {
+        returns: LpcType::Void,
+        arity: (4, 1),
+        args: [LpcType::Object(false), LpcType::String(false), LpcType::Mixed(false), LpcType::String(false)],
+    },
+    get_char => {
+        returns: LpcType::Int(false),
+        arity: (2, 1),
+        args: [LpcType::String(false) | LpcType::Function(false), LpcType::Int(false)],
+    },
+    snoop [async] => {
+        returns: LpcType::Object(false),
+        arity: (2, 1),
+        args: [LpcType::Object(false), LpcType::Object(false)],
+    },
+    query_snoop [async in snoop] => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    query_snooping [async in snoop] => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    nilp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+
+    socket_connect [async in sockets] => {
+        returns: LpcType::Int(false), arity: 3,
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Function(false)],
+    },
+    socket_listen [async in sockets] => {
+        returns: LpcType::Int(false), arity: 3,
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Function(false)],
+    },
+    socket_write [async in sockets] => {
+        returns: LpcType::Int(false), arity: 2,
+        args: [LpcType::Int(false), LpcType::Bytes(false)],
+    },
+    socket_close [async in sockets] => {
+        returns: LpcType::Void, arity: 1, args: [LpcType::Int(false)],
+    },
+    socket_release [async in sockets] => {
+        returns: LpcType::Int(false), arity: 3,
+        args: [LpcType::Int(false), LpcType::Object(false), LpcType::Function(false)],
+    },
+    socket_acquire [async in sockets] => {
+        returns: LpcType::Void, arity: 2,
+        args: [LpcType::Int(false), LpcType::Function(false)],
+    },
+    socket_info [async in sockets] => {
+        returns: LpcType::Mapping(false), arity: 1, args: [LpcType::Int(false)],
+    },
+    query_sockets [async in sockets] => {
+        returns: LpcType::Mapping(true), arity: (1, 1),
+        args: [LpcType::Object(false) | LpcType::Int(false)],
+    },
+    disassemble => {
+        returns: LpcType::String(true),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    function_signature => {
+        returns: LpcType::Mapping(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::Object(false)],
+    },
+    rusage => {
+        returns: LpcType::Mapping(false),
+    },
+    object_memory_info [async] => {
+        returns: LpcType::Mapping(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    syntax_tree [async] => {
+        returns: LpcType::String(true),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::String(false)],
+    },
+
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1263,7 +1445,7 @@ async fn arg_or_this_object<const N: usize>(
     context: &EfunContext<'_, N>,
 ) -> Result<Option<Arc<Process>>> {
     Ok(match arg_ref {
-        LpcRef::Int(LpcInt(0)) => Some(context.process().clone()),
+        value if value == &context.txn().nil() => Some(context.process().clone()),
         LpcRef::String(path) => Some(context.load_object(path.to_str()).await?),
         _ => arg_ref.live_object(context.txn()),
     })
@@ -1275,7 +1457,7 @@ fn inspection_target<const N: usize>(
     name: &str,
 ) -> Result<Option<Arc<Process>>> {
     match context.arg(0) {
-        LpcRef::Int(LpcInt(0)) => Ok(None),
+        value if value == &context.txn().nil() => Ok(None),
         value @ LpcRef::Object(_) => Ok(value.live_object(context.txn())),
         _ => Err(context.runtime_error(format!("{name}: expected an object"))),
     }
@@ -1294,7 +1476,7 @@ pub(crate) fn in_game_name<const N: usize>(
 /// argument is absent or 0 — or `None` when there is none.
 fn connection_of<const N: usize>(context: &EfunContext<'_, N>) -> Option<Arc<Connection>> {
     let target = match context.arg(0) {
-        LpcRef::Int(LpcInt(0)) => context.this_player().load_full(),
+        value if value == &context.txn().nil() => context.this_player().load_full(),
         arg => arg.live_object(context.txn()),
     };
     target.and_then(|proc| {
@@ -1358,6 +1540,7 @@ mod tests {
         assert!(!Efun::find_object.suspends());
         assert!(!Efun::this_object.suspends());
         assert!(!Efun::intp.suspends());
+        assert!(!Efun::nilp.suspends());
     }
 
     /// `Efun`'s discriminants are the table positions `CallEfun` carries.
@@ -1436,6 +1619,8 @@ mod tests {
                 "query_call_outs",
                 "query_command",
                 "query_notify_fail",
+                "query_parser_registry",
+                "query_parser_rules",
                 "query_resident_memory",
                 "query_verb",
                 "remove_action",
@@ -1471,6 +1656,7 @@ mod tests {
                 "min",
                 "random",
                 "time",
+                "uptime",
                 "to_float",
                 "to_int",
                 "to_string",
@@ -1510,6 +1696,7 @@ mod tests {
                 "sqrt",
                 "floor",
                 "ceil",
+                "round",
                 "set_bit",
                 "clear_bit",
                 "test_bit",
@@ -1540,6 +1727,7 @@ mod tests {
                 "function_name",
                 "regmatch",
                 "object_clones",
+                "objects",
                 "hash_string",
                 "load_object",
                 "function_object",
@@ -1557,6 +1745,36 @@ mod tests {
                 "request_clean_up",
                 "request_object_recompile",
                 "query_object_recompile",
+                "copy_class",
+                "deep_copy",
+                "classp",
+                "replace_string",
+                "strindex",
+                "trim",
+                "evaluate",
+                "origin",
+                "has_key",
+                "save_value",
+                "restore_value",
+                "store_variable",
+                "get_char",
+                "snoop",
+                "query_snoop",
+                "query_snooping",
+                "nilp",
+                "socket_connect",
+                "socket_listen",
+                "socket_write",
+                "socket_close",
+                "socket_release",
+                "socket_acquire",
+                "socket_info",
+                "query_sockets",
+                "disassemble",
+                "function_signature",
+                "rusage",
+                "object_memory_info",
+                "syntax_tree",
             ]
         );
     }

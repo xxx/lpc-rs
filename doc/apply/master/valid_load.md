@@ -40,9 +40,12 @@ Once compiled, the new program's own `inherit`s and `#include`s are put to
 `valid_inherit` and `valid_read` for the file being compiled, not for the
 loader: the loader's permission ends at the load.
 
-`compile_string` also asks this apply, after `valid_write` approves supplying
-source under the requested name. Its `func` is `"compile_string"`; the source
-need not exist on disk. Includes and inherits keep the same checks.
+`compile_string` and `syntax_tree` also ask this apply, after `valid_write`
+approves supplied source under the requested name. Their `func` is their efun
+name; the source need not exist on disk. Includes and inherits keep the same
+checks. `syntax_tree` asks even when that source identity names an already-loaded
+object, because it is inspecting different supplied text. It neither replaces
+that object nor creates or initializes another one.
 
 The apply runs inside the loading task: `this_object` is the master, and an
 error thrown here is the caller's error. For a `call_out` or `input_to`

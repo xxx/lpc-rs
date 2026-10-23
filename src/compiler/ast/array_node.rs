@@ -66,3 +66,6 @@ impl Display for ArrayNode {
         write!(f, "({{ {s} }})")
     }
 }
+
+#[cfg(test)]
+mod tests;

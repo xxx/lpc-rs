@@ -7,6 +7,9 @@
  *
  * The vocabulary hooks serve parse_command() and the grammar parser used by
  * parse_sentence(); they do not change ulib's add_action() commands.
+ * Parser efun callbacks retain the invoking LPC frames behind the actor's caller entry.
+ * Parser callbacks use the selected command giver as this_player(), defaulting to the actor.
+ * Command vocabulary uses the actor as player/caller; parse_command keeps its entering player.
  * See ../doc/applies.md, "Master applies", for the complete hook index.
  */
 #pragma strict_types
@@ -145,8 +148,16 @@ object *parse_command_users() {
  * arg is the phrase for 2/3/7, objects for 4, a count for 5, a reason for 6,
  * or 0 for 8; ob is the refusing object for kind 6 and otherwise 0.
  * flag marks a plural slot for 2/3/7 and is otherwise 0.
+ * Pair-rule ordinals count matches satisfying slot access policy before permissions.
+ * :v includes visible but unreachable matches; aggregate rules count permission qualifiers.
  * Return a message, or 0 for no parser message; omission also supplies none.
- * Dispatch may then try other rules or command_not_found().
+ * Called after all parser phrases fail, with the most resolved object slots first.
+ * Ties keep longest phrase first and registration order within each.
+ * A string ends reporting; a successful rule prevents all error-hook calls.
+ * parse_my_rules considers only its caller's rules and returns text without delivery.
+ * Deferred reporting retains the parser efun's invoking frames behind the actor.
+ * query_verb() reports this failure's phrase; query_verb(1) preserves its typed spacing.
+ * Silence allows later failure reports, then the ordinary dispatch fallback.
  * This example preserves a handler's reason and uses one fallback otherwise.
  */
 string parser_error_message(int kind, object ob, mixed arg, int flag) {

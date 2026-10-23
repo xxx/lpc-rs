@@ -393,7 +393,7 @@
     parserOut: [
       'can → choose → do',
       'The parser package adds an object-selection and permission protocol around the parse.',
-      'For 2 object slots, can_ begins with both unchosen. A direct_ call tests the sword with its own slot filled, then indirect_ tests bob with both slots filled. Once selection finishes, both checks run again with the final arguments before do_. Raw noun phrases follow the object arguments. The inspector shows those calls in order. Uncheck Handler accepts to make can_ refuse. A successful do_ counts as handled regardless of its return value; this tour supplies accepting direct_ and indirect_ implementations.',
+      'For 2 object slots, can_ begins with both unresolved. Both nouns then resolve before direct_ tests the sword and indirect_ tests bob. Each check receives both individual objects, so either object can help identify its partner. The selected pair is checked again before do_. Source text for every capture follows its semantic arguments; the inspector shows the calls in order. The tour assumes specific handlers on the verb owner and noun objects, with no actor can_ handler. Other name tiers and target fallback are outside this model. There is one match per slot and accepting direct_ and indirect_ implementations. Uncheck Handler accepts to make can_ refuse. Reaching do_ counts as handled regardless of its return value.',
     ],
     dgdOut: [
       'Tree → action values',

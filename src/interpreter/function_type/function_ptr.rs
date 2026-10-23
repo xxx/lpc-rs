@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     convert::Infallible,
     fmt::{Display, Formatter},
@@ -15,17 +16,18 @@ use crate::interpreter::program::Function;
 use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
     call_frame::FrameReceiver,
+    call_origin::CallOrigin,
     efun::{CALL_OTHER, EFUN_FUNCTIONS, compose::COMPOSE_RECEIVER_EXECUTOR},
     function_type::function_address::FunctionAddress,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     task_context::{Caller, Callers, Loader, ObjectLookup, TaskContext},
 };
 
-/// The first of `args`, taken; `0` when there is none.
-pub(crate) fn first_arg(args: &mut Vec<LpcRef>) -> LpcRef {
+/// The first of `args`, taken; the selected null when there is none.
+pub(crate) fn first_arg(args: &mut Vec<LpcRef>, txn: &TxnHandle) -> LpcRef {
     if args.is_empty() {
-        NULL
+        txn.nil()
     } else {
         args.remove(0)
     }
@@ -77,6 +79,27 @@ pub struct FunctionPtr {
 }
 
 impl FunctionPtr {
+    pub(crate) fn storage_bytes(&self) -> Result<usize> {
+        let mut size = crate::interpreter::memory::Size::new(size_of::<Self>());
+        if self.partial_args.capacity() != 0 {
+            size.items::<usize>(2)?;
+            size.items::<Option<LpcRef>>(self.partial_args.capacity())?;
+        }
+        if self.upvalue_ptrs.capacity() != 0 {
+            size.items::<usize>(2)?;
+            size.items::<VarId>(self.upvalue_ptrs.capacity())?;
+        }
+        Ok(size.bytes())
+    }
+
+    /// Classification for an explicit pointer call, before dispatcher overrides.
+    pub(crate) fn call_origin(&self) -> CallOrigin {
+        match &self.address {
+            FunctionAddress::Local(_, function) if function.is_closure() => CallOrigin::Closure,
+            _ => CallOrigin::FunctionPointer,
+        }
+    }
+
     pub(crate) fn frame_receiver(
         &self,
         process: Arc<Process>,
@@ -138,11 +161,12 @@ impl FunctionPtr {
     }
 
     /// The argument list for a call with `passed`: the holes in the partial
-    /// args fill left to right, the rest append, an unfilled hole is `0`.
-    pub fn bound_args(&self, passed: &[LpcRef]) -> Vec<LpcRef> {
+    /// args fill left to right, the rest append, an unfilled hole is the selected null.
+    pub fn bound_args(&self, passed: &[LpcRef], mode: NullMode) -> Vec<LpcRef> {
         let mut args = Vec::with_capacity(self.bound_len(passed.len()));
         let Ok(()) = self.each_bound(
             passed.iter().cloned().map(Ok::<_, Infallible>),
+            LpcRef::nil(mode),
             |_, value| {
                 args.push(value);
                 Ok(())
@@ -157,18 +181,19 @@ impl FunctionPtr {
     }
 
     /// Every argument a call with `passed` values runs with, in order, to
-    /// `sink`: a hole takes the next passed value (0 when none is left), the
+    /// `sink`: a hole takes the next passed value (nil when none is left), the
     /// extras follow.
     pub(crate) fn each_bound<E>(
         &self,
         mut passed: impl Iterator<Item = std::result::Result<LpcRef, E>>,
+        nil: LpcRef,
         mut sink: impl FnMut(usize, LpcRef) -> std::result::Result<(), E>,
     ) -> std::result::Result<(), E> {
         let mut i = 0;
         for arg in &self.partial_args {
             let value = match arg {
                 Some(value) => value.clone(),
-                None => passed.next().transpose()?.unwrap_or(NULL),
+                None => passed.next().transpose()?.unwrap_or_else(|| nil.clone()),
             };
             sink(i, value)?;
             i += 1;
@@ -211,17 +236,23 @@ impl FunctionPtr {
 
     /// The identity a load this pointer triggers runs under: its owner in
     /// front of `callers`, the chain where it fired, and the file that wrote
-    /// it (`0` when it has none).
-    pub(crate) fn loader(&self, lib_dir: &str, callers: Callers) -> Result<Loader> {
+    /// it (the selected null when it has none).
+    pub(crate) fn loader(
+        &self,
+        lib_dir: &str,
+        callers: Callers,
+        txn: &TxnHandle,
+    ) -> Result<Loader> {
         let Some(owner) = self.owner.upgrade() else {
             return Err(LpcError::runtime(format!(
                 "attempted to call a function pointer whose owner is destructed: {}",
                 self
             )));
         };
-        let program = self.origin.as_ref().map_or(NULL, |origin| {
-            LpcRef::from(LibRoot::new(lib_dir).source_name(origin).to_string())
-        });
+        let program = self.origin.as_ref().map_or_else(
+            || txn.nil(),
+            |origin| LpcRef::from(LibRoot::new(lib_dir).source_name(origin).to_string()),
+        );
         Ok(Loader {
             func: "call_other".to_string(),
             chain: Caller::link(owner, callers),
@@ -262,7 +293,8 @@ impl FunctionPtr {
                         )));
                     }
                     ObjectLookup::NotCreated => {
-                        let loader = self.loader(ctx.config().lib_dir.as_str(), callers()?)?;
+                        let loader =
+                            self.loader(ctx.config().lib_dir.as_str(), callers()?, ctx.txn())?;
                         let process = ctx.compile_process(&path, &loader).await?;
                         ctx.insert_and_initialize(loader.callers(), &process)
                             .await?;
@@ -288,7 +320,7 @@ impl FunctionPtr {
     /// through `ctx` for the owner standing in the chain `callers` yields),
     /// the function, and the bound arguments.
     /// `Ok(None)`: a dynamic receiver has no function by this name, so the
-    /// call yields `0` as `call_other` would.
+    /// call yields the selected null as `call_other` would.
     pub async fn prepare_call(
         &self,
         passed: &[LpcRef],
@@ -296,7 +328,7 @@ impl FunctionPtr {
         callers: impl FnOnce() -> Result<Callers>,
     ) -> Result<Option<ResolvedCall>> {
         let txn = ctx.txn();
-        let mut args = self.bound_args(passed);
+        let mut args = self.bound_args(passed, txn.null_mode());
 
         let (process, function) = match &self.address {
             FunctionAddress::Local(receiver, function) => {
@@ -310,15 +342,15 @@ impl FunctionPtr {
                 (process, resolved)
             }
             FunctionAddress::Dynamic(name) => {
-                let receiver = first_arg(&mut args);
+                let receiver = first_arg(&mut args, txn);
                 let Some(callee) = self.dynamic_callee(*name, receiver, ctx, callers).await? else {
                     return Ok(None);
                 };
                 callee
             }
             FunctionAddress::Efun(name) if *name == CALL_OTHER => {
-                let receiver = first_arg(&mut args);
-                let name = call_other_name(&first_arg(&mut args))?;
+                let receiver = first_arg(&mut args, txn);
+                let name = call_other_name(&first_arg(&mut args, txn))?;
                 let Some(callee) = self.dynamic_callee(name, receiver, ctx, callers).await? else {
                     return Ok(None);
                 };
@@ -341,7 +373,12 @@ impl FunctionPtr {
                         "call to simul efun `{name}`: no simul-efun object is loaded"
                     )));
                 };
-                let Some(function) = simul_efuns.program(txn).lookup_function(name).cloned() else {
+                let Some(function) = simul_efuns
+                    .program(txn)
+                    .lookup_function(name)
+                    .filter(|function| function.public())
+                    .cloned()
+                else {
                     return Err(LpcError::runtime(format!(
                         "call to unknown simul efun `{name}`"
                     )));
@@ -406,7 +443,7 @@ impl Display for FunctionPtr {
 
 #[cfg(test)]
 mod tests {
-    use factori_imp::create;
+    use crate::interpreter::lpc_ref::NULL;
     use thin_vec::thin_vec;
 
     use super::*;
@@ -420,7 +457,10 @@ mod tests {
         );
 
         assert_eq!(
-            ptr.bound_args(&[LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)]),
+            ptr.bound_args(
+                &[LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)],
+                Default::default()
+            ),
             vec![
                 LpcRef::from(1),
                 LpcRef::from(2),
@@ -429,7 +469,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            ptr.bound_args(&[LpcRef::from(1)]),
+            ptr.bound_args(&[LpcRef::from(1)], Default::default()),
             vec![LpcRef::from(1), NULL, LpcRef::from("x")]
         );
     }

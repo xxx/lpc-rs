@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::interpreter::{
     EPILOG, PRELOAD,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     task::{
         apply_function::{applied_in_master, apply_function_in_master, report_runtime_error},
@@ -84,7 +84,7 @@ impl GlobalState {
             }
         };
         let Some(array) = applied.array() else {
-            if *applied.value() != NULL {
+            if *applied.value() != LpcRef::nil(self.config.null_mode) {
                 self.config
                     .debug_log(format!(
                         "epilog answered a {}; nothing preloaded",

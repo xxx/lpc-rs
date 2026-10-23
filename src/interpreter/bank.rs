@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     fmt::{Display, Formatter},
     ops::{Deref, DerefMut, Index, IndexMut},
@@ -27,6 +28,20 @@ impl RefBank {
         let mut registers = ThinVec::with_capacity(reservation);
         registers.extend((0..reservation).map(|_| NULL));
 
+        if function.null_mode == NullMode::Distinct {
+            registers[0] = LpcRef::default_for(function.return_type(), function.null_mode);
+            for (index, type_) in function.prototype.arg_types.iter().enumerate() {
+                let location = function.arg_locations.get(index).copied().unwrap_or(
+                    lpc_rs_core::register::RegisterVariant::Local(Register(
+                        (index + 1) as RegisterSize,
+                    )),
+                );
+                if let lpc_rs_core::register::RegisterVariant::Local(reg) = location {
+                    registers[usize::from(reg.index())] =
+                        LpcRef::default_for(*type_, function.null_mode);
+                }
+            }
+        }
         RefBank { registers }
     }
 }

@@ -37,6 +37,22 @@ impl FunctionPrototypeWalker {
             max_closure_arg_reference: 0,
         }
     }
+
+    fn check_trailing_defaults(parameters: &[VarInitNode]) -> Result<()> {
+        for pair in parameters.windows(2) {
+            let previous = &pair[0];
+            let parameter = &pair[1];
+            if previous.value.is_some() && parameter.value.is_none() {
+                return Err(lpc_error!(
+                    parameter.span,
+                    "parameter `{}` must have a default value because it follows a defaulted parameter",
+                    parameter.name
+                )
+                .with_label("defaulted parameter declared here", previous.span));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl ContextHolder for FunctionPrototypeWalker {
@@ -59,6 +75,10 @@ impl Pass for FunctionPrototypeWalker {
 #[async_trait]
 impl TreeWalker for FunctionPrototypeWalker {
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+        if let Some(parameters) = &node.parameters {
+            Self::check_trailing_defaults(parameters)?;
+        }
+
         // `$N` names a position in the innermost closure only.
         let enclosing_max = std::mem::replace(&mut self.max_closure_arg_reference, 0);
 
@@ -69,6 +89,13 @@ impl TreeWalker for FunctionPrototypeWalker {
 
         let parameters = node.parameters.get_or_insert_default();
         let declared = RegisterSize::try_from(parameters.len())?;
+        if highest_positional > declared && node.variadic.is_some() {
+            return Err(lpc_error!(
+                node.span,
+                "positional `${}` lies beyond the fixed parameters of a named variadic closure",
+                highest_positional
+            ));
+        }
         if highest_positional > declared && parameters.iter().any(|p| p.value.is_some()) {
             self.context.diagnostics.record(lpc_error!(
                 node.span,
@@ -86,7 +113,10 @@ impl TreeWalker for FunctionPrototypeWalker {
         let num_default_args =
             RegisterSize::try_from(parameters.iter().filter(|p| p.value.is_some()).count())?;
         let kind = FunctionKind::Closure;
-        let arg_types = parameters.iter().map(|parm| parm.type_).collect::<Vec<_>>();
+        let arg_types = parameters
+            .iter()
+            .map(|parm| parm.type_.resolved())
+            .collect::<Result<Vec<_>>>()?;
         let arg_spans = parameters.iter().flat_map(|n| n.span).collect::<Vec<_>>();
 
         self.context.function_prototypes.insert(
@@ -94,7 +124,7 @@ impl TreeWalker for FunctionPrototypeWalker {
             FunctionPrototypeBuilder::default()
                 .name(node.name.to_owned())
                 .filename(self.context.source.input().clone())
-                .return_type(node.return_type)
+                .return_type(node.return_type.resolved()?)
                 .kind(kind)
                 .arity(FunctionArity {
                     num_args,
@@ -118,6 +148,8 @@ impl TreeWalker for FunctionPrototypeWalker {
     }
 
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+        Self::check_trailing_defaults(&node.parameters)?;
+
         let proto_opt = self
             .context
             .lookup_function_complete(node.name, &CallNamespace::default());
@@ -163,14 +195,14 @@ impl TreeWalker for FunctionPrototypeWalker {
         let arg_types = node
             .parameters
             .iter()
-            .map(|parm| parm.type_)
-            .collect::<Vec<_>>();
+            .map(|parm| parm.type_.resolved())
+            .collect::<Result<Vec<_>>>()?;
         self.context.function_prototypes.insert(
             node.name.to_owned(),
             FunctionPrototypeBuilder::default()
                 .name(node.name.to_owned())
                 .filename(self.context.source.input().clone())
-                .return_type(node.return_type)
+                .return_type(node.return_type.resolved()?)
                 .arity(FunctionArity {
                     num_args,
                     num_default_args,
@@ -233,7 +265,8 @@ mod tests {
     #[tokio::test]
     async fn disallows_redefining_nomask_function() {
         let mut node = FunctionDefNode {
-            return_type: LpcType::Void,
+            variadic: None,
+            return_type: LpcType::Void.into(),
             name: ustr("duplicate"),
             parameters: vec![],
             flags: FunctionFlags::default(),
@@ -284,7 +317,8 @@ mod tests {
         own_args: usize,
     ) -> Result<()> {
         let mut node = FunctionDefNode {
-            return_type: LpcType::Void,
+            variadic: None,
+            return_type: LpcType::Void.into(),
             name: ustr("g"),
             parameters: (0..own_args)
                 .map(|i| VarInitNode::new(&format!("p{i}"), LpcType::Int(false)))
@@ -347,7 +381,8 @@ mod tests {
     async fn function_def_stores_the_prototype() {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = FunctionDefNode {
-            return_type: LpcType::Mixed(false),
+            variadic: None,
+            return_type: LpcType::Mixed(false).into(),
             name: ustr("marf"),
             flags: FunctionFlags::default(),
             parameters: vec![
@@ -384,8 +419,9 @@ mod tests {
     async fn closure_stores_the_prototype() {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = ClosureNode {
+            variadic: None,
             name: "closure-123".into(),
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             flags: FunctionFlags::default(),
             parameters: Some(vec![
                 VarInitNode::new("foo", LpcType::Int(false)),
@@ -394,6 +430,8 @@ mod tests {
             body: vec![AstNode::Expression(ExpressionNode::Var(VarNode::new("$4")))],
             span: None,
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         };
 
         let _ = walker.visit_closure(&mut node).await;

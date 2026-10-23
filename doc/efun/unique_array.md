@@ -7,6 +7,9 @@ array of groups, each group an array of the elements for which `f` returned
 the same value. Groups come in the order their key was first seen, and the
 elements of a group in their order in `arr`. The group whose key equals
 `skip` is left out; with no `skip`, that is the group with key `0`.
+Grouping and skip keys use [type-sensitive matching](../lpc/comparisons.md#collection-matching):
+integer `1` and float `1.0` form separate groups, and the default skip leaves
+the `0.0` group present.
 
 `f` is called once per element, with that element as its only argument. A
 string `f` names a function called in each element, `element->f()`, and an

@@ -121,6 +121,45 @@ fn store_nonlocal_integer(
     frame.set_int(txn, location, value)
 }
 
+#[inline(always)]
+fn execute_integer_action(
+    frame: &mut CallFrame,
+    txn: &TxnHandle,
+    action: IntegerAction,
+) -> lpc_rs_errors::Result<()> {
+    match action {
+        IntegerAction::Store(RegisterVariant::Local(reg), value) => {
+            frame.set_int(txn, RegisterVariant::Local(reg), value)?;
+        }
+        IntegerAction::Store(location, value) => {
+            store_nonlocal_integer(frame, txn, location, value)?;
+        }
+        IntegerAction::Branch(taken, address) => {
+            if taken {
+                frame.set_pc(address);
+            }
+        }
+    }
+    Ok(())
+}
+
+// Keep span storage and cleanup outside the untraced instruction loop.
+#[inline(never)]
+fn execute_traced_integer_action(
+    frame: &mut CallFrame,
+    txn: &TxnHandle,
+    instruction: Instruction,
+    action: IntegerAction,
+) -> lpc_rs_errors::Result<()> {
+    let span = tracing::debug_span!("step");
+    let _guard = span.enter();
+    trace!("about to evaluate: {}", instruction);
+    frame.inc_pc();
+    #[cfg(feature = "opcode-profile")]
+    crate::interpreter::opcode_profile::record(&instruction);
+    execute_integer_action(frame, txn, action)
+}
+
 /// Keep one frame borrowed until an instruction needs the full dispatcher.
 #[inline(never)]
 fn run_integer_frame(
@@ -137,33 +176,17 @@ fn run_integer_frame(
         };
 
         *left -= 1;
-        let span;
-        let _guard;
         if tracing::level_enabled!(tracing::Level::DEBUG)
             || tracing::if_log_enabled!(tracing::Level::DEBUG, { true } else { false })
         {
-            span = tracing::debug_span!("step");
-            _guard = span.enter();
-        }
-        trace!("about to evaluate: {}", instruction);
-        #[cfg(feature = "opcode-profile")]
-        let counted_instruction = *instruction;
-        frame.inc_pc();
-        #[cfg(feature = "opcode-profile")]
-        crate::interpreter::opcode_profile::record(&counted_instruction);
-
-        match action {
-            IntegerAction::Store(RegisterVariant::Local(reg), value) => {
-                frame.set_int(txn, RegisterVariant::Local(reg), value)?;
-            }
-            IntegerAction::Store(location, value) => {
-                store_nonlocal_integer(frame, txn, location, value)?;
-            }
-            IntegerAction::Branch(taken, address) => {
-                if taken {
-                    frame.set_pc(address);
-                }
-            }
+            execute_traced_integer_action(frame, txn, *instruction, action)?;
+        } else {
+            #[cfg(feature = "opcode-profile")]
+            let counted_instruction = *instruction;
+            frame.inc_pc();
+            #[cfg(feature = "opcode-profile")]
+            crate::interpreter::opcode_profile::record(&counted_instruction);
+            execute_integer_action(frame, txn, action)?;
         }
     }
     Ok(())
@@ -199,7 +222,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         self.catch_error(e)?;
                     } else {
                         let stack_trace = self.stack.stack_trace();
-                        return Err(e.with_stack_trace(stack_trace));
+                        let frames = crate::interpreter::error_frames::capture(
+                            &self.stack,
+                            self.context.txn(),
+                        );
+                        return Err(e.with_stack_trace(stack_trace).with_error_frames(frames));
                     }
                 }
             }
@@ -291,6 +318,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let result = self.handle_aconst(location);
                 consumed(&mut self.array_items, result)?;
             }
+            Instruction::AConstSpread(list, location) => {
+                let values = self.arg_values(list)?;
+                let array = self
+                    .context
+                    .txn
+                    .with(|txn| txn.mint_array(LpcArray::new(values)));
+                set_location(
+                    &mut self.stack,
+                    &self.context.txn,
+                    location,
+                    LpcRef::Array(array),
+                )?;
+            }
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(
                     r1,
@@ -337,7 +377,75 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(Step::Await(call));
                 }
             }
-            Instruction::Cast(r1, target, r2) => {
+            Instruction::ClassConst(index, dest) => {
+                let frame = self.stack.current_frame()?;
+                let Some(lpc_rs_core::lpc_type::LpcType::Class(id, false)) =
+                    frame.function.types.get(usize::from(index.0))
+                else {
+                    return Err(LpcError::bug("invalid constructor class type"));
+                };
+                let definition = frame
+                    .function
+                    .class_scope
+                    .definitions
+                    .iter()
+                    .find(|definition| definition.id == *id)
+                    .ok_or_else(|| LpcError::bug("missing constructor class definition"))?
+                    .clone();
+                let instance = crate::interpreter::lpc_class::LpcClass::with_null_mode(
+                    definition,
+                    self.context.txn.null_mode(),
+                );
+                let value = LpcRef::Class(self.context.txn.with(|txn| txn.mint_class(instance)));
+                set_location(&mut self.stack, &self.context.txn, dest, value)?;
+            }
+            Instruction::MemberLoad(receiver, name, dest) => {
+                let frame = self.stack.current_frame()?;
+                let receiver = get_location(&self.stack, &self.context.txn, receiver)?;
+                let value = crate::interpreter::lpc_class::read_member(
+                    &receiver,
+                    &self.context.txn,
+                    &frame.function.class_scope,
+                    name,
+                )?;
+                set_location(&mut self.stack, &self.context.txn, dest, value)?;
+            }
+            Instruction::MemberStore(value, receiver, name) => {
+                let frame = self.stack.current_frame()?;
+                let receiver = get_location(&self.stack, &self.context.txn, receiver)?;
+                let value = get_location(&self.stack, &self.context.txn, value)?.into_owned();
+                crate::interpreter::lpc_class::write_member(
+                    &receiver,
+                    &self.context.txn,
+                    &frame.function.class_scope,
+                    name,
+                    value,
+                )?;
+            }
+            Instruction::Guard(value, index) => {
+                let frame = self.stack.current_frame()?;
+                let target = *frame
+                    .function
+                    .types
+                    .get(usize::from(index.0))
+                    .ok_or_else(|| LpcError::bug("invalid nominal guard type"))?;
+                let value = get_location(&self.stack, &self.context.txn, value)?;
+                if !value.passes_cast(target, &self.context.txn) {
+                    return Err(LpcError::runtime(format!(
+                        "expected {target}, found {}",
+                        value.as_lpc_type(&self.context.txn)
+                    )));
+                }
+            }
+            Instruction::Cast(r1, index, r2) => {
+                let target = *self
+                    .stack
+                    .last()
+                    .ok_or_else(|| lpc_rs_errors::lpc_bug!("cast without a frame"))?
+                    .function
+                    .types
+                    .get(usize::from(index.0))
+                    .ok_or_else(|| lpc_rs_errors::lpc_bug!("invalid cast type index"))?;
                 self.unary_operation(r1, r2, |value, txn| {
                     if value.passes_cast(target, txn) {
                         Ok(value.clone())
@@ -510,8 +618,35 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::PushPartialArg(r) => {
                 self.partial_args.push(r);
             }
-            Instruction::Range(r1, r2, r3, r4) => {
+            Instruction::IndexFromEnd(container, distance, destination) => {
+                self.handle_index_from_end(container, distance, destination)?;
+            }
+            Instruction::AssignIndex(value, target, index, address) => {
+                if !self.handle_store::<true>(value, target, index)? {
+                    self.stack.current_frame_mut()?.set_pc(address);
+                }
+            }
+            Instruction::ReplaceRange(direction, array, start, end, replacement) => {
+                self.handle_replace_range(direction, array, start, end, replacement)?;
+            }
+            Instruction::Range(r1, r2, r3, r4) | Instruction::RangeFromEnd(_, r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
+
+                let direction = match instruction {
+                    Instruction::RangeFromEnd(kind, ..) => Some(kind),
+                    _ => None,
+                };
+                if direction.is_some()
+                    && (!matches!(
+                        *get_location(&self.stack, &self.context.txn, r2)?,
+                        LpcRef::Int(_)
+                    ) || !matches!(
+                        *get_location(&self.stack, &self.context.txn, r3)?,
+                        LpcRef::Int(_)
+                    ))
+                {
+                    return Err(self.runtime_error("Slice bounds must be integers"));
+                }
 
                 let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
                     let to_idx = |i: LpcIntInner| {
@@ -522,8 +657,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             (len as LpcIntInner + i) as usize
                         }
                     };
-                    let real_start = to_idx(start);
-                    let mut real_end = to_idx(end);
+                    let real_start = if direction.is_some_and(|kind| kind.start_from_end()) {
+                        (len as LpcIntInner).saturating_sub(start).max(0) as usize
+                    } else {
+                        to_idx(start)
+                    };
+                    let mut real_end = if direction.is_some_and(|kind| kind.end_from_end()) {
+                        let end = (len as LpcIntInner).saturating_sub(end);
+                        if end < 0 {
+                            return (1, 0);
+                        }
+                        end as usize
+                    } else {
+                        to_idx(end)
+                    };
 
                     if real_end >= len {
                         real_end = len - 1;
@@ -639,7 +786,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             }
                         }
                         LpcRef::Float(_)
+                        | LpcRef::Nil
                         | LpcRef::Int(_)
+                        | LpcRef::Class(_)
                         | LpcRef::Mapping(_)
                         | LpcRef::Object(_)
                         | LpcRef::Function(_) => {
@@ -656,6 +805,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return_value(new_ref, &mut self.stack)?;
             }
             Instruction::Ret => {
+                let frame = self.stack.current_frame()?;
+                let target = frame.function.prototype.return_type;
+                if matches!(target, lpc_rs_core::lpc_type::LpcType::Class(_, false)) {
+                    let value =
+                        get_location(&self.stack, &self.context.txn, Register(0).as_local())?;
+                    if !value.passes_cast(target, &self.context.txn) {
+                        return Err(LpcError::runtime(format!(
+                            "return expected {target}, found {}",
+                            value.as_lpc_type(&self.context.txn)
+                        )));
+                    }
+                }
                 self.pop_frame()?;
 
                 // halt at the end of all input
@@ -676,7 +837,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::Store(value_loc, container_loc, index_loc) => {
                 // r2[r3] = r1;
-                self.handle_store(value_loc, container_loc, index_loc)?;
+                self.handle_store::<false>(value_loc, container_loc, index_loc)?;
             }
             Instruction::Shl(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| Some(int_shl(x, y)), |x, y, _| x.shl(y))?;
@@ -846,6 +1007,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn integer_slices_match_single_steps_for_global_and_upvalue_writes() {
+        use crate::interpreter::{bank::RefBank, stm::VarId};
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "int result; void create() {}", |_| true).await;
+        let [r0, r1] = [0, 1].map(|i| Register(i).as_local());
+        let g0 = Register(0).as_global();
+        let u0 = Register(0).as_upvalue();
+        let frame = task.stack.current_frame_mut().unwrap();
+        frame.registers = RefBank::new(vec![2.into(), 3.into()]);
+        frame.upvalue_ptrs = (&[VarId::new()][..]).into();
+        let function = Arc::make_mut(&mut frame.function);
+        function.instructions = vec![
+            Instruction::Add(r0, r1, g0),
+            Instruction::Mul(r0, r1, u0),
+            Instruction::Copy(g0, r0),
+            Instruction::Copy(u0, r1),
+            Instruction::Sub(r1, r0, g0),
+            Instruction::Copy(r0, u0),
+            Instruction::Jmp(Address(0)),
+        ];
+        function.debug_spans.resize(7, None);
+        let dispatchers = [
+            tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default()),
+            tracing::Dispatch::new(tracing_subscriber::registry()),
+        ];
+
+        for dispatcher in &dispatchers {
+            let mut actual = task.clone();
+            let mut reference = task.clone();
+            actual.context.txn = TxnHandle::empty();
+            reference.context.txn = TxnHandle::empty();
+            tracing::dispatcher::with_default(dispatcher, || {
+                for count in [1, 2, 3, 7, 19] {
+                    let mut budget = count;
+                    assert!(matches!(
+                        actual.run_slice(&mut budget).unwrap(),
+                        Slice::Budget
+                    ));
+                    for _ in 0..count {
+                        assert!(matches!(reference.step().unwrap(), Step::Next));
+                    }
+                    let frame = actual.stack.current_frame().unwrap();
+                    let expected = reference.stack.current_frame().unwrap();
+                    assert_eq!(budget, 0);
+                    assert_eq!(frame.pc(), expected.pc());
+                    assert_eq!(frame.registers, expected.registers);
+                    for location in [g0, u0] {
+                        assert_eq!(
+                            frame.get_location(&actual.context.txn, location).unwrap(),
+                            expected
+                                .get_location(&reference.context.txn, location)
+                                .unwrap(),
+                        );
+                    }
+                }
+            });
+        }
+    }
+
+    #[tokio::test]
+    async fn traced_integer_write_error_exits_the_step_span() {
+        use crate::interpreter::bank::RefBank;
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "void create() {}", |_| true).await;
+        let r0 = Register(0).as_local();
+        let frame = task.stack.current_frame_mut().unwrap();
+        frame.registers = RefBank::new(vec![1.into()]);
+        let function = Arc::make_mut(&mut frame.function);
+        function.instructions = vec![Instruction::Copy(r0, Register(0).as_constant())];
+        function.debug_spans.resize(1, None);
+        let _disabled = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
+
+        tracing::subscriber::with_default(tracing_subscriber::registry(), || {
+            let caller = tracing::info_span!("caller");
+            let _entered = caller.enter();
+            let mut budget = 3;
+            let error = task.run_slice(&mut budget).err().unwrap();
+            assert!(error.is_bug());
+            assert_eq!(budget, 2);
+            assert_eq!(task.stack.current_frame().unwrap().pc(), 1);
+            assert_eq!(tracing::Span::current().id(), caller.id());
+        });
+    }
+
+    #[tokio::test]
     async fn integer_and_general_instructions_each_emit_one_step_span() {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -853,13 +1101,41 @@ mod tests {
             Subscriber,
             span::{Attributes, Id},
         };
-        use tracing_subscriber::{Layer, layer::Context, prelude::*};
+        use tracing_subscriber::{Layer, layer::Context, prelude::*, registry::LookupSpan};
 
-        struct Steps(Arc<AtomicUsize>);
-        impl<S: Subscriber> Layer<S> for Steps {
+        #[derive(Default)]
+        struct Counts {
+            spans: AtomicUsize,
+            entries: AtomicUsize,
+            exits: AtomicUsize,
+            events: AtomicUsize,
+        }
+        struct Steps(Arc<Counts>);
+        impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for Steps {
             fn on_new_span(&self, attrs: &Attributes<'_>, _: &Id, _: Context<'_, S>) {
                 if attrs.metadata().name() == "step" {
-                    self.0.fetch_add(1, Ordering::Relaxed);
+                    self.0.spans.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
+                if ctx.span(id).unwrap().name() == "step" {
+                    self.0.entries.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            fn on_exit(&self, id: &Id, ctx: Context<'_, S>) {
+                if ctx.span(id).unwrap().name() == "step" {
+                    self.0.exits.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+                if event.metadata().target() == module_path!().trim_end_matches("::tests")
+                    && *event.metadata().level() == tracing::Level::TRACE
+                {
+                    assert_eq!(ctx.event_span(event).unwrap().name(), "step");
+                    self.0.events.fetch_add(1, Ordering::Relaxed);
                 }
             }
         }
@@ -877,8 +1153,10 @@ mod tests {
             Instruction::Ret,
         ];
         function.debug_spans.resize(5, None);
-        let count = Arc::new(AtomicUsize::new(0));
+        let count = Arc::new(Counts::default());
         let subscriber = tracing_subscriber::registry().with(Steps(count.clone()));
+        // Keep callsite interest dispatch-specific while other tests run without a subscriber.
+        let _disabled = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
         let mut budget = 9;
 
         let result = tracing::subscriber::with_default(subscriber, || task.run_slice(&mut budget));
@@ -890,6 +1168,14 @@ mod tests {
         } else {
             0
         };
-        assert_eq!(count.load(Ordering::Relaxed), expected);
+        assert_eq!(count.spans.load(Ordering::Relaxed), expected);
+        assert_eq!(count.entries.load(Ordering::Relaxed), expected);
+        assert_eq!(count.exits.load(Ordering::Relaxed), expected);
+        let expected_events = if tracing::Level::TRACE <= tracing::level_filters::STATIC_MAX_LEVEL {
+            5
+        } else {
+            0
+        };
+        assert_eq!(count.events.load(Ordering::Relaxed), expected_events);
     }
 }

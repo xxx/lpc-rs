@@ -13,8 +13,11 @@ pub fn latin1_warning(in_game_path: &str, span: Option<Span>) -> LpcError {
 }
 
 impl Diagnostics {
-    /// Record a diagnostic of any severity.
+    /// Record a diagnostic unless it is a warning suppressed at its source occurrence.
     pub fn record(&mut self, error: LpcError) {
+        if error.is_warning() && error.span().is_some_and(|span| span.warnings_suppressed()) {
+            return;
+        }
         self.recorded.push(error);
     }
 
@@ -108,6 +111,19 @@ mod tests {
         d.record(lpc_bug!("b"));
         assert!(!d.is_clean());
         assert!(d.finish().unwrap_err().is_bug());
+    }
+
+    #[test]
+    fn warning_policy_never_suppresses_errors_bugs_or_unlocated_warnings() {
+        let span = Some(Span::new(0, 0..1).with_warnings_suppressed(true));
+        let mut d = Diagnostics::default();
+        d.record(lpc_warning!(span, "hidden"));
+        d.record(lpc_warning!("unlocated"));
+        d.record(lpc_error!(span, "error"));
+        d.record(lpc_bug!(span, "bug"));
+        let e = d.finish().unwrap_err();
+        let messages: Vec<_> = e.to_diagnostics().into_iter().map(|d| d.message).collect();
+        assert_eq!(messages, ["error", "unlocated", "bug"]);
     }
 
     #[test]

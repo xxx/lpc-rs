@@ -10,12 +10,16 @@ pub fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let arg_ref = context.arg(0);
 
     let result = match arg_ref {
-        LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) => arg_ref.to_string(),
+        LpcRef::Nil | LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) => arg_ref.to_string(),
         LpcRef::Bytes(_) => {
             return Err(context
                 .runtime_error("write_socket: a bytes is sent as text; convert with to_text()"));
         }
-        LpcRef::Array(_) | LpcRef::Mapping(_) | LpcRef::Function(_) | LpcRef::Object(_) => {
+        LpcRef::Array(_)
+        | LpcRef::Mapping(_)
+        | LpcRef::Class(_)
+        | LpcRef::Function(_)
+        | LpcRef::Object(_) => {
             return Err(context.runtime_error("invalid argument to `write_socket`"));
         }
     };

@@ -6,6 +6,12 @@ pub enum ConnectionOp {
     /// Send a message to the user
     SendMessage(String),
 
+    /// Activate a committed snoop registration on this connection.
+    StartSnoop(std::sync::Arc<crate::interpreter::snooping::Registration>),
+
+    /// Forget only the registration bearing this identity.
+    StopSnoop(crate::interpreter::stm::VarId),
+
     /// Set a function to receive the next line of input
     InputTo(InputTo),
 

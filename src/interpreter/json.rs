@@ -23,6 +23,7 @@ fn to_value(value: &LpcRef, txn: &TxnHandle, depth: usize) -> Result<Value> {
         )));
     }
     match value {
+        LpcRef::Nil => Ok(Value::Null),
         LpcRef::Int(x) => Ok(Value::from(x.0)),
         LpcRef::Float(x) => Number::from_f64(x.0.into_inner())
             .map(Value::Number)
@@ -49,7 +50,7 @@ fn to_value(value: &LpcRef, txn: &TxnHandle, depth: usize) -> Result<Value> {
             })??;
             Ok(Value::Object(entries))
         }
-        LpcRef::Object(object) if object.upgrade().is_none() => Ok(Value::from(0)),
+        LpcRef::Object(_) if value.is_dead_object(txn) => to_value(&txn.nil(), txn, depth),
         LpcRef::Bytes(b) => Ok(Value::Array(b.iter().map(|&x| Value::from(x)).collect())),
         other => Err(LpcError::runtime(format!(
             "json_encode: cannot encode {}",
@@ -69,7 +70,8 @@ pub(crate) fn decode(text: &str, txn: &TxnHandle) -> Result<LpcRef> {
 
 fn from_value(value: Value, txn: &TxnHandle) -> Result<LpcRef> {
     match value {
-        Value::Null | Value::Bool(false) => Ok(LpcRef::from(0)),
+        Value::Null => Ok(txn.nil()),
+        Value::Bool(false) => Ok(LpcRef::from(0)),
         Value::Bool(true) => Ok(LpcRef::from(1)),
         Value::Number(n) => n
             .as_i64()

@@ -39,7 +39,7 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     let grammar = context.arg(0).clone();
     let input = context.arg(1).clone();
     let (Some(grammar), Some(input)) = (grammar.as_str(), input.as_str()) else {
-        context.return_efun_result(LpcRef::from(0));
+        context.return_efun_result(context.txn().nil());
         return Ok(());
     };
     if context.arg_count() >= 3 && !matches!(context.arg(2), LpcRef::Int(LpcInt(0))) {
@@ -62,7 +62,7 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     .await?;
     match outcome {
         Outcome::Values(values) => context.return_array(values),
-        Outcome::Ended(Ending::Done) => context.return_efun_result(LpcRef::from(0)),
+        Outcome::Ended(Ending::Done) => context.return_efun_result(context.txn().nil()),
         Outcome::Ended(Ending::Exhausted) => {
             return Err(context.runtime_error("parse_string: parse budget exhausted"));
         }

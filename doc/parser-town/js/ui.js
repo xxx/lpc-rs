@@ -263,7 +263,7 @@
       return m.input.family === 'dgd'
         ? 'These are strings from the tree. Scope did not participate.'
         : m.input.family === 'parser'
-          ? 'Object selection and the all-filled rechecks finished before do_ ran.'
+          ? 'Pair permissions, selection, and the selected pair’s recheck finished before do_ ran.'
           : 'The handler received resolved objects or captured text.';
     if (m.derivations.length)
       return 'Recognition succeeded. The frontend still needs to interpret the derivation.';

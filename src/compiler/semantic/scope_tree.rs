@@ -155,7 +155,7 @@ impl ScopeTree {
         };
         let mut units: HashSet<ScopeId> = self.function_scopes.values().copied().collect();
         units.extend(closure_scopes);
-        self.layout_unit(root, 0, &units)
+        self.layout_unit(root, 0, &units, closure_scopes)
     }
 
     fn layout_unit(
@@ -163,6 +163,7 @@ impl ScopeTree {
         unit: ScopeId,
         inherited: RegisterSize,
         units: &HashSet<ScopeId>,
+        closure_scopes: &HashSet<ScopeId>,
     ) -> Result<()> {
         let mut captured = Vec::new();
         let mut nested = Vec::new();
@@ -195,7 +196,13 @@ impl ScopeTree {
         self.scopes[unit].get_mut().num_upvalues = own;
 
         for child in nested {
-            self.layout_unit(child, inherited + own, units)?;
+            // Named functions do not inherit the global initializer's capture cells.
+            let inherited = if closure_scopes.contains(&child) {
+                inherited + own
+            } else {
+                0
+            };
+            self.layout_unit(child, inherited, units, closure_scopes)?;
         }
         Ok(())
     }

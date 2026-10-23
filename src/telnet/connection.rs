@@ -8,7 +8,7 @@ use std::{
 };
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use lpc_rs_telnet::{Opt, Session, TerminalInfo};
+use lpc_rs_telnet::{InputMode, Opt, Session, TerminalInfo};
 use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 
 use crate::{
@@ -16,21 +16,24 @@ use crate::{
     telnet::ops::ConnectionOp,
 };
 
-/// A struct to encapsulate the state of awaiting a line of input from the user.
+/// A callback awaiting a line or character of input from the user.
 #[derive(Debug, Clone)]
 pub struct InputTo {
     /// The function to call when we receive input.
     pub ptr: Arc<FunctionPtr>,
 
-    /// Whether `no_echo` was set when `input_to` was called, so we know
-    /// that we need to re-enable it.
+    /// Whether the client should hide input while this callback is pending.
     pub no_echo: bool,
+
+    /// Whether the callback consumes a line or one Unicode scalar.
+    pub mode: InputMode,
 }
 
 impl PartialEq for InputTo {
     fn eq(&self, other: &Self) -> bool {
-        // heh
-        std::ptr::eq(&self.ptr, &other.ptr) && self.no_echo == other.no_echo
+        Arc::ptr_eq(&self.ptr, &other.ptr)
+            && self.no_echo == other.no_echo
+            && self.mode == other.mode
     }
 }
 
@@ -71,7 +74,7 @@ impl Snapshot {
 }
 
 /// A connection from a user. The binding module and the `Exec` flush write
-/// its body, the loop its `input_to`; nothing else writes it.
+/// its body; the loop writes its input callback and cached snoop registration.
 #[derive(Debug)]
 pub struct Connection {
     /// The address of the client.
@@ -86,8 +89,11 @@ pub struct Connection {
     /// The loop's channel.
     tx: UnboundedSender<ConnectionOp>,
 
-    /// The function the next line goes to.
+    /// The callback for the next line or character.
     input_to: ArcSwapOption<InputTo>,
+
+    snoop: ArcSwapOption<crate::interpreter::snooping::Registration>,
+    has_snoop: AtomicBool,
 
     /// The loop's mirror of the session, for readers that never see it.
     snapshot: ArcSwap<Snapshot>,
@@ -110,6 +116,30 @@ pub struct Connection {
 }
 
 impl Connection {
+    pub(crate) fn set_snoop(
+        &self,
+        registration: Option<Arc<crate::interpreter::snooping::Registration>>,
+    ) {
+        let active = registration.is_some();
+        self.snoop.store(registration);
+        self.has_snoop.store(active, Ordering::Release);
+    }
+
+    pub(crate) fn stop_snoop(&self, id: crate::interpreter::stm::VarId) {
+        if self.snoop.load().as_ref().is_some_and(|r| r.id == id) {
+            self.set_snoop(None);
+        }
+    }
+
+    pub(crate) fn observe(&self, text: &str, direction: &'static str, newline: bool) {
+        if !self.has_snoop.load(Ordering::Acquire) {
+            return;
+        }
+        if let Some(registration) = self.snoop.load().as_ref() {
+            registration.capture(text, direction, newline);
+        }
+    }
+
     /// Creates a new [`Connection`].
     pub fn new(address: SocketAddr, connection_tx: UnboundedSender<ConnectionOp>) -> Self {
         Self {
@@ -118,6 +148,8 @@ impl Connection {
             process: ArcSwapOption::from(None),
             tx: connection_tx,
             input_to: ArcSwapOption::from(None),
+            snoop: ArcSwapOption::from(None),
+            has_snoop: AtomicBool::new(false),
             snapshot: ArcSwap::default(),
             dead: AtomicBool::new(false),
             logged_in: AtomicBool::new(false),
@@ -159,7 +191,7 @@ impl Connection {
         self.tx.clone()
     }
 
-    /// An `input_to` is waiting for the next line.
+    /// A line or character callback is waiting for input.
     pub fn awaits_input(&self) -> bool {
         self.input_to.load().is_some()
     }
@@ -169,7 +201,7 @@ impl Connection {
         self.input_to.load_full()
     }
 
-    /// Set, or clear, the function the next line goes to.
+    /// Set, or clear, the callback for the next line or character.
     pub(crate) fn set_input_to(&self, input_to: Option<InputTo>) {
         self.input_to.store(input_to.map(Arc::new));
     }

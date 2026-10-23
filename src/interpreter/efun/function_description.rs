@@ -6,14 +6,14 @@ use lpc_rs_utils::string::MAX_STRING_LENGTH;
 use crate::interpreter::{
     efun::{callback::function_arg, efun_context::EfunContext},
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
 };
 
 /// Describe a pointer's receiver, name, and masked bindings, or return 0 for a dead target.
 pub fn function_description<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let ptr = function_arg(context, "function_description", 0)?;
     let Some(mut name) = target_name(context, &ptr) else {
-        context.return_efun_result(NULL);
+        context.return_efun_result(context.txn().nil());
         return Ok(());
     };
     let args = if matches!(ptr.address, FunctionAddress::Dynamic(_)) {

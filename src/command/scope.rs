@@ -2,13 +2,17 @@
 //! use and what its native captures name) and the candidate walk (the parser
 //! package's descent through visible containers).
 
+mod supplied;
+
+pub(crate) use supplied::SuppliedScope;
+
 use std::sync::{Arc, Weak};
 
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     INVENTORY_ACCESSIBLE, INVENTORY_VISIBLE, PARSE_COMMAND_USERS,
-    apply::{apply_hook, as_actor},
+    apply::{apply_nested, as_actor, diagnostics},
     lpc_ref::LpcRef,
     process::Process,
     stm::TxnHandle,
@@ -131,16 +135,7 @@ pub(crate) async fn users(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec
     let Some(master) = ctx.master_object() else {
         return Ok(Vec::new());
     };
-    let Some(value) = apply_hook(
-        ctx,
-        as_actor(ctx, actor),
-        &master,
-        actor,
-        PARSE_COMMAND_USERS,
-        &[],
-    )
-    .await?
-    else {
+    let Some(value) = hook(ctx, actor, &master, PARSE_COMMAND_USERS).await? else {
         return Ok(Vec::new());
     };
     match &value {
@@ -162,10 +157,26 @@ async fn truthy(
     target: &Arc<Process>,
     name: &str,
 ) -> Result<bool> {
-    let Some(value) = apply_hook(ctx, as_actor(ctx, actor), target, actor, name, &[]).await? else {
+    let Some(value) = hook(ctx, actor, target, name).await? else {
         return Ok(true);
     };
     Ok(value.is_truthy(ctx.txn()))
+}
+
+/// Call a scope hook through shadows with the selected command giver and actor caller.
+async fn hook(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    target: &Arc<Process>,
+    name: &str,
+) -> Result<Option<LpcRef>> {
+    let Some((target, function)) = Process::apply_entry(ctx.txn(), target, name) else {
+        diagnostics::missing(name, Some(target));
+        return Ok(None);
+    };
+    apply_nested(ctx, as_actor(ctx, actor), &target, function, &[])
+        .await
+        .map(Some)
 }
 
 #[cfg(test)]

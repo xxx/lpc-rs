@@ -3,9 +3,11 @@
 use std::sync::Arc;
 
 use ahash::{AHashMap, AHashSet};
+use thin_vec::ThinVec;
 
 use crate::interpreter::{
     lpc_array::LpcArray,
+    lpc_class::LpcClass,
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
     stm::{CommitOrigin, MergeOp, VarId, Version, WorldValue},
@@ -74,6 +76,8 @@ pub(crate) struct Changeset {
     entries: AHashMap<VarId, Entry>,
     pub(crate) origin: Option<Arc<CommitOrigin>>,
     pub(crate) system_publications: Vec<SystemPublication>,
+    pub(crate) object_changes: ThinVec<super::snapshot::ObjectChange>,
+    pub(crate) socket_publications: ThinVec<crate::interpreter::sockets::Publication>,
 }
 
 #[derive(Debug, Clone)]
@@ -100,12 +104,26 @@ impl SystemPublication {
 }
 
 impl Changeset {
+    /// Validate an aborted attempt's observations without publishing any of its changes.
+    pub(crate) fn validation_only(&self) -> Self {
+        let mut validation = Self::new(self.version);
+        validation.origin = self.origin.clone();
+        for (cell, entry) in &self.entries {
+            if entry.is_tracked() {
+                validation.track_read(*cell);
+            }
+        }
+        validation
+    }
+
     pub(crate) fn new(version: Version) -> Self {
         Self {
             version,
             entries: AHashMap::new(),
             origin: None,
             system_publications: Vec::new(),
+            object_changes: ThinVec::new(),
+            socket_publications: ThinVec::new(),
         }
     }
 
@@ -177,6 +195,13 @@ impl Changeset {
     pub(crate) fn written_mapping_mut(&mut self, var_id: VarId) -> Option<&mut Arc<LpcMapping>> {
         match self.entries.get_mut(&var_id).map(|entry| &mut entry.change) {
             Some(Change::Write(WorldValue::Mapping(arc))) => Some(arc),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn written_class_mut(&mut self, var_id: VarId) -> Option<&mut Arc<LpcClass>> {
+        match self.entries.get_mut(&var_id).map(|entry| &mut entry.change) {
+            Some(Change::Write(WorldValue::Class(arc))) => Some(arc),
             _ => None,
         }
     }
@@ -681,5 +706,32 @@ mod tests {
         assert_eq!(changeset.peek_int(string), Some(false));
         assert_eq!(changeset.peek_int(merged), Some(true));
         assert_eq!(changeset.peek_int(untouched), None);
+    }
+
+    #[test]
+    fn aborted_attempt_validation_preserves_reads_without_writes_merges_or_removals() {
+        let mut changeset = Changeset::new(Version(0));
+        let (read_written, read_removed, merged, own_write) =
+            (VarId(0), VarId(1), VarId(2), VarId(3));
+        changeset.read_value(read_written, || Some(WorldValue::ref_of(1.into())));
+        changeset.write(read_written, WorldValue::ref_of(2.into()));
+        changeset.track_read(read_removed);
+        changeset.drop_var(read_removed);
+        changeset.merge(merged, MergeOp::IntAdd(1));
+        changeset.write(own_write, WorldValue::ref_of(3.into()));
+        changeset.read_value(own_write, || panic!("own write"));
+        let validation = changeset.validation_only();
+        for cell in [read_written, read_removed] {
+            assert!(validation.conflicts_with(&[cell].into_iter().collect()));
+        }
+        for cell in [merged, own_write] {
+            assert!(!validation.conflicts_with(&[cell].into_iter().collect()));
+        }
+        assert!(!validation.has_changes());
+        assert!(validation.system_publications.is_empty());
+        assert!(validation.object_changes.is_empty());
+        assert!(validation.socket_publications.is_empty());
+        assert_eq!(validation.into_changes().count(), 0);
+        assert!(changeset.has_changes());
     }
 }

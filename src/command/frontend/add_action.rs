@@ -4,10 +4,10 @@
 use lpc_rs_utils::lpc_string::LpcString;
 use std::sync::{Arc, LazyLock};
 
+use crate::util::memo::Memo;
 use crate::{
     command::{
         grammar::{Grammar, GrammarBuilder, Label, Limits, Parse, lit, nt, parse},
-        memo::Memo,
         registry::{ArgSpan, Reported, VerbMatch},
     },
     interpreter::lpc_ref::LpcRef,

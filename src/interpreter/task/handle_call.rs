@@ -1,7 +1,10 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::sync::Arc;
 
 use lpc_rs_asm::instruction::{Arg, ArgList};
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, lpc_type::LpcType};
+use lpc_rs_core::{
+    CREATE_FUNCTION, INIT_PROGRAM, RegisterSize, lpc_path::LpcPath, lpc_type::LpcType,
+};
 use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
@@ -10,8 +13,9 @@ use ustr::Ustr;
 use crate::interpreter::program::Function;
 use crate::interpreter::{
     call_frame::{CallFrame, FrameReceiver},
+    call_origin::CallOrigin,
     efun::{Efun, call_efun, call_efun_sync, efun_context::EfunContext},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     stm::{TxnHandle, VarId},
     task::{Task, advance::Advance},
@@ -19,19 +23,21 @@ use crate::interpreter::{
 
 /// How a frame is entered: a direct or simul-efun call was compiled against
 /// its callee's parameter list; a virtual call reached a redefinition of
-/// the callee, and a door was compiled against nothing.
+/// the callee, and a door was compiled against nothing. An initializer
+/// forwards constructor arguments whose types are known only at runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CallEntry {
     Direct,
     Virtual,
     SimulEfun,
     Door,
+    Initializer,
 }
 
 impl CallEntry {
     /// Whether the frame counts as entered from outside its program.
     fn external(self) -> bool {
-        !matches!(self, Self::Direct | Self::Virtual)
+        !matches!(self, Self::Direct | Self::Virtual | Self::Initializer)
     }
 
     /// Whether the argument count is held to the callee's parameter list.
@@ -55,11 +61,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .runtime_bug(format!("call to unknown local function `{name}`")));
         };
         let func = target.function.clone();
-        let entry = if target.overridden {
-            CallEntry::Virtual
-        } else {
-            CallEntry::Direct
-        };
+        let entry =
+            if current_frame.function.name() == INIT_PROGRAM && func.name() == CREATE_FUNCTION {
+                CallEntry::Initializer
+            } else if target.overridden {
+                CallEntry::Virtual
+            } else {
+                CallEntry::Direct
+            };
         let receiver = current_frame.receiver.clone();
 
         self.push_receiver_frame(receiver, func, list, entry)
@@ -108,6 +117,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
         let mut frame =
             CallFrame::with_receiver(receiver, function, num_args, num_args, None::<&[VarId]>);
+        frame.initialize_parameters(&self.context.txn);
         for (i, arg) in args.enumerate() {
             let prototype = &frame.function.prototype;
             check_arg_type(
@@ -159,6 +169,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         entry: CallEntry,
     ) -> lpc_rs_errors::Result<()> {
         let num_args = self.checked_register_count(self.expanded_arg_count(list)?, &func)?;
+        if entry == CallEntry::Initializer {
+            for (i, value) in self.arg_values(list)?.iter().enumerate() {
+                self.type_check_call_arg(
+                    value,
+                    func.prototype.arg_types.get(i),
+                    func.prototype.arg_spans.get(i),
+                    func.name(),
+                )?;
+            }
+        }
         // A simul_efun's prototype can change after a cached caller was compiled against it.
         if num_args < func.arity().num_args
             && let Some(i) = func.prototype.first_ref_param()
@@ -182,12 +202,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .or_span(self.caller_span()));
         }
 
+        let origin = if self.stack.current_frame()?.function.name() == INIT_PROGRAM {
+            CallOrigin::Driver
+        } else {
+            match entry {
+                CallEntry::Direct | CallEntry::Virtual => CallOrigin::Local,
+                CallEntry::SimulEfun => CallOrigin::Simul,
+                CallEntry::Door => CallOrigin::CallOther,
+                CallEntry::Initializer => CallOrigin::Driver,
+            }
+        };
         trace!("pushing new frame; copying arguments: {num_args}");
         self.stack
             .push_new(receiver, func, num_args, num_args, None::<&[VarId]>)?;
-        if entry.external() {
-            self.stack.current_frame_mut()?.external = true;
-        }
+        let frame = self.stack.current_frame_mut()?;
+        frame.initialize_parameters(&self.context.txn);
+        frame.external = entry.external();
+        frame.origin = origin;
         if let Err(e) = self.populate_arguments(list) {
             // The half-built frame comes off; the error names the caller.
             let depth = self.stack.len() - 1;
@@ -229,8 +260,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn checked_register_count(
         &self,
         count: usize,
-        function: &ProgramFunction,
+        function: &Function,
     ) -> lpc_rs_errors::Result<RegisterSize> {
+        if !function.is_driver_code() && function.null_mode != self.context.config().null_mode {
+            return Err(
+                self.runtime_error("compiled function and VM use different NULL_MODE settings")
+            );
+        }
         let num_locals = usize::from(function.num_locals);
         if count + num_locals + 1 > usize::from(RegisterSize::MAX) {
             let limit = usize::from(RegisterSize::MAX).saturating_sub(num_locals + 1);
@@ -259,7 +295,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
                 Arg::Ref(loc) => {
                     let cell = caller.ref_cell(loc)?;
-                    callee.push_ref(i, cell)?;
+                    callee.push_ref(txn, i, cell)?;
                     i += 1;
                 }
                 Arg::Spread(loc) => {
@@ -358,8 +394,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Push the frame an efun fired through a pointer runs in, as `owner`.
-    pub(crate) fn push_entry_frame(&mut self, owner: Arc<Process>) -> lpc_rs_errors::Result<()> {
-        self.stack.push(CallFrame::entry(owner, &self.context.txn))
+    pub(crate) fn push_entry_frame(
+        &mut self,
+        owner: Arc<Process>,
+        origin: CallOrigin,
+    ) -> lpc_rs_errors::Result<()> {
+        let mut frame = CallFrame::entry(owner, &self.context.txn);
+        frame.origin = origin;
+        self.stack.push(frame)
     }
 
     /// The by-reference parameter no pointer call can satisfy, as the error;
@@ -448,6 +490,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let Some(func) = simul_efuns
             .program(&self.context.txn)
             .lookup_function(func_name)
+            .filter(|function| function.public())
             .cloned()
         else {
             return Err(self.runtime_error(format!("call to unknown simul efun `{func_name}`")));
@@ -466,13 +509,13 @@ pub(crate) fn check_arg_type(
     arg_def_span: Option<&Span>,
     function_name: &str,
 ) -> lpc_rs_errors::Result<()> {
-    if lpc_ref.eq_in(&NULL, txn) {
+    if txn.null_mode() == NullMode::Zero && lpc_ref.is_null_in(txn) {
         return Ok(());
     }
     let Some(arg_type) = arg_type else {
         return Ok(());
     };
-    let ref_type = lpc_ref.as_lpc_type();
+    let ref_type = lpc_ref.as_lpc_type(txn);
     // Declared against found — reversed, a union parameter rejected its own members.
     if arg_type.matches_type(ref_type) {
         return Ok(());

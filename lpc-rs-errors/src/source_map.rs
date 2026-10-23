@@ -27,13 +27,22 @@ pub static SOURCE_MAP: LazyLock<RwLock<SourceMap>> =
 pub struct DiagnosticSources(Option<Arc<RwLock<SourceMap>>>);
 
 impl DiagnosticSources {
+    /// Whether source IDs from these handles identify the same immutable versions.
+    pub fn same_storage(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (None, None) => true,
+            (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+            _ => false,
+        }
+    }
+
     /// Retain sources only as long as this handle and its clones live.
     ///
     /// Scoped spans must be resolved through this handle, not [`SOURCE_MAP`].
     pub fn scoped() -> Self {
         Self(Some(Arc::new(RwLock::new(SourceMap {
-            // Scoped IDs cannot accidentally resolve against the global registry.
-            id_offset: 1 << 31,
+            // Bit 30 separates scoped IDs; Span reserves bit 31 for warning policy.
+            id_offset: 1 << 30,
             ..SourceMap::default()
         }))))
     }

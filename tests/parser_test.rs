@@ -1,5 +1,6 @@
 use claims::assert_ok;
 use indoc::indoc;
+use lpc_rs::compiler::ast::parsed_type::ParsedType;
 use lpc_rs::{
     compiler::{
         Compiler,
@@ -83,6 +84,7 @@ fn inherit_constant_string_expressions() {
             assert_eq!(
                 node.inherits,
                 vec![InheritNode {
+                    visibility: Default::default(),
                     path: ustr("/armour/base"),
                     namespace: namespace.map(ustr),
                     span: Some(Span::new(0, 0..code.len())),
@@ -134,9 +136,9 @@ fn program_global_vars() {
         inherits: vec![],
         body: vec![
             AstNode::from(DeclNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 initializations: vec![VarInitNode {
-                    type_: LpcType::Int(false),
+                    type_: LpcType::Int(false).into(),
                     name: ustr("i"),
                     value: Some(ExpressionNode::Int(IntNode {
                         value: 123,
@@ -150,9 +152,9 @@ fn program_global_vars() {
                 }],
             }),
             AstNode::from(DeclNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 initializations: vec![VarInitNode {
-                    type_: LpcType::Int(false),
+                    type_: LpcType::Int(false).into(),
                     name: ustr("j"),
                     value: Some(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(VarNode {
@@ -176,9 +178,9 @@ fn program_global_vars() {
                 }],
             }),
             AstNode::from(DeclNode {
-                type_: LpcType::String(true),
+                type_: LpcType::String(true).into(),
                 initializations: vec![VarInitNode {
-                    type_: LpcType::String(true),
+                    type_: LpcType::String(true).into(),
                     name: ustr("k"),
                     value: None,
                     array: true,
@@ -406,6 +408,7 @@ fn compound_assignment_decompose() {
     };
 
     let expected = ExpressionNode::Assignment(AssignmentNode {
+        is_compound: true,
         lhs: Box::new(ExpressionNode::Var(VarNode {
             name: ustr("a"),
             span: Some(Span::new(0, 16..17)),
@@ -473,7 +476,8 @@ fn typeless_functions_are_mixed() {
     assert!(matches!(
         node,
         AstNode::FunctionDef(FunctionDefNode {
-            return_type: LpcType::Mixed(false),
+            variadic: None,
+            return_type: ParsedType::Resolved(LpcType::Mixed(false)),
             ..
         })
     ));
@@ -492,6 +496,88 @@ async fn error_when_pragma_strict_types_without_return_type() {
     let program = parse_prog(prog).await;
 
     assert_eq!(&program.unwrap_err().to_string(), "Missing return type");
+}
+
+#[tokio::test]
+async fn trailing_call_commas_preserve_arguments_and_spans() {
+    for expression in [
+        "f(value,)",
+        "ob->f(value,)",
+        "::f(value,)",
+        "parent::f(value,)",
+        "efun::sizeof(value,)",
+        "callbacks[0](value,)",
+        "factory()(value,)",
+        "record.callback(value,)",
+        "f(\nvalue, // final argument\n)",
+    ] {
+        let code = format!("void create() {{ {expression}; }}");
+        let lexer = LexWrapper::new(&code, 0).triples();
+        let node = lpc_parser::ProgramParser::new()
+            .parse(&mut CompilationContext::default(), lexer)
+            .unwrap_or_else(|error| panic!("{expression}: {error}"));
+        let AstNode::FunctionDef(def) = &node.body[0] else {
+            panic!("expected a function");
+        };
+        let AstNode::Expression(ExpressionNode::Call(call)) = &def.body[0] else {
+            panic!("expected a call");
+        };
+        assert!(matches!(&call.arguments[..], [ExpressionNode::Var(v)] if v.name == "value"));
+        let start = code.find(expression).unwrap();
+        assert_eq!(
+            call.span,
+            Some(Span::new(0, start..start + expression.len()))
+        );
+    }
+}
+
+#[tokio::test]
+async fn trailing_call_commas_preserve_comma_expressions_refs_and_spreads() {
+    let program = parse_prog("void create() { f((a, b), ref n, xs...,); }")
+        .await
+        .unwrap();
+    let AstNode::FunctionDef(def) = &program.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::Expression(ExpressionNode::Call(call)) = &def.body[0] else {
+        panic!("expected a call");
+    };
+    assert!(matches!(
+        &call.arguments[..],
+        [ExpressionNode::CommaExpression(pair), ExpressionNode::Ref(reference), ExpressionNode::Spread(spread)]
+        if pair.value.len() == 2 && reference.name == "n"
+            && matches!(spread.expr.as_ref(), ExpressionNode::Var(v) if v.name == "xs")
+    ));
+}
+
+#[tokio::test]
+async fn trailing_call_commas_do_not_allow_empty_argument_slots() {
+    for callee in [
+        "f",
+        "ob->f",
+        "::f",
+        "efun::sizeof",
+        "callbacks[0]",
+        "factory()",
+    ] {
+        for arguments in [",", ",1", "1,,", "1,,2", "1,2,,"] {
+            let code = format!("void create() {{ {callee}({arguments}); }}");
+            assert!(parse_prog(&code).await.is_err(), "{code}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn trailing_call_commas_do_not_change_parameter_or_expression_lists() {
+    for code in [
+        "void f(int x,) {}",
+        "void f(int,) ;",
+        "void create() { function f = (: [int x,] x :); }",
+        "void create() { (1,); }",
+        "void create() { f((1,),); }",
+    ] {
+        assert!(parse_prog(code).await.is_err(), "{code}");
+    }
 }
 
 #[tokio::test]
@@ -584,7 +670,7 @@ async fn partial_application_argument_lists() {
 
     let get_args = |node: &AstNode| -> Option<Vec<Option<LpcIntInner>>> {
         if let AstNode::Decl(DeclNode {
-            type_: LpcType::Function(false),
+            type_: ParsedType::Resolved(LpcType::Function(false)),
             initializations,
         }) = node
             && let Some(ExpressionNode::FunctionPtr(FunctionPtrNode { arguments, .. })) =
@@ -854,6 +940,156 @@ async fn warning_on_prototype() {
 }
 
 #[tokio::test]
+async fn unnamed_prototype_parameters_accept_value_types_and_qualifiers() {
+    for type_ in [
+        "int",
+        "float",
+        "string",
+        "bytes",
+        "object",
+        "mapping",
+        "mixed",
+        "function",
+        "class Record",
+    ] {
+        for qualifier in ["", " *", " ref", " ref *"] {
+            let code = format!("void f({type_}{qualifier});");
+            let program = parse_prog(&code).await.unwrap();
+            assert!(matches!(&program.body[..], [AstNode::NoOp]), "{code}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn named_and_unnamed_prototype_parameters_can_mix() {
+    for parameters in [
+        "int, string label, object",
+        "int first, int, int last",
+        "class Record, class Record *records, int ref",
+        "int, mixed value = 0",
+        "int, ...",
+        "int, mixed *rest...",
+        "int first, mixed *...",
+        "int first, mixed...",
+        "int, mixed rest...",
+    ] {
+        let code = format!("#pragma strict_types\nvoid f({parameters});");
+        assert_ok!(parse_prog(&code).await);
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_follow_warning_pragmas() {
+    let code = "#pragma no_warnings\nvoid f(int);\n#pragma warnings\nvoid g(string *);";
+    let (tokens, preprocessor) = Compiler::default()
+        .preprocess_string("foo/bar.c", code)
+        .await
+        .unwrap();
+    let mut context = preprocessor.into_context();
+    lpc_parser::ProgramParser::new()
+        .parse(&mut context, TokenTriples::new(&tokens))
+        .unwrap();
+    let warnings = context.diagnostics.errors();
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(
+        warnings[0].to_string(),
+        "function prototypes are ignored; the definition declares the function"
+    );
+    let start = code.find("void g").unwrap();
+    let span = warnings[0].span().unwrap();
+    assert_eq!(span.l()..span.r(), start..code.len());
+}
+
+#[tokio::test]
+async fn definitions_require_names_for_every_parameter() {
+    for parameters in [
+        "int",
+        "string *",
+        "int ref",
+        "class Record",
+        "int first, string",
+        "int, string second",
+        "mixed *...",
+        "mixed...",
+        "int first, mixed *...",
+    ] {
+        let code = format!("void f({parameters}) {{}}");
+        let error = parse_prog(&code).await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "a parameter name is required in a function definition or closure",
+            "{code}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn closures_require_names_for_every_declared_parameter() {
+    for parameters in [
+        "int",
+        "int n, string *",
+        "int ref",
+        "mixed *...",
+        "mixed...",
+    ] {
+        let code = format!("function f = (: [{parameters}] 1 :);");
+        let error = parse_prog(&code).await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "a parameter name is required in a function definition or closure",
+            "{code}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototypes_preserve_variadic_constraints() {
+    for (parameter, message) in [
+        (
+            "int...",
+            "a named variadic parameter must have type `mixed` or an array type",
+        ),
+        ("int ref *...", "a named variadic parameter cannot be `ref`"),
+        (
+            "int, mixed *args = ({})...",
+            "a named variadic parameter cannot have a default value",
+        ),
+    ] {
+        let error = parse_prog(&format!("void f({parameter});"))
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_string(), message);
+    }
+}
+
+#[tokio::test]
+async fn malformed_unnamed_prototype_parameters_are_rejected() {
+    for parameters in [
+        "void, int",
+        "int, void",
+        "void *",
+        "void ref",
+        "int = 1",
+        "ref",
+        "*",
+        "int,",
+    ] {
+        let code = format!("void f({parameters});");
+        assert!(parse_prog(&code).await.is_err(), "{code}");
+    }
+}
+
+#[tokio::test]
+async fn unnamed_prototype_support_preserves_empty_parameter_lists() {
+    for parameters in ["", "void", "..."] {
+        let code = format!(
+            "void f({parameters}); void f({parameters}) {{}} function g = (: [{parameters}] 1 :);"
+        );
+        assert_ok!(parse_prog(&code).await);
+    }
+}
+
+#[tokio::test]
 async fn test_closure_bodies() {
     let prog = indoc! { r#"
         function f = (: :);
@@ -876,6 +1112,50 @@ async fn test_closure_bodies() {
     "#};
 
     assert_ok!(parse_prog(prog).await);
+}
+
+#[tokio::test]
+async fn foreach_accepts_both_separators_with_typed_and_untyped_bindings() {
+    for separator in [":", "in"] {
+        for bindings in [
+            "item",
+            "int item",
+            "int *row",
+            "key, value",
+            "string key, class Record value",
+            "class Record *row",
+            "in",
+            "int in",
+            "string in, mixed value",
+        ] {
+            let code =
+                format!("void f(mixed items) {{ foreach ({bindings} {separator} items) {{}} }}");
+            assert_ok!(parse_prog(&code).await);
+        }
+    }
+}
+
+#[tokio::test]
+async fn foreach_rejects_other_words_at_the_separator() {
+    for separator in ["from", "of", "inside", "IN"] {
+        let code = format!("void f(mixed items) {{ foreach (item {separator} items) {{}} }}");
+        let error = parse_prog(&code).await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "expected `:` or `in` after `foreach` variables"
+        );
+        let start = code.find(separator).unwrap();
+        let span = error.span().unwrap();
+        assert_eq!(span.l()..span.r(), start..start + separator.len());
+    }
+}
+
+#[tokio::test]
+async fn in_is_not_a_general_expression_operator() {
+    let error = parse_prog("int f(mixed items) { return 1 in items; }")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "Unrecognized Token: in");
 }
 
 #[tokio::test]
@@ -1127,4 +1407,133 @@ async fn a_cast_to_void_is_rejected() {
         .await
         .unwrap_err();
     assert_eq!(err.to_string(), "cannot cast to `void`");
+}
+
+#[test]
+fn inheritance_visibility_keeps_aliases_and_statement_spans() {
+    use lpc_rs_core::visibility::Visibility;
+
+    for (modifier, visibility) in [
+        ("private", Visibility::Private),
+        ("protected", Visibility::Protected),
+        ("public", Visibility::Public),
+    ] {
+        let code = format!("{modifier}\n inherit \"/base\" base; int value;");
+        let node = lpc_parser::ProgramParser::new()
+            .parse(
+                &mut CompilationContext::default(),
+                LexWrapper::new(&code, 0).triples(),
+            )
+            .unwrap();
+        let inherit = &node.inherits[0];
+        assert_eq!(inherit.visibility, visibility);
+        assert_eq!(inherit.namespace, Some(ustr("base")));
+        assert_eq!(
+            inherit.span,
+            Some(Span::new(0, 0..code.find(';').unwrap() + 1))
+        );
+    }
+}
+
+#[test]
+fn inheritance_rejects_multiple_or_unsupported_modifiers() {
+    for modifiers in [
+        "private public",
+        "private private",
+        "static",
+        "nomask",
+        "nosave",
+        "varargs",
+    ] {
+        let code = format!("{modifiers} inherit \"/base\";");
+        assert!(
+            lpc_parser::ProgramParser::new()
+                .parse(
+                    &mut CompilationContext::default(),
+                    LexWrapper::new(&code, 0).triples()
+                )
+                .is_err(),
+            "{code}"
+        );
+    }
+}
+
+#[test]
+fn nosave_globals_combine_storage_visibility_and_nomask() {
+    for (modifiers, visibility, nomask) in [
+        ("nosave", Visibility::Public, false),
+        ("public nosave", Visibility::Public, false),
+        ("nosave private", Visibility::Private, false),
+        ("protected nosave", Visibility::Protected, false),
+        (
+            "nosave nomask protected static",
+            Visibility::Protected,
+            true,
+        ),
+    ] {
+        let code = format!("{modifiers} int count = 7, *cache = ({{ 8 }});");
+        let program = lpc_parser::ProgramParser::new()
+            .parse(
+                &mut CompilationContext::default(),
+                LexWrapper::new(&code, 0).triples(),
+            )
+            .unwrap();
+        let AstNode::Decl(declaration) = &program.body[0] else {
+            panic!("expected a global declaration");
+        };
+        assert_eq!(declaration.initializations.len(), 2);
+        for init in &declaration.initializations {
+            let flags = init.flags.unwrap();
+            assert!(init.global && flags.is_static(), "{code}");
+            assert_eq!(flags.visibility(), visibility, "{code}");
+            assert_eq!(flags.nomask(), nomask, "{code}");
+        }
+        assert_eq!(declaration.initializations[0].type_, LpcType::Int(false));
+        assert_eq!(declaration.initializations[1].type_, LpcType::Int(true));
+    }
+}
+
+#[test]
+fn nosave_functions_and_prototypes_have_a_modifier_diagnostic() {
+    for code in [
+        "nosave int f() { return 1; }",
+        "private nosave int f();",
+        "nosave f() {}",
+    ] {
+        let error = lpc_parser::ProgramParser::new()
+            .parse(
+                &mut CompilationContext::default(),
+                LexWrapper::new(code, 0).triples(),
+            )
+            .unwrap_err();
+        let lalrpop_util::ParseError::User { error } = error else {
+            panic!("expected a modifier diagnostic: {error}");
+        };
+        assert_eq!(
+            error.to_string(),
+            "`nosave` is intended for global variables only"
+        );
+        let start = code.find("nosave").unwrap();
+        assert_eq!(error.span(), Some(Span::new(0, start..start + 6)));
+    }
+}
+
+#[test]
+fn nosave_cannot_modify_locals_or_parameters_or_name_a_variable() {
+    for code in [
+        "void f() { nosave int local; }",
+        "void f(nosave int value) {}",
+        "function f() { return (: [nosave int value] value :); }",
+        "int nosave;",
+    ] {
+        assert!(
+            lpc_parser::ProgramParser::new()
+                .parse(
+                    &mut CompilationContext::default(),
+                    LexWrapper::new(code, 0).triples(),
+                )
+                .is_err(),
+            "{code}",
+        );
+    }
 }

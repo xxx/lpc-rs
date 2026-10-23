@@ -7,4 +7,4 @@ Return the largest whole number not above `x`, as a float: `floor(4.5)` is
 
 ### See also
 
-`ceil`, `to_int`
+`ceil`, `round`, `to_int`

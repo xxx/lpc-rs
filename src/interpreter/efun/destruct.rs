@@ -520,6 +520,7 @@ mod tests {
             let deferred = CallOutSchedule {
                 id: 100000,
                 process: Arc::downgrade(&old),
+                player: None,
                 func_ref: 0.into(),
                 delay: chrono::Duration::seconds(100),
                 repeat: None,

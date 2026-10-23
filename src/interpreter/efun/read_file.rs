@@ -3,13 +3,14 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     VALID_READ,
     efun::{efun_context::EfunContext, file_access::authorize},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
 };
 
 /// `read_file(path [, start [, lines]])`: the file as a string, once the
 /// master's `valid_read` allows it; `start` a 1-based line (0 is 1), `lines`
-/// a count (0 means to the end). A start past EOF returns 0; an empty file
-/// read from the beginning returns "". A write earlier in this task is seen.
+/// a count (0 means to the end). A start past EOF returns the configured nil;
+/// an empty file read from the beginning returns "". A write earlier in this
+/// task is seen.
 pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "read_file", VALID_READ, 0).await?;
     let start = line_number(context, 1, "start")?;
@@ -23,7 +24,7 @@ pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         contents
     };
     let result = if start > 1 && contents.is_empty() {
-        NULL
+        context.txn().nil()
     } else {
         LpcRef::from(contents)
     };

@@ -1,4 +1,4 @@
-//! An `expr...` argument: the array's elements are passed one per argument.
+//! An `expr...` operand in a call or array literal.
 
 use std::fmt::{self, Display, Formatter};
 
@@ -13,7 +13,7 @@ use crate::compiler::{
     codegen::tree_walker::TreeWalker,
 };
 
-/// An array spread across a call's argument list.
+/// An array whose elements are inserted into the surrounding list.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct SpreadNode {
     /// The array expression.

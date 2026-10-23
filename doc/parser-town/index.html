@@ -292,14 +292,17 @@
             two example objects, at most 120 input characters and 24 tokens. The
             browser caps work at 20,000 operations per chart or derivation pass,
             trees at 32 per span, and depth at 64. These are teaching limits,
-            not driver defaults. Only the native and package capture forms
-            printed in the lessons are exercised. DGD compilation accepts the
+            not driver defaults. The fixed lessons exercise the printed capture forms.
+            The package compiler and model tests also support multiple nonempty
+            <code>STR</code> captures, including adjacent ones; the fixed lessons
+            do not demonstrate their split retries. DGD compilation accepts the
             displayed line-oriented subset and three simple regex forms.
           </p>
           <p>
             <strong>Assumed:</strong> the sword has id sword and adjective red;
-            bob is a living with id bob. Direct and indirect checks always
-            accept. Handler accepts controls the native handler’s result, the
+            bob is a living with id bob. Specific handlers live on the verb
+            owner and noun objects, with no actor can_ handler. Direct and
+            indirect checks always accept. Handler accepts controls the native handler’s result, the
             package’s can_ result, or the DGD accept action, which returns its
             input array or 0. All examples use case-sensitive matching. Changing
             an experiment begins a fresh run.
@@ -310,10 +313,12 @@
             joint DFA; spans use JavaScript character offsets instead of UTF-8
             byte offsets. The model eagerly materializes bounded derivations and
             skips same-span cycles; Rust enumerates lazily with different
-            limits. It does not implement general LPC actions, action
+            limits and uses the completed chart to skip child spans whose remaining
+            rule cannot match; the teaching model does not perform that pruning. It does not implement general LPC actions, action
             memoization, the full DGD dialect, many-object selection, complete
-            noun vocabulary or scope traversal, multiple-rule dispatch, caches,
-            STM or I/O. Buildings, travel time, and reading stops have no
+            noun vocabulary or scope traversal (including <code>:v</code> modifiers
+            and structured explicit scopes), multiword verb selection, multiple-rule dispatch, handler
+            name/target fallback, caches, STM or I/O. Buildings, travel time, and reading stops have no
             performance meaning. Trust the demonstrated mechanism and values
             within this subset, not the animation as a benchmark.
           </p>

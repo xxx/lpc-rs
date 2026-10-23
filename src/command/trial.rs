@@ -1,17 +1,18 @@
 //! One line tried against rules in precedence order inside one command
-//! frame; `dispatch` and `parse_sentence` are its two callers.
+//! frame, shared by command dispatch and the parser efuns.
 
 use std::sync::Arc;
 
 use lpc_rs_errors::{Result, lpc_error};
+use ustr::Ustr;
 
 use crate::{
     command::{
         frontend::{add_action, native},
-        parser::{self, Nickname, Verdict},
+        parser::{self, Completion, Nickname, Options, Rejection, RejectionCode, Verdict},
         registry::{ActorRules, Family, Rule, VerbRules},
         resolve::{LpcVocabulary, Resolver},
-        scope::neighbourhood,
+        scope::{SuppliedScope, neighbourhood},
     },
     compile_time_config::MAX_COMMAND_DEPTH,
     interpreter::{
@@ -19,6 +20,7 @@ use crate::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
+        stm::TxnHandle,
         task_context::{CommandState, TaskContext},
     },
 };
@@ -62,17 +64,48 @@ impl Drop for Frame<'_> {
     }
 }
 
-/// `line` after its first word, spacing trimmed. `first_word` came from
-/// `split_whitespace`, so it starts exactly where the trimmed line does —
-/// slicing by its byte length off the untrimmed `line` would misplace the
-/// cut (or land mid-character) whenever `line` has leading whitespace.
-fn rest_of<'a>(line: &'a str, first_word: &str) -> &'a str {
-    let trimmed = line.trim_start();
-    trimmed[first_word.len()..].trim_start()
+/// A parser phrase's query context, restored on success, refusal or unwind.
+struct VerbFrame<'a> {
+    ctx: &'a TaskContext,
+    previous: Option<(String, String)>,
+}
+
+impl<'a> VerbFrame<'a> {
+    fn enter(ctx: &'a TaskContext, registered: &str, typed: &str) -> Self {
+        let previous = ctx.with_command(|state| {
+            state.map(|state| {
+                (
+                    std::mem::replace(&mut state.verb_reported, registered.to_owned()),
+                    std::mem::replace(&mut state.verb_typed, typed.to_owned()),
+                )
+            })
+        });
+        Self { ctx, previous }
+    }
+}
+
+impl Drop for VerbFrame<'_> {
+    fn drop(&mut self) {
+        if let Some((registered, typed)) = self.previous.take() {
+            self.ctx.with_command(|state| {
+                if let Some(state) = state {
+                    state.verb_reported = registered;
+                    state.verb_typed = typed;
+                }
+            });
+        }
+    }
+}
+
+/// The phrase context retained until every parser rule has failed.
+struct PendingRejection<'a> {
+    verb: Ustr,
+    typed: &'a str,
+    rejection: Rejection,
 }
 
 /// Rules in precedence order — the actor's own, then the verb-attached
-/// parser rules for `first_word` — each tried until one handles the line;
+/// parser phrases — each tried until one handles the line;
 /// `true` when one did. The verb-attached cell is read only when the actor's
 /// own rules did not handle the line — it stays out of most transactions'
 /// read sets.
@@ -82,6 +115,18 @@ pub(crate) async fn run(
     line: &str,
     first_word: &str,
 ) -> Result<bool> {
+    let actor_context = ctx
+        .this_player
+        .load()
+        .as_ref()
+        .is_none_or(|player| !Arc::ptr_eq(player, actor))
+        .then(|| {
+            // Boxed to keep the owned context out of command dispatch's future.
+            let ctx = Box::new(ctx.clone());
+            ctx.this_player.store(Some(actor.clone()));
+            ctx
+        });
+    let ctx = actor_context.as_deref().unwrap_or(ctx);
     let scope = neighbourhood(ctx.txn(), actor);
     let candidates = ActorRules::new(ctx.txn(), actor).matching(first_word, &scope);
 
@@ -91,41 +136,24 @@ pub(crate) async fn run(
     );
     // Boxed to stay out of `call_efun`'s unboxed future union, which every
     // efun call pays for — `command` calls `dispatch` unboxed.
-    if Box::pin(try_rules(
-        ctx,
-        actor,
-        line,
-        first_word,
-        &mut resolver,
-        candidates,
-    ))
-    .await?
-    {
+    if Box::pin(try_actor_rules(ctx, actor, line, &mut resolver, candidates)).await? {
         return Ok(true);
     }
-    let verb_rules = VerbRules::new(ctx).for_verb(first_word);
-    if Box::pin(try_rules(
-        ctx,
-        actor,
-        line,
-        first_word,
-        &mut resolver,
-        verb_rules,
-    ))
-    .await?
-    {
-        return Ok(true);
+    match Box::pin(sentence_trial(ctx, actor, line, None, Options::default())).await? {
+        Sentence::Handled => Ok(true),
+        Sentence::Message(message) => {
+            deliver(ctx, || as_actor(ctx, actor), actor, Some(actor), &message).await?;
+            Ok(true)
+        }
+        _ => Ok(false),
     }
-    Ok(false)
 }
 
-/// Try `candidates` in turn against `line`; `true` as soon as one handles
-/// it (delivering a `Protocol` rule's message first).
-async fn try_rules(
+/// Try the actor's native and add_action rules before reading the parser registry.
+async fn try_actor_rules(
     ctx: &TaskContext,
     actor: &Arc<Process>,
     line: &str,
-    first_word: &str,
     resolver: &mut Resolver<LpcVocabulary<'_>>,
     candidates: Vec<Rule>,
 ) -> Result<bool> {
@@ -152,23 +180,7 @@ async fn try_rules(
                 };
                 (pointer, args, rule.verb.to_string())
             }
-            Family::Parser(parser) => {
-                let Some(owner) = rule.owner() else { continue };
-                let rest = rest_of(line, first_word);
-                ctx.with_command(|state| {
-                    if let Some(state) = state {
-                        state.verb_reported = rule.verb.to_string();
-                    }
-                });
-                match Box::pin(parser::run(ctx, actor, &owner, parser, rest, None, &[])).await? {
-                    Verdict::Handled => return Ok(true),
-                    Verdict::Message(message) => {
-                        deliver(ctx, || as_actor(ctx, actor), actor, Some(actor), &message).await?;
-                        return Ok(true);
-                    }
-                    Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,
-                }
-            }
+            Family::Parser(_) => continue,
         };
         ctx.with_command(|state| {
             if let Some(state) = state {
@@ -179,19 +191,21 @@ async fn try_rules(
         let Some(result) = apply_pointer(ctx, actor, pointer, &args).await? else {
             continue;
         };
-        if !matches!(result, LpcRef::Int(LpcInt(0))) {
+        if !matches!(result, LpcRef::Nil | LpcRef::Int(LpcInt(0))) {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-/// `parse_sentence`'s outcome.
+/// A parser efun's outcome.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Sentence {
     /// A verb-attached rule's `do_` ran.
     Handled,
-    /// No verb-attached rule is registered for the line's first word.
+    /// A restricted parse's generic action arguments, without executing the action.
+    Arguments(Vec<LpcRef>),
+    /// No registered parser verb matches a leading phrase of the line.
     NoVerb,
     /// No verb-attached rule's grammar parsed the rest of the line.
     NoParse,
@@ -204,18 +218,30 @@ pub(crate) enum Sentence {
 }
 
 impl Sentence {
+    /// The parser efuns share status codes, message strings and argument arrays.
+    pub(crate) fn into_value(self, txn: &TxnHandle) -> LpcRef {
+        match self {
+            Self::Handled => LpcRef::from(1),
+            Self::Arguments(args) => {
+                LpcRef::Array(txn.with(|t| t.mint_array(args.into_iter().collect())))
+            }
+            Self::NoVerb => LpcRef::from(0),
+            Self::NoParse => LpcRef::from(-1),
+            Self::Refused => LpcRef::from(-2),
+            Self::Unresolved => LpcRef::from(-3),
+            Self::Message(message) => LpcRef::from(message.as_str()),
+        }
+    }
+
     /// The outcome when no rule handled the line or gave a message:
     /// `Unresolved` over `Refused` over `NoParse`; `NoParse` for none.
-    pub(crate) fn worst(verdicts: &[Verdict]) -> Sentence {
-        let rank = |v: &Verdict| match v {
-            Verdict::Unresolved => 2,
-            Verdict::Refused => 1,
-            _ => 0,
-        };
-        match verdicts.iter().max_by_key(|v| rank(v)) {
-            Some(Verdict::Unresolved) => Sentence::Unresolved,
-            Some(Verdict::Refused) => Sentence::Refused,
-            _ => Sentence::NoParse,
+    pub(crate) fn worst(codes: &[RejectionCode]) -> Sentence {
+        if codes.contains(&RejectionCode::Unresolved) {
+            Sentence::Unresolved
+        } else if codes.contains(&RejectionCode::Refused) {
+            Sentence::Refused
+        } else {
+            Sentence::NoParse
         }
     }
 }
@@ -224,59 +250,117 @@ impl Sentence {
 /// does: the same transaction, depth limit and command state as
 /// `dispatch`, but no pre-hook, no fallback, nothing delivered.
 pub(crate) async fn sentence(
-    ctx: &TaskContext,
+    ctx: TaskContext,
     actor: &Arc<Process>,
     line: &str,
-    scope: Option<Vec<Arc<Process>>>,
+    scope: Option<SuppliedScope>,
     nicknames: &[Nickname],
 ) -> Result<Sentence> {
-    depth_guard(ctx, "parse_sentence")?;
+    depth_guard(&ctx, "parse_sentence")?;
     let first_word = line.split_whitespace().next().unwrap_or("").to_owned();
-    let _frame = Frame::push(ctx, line, &first_word);
-    sentence_trial(ctx, actor, line, &first_word, scope, nicknames).await
+    let _frame = Frame::push(&ctx, line, &first_word);
+    sentence_trial(
+        &ctx,
+        actor,
+        line,
+        None,
+        Options {
+            scope: scope.as_ref(),
+            nicknames,
+            ..Options::default()
+        },
+    )
+    .await
 }
 
-/// The verb-attached rules for `first_word`, tried in registration order:
-/// none registered is `NoVerb`; the first `Handled` wins; a `Message`
-/// returns at once; otherwise the outcomes fold by severity, `Unresolved`
-/// over `Refused` over `NoParse`.
+/// Parse only the caller's registrations, retaining the context's selected command giver.
+pub(crate) async fn owned_sentence(
+    ctx: TaskContext,
+    actor: &Arc<Process>,
+    owner: &Arc<Process>,
+    line: &str,
+    completion: Completion,
+) -> Result<Sentence> {
+    depth_guard(&ctx, "parse_my_rules")?;
+    let first_word = line.split_whitespace().next().unwrap_or("");
+    let _frame = Frame::push(&ctx, line, first_word);
+    sentence_trial(
+        &ctx,
+        actor,
+        line,
+        Some(owner),
+        Options {
+            completion,
+            ..Options::default()
+        },
+    )
+    .await
+}
+
+/// Try every matching parser phrase before reporting any failure.
 async fn sentence_trial(
     ctx: &TaskContext,
     actor: &Arc<Process>,
     line: &str,
-    first_word: &str,
-    scope: Option<Vec<Arc<Process>>>,
-    nicknames: &[Nickname],
+    only_owner: Option<&Arc<Process>>,
+    options: Options<'_>,
 ) -> Result<Sentence> {
-    let candidates = VerbRules::new(ctx).for_verb(first_word);
+    let mut candidates = VerbRules::new(ctx).for_line(line);
+    if let Some(owner) = only_owner {
+        candidates.retain(|matched| matched.rule.owned_by(owner));
+    }
     if candidates.is_empty() {
         return Ok(Sentence::NoVerb);
     }
-    let rest = rest_of(line, first_word);
-
-    let mut verdicts = Vec::new();
-    for rule in &candidates {
-        let Some(owner) = rule.owner() else { continue };
+    let mut rejections = Vec::new();
+    for matched in candidates {
+        let rule = &matched.rule;
+        let Some(owner) = rule.owner().filter(|owner| owner.is_live(ctx.txn())) else {
+            continue;
+        };
         let Some(parser) = rule.protocol() else {
             continue;
         };
+        let _verb = VerbFrame::enter(ctx, rule.verb.as_str(), matched.typed);
         let verdict = Box::pin(parser::run(
             ctx,
             actor,
             &owner,
             parser,
-            rest,
-            scope.clone(),
-            nicknames,
+            matched.rest,
+            options,
         ))
         .await?;
         match verdict {
             Verdict::Handled => return Ok(Sentence::Handled),
-            Verdict::Message(message) => return Ok(Sentence::Message(message)),
-            other => verdicts.push(other),
+            Verdict::Arguments(args) => return Ok(Sentence::Arguments(args)),
+            Verdict::Rejected(rejection) => rejections.push(PendingRejection {
+                verb: rule.verb,
+                typed: matched.typed,
+                rejection,
+            }),
+            Verdict::NoParse => {}
         }
     }
-    Ok(Sentence::worst(&verdicts))
+    report_rejections(ctx, actor, rejections).await
+}
+
+/// Report furthest failures first, preserving trial order for ties, else combine silent codes.
+async fn report_rejections(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    mut rejections: Vec<PendingRejection<'_>>,
+) -> Result<Sentence> {
+    rejections.sort_by_key(|pending| std::cmp::Reverse(pending.rejection.progress));
+    let mut codes = Vec::with_capacity(rejections.len());
+    for pending in rejections {
+        let _verb = VerbFrame::enter(ctx, pending.verb.as_str(), pending.typed);
+        codes.push(pending.rejection.code);
+        if let Some(message) = pending.rejection.report(ctx, actor).await? {
+            return Ok(Sentence::Message(message));
+        }
+    }
+    Ok(Sentence::worst(&codes))
 }
 
 #[cfg(test)]
@@ -289,14 +373,17 @@ mod tests {
     #[test]
     fn unresolved_outranks_refused_outranks_no_parse() {
         assert_eq!(
-            Sentence::worst(&[Verdict::NoParse, Verdict::Refused, Verdict::NoParse]),
+            Sentence::worst(&[RejectionCode::Refused]),
             Sentence::Refused
         );
         assert_eq!(
-            Sentence::worst(&[Verdict::Refused, Verdict::Unresolved, Verdict::Refused]),
+            Sentence::worst(&[
+                RejectionCode::Refused,
+                RejectionCode::Unresolved,
+                RejectionCode::Refused,
+            ]),
             Sentence::Unresolved
         );
-        assert_eq!(Sentence::worst(&[Verdict::NoParse]), Sentence::NoParse);
     }
 
     #[test]

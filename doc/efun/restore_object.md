@@ -6,9 +6,10 @@ Read the save file `file` into the calling object's global variables.
 `file` is an in-game path resolved against the lib root (not the caller's
 directory), and `.o` is always appended. Each `name value` line sets the
 global of that name; a name the object does not have, or one that is
-`static`, is ignored, and a variable not named in the file keeps its
-value. There is no type check: a string in the file lands in an `int`
-variable as a string.
+[`nosave` or `static`](../lpc/nosave.md), is ignored. A variable not named in
+the file keeps its value. There is no type check: a string in the file lands in an `int`
+variable as a string. Restored class records validate their own field types;
+scalar class globals still enforce nominal identity when consumed by LPC code.
 
 Returns 1 on success and 0, without an error, when the file does not exist
 or cannot be read, which is how a lib tells a new player from a returning
@@ -25,6 +26,10 @@ runtime error `restore_object: permission denied`.
 
 A file that is not UTF-8 is read as Latin-1. The format is described in
 [`doc/save-format.md`](../save-format.md).
+
+Saved `0` remains numeric zero. Saved `nil` is preserved in distinct mode;
+zero mode converts it to `0` and emits one commit-time warning with the path
+and conversion count. See [null values](../lpc/null.md).
 
 ### Examples
 

@@ -49,7 +49,7 @@ pub async fn read_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     let count = text.chars().count();
     let from = offset(start, count as u64);
     let result = if from >= count as u64 {
-        LpcRef::from(0)
+        context.txn().nil()
     } else {
         let take = length.map_or(count, |n| n.min(count as u64) as usize);
         LpcRef::from(

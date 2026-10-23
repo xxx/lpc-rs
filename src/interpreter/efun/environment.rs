@@ -1,6 +1,6 @@
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::NULL};
+use crate::interpreter::{efun, efun::efun_context::EfunContext};
 
 pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.arg(0);
@@ -11,7 +11,7 @@ pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
                 .txn()
                 .with(|t| t.read(object.position.environment.id))
         })
-        .unwrap_or(NULL);
+        .unwrap_or(context.txn().nil());
 
     context.return_efun_result(result);
 
@@ -20,10 +20,11 @@ pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::lpc_ref::LpcRef;
     use indoc::indoc;
 
     use crate::{
-        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
+        interpreter::{CommittedReader, vm::Vm},
         test_support::{permissive_master, test_config},
     };
 

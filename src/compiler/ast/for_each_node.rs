@@ -30,7 +30,7 @@ pub enum ForEachInit {
     Array(VarInitNode),
     Mapping {
         key: VarInitNode,
-        value: VarInitNode,
+        value: Box<VarInitNode>,
     },
 }
 

@@ -8,10 +8,11 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     call_frame::{CallFrame, CollectionCall},
+    call_origin::CallOrigin,
     continuation::{Callee, Next, Pending},
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     stm::VarId,
     task::{
@@ -77,7 +78,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             break Ok(Advance::Running);
                         }
                         Next::Call(callee) => {
-                            match self.call_callee_now(&callee).map_err(|e| e.or_span(span))? {
+                            match self
+                                .call_callee_now(&callee, cont.origin)
+                                .map_err(|e| e.or_span(span))?
+                            {
                                 Called::Framed => {
                                     self.restore_pending(owner, pending)?;
                                     break Ok(Advance::Running);
@@ -86,7 +90,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     self.restore_pending(owner, pending)?;
                                     return Ok(Advance::Suspends);
                                 }
-                                Called::Unresolved => result = Some(NULL),
+                                Called::Unresolved => result = Some(self.context.txn.nil()),
                                 Called::Suspends => {
                                     cont.suspended = Some(callee);
                                     self.restore_pending(owner, pending)?;
@@ -109,17 +113,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Make `callee`'s call where no loading is needed.
-    fn call_callee_now(&mut self, callee: &Callee) -> Result<Called> {
+    fn call_callee_now(&mut self, callee: &Callee, origin: Option<CallOrigin>) -> Result<Called> {
         match callee {
             Callee::Pointer { ptr, args } => {
-                self.call_pointer_now(Passed::Values { ptr, values: args })
+                self.call_pointer_now(Passed::Values { ptr, values: args }, origin)
             }
             Callee::Function {
                 process,
                 function,
                 args,
             } => {
-                self.push_external_frame(process.clone(), function.clone(), args.iter().cloned())?;
+                self.push_external_frame(
+                    process.clone(),
+                    function.clone(),
+                    args.iter().cloned(),
+                    CallOrigin::Efun,
+                )?;
                 Ok(Called::Framed)
             }
             Callee::Inherited {
@@ -172,13 +181,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 "a `->` callee has a body"
                             );
                             let args = call.args.clone();
-                            self.push_external_frame(process, function, args.into_iter())?;
+                            self.push_external_frame(
+                                process,
+                                function,
+                                args.into_iter(),
+                                CallOrigin::CallOther,
+                            )?;
                             return Ok(Collected::Framed);
                         }
-                        None => call.results.push(NULL),
+                        None => call.results.push(self.context.txn.nil()),
                     }
                 }
-                Standing::Dead | Standing::Removed(_) => call.results.push(NULL),
+                Standing::Dead | Standing::Removed(_) => call.results.push(self.context.txn.nil()),
                 Standing::Uncreated(_) | Standing::Uninitialized(_) => {
                     call.remaining.push(receiver);
                     return Ok(Collected::Suspends);
@@ -242,11 +256,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 "a `->` callee has a body"
                             );
                             let args = call.args.clone();
-                            self.push_external_frame(process, function, args.into_iter())?;
+                            self.push_external_frame(
+                                process,
+                                function,
+                                args.into_iter(),
+                                CallOrigin::CallOther,
+                            )?;
                             Resolved::Framed
                         }
                         None => {
-                            call.results.push(NULL);
+                            call.results.push(self.context.txn.nil());
                             Resolved::Continue { answered: false }
                         }
                     }
@@ -259,13 +278,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         );
                     };
                     match self
-                        .call_pointer_slow(&ptr, args.to_vec())
+                        .call_pointer_slow(&ptr, args.to_vec(), cont.origin)
                         .await
                         .map_err(|e| e.or_span(span))?
                     {
                         Called::Framed => Resolved::Framed,
                         Called::Unresolved => {
-                            self.stack.current_frame_mut()?.registers[0] = NULL;
+                            self.stack.current_frame_mut()?.registers[0] = self.context.txn.nil();
                             Resolved::Continue { answered: true }
                         }
                         Called::Suspends | Called::Pending => {
@@ -309,6 +328,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         process: Arc<Process>,
         function: Function,
         args: impl ExactSizeIterator<Item = LpcRef>,
+        origin: CallOrigin,
     ) -> Result<()> {
         if let Some(i) = function.prototype.first_ref_param() {
             return Err(self.runtime_error(format!(
@@ -329,6 +349,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             frame.push_arg(&self.context.txn, i, arg)?;
         }
         frame.external = true;
+        frame.origin = origin;
         self.stack.push(frame)
     }
 }

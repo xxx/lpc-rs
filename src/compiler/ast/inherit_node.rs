@@ -4,6 +4,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use lpc_rs_core::visibility::Visibility;
 use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
 
@@ -19,6 +20,8 @@ pub struct InheritNode {
     pub path: Ustr,
 
     pub namespace: Option<Ustr>,
+
+    pub visibility: Visibility,
 
     /// The span of the inherit statement in the original file.
     pub span: Option<Span>,
@@ -44,6 +47,9 @@ impl Display for InheritNode {
             None => String::new(),
         };
 
+        if self.visibility != Visibility::Public {
+            write!(f, "{} ", self.visibility)?;
+        }
         write!(f, "inherit {}{}", self.path, ns)
     }
 }

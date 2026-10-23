@@ -52,7 +52,10 @@ pub(crate) struct SystemView {
 
 pub(crate) fn compatible_exports(old: &Program, new: &Program) -> Result<()> {
     for (name, function) in old.unmangled_functions.iter() {
-        if name == lpc_rs_core::INIT_PROGRAM || name == lpc_rs_core::INIT_GLOBALS {
+        if !function.public()
+            || name == lpc_rs_core::INIT_PROGRAM
+            || name == lpc_rs_core::INIT_GLOBALS
+        {
             continue;
         }
         let Some(replacement) = new.unmangled_functions.get(name) else {
@@ -62,7 +65,8 @@ pub(crate) fn compatible_exports(old: &Program, new: &Program) -> Result<()> {
         };
         let a = &function.prototype;
         let b = &replacement.prototype;
-        if a.return_type != b.return_type
+        if !replacement.public()
+            || a.return_type != b.return_type
             || a.arity != b.arity
             || a.arg_types != b.arg_types
             || a.ref_params != b.ref_params
@@ -75,4 +79,69 @@ pub(crate) fn compatible_exports(old: &Program, new: &Program) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        compiler::Compiler,
+        test_support::{lib_holding, temp_lib_config},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn a_simul_export_cannot_be_hidden_by_changing_inherit_visibility() {
+        let root = lib_holding(
+            "simul-inherit-recompile",
+            &[("base.c", "int exported() { return 1; }")],
+        );
+        let compiler = Compiler::new(temp_lib_config(&root));
+        let old = compiler
+            .compile_string("/simul.c", "inherit \"/base\";")
+            .await
+            .unwrap()
+            .program;
+        for modifier in ["private", "protected"] {
+            let new = compiler
+                .compile_string("/simul.c", format!("{modifier} inherit \"/base\";"))
+                .await
+                .unwrap()
+                .program;
+            assert_eq!(
+                old.lookup_function("exported").unwrap().prototype.flags,
+                new.lookup_function("exported").unwrap().prototype.flags
+            );
+            let error = compatible_exports(&old, &new).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("incompatible simul-efun export `exported`"),
+                "{error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn private_inherited_helpers_are_not_part_of_the_simul_export_contract() {
+        let root = lib_holding(
+            "simul-private-helpers-recompile",
+            &[("base.c", "int helper() { return 1; }")],
+        );
+        let compiler = Compiler::new(temp_lib_config(&root));
+        let old = compiler
+            .compile_string(
+                "/simul.c",
+                "private inherit \"/base\"; int exported() { return helper(); }",
+            )
+            .await
+            .unwrap()
+            .program;
+        let new = compiler
+            .compile_string("/simul.c", "int exported() { return 2; }")
+            .await
+            .unwrap()
+            .program;
+        compatible_exports(&old, &new).unwrap();
+    }
 }

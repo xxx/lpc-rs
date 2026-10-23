@@ -12,15 +12,17 @@ all three share `give`'s base); removing a synonym's own verb name (`"g"` or
 `"gv"`) matches nothing. Removing a verb `this_object()` has no rules for is
 silent.
 
+Multiword keys use the same normalization as registration: trim surrounding
+Unicode whitespace and join words with one space, preserving case and punctuation.
+An empty or whitespace-only name raises
+`parse_remove: the verb must contain at least one word`.
+
 As a side effect, `parse_remove` also purges every rule left in the registry
 by any owner that has since been destructed, not only `this_object()`'s own
 — destruct does the same. A dead owner's rules stop being tried immediately
 regardless of either; the purge only reclaims the entry.
 
-Departures from MudOS are listed in [`parse_sentence`](parse_sentence.md)'s
-departures table.
-
 ### See also
 
-`parse_init`, `parse_add_rule`, `parse_add_synonym`, `parse_my_rules`,
+`parse_init`, `parse_add_rule`, `parse_add_synonym`, `query_parser_rules`,
 `parse_dump`

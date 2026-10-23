@@ -4,11 +4,18 @@
 
 use std::{collections::HashMap, iter::Peekable};
 
-use lpc_rs_errors::{Result, lpc_error, span::Span};
+use lpc_rs_errors::{
+    Result, lpc_bug, lpc_error,
+    source_map::DiagnosticSources,
+    span::{HasSpan, Span},
+};
 
 use crate::compiler::{
     lexer::{Token, logos_token::StringToken},
-    preprocessor::define::{Define, FunctionMacro},
+    preprocessor::{
+        define::{Define, FunctionMacro, identifier_name},
+        predefined::Predefined,
+    },
 };
 
 /// Hard cap on tokens one top-level expansion may emit: the hide set
@@ -17,6 +24,9 @@ use crate::compiler::{
 /// and `emit`'s rescan both count against it — conservative, not an exact
 /// count of the final output.
 const MAX_EXPANDED_TOKENS: usize = 65_536;
+
+/// Stringification can grow text exponentially while collapsing each result to one token.
+const MAX_STRINGIFIED_BYTES: usize = 1_048_576;
 
 /// Hard cap on nested invocation depth: source nesting like
 /// `F(F(F(...)))` recurses once per level and isn't bounded by the hide
@@ -39,27 +49,47 @@ pub(super) struct Expanded {
 /// The engine over one define table. Cheap to build; one per use is fine.
 pub(super) struct Expander<'a> {
     defines: &'a HashMap<String, Define>,
+    sources: &'a DiagnosticSources,
+    port: u16,
 }
 
 impl<'a> Expander<'a> {
     /// Build an engine over `defines`.
-    pub(super) fn new(defines: &'a HashMap<String, Define>) -> Self {
-        Self { defines }
+    pub(super) fn new(
+        defines: &'a HashMap<String, Define>,
+        sources: &'a DiagnosticSources,
+        port: u16,
+    ) -> Self {
+        Self {
+            defines,
+            sources,
+            port,
+        }
     }
 
     /// Expand one potential macro use. `cursor` is the stream the use sits
     /// in; a function-macro's arguments are captured from it. `None`: not a
     /// macro use (undefined name, or a function-macro name with no `(`
-    /// following); the caller emits the Id.
+    /// following); the caller emits the original token.
     pub(super) fn expand_use<T>(
         &self,
-        token: &StringToken,
+        token: &Token,
         cursor: &mut Peekable<T>,
     ) -> Result<Option<Expanded>>
     where
         T: Iterator<Item = Result<Token>>,
     {
-        let Some((name, define)) = self.defines.get_key_value(&token.1) else {
+        let Some(name) = identifier_name(token) else {
+            return Ok(None);
+        };
+        let span = token.span();
+        if let Some(predefined) = Predefined::from_name(name) {
+            return Ok(Some(Expanded {
+                tokens: vec![predefined.expand(span, self.sources, self.port)?],
+                use_span: span,
+            }));
+        }
+        let Some((name, define)) = self.defines.get_key_value(name) else {
             return Ok(None);
         };
         if matches!(define, Define::Function(_))
@@ -70,16 +100,23 @@ impl<'a> Expander<'a> {
 
         let mut expansion = Expansion {
             defines: self.defines,
+            sources: self.sources,
+            port: self.port,
             top: name,
-            use_span: token.0,
+            use_span: span,
             hide: vec![],
             emitted: 0,
+            stringified_bytes: 0,
             depth: 0,
         };
         let mut out = vec![];
-        expansion.expand_named(name, cursor, &mut out)?;
+        let mut previous = Some(span);
+        let mut input = cursor
+            .map(|token| token.map(|token| ExpansionToken::source(token, &mut previous)))
+            .peekable();
+        expansion.expand_named(name, &mut input, &mut out)?;
         Ok(Some(Expanded {
-            tokens: out,
+            tokens: out.into_iter().map(|item| item.token).collect(),
             use_span: expansion.use_span,
         }))
     }
@@ -88,6 +125,8 @@ impl<'a> Expander<'a> {
 /// One top-level use being expanded: the budget, the hide set, the use site.
 struct Expansion<'a> {
     defines: &'a HashMap<String, Define>,
+    sources: &'a DiagnosticSources,
+    port: u16,
     /// The top-level macro, named by the cap diagnostic.
     top: &'a str,
     /// Every body-derived token emits with this span: the use-site
@@ -98,12 +137,40 @@ struct Expansion<'a> {
     /// is the membership test — macro chains are short.
     hide: Vec<&'a str>,
     emitted: usize,
+    stringified_bytes: usize,
     /// Current nested-invocation depth; see `MAX_EXPANSION_DEPTH`.
     depth: usize,
 }
 
+/// Spelling and separation survive diagnostic respanning and parameter substitution.
+#[derive(Clone)]
+struct ExpansionToken {
+    token: Token,
+    origin: Option<Span>,
+    leading_space: bool,
+}
+
+impl ExpansionToken {
+    fn source(token: Token, previous: &mut Option<Span>) -> Self {
+        let span = token.span();
+        let leading_space =
+            previous.is_some_and(|prev| prev.file_id() != span.file_id() || prev.r() < span.l());
+        *previous = Some(span);
+        Self {
+            token,
+            origin: Some(span),
+            leading_space,
+        }
+    }
+}
+
+struct Argument {
+    raw: Vec<ExpansionToken>,
+    expanded: Option<Vec<ExpansionToken>>,
+}
+
 /// No parameters to substitute: object-macro bodies have none.
-fn no_args() -> HashMap<&'static str, Vec<Token>> {
+fn no_args() -> HashMap<&'static str, Argument> {
     HashMap::new()
 }
 
@@ -113,10 +180,10 @@ impl<'a> Expansion<'a> {
         &mut self,
         name: &'a str,
         cursor: &mut Peekable<T>,
-        out: &mut Vec<Token>,
+        out: &mut Vec<ExpansionToken>,
     ) -> Result<()>
     where
-        T: Iterator<Item = Result<Token>>,
+        T: Iterator<Item = Result<ExpansionToken>>,
     {
         if self.depth >= MAX_EXPANSION_DEPTH {
             return Err(self.too_deep());
@@ -134,14 +201,14 @@ impl<'a> Expansion<'a> {
         &mut self,
         name: &'a str,
         cursor: &mut Peekable<T>,
-        out: &mut Vec<Token>,
+        out: &mut Vec<ExpansionToken>,
     ) -> Result<()>
     where
-        T: Iterator<Item = Result<Token>>,
+        T: Iterator<Item = Result<ExpansionToken>>,
     {
         match self.defines.get(name).expect("caller looked the name up") {
             Define::Object(object) => {
-                let replacement = self.substitute(&object.tokens, &no_args())?;
+                let replacement = self.substitute(&object.tokens, &mut no_args())?;
                 self.hide.push(name);
                 let walked = self.walk(&replacement, out);
                 self.hide.pop();
@@ -150,8 +217,8 @@ impl<'a> Expansion<'a> {
             Define::Function(function) => {
                 cursor.next(); // the `(` the caller peeked
                 let raw = self.capture_arguments(name, cursor)?;
-                let args = self.bind_arguments(name, function, raw)?;
-                let replacement = self.substitute(&function.tokens, &args)?;
+                let mut args = self.bind_arguments(name, function, raw)?;
+                let replacement = self.substitute(&function.tokens, &mut args)?;
                 self.hide.push(name);
                 let walked = self.walk(&replacement, out);
                 self.hide.pop();
@@ -160,62 +227,167 @@ impl<'a> Expansion<'a> {
         }
     }
 
-    /// Build one macro's replacement from its raw body: a parameter Id
-    /// splices its bound (already-expanded) tokens verbatim, their own
-    /// spans kept; every other token is respanned to the use site here, at
-    /// construction — once, not on every rescan. Budgeted against
-    /// `MAX_EXPANDED_TOKENS` here too: a parameter splice can multiply
-    /// body-occurrences by argument size, so `walk`/`emit`'s cap alone
-    /// would let construction build an unbounded vector first.
-    fn substitute(&self, body: &[Token], args: &HashMap<&str, Vec<Token>>) -> Result<Vec<Token>> {
+    /// Substitute parameters, expanding ordinary uses and stringifying raw uses,
+    /// while preserving argument spans and bounding replacement-list construction.
+    fn substitute(
+        &mut self,
+        body: &[Token],
+        args: &mut HashMap<&str, Argument>,
+    ) -> Result<Vec<ExpansionToken>> {
         let mut replacement = Vec::with_capacity(body.len());
-        for token in body {
-            // A parameter spelled like a keyword lexes as that keyword, not `Token::Id`, so it's matched by spelling instead.
-            let param_tokens = if let Token::Id(st) = token {
-                args.get(st.1.as_str())
-            } else {
-                token.keyword_text().and_then(|spelling| args.get(spelling))
-            };
-            if let Some(arg_tokens) = param_tokens {
+        let mut previous = None;
+        let mut cursor = body
+            .iter()
+            .cloned()
+            .map(|token| ExpansionToken::source(token, &mut previous));
+        let mut pending_space = false;
+        while let Some(mut token) = cursor.next() {
+            token.leading_space |= pending_space;
+            pending_space = false;
+            if matches!(token.token, Token::DirectiveLine(_)) {
+                let argument = cursor
+                    .next()
+                    .and_then(|operand| {
+                        identifier_name(&operand.token).and_then(|name| args.get(name))
+                    })
+                    .ok_or_else(|| {
+                        lpc_bug!("invalid stringification operand after definition validation")
+                    })?;
+                let text = self.stringify(&argument.raw)?;
+                token.token = Token::StringLiteral(StringToken(self.use_span, text));
+                token.origin = None;
+            } else if let Some(arg) =
+                identifier_name(&token.token).and_then(|name| args.get_mut(name))
+            {
+                let arg_tokens = if let Some(expanded) = &arg.expanded {
+                    expanded
+                } else {
+                    let mut expanded = vec![];
+                    self.walk(&arg.raw, &mut expanded)?;
+                    arg.expanded.insert(expanded)
+                };
                 if self.emitted + replacement.len() + arg_tokens.len() > MAX_EXPANDED_TOKENS {
                     return Err(self.too_many());
                 }
+                let start = replacement.len();
                 replacement.extend(arg_tokens.iter().cloned());
+                if let Some(first) = replacement.get_mut(start) {
+                    first.leading_space = token.leading_space;
+                } else {
+                    pending_space = token.leading_space;
+                }
                 continue;
+            } else {
+                token.token = token.token.with_span(self.use_span);
             }
             if self.emitted + replacement.len() + 1 > MAX_EXPANDED_TOKENS {
                 return Err(self.too_many());
             }
-            replacement.push(token.clone().with_span(self.use_span));
+            replacement.push(token);
         }
         Ok(replacement)
+    }
+
+    fn stringify(&mut self, tokens: &[ExpansionToken]) -> Result<String> {
+        let sources = self.sources.read();
+        let mut text = String::new();
+        let remaining = MAX_STRINGIFIED_BYTES.saturating_sub(self.stringified_bytes);
+        let append = |text: &mut String, spelling: &str| -> Result<()> {
+            if spelling.len() > remaining.saturating_sub(text.len()) {
+                return Err(lpc_error!(
+                    Some(self.use_span),
+                    "stringification in `{}` exceeds {} bytes",
+                    self.top,
+                    MAX_STRINGIFIED_BYTES
+                ));
+            }
+            text.push_str(spelling);
+            Ok(())
+        };
+        for (i, item) in tokens.iter().enumerate() {
+            if i > 0 && item.leading_space {
+                append(&mut text, " ")?;
+            }
+            let spelling = item.origin.and_then(|span| {
+                sources
+                    .get(span.file_id())
+                    .ok()?
+                    .source()
+                    .get(span.l()..span.r())
+            });
+            if let Some(spelling) = spelling {
+                append(&mut text, spelling)?;
+            } else if let Token::StringLiteral(value) = &item.token {
+                append(&mut text, "\"")?;
+                for ch in value.1.chars() {
+                    let escape = match ch {
+                        '\\' => Some("\\\\"),
+                        '"' => Some("\\\""),
+                        '\n' => Some("\\n"),
+                        '\r' => Some("\\r"),
+                        '\t' => Some("\\t"),
+                        '\x0B' => Some("\\v"),
+                        '\x0C' => Some("\\f"),
+                        '\x07' => Some("\\a"),
+                        '\x08' => Some("\\b"),
+                        _ => None,
+                    };
+                    if let Some(escape) = escape {
+                        append(&mut text, escape)?;
+                    } else {
+                        append(&mut text, ch.encode_utf8(&mut [0; 4]))?;
+                    }
+                }
+                append(&mut text, "\"")?;
+            } else {
+                append(&mut text, &item.token.to_string())?;
+            }
+        }
+        self.stringified_bytes += text.len();
+        Ok(text)
     }
 
     /// Rescan one already-substituted, already-spanned replacement:
     /// hidden names and non-macro tokens emit verbatim; a live macro name
     /// expands in place, off this same cursor — so a nested call's
     /// argument capture sees the substitution `substitute` already made.
-    fn walk(&mut self, stream: &[Token], out: &mut Vec<Token>) -> Result<()> {
+    fn walk(&mut self, stream: &[ExpansionToken], out: &mut Vec<ExpansionToken>) -> Result<()> {
         let mut cursor = stream.iter().cloned().map(Ok).peekable();
+        let mut pending_space = false;
         while let Some(next) = cursor.next() {
-            let token = next?;
-            let Token::Id(st) = &token else {
+            let mut token = next?;
+            token.leading_space |= pending_space;
+            pending_space = false;
+            let Some(identifier) = identifier_name(&token.token) else {
                 self.emit(token, out)?;
                 continue;
             };
-            match self.defines.get_key_value(&st.1) {
+            if let Some(predefined) = Predefined::from_name(identifier) {
+                token.token = predefined.expand(token.token.span(), self.sources, self.port)?;
+                token.origin = None;
+                self.emit(token, out)?;
+                continue;
+            }
+            match self.defines.get_key_value(identifier) {
                 None => self.emit(token, out)?,
                 Some((name, _)) if self.hide.contains(&name.as_str()) => {
                     // Hidden: a plain identifier.
                     self.emit(token, out)?;
                 }
-                Some((_, Define::Function(_)))
-                    if !matches!(cursor.peek(), Some(Ok(Token::LParen(_)))) =>
+                Some((_, Define::Function(_))) if !matches!(cursor.peek(), Some(Ok(item)) if matches!(item.token, Token::LParen(_))) =>
                 {
                     // Function-macro name, no `(`: a plain identifier.
                     self.emit(token, out)?;
                 }
-                Some((name, _)) => self.expand_named(name, &mut cursor, out)?,
+                Some((name, _)) => {
+                    let start = out.len();
+                    self.expand_named(name, &mut cursor, out)?;
+                    if let Some(first) = out.get_mut(start) {
+                        first.leading_space = token.leading_space;
+                    } else {
+                        pending_space = token.leading_space;
+                    }
+                }
             }
         }
         Ok(())
@@ -228,20 +400,20 @@ impl<'a> Expansion<'a> {
         &mut self,
         name: &str,
         cursor: &mut Peekable<T>,
-    ) -> Result<Vec<Vec<Token>>>
+    ) -> Result<Vec<Vec<ExpansionToken>>>
     where
-        T: Iterator<Item = Result<Token>>,
+        T: Iterator<Item = Result<ExpansionToken>>,
     {
         let mut depth = 1_usize;
-        let mut args: Vec<Vec<Token>> = vec![];
-        let mut arg: Vec<Token> = vec![];
+        let mut args: Vec<Vec<ExpansionToken>> = vec![];
+        let mut arg: Vec<ExpansionToken> = vec![];
 
         loop {
             let Some(next) = cursor.next() else {
                 return Err(self.unterminated(name));
             };
             let token = next?;
-            match &token {
+            match &token.token {
                 Token::LParen(_) => {
                     depth += 1;
                     arg.push(token);
@@ -274,16 +446,14 @@ impl<'a> Expansion<'a> {
     }
 
     /// C99 arity: a zero-parameter macro's `()` is zero arguments; on
-    /// one-plus parameters `()` is one empty argument. Each argument is
-    /// fully expanded before substitution, under the hide set in
-    /// force at the call — `name` itself isn't pushed onto it until after
-    /// this returns, so a same-named call inside an argument expands freely.
+    /// one-plus parameters `()` is one empty argument; expansion is deferred
+    /// until an ordinary parameter use needs it.
     fn bind_arguments(
-        &mut self,
+        &self,
         name: &'a str,
         function: &'a FunctionMacro,
-        mut raw: Vec<Vec<Token>>,
-    ) -> Result<HashMap<&'a str, Vec<Token>>> {
+        mut raw: Vec<Vec<ExpansionToken>>,
+    ) -> Result<HashMap<&'a str, Argument>> {
         if function.args.is_empty() && raw.len() == 1 && raw[0].is_empty() {
             raw.clear();
         }
@@ -301,16 +471,20 @@ impl<'a> Expansion<'a> {
         }
         let mut map = HashMap::new();
         for (param, tokens) in function.args.iter().zip(raw) {
-            let mut expanded = vec![];
-            self.walk(&tokens, &mut expanded)?;
-            map.insert(param.as_str(), expanded);
+            map.insert(
+                param.as_str(),
+                Argument {
+                    raw: tokens,
+                    expanded: None,
+                },
+            );
         }
         Ok(map)
     }
 
     /// Emit one token, budgeted. Its span is already final —
     /// `substitute` set it once, at replacement construction.
-    fn emit(&mut self, token: Token, out: &mut Vec<Token>) -> Result<()> {
+    fn emit(&mut self, token: ExpansionToken, out: &mut Vec<ExpansionToken>) -> Result<()> {
         self.emitted += 1;
         if self.emitted > MAX_EXPANDED_TOKENS {
             return Err(self.too_many());
@@ -382,17 +556,18 @@ mod tests {
 
     /// Drive the engine over `src` the way internal_scan does; Display strings out.
     fn expand_all(preprocessor: &Preprocessor, src: &str) -> Result<Vec<String>> {
-        let expander = Expander::new(&preprocessor.defines);
+        let expander = Expander::new(
+            &preprocessor.defines,
+            &preprocessor.context.diagnostic_sources,
+            preprocessor.context.config.port,
+        );
         let mut cursor = LexWrapper::new(src, 0).peekable();
         let mut out = vec![];
         while let Some(next) = cursor.next() {
             let token = next?;
-            match &token {
-                Token::Id(st) => match expander.expand_use(st, &mut cursor)? {
-                    Some(expanded) => out.extend(expanded.tokens),
-                    None => out.push(token),
-                },
-                _ => out.push(token),
+            match expander.expand_use(&token, &mut cursor)? {
+                Some(expanded) => out.extend(expanded.tokens),
+                None => out.push(token),
             }
         }
         Ok(out.iter().map(|t| t.to_string()).collect())
@@ -569,27 +744,41 @@ mod tests {
     #[tokio::test]
     async fn body_tokens_take_the_use_site_span() {
         let pp = table("#define FOO 42\n").await;
-        let expander = Expander::new(&pp.defines);
+        let expander = Expander::new(
+            &pp.defines,
+            &pp.context.diagnostic_sources,
+            pp.context.config.port,
+        );
         let mut cursor = LexWrapper::new("FOO", 0).peekable();
         let Some(Ok(Token::Id(st))) = cursor.next() else {
             panic!("expected an Id");
         };
         let use_span = st.0;
-        let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let mut expanded = expander
+            .expand_use(&Token::Id(st), &mut cursor)
+            .unwrap()
+            .unwrap();
         assert_eq!(*expanded.tokens[0].span_ref(), use_span);
     }
 
     #[tokio::test]
     async fn argument_tokens_keep_their_own_spans() {
         let pp = table("#define ID(x) x\n").await;
-        let expander = Expander::new(&pp.defines);
+        let expander = Expander::new(
+            &pp.defines,
+            &pp.context.diagnostic_sources,
+            pp.context.config.port,
+        );
         let src = "ID(marf)";
         let mut cursor = LexWrapper::new(src, 0).peekable();
         let Some(Ok(Token::Id(st))) = cursor.next() else {
             panic!("expected an Id");
         };
         let use_span = st.0;
-        let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let mut expanded = expander
+            .expand_use(&Token::Id(st), &mut cursor)
+            .unwrap()
+            .unwrap();
         let got = *expanded.tokens[0].span_ref();
         assert_ne!(got, use_span);
         assert_eq!(expanded.tokens[0].to_string(), "marf");
@@ -619,13 +808,20 @@ mod tests {
     #[tokio::test]
     async fn body_tokens_of_a_call_take_the_whole_call_span() {
         let pp = table("#define F(x) x + 1\n").await;
-        let expander = Expander::new(&pp.defines);
+        let expander = Expander::new(
+            &pp.defines,
+            &pp.context.diagnostic_sources,
+            pp.context.config.port,
+        );
         let src = "F(9)";
         let mut cursor = LexWrapper::new(src, 0).peekable();
         let Some(Ok(Token::Id(st))) = cursor.next() else {
             panic!("expected an Id");
         };
-        let expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let expanded = expander
+            .expand_use(&Token::Id(st), &mut cursor)
+            .unwrap()
+            .unwrap();
         // `+` is body-derived: the whole call `F(9)`.
         assert_eq!(expanded.tokens[1].span(), Span::new(0, 0..4));
         // `9` is an argument: its own span.

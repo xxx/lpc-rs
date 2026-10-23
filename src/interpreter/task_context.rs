@@ -16,7 +16,10 @@ use tokio::sync::mpsc::Sender;
 
 use crate::compile_time_config::{MAX_CALL_STACK_SIZE, MAX_TASK_CHAIN};
 use crate::{
-    compiler::source_reader::{SourceKind, SourceReader},
+    compiler::{
+        codegen::{tree_printer::TreePrinter, tree_walker::TreeWalker},
+        source_reader::{SourceKind, SourceReader},
+    },
     interpreter::{
         COMPILE_OBJECT, VALID_LOAD, VALID_WRITE,
         apply::{master_apply, report_warnings, valid_apply},
@@ -32,7 +35,7 @@ use crate::{
         task::Task,
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
-    util::process_builder::compile_process_in_context,
+    util::process_builder::{analyze_in_context, compile_process_in_context},
 };
 
 /// The command a task is running: what `query_verb`, `query_command`, and
@@ -41,7 +44,7 @@ use crate::{
 pub struct CommandState {
     /// The line `dispatch` is trying, after any `process_input` rewrite.
     pub line: String,
-    /// The first word as typed.
+    /// The parser's matched phrase, or another command family's first word, as typed.
     pub verb_typed: String,
     /// What `query_verb()` returns for the rule being tried.
     pub verb_reported: String,
@@ -102,12 +105,11 @@ impl Default for TaskResult {
 /// and `compile_string` requests may recreate a `Removed` name.
 #[derive(Debug)]
 pub enum ObjectLookup {
-    /// Live for this attempt — its cell holds it, or the physical map does
-    /// (objects created outside any transaction: bootstrap, `clone_object`).
+    /// Live for this attempt, including bootstrap objects without a cell value.
     Found(Arc<Process>),
     /// This attempt destructed it.
     Removed,
-    /// No cell exists.
+    /// No object exists at the path in this attempt's view.
     NotCreated,
 }
 
@@ -344,6 +346,66 @@ impl TaskContext {
             .is_ok_and(|kind| kind == SourceKind::File)
     }
 
+    async fn authorize_source(
+        &self,
+        path: &LpcPath,
+        loader: &Loader,
+        supplied: bool,
+    ) -> Result<()> {
+        let source = self
+            .config()
+            .paths()
+            .source_name(&path.source_file())
+            .to_string();
+        let args = [
+            LpcRef::from(source),
+            LpcRef::from(loader.func.as_str()),
+            LpcRef::from(Arc::downgrade(loader.caller())),
+            loader.program.clone(),
+        ];
+        if supplied && !valid_apply(self, loader.callers(), VALID_WRITE, &args).await? {
+            return Err(LpcError::runtime(format!(
+                "{}: permission denied",
+                loader.func
+            )));
+        }
+        if !valid_apply(self, loader.callers(), VALID_LOAD, &args).await? {
+            return Err(LpcError::runtime(format!(
+                "{}: permission denied",
+                loader.func
+            )));
+        }
+        Ok(())
+    }
+
+    /// Render checked source in this attempt without placing or initializing an object.
+    pub(crate) fn syntax_tree<'a>(
+        &'a self,
+        path: &'a LpcPath,
+        loader: &'a Loader,
+        code: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
+        Box::pin(async move {
+            self.authorize_source(path, loader, true).await?;
+            let compiling = self.txn().time_compilation();
+            let reader: Arc<dyn SourceReader> =
+                Arc::new(TransactionSourceReader(self.txn().clone()));
+            let (mut node, warnings) = analyze_in_context(
+                self,
+                path,
+                code,
+                MasterGate::new(self, loader.callers()),
+                reader,
+            )
+            .await?;
+            drop(compiling);
+            report_warnings(self, loader.callers(), &path.source_file(), warnings).await?;
+            let mut printer = TreePrinter::new();
+            printer.visit_program(&mut node).await?;
+            Ok(printer.into_lines())
+        })
+    }
+
     /// Compile supplied text or the attempt's source file after authorization, without insertion.
     pub(crate) fn compile_source_process<'a>(
         &'a self,
@@ -352,29 +414,7 @@ impl TaskContext {
         code: Option<&'a str>,
     ) -> Pin<Box<dyn Future<Output = Result<Arc<Process>>> + Send + 'a>> {
         Box::pin(async move {
-            let source = self
-                .config()
-                .paths()
-                .source_name(&path.source_file())
-                .to_string();
-            let args = [
-                LpcRef::from(source),
-                LpcRef::from(loader.func.as_str()),
-                LpcRef::from(Arc::downgrade(loader.caller())),
-                loader.program.clone(),
-            ];
-            if code.is_some() && !valid_apply(self, loader.callers(), VALID_WRITE, &args).await? {
-                return Err(LpcError::runtime(format!(
-                    "{}: permission denied",
-                    loader.func
-                )));
-            }
-            if !valid_apply(self, loader.callers(), VALID_LOAD, &args).await? {
-                return Err(LpcError::runtime(format!(
-                    "{}: permission denied",
-                    loader.func
-                )));
-            }
+            self.authorize_source(path, loader, code.is_some()).await?;
             let gate = MasterGate::new(self, loader.callers());
             let compiling = self.txn().time_compilation();
             let reader: Arc<dyn SourceReader> =
@@ -473,11 +513,28 @@ impl TaskContext {
         callers: Callers,
         process: &Arc<Process>,
     ) -> Result<()> {
+        self.insert_and_initialize_with_args(callers, process, &[])
+            .await
+    }
+
+    /// Insert an object and initialize it with arguments for its `create` hook.
+    pub(crate) async fn insert_and_initialize_with_args(
+        &self,
+        callers: Callers,
+        process: &Arc<Process>,
+        args: &[LpcRef],
+    ) -> Result<()> {
         // `nested` is resolved before the insert: a depth refusal here must
         // not leave an inserted, never-initialized object behind.
         let nested = self.nested(callers, process.clone())?;
         self.insert_process_transactional(process);
-        if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(nested)).await {
+        if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process_with_args(
+            nested, args,
+        ))
+        .await
+        {
+            self.txn()
+                .with(|t| self.global_state.sockets.retire_object(t, process));
             txn_undo_insert(self.txn(), self.object_space(), process);
             return Err(e);
         }
@@ -495,10 +552,16 @@ impl TaskContext {
         repeat: Option<Duration>,
     ) -> u64 {
         let id = self.global_state.with_call_outs(|co| co.mint_id());
+        let player = if self.config().call_out_preserve_player {
+            self.this_player.load().as_ref().map(Arc::downgrade)
+        } else {
+            None
+        };
         self.txn().with(|t| {
             t.record_call_out(CallOutSchedule {
                 id,
                 process: Arc::downgrade(owner),
+                player,
                 func_ref,
                 delay,
                 repeat,
@@ -556,9 +619,9 @@ impl TaskContext {
         })
     }
 
-    /// Query all call outs owned by `owner`, as in
-    /// [`TaskContext::query_call_out`].
-    pub fn query_call_outs(&self, owner: &Arc<Process>) -> Vec<Vec<LpcRef>> {
+    /// Query call outs for `owner`, or every live owner when `None`, using
+    /// the row format of [`TaskContext::query_call_out`].
+    pub fn query_call_outs(&self, owner: Option<&Arc<Process>>) -> Vec<Vec<LpcRef>> {
         let mut out = Vec::new();
         let pending = self.txn().with(|t| t.pending_call_outs().to_vec());
         for s in pending {
@@ -566,7 +629,8 @@ impl TaskContext {
                 continue;
             }
             if let Some(p) = s.process.upgrade()
-                && Arc::ptr_eq(&p, owner)
+                && owner.is_none_or(|owner| Arc::ptr_eq(&p, owner))
+                && p.is_live(self.txn())
             {
                 out.push(vec![
                     Arc::downgrade(&p).into(),
@@ -583,7 +647,8 @@ impl TaskContext {
                     continue;
                 }
                 if let Some(p) = call_out.process().upgrade()
-                    && Arc::ptr_eq(&p, owner)
+                    && owner.is_none_or(|owner| Arc::ptr_eq(&p, owner))
+                    && p.is_live(self.txn())
                 {
                     out.push(vec![
                         Arc::downgrade(&p).into(),
@@ -614,6 +679,9 @@ impl TaskContext {
     /// from the attempt; committed entries get a deferred removal plus the
     /// shadow. Returns the milliseconds left, or -1 if unknown.
     pub fn cancel_call_out(&self, id: u64) -> i64 {
+        if self.txn().with(|t| t.is_cancelled_call_out(id)) {
+            return -1;
+        }
         if let Some(ms) = self.txn().with(|t| t.cancel_pending_call_out(id)) {
             return ms;
         }
@@ -768,16 +836,15 @@ impl TaskContext {
     pub fn tx(&self) -> Sender<VmOp> {
         self.global_state.tx.clone()
     }
-}
 
-impl Clone for TaskContext {
-    fn clone(&self) -> Self {
+    /// Clone with an independent player slot, preserving the original entry player.
+    pub(crate) fn clone_with_player(&self, player: Option<Arc<Process>>) -> Self {
         Self {
             global_state: self.global_state.clone(),
             process: self.process.clone(),
             result: TaskResult::new(),
             system_view: self.system_view.clone(),
-            this_player: ArcSwapAny::from(self.this_player.load_full()),
+            this_player: ArcSwapAny::from(player),
             entry_player: ArcSwapAny::from(self.entry_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             chain_count: self.chain_count,
@@ -786,6 +853,12 @@ impl Clone for TaskContext {
             command: self.command.clone(),
             callers: self.callers.clone(),
         }
+    }
+}
+
+impl Clone for TaskContext {
+    fn clone(&self) -> Self {
+        self.clone_with_player(self.this_player.load_full())
     }
 }
 
@@ -829,6 +902,54 @@ mod tests {
         let c = result_test_ctx();
         c.set_result(LpcRef::from(1i64)).unwrap();
         c.set_result(LpcRef::from(2i64)).unwrap();
+    }
+
+    #[test]
+    fn cloned_player_changes_preserve_the_parent_and_entry_player() {
+        let parent = result_test_ctx();
+        let entering_player = parent.process.clone();
+        let selected_player = result_test_ctx().process;
+        parent.this_player.store(Some(entering_player.clone()));
+        parent.entry_player.store(Some(entering_player.clone()));
+
+        let scoped = parent.clone_with_player(Some(selected_player.clone()));
+        let nested = scoped.clone();
+        scoped.this_player.store(None);
+
+        assert!(Arc::ptr_eq(
+            &parent.this_player.load_full().unwrap(),
+            &entering_player
+        ));
+        assert!(Arc::ptr_eq(
+            &nested.this_player.load_full().unwrap(),
+            &selected_player
+        ));
+        assert!(Arc::ptr_eq(
+            &scoped.entry_player.load_full().unwrap(),
+            &entering_player
+        ));
+        assert!(Arc::ptr_eq(
+            &nested.entry_player.load_full().unwrap(),
+            &entering_player
+        ));
+    }
+
+    #[test]
+    fn cloned_null_player_preserves_entry_without_inheriting_later_changes() {
+        let parent = result_test_ctx();
+        let entering_player = parent.process.clone();
+        parent.this_player.store(Some(entering_player.clone()));
+        parent.entry_player.store(Some(entering_player.clone()));
+
+        let scoped = parent.clone_with_player(None);
+        parent.this_player.store(Some(result_test_ctx().process));
+        parent.entry_player.store(None);
+
+        assert!(scoped.this_player.load_full().is_none());
+        assert!(Arc::ptr_eq(
+            &scoped.entry_player.load_full().unwrap(),
+            &entering_player
+        ));
     }
 
     #[test]

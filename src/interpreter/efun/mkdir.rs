@@ -3,6 +3,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     VALID_WRITE,
     efun::{efun_context::EfunContext, file_access::authorize},
+    file_view::EntryKind,
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -13,16 +14,8 @@ use crate::interpreter::{
 /// directory as existing.
 pub async fn mkdir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "mkdir", VALID_WRITE, 0).await?;
-    let io_error = |e: std::io::Error| access.error(context, e);
-    if context.has_pending_dir(access.path().server()) {
+    if access.entry_kind(context).await? != EntryKind::Missing {
         return Err(context.runtime_error(format!("mkdir: {} exists", access)));
-    }
-    match tokio::fs::symlink_metadata(access.path().server()).await {
-        Ok(_) => {
-            return Err(context.runtime_error(format!("mkdir: {} exists", access)));
-        }
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
-        Err(_) => {}
     }
     access.require_parent(context).await?;
     context.record_effect(Effect::CreateDir {
@@ -43,7 +36,8 @@ mod tests {
         let vm = Vm::new(temp_lib_config(root));
         vm.initialize_process_from_code(
             "/secure/master.c",
-            "int valid_write(string p, string e, object c, string g) { return 1; }",
+            "int valid_read(string p, string e, object c, string g) { return 1; }\n\
+             int valid_write(string p, string e, object c, string g) { return 1; }",
         )
         .await
         .unwrap();
@@ -121,6 +115,94 @@ mod tests {
             .to_string();
         assert!(err.contains("mkdir: /d exists"), "{err}");
         assert!(!root.join("d").exists());
+    }
+
+    #[tokio::test]
+    async fn removed_directories_can_be_recreated_with_new_contents_before_commit() {
+        let root = TempLib::new("mkdir-recreate");
+        std::fs::create_dir_all(root.join("d/child")).unwrap();
+        std::fs::write(root.join("d/child/old"), "old").unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/m.c",
+                r#"int create() {
+                    rm("/d/child/old");
+                    rmdir("/d/child");
+                    rmdir("/d");
+                    mkdir("/d");
+                    mkdir("/d/child");
+                    write_file("/d/child/new", "new");
+                    return file_size("/d") == -2 &&
+                        file_size("/d/child/old") == -1 &&
+                        read_file("/d/child/new") == "new";
+                }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert!(!root.join("d/child/old").exists());
+        assert_eq!(
+            std::fs::read_to_string(root.join("d/child/new")).unwrap(),
+            "new"
+        );
+    }
+
+    #[tokio::test]
+    async fn recreating_a_directory_is_rolled_back_with_the_task() {
+        let root = TempLib::new("mkdir-recreate-abort");
+        std::fs::create_dir(root.join("d")).unwrap();
+        std::fs::write(root.join("d/old"), "old").unwrap();
+        let vm = allowing_vm(&root).await;
+        let err = vm
+            .initialize_process_from_code(
+                "/m.c",
+                r#"void create() {
+                    rm("/d/old");
+                    rmdir("/d");
+                    mkdir("/d");
+                    write_file("/d/new", "new");
+                    throw("boom");
+                }"#,
+            )
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("boom"), "{err}");
+        assert_eq!(std::fs::read_to_string(root.join("d/old")).unwrap(), "old");
+        assert!(!root.join("d/new").exists());
+    }
+
+    #[tokio::test]
+    async fn a_pending_file_write_occupies_the_path() {
+        let root = TempLib::new("mkdir-pending-file");
+        let vm = allowing_vm(&root).await;
+        let err = vm
+            .initialize_process_from_code(
+                "/m.c",
+                r#"void create() { write_file("/d", "file"); mkdir("/d"); }"#,
+            )
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("mkdir: /d exists"), "{err}");
+        assert!(!root.join("d").exists());
+    }
+
+    #[tokio::test]
+    async fn a_removed_file_path_can_become_a_directory() {
+        let root = TempLib::new("mkdir-removed-file");
+        std::fs::write(root.join("d"), "file").unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/m.c",
+                r#"int create() { rm("/d"); return mkdir("/d"); }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert!(root.join("d").is_dir());
     }
 
     #[tokio::test]

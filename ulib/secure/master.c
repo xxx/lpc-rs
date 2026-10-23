@@ -4,7 +4,8 @@
  * no_clone, no_inherit and no_shadow keep this policy object from being
  * duplicated, inherited or intercepted by another object's shadow functions.
  *
- * Policy hooks return 1 to allow or 0 to deny; omission also denies.
+ * Policy hooks return 1 to allow or 0 to deny; omission denies except for
+ * the optional valid_override() compilation policy.
  * Their program argument names the source defining the requesting code,
  * which may differ from caller's filename through inheritance, or be 0
  * when an efun pointer has no defining program.
@@ -59,6 +60,7 @@ void preload(string file) {
  * not which trusted object requested it, and all other paths are denied.
  * This is not a call permission: resident objects and clones of resident
  * prototypes are reused without another valid_load() check.
+ * compile_string() and syntax_tree() source identities also ask after valid_write().
  */
 int valid_load(string path, string func, object caller, string program) {
     return path[0..4] == "/obj/"
@@ -79,6 +81,18 @@ int valid_inherit(string path, string from) {
 }
 
 /**
+ * Refuse explicit efun:: calls in code compiled on an LPC caller's behalf.
+ * source names the call's file (or macro invocation); main_file names the
+ * program being compiled, and both retain their extensions.
+ * ulib needs only ordinary efun calls, which do not ask this hook.
+ * Omitting this optional hook allows explicit calls; boot compilation also
+ * bypasses it, and changing it does not revoke already compiled code.
+ */
+int valid_override(string source, string name, string main_file) {
+    return 0;
+}
+
+/**
  * Authorise an ordinary file read or a compilation include.
  * path is the canonical in-game filename, func names the operation, caller
  * requested it, and program identifies the source defining the calling code.
@@ -91,7 +105,7 @@ int valid_read(string path, string func, object caller, string program) {
 }
 
 /**
- * Authorise filesystem changes and source supplied through compile_string().
+ * Authorise filesystem changes and source for compile_string() or syntax_tree().
  * path is the canonical in-game target, func names the operation, caller
  * requested it, and program defines the requesting code.
  * Return 0 for every request: guest names and conversations are not saved,
@@ -123,6 +137,16 @@ int valid_exec(string program, object new_body, object old_body) {
     return 0;
 }
 
+/** Deny observation and live relationship queries; ulib has no snoop service. */
+int valid_snoop(object caller, object observer, object target, string operation, string program) {
+    return 0;
+}
+
+/** Deny raw TCP operations and inspection; ulib uses only player Telnet sessions. */
+int valid_socket(object caller, string operation, mixed *info) {
+    return 0;
+}
+
 /**
  * Authorise caller inspecting target's globals with variable_info(target).
  * program is the source defining the inspection request; the operation can
@@ -131,6 +155,20 @@ int valid_exec(string program, object new_body, object old_body) {
  * self-inspection is allowed by the driver without asking this hook.
  */
 int valid_variable_info(object caller, object target, string program) {
+    return 0;
+}
+
+/**
+ * Authorise caller replacing target's named global with value.
+ * declaring_program is the requested source selector, or nil; program is
+ * the source defining the request. Lookup and type checks follow approval.
+ * Return 0 because ulib needs no writes to another object's globals;
+ * self-writes need no hook, and omission also denies foreign writes.
+ * The hook shares the transaction and proposed reference values: its own
+ * changes can survive a caught refusal, so keep a denying policy read-only.
+ */
+int valid_store_variable(object caller, object target, string name,
+                         string declaring_program, mixed value, string program) {
     return 0;
 }
 
@@ -185,8 +223,14 @@ string command_not_found(object player, string line) {
  * Report a failed operation in a fresh transaction after its changes roll back.
  * error contains "error" (message), "location" (source position), "object"
  * (affected object) and "diagnostic" (the rendered source diagnostic).
+ * When evaluation frames were captured, "frames" contains root-to-leaf
+ * mappings with source details and rendered named argument/local values;
+ * "frames_omitted" counts dropped outer frames, and per-frame limits can
+ * omit or shorten values. These diagnostics contain no live container graphs;
+ * caught errors do not call this hook or expose saved frames.
  * this_interactive() identifies the initiating client's body, which may differ
- * from error["object"]; boot errors and call-outs have no initiating client.
+ * from error["object"]; input_to() and get_char() callbacks keep this context.
+ * Boot errors and call-outs have no initiating client.
  * The return is ignored; the driver always logs the full error, while this
  * hook gives the guest a short notice; omission also sends the diagnostic.
  */
@@ -223,7 +267,7 @@ mapping get_mud_stats() {
  * Notify clients during the driver's final LPC hook on an orderly shutdown.
  * No arguments or useful return value; missing this hook adds no farewell.
  * Output can still reach connected bodies, including unnamed guests, but
- * new commands and call-outs will not run and net_dead() is not called.
+ * new commands, call-outs and raw TCP callbacks will not run; net_dead() is not called.
  * ulib has no account or world state to save before the process exits.
  */
 void shutdown() {

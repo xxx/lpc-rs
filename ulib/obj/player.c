@@ -10,7 +10,7 @@
 #pragma strict_types, no_inherit, no_shadow
 #include <ulib.h>
 
-// An uninitialised LPC string is 0; after login this holds a lowercase ASCII name.
+// An uninitialised LPC string is nil (0 in the default mode); after login this holds a lowercase ASCII name.
 private string name;
 
 /**
@@ -29,6 +29,7 @@ string query_name() {
  * this_player() is this body, and neither argument is used as an identity.
  * Return 1 to keep the connection while input_to() waits for a guest name;
  * a 0 result or a missing logon() causes the connection to be rejected.
+ * Output and input registration are delivered in call order after commit.
  * Commands stay disabled until receive_name() accepts a unique name.
  */
 int logon(string remote_ip_addr, int remote_port) {
@@ -87,11 +88,11 @@ private void receive_name(string input) {
  * Return the next prompt after logon(), a command or an input callback.
  * The driver delivers the string and a Telnet prompt marker; returning 0
  * supplies no text, and omitting the hook supplies neither text nor marker.
- * While input_to() is pending this hook is skipped and only the marker is
- * sent, so the name-selection code must write its own "Name: " prompt.
+ * While input_to() or get_char() is pending, this hook is skipped and only
+ * the negotiated marker is sent; name selection writes its own "Name: " prompt.
  */
 string write_prompt() {
-    return name ? name + "> " : 0;
+    return name ? name + "> " : nil;
 }
 
 /**
@@ -110,7 +111,7 @@ void catch_tell(string message) {
  * line is the command after any master modify_command() rewrite.
  * Return a replacement string for apostrophe-prefixed speech, 0 to dispatch
  * the original, or another non-string value to consume a line entirely.
- * Omission passes input through; input_to() name callbacks bypass this path.
+ * Omission passes input through; input_to() and get_char() callbacks bypass this path.
  * Unlike this hook, the master's modify_command() consumes input on 0.
  */
 mixed process_input(string line) {
@@ -127,6 +128,8 @@ mixed process_input(string line) {
  * The parser uses id() only when parse_command_id_list() is absent; without
  * either hook this body contributes no object-specific noun matches.
  * The master's shared ids do not apply to this fallback.
+ * Command matching supplies the actor as player/caller; parse_command keeps its entering player.
+ * Parser efuns can select a separate command giver for this_player().
  */
 int id(string phrase) {
     if (!name) {

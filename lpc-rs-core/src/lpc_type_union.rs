@@ -7,7 +7,7 @@ use std::{
 
 use modular_bitfield::prelude::*;
 
-use crate::{lpc_type::LpcType, mangle::Mangle};
+use crate::{class::ClassId, lpc_type::LpcType, mangle::Mangle};
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
@@ -31,12 +31,15 @@ pub struct LpcTypeUnion {
     pub mixed_array: bool,
     pub function: bool,
     pub function_array: bool,
+    pub nil: bool,
 }
 
 impl LpcTypeUnion {
     /// Insert a new type into the union
-    pub fn insert(&mut self, type_: LpcType) {
+    pub fn insert(&mut self, type_: LpcType) -> Result<(), ClassId> {
         match type_ {
+            LpcType::Class(id, _) => return Err(id),
+            LpcType::Nil => self.set_nil(true),
             LpcType::Void => self.set_void(true),
             LpcType::Int(array) => {
                 if array {
@@ -96,6 +99,7 @@ impl LpcTypeUnion {
             }
             LpcType::Union(other) => *self = *self | other,
         }
+        Ok(())
     }
 
     /// Do we match against another type?
@@ -109,6 +113,7 @@ impl LpcTypeUnion {
         }
 
         match other {
+            LpcType::Nil => self.nil(),
             LpcType::Void => self.void(),
             LpcType::Int(array) => {
                 if array {
@@ -172,6 +177,7 @@ impl LpcTypeUnion {
                     self.function()
                 }
             }
+            LpcType::Class(_, _) => false,
             LpcType::Union(other_union) => self.into_bytes() == other_union.into_bytes(),
         }
     }
@@ -179,6 +185,7 @@ impl LpcTypeUnion {
     /// The member types, in declaration order.
     pub fn types(self) -> Vec<LpcType> {
         let members = [
+            (self.nil(), LpcType::Nil),
             (self.void(), LpcType::Void),
             (self.int(), LpcType::Int(false)),
             (self.int_array(), LpcType::Int(true)),
@@ -234,6 +241,9 @@ impl Mangle for LpcTypeUnion {
     fn mangle(&self) -> String {
         let mut vec = vec![];
 
+        if self.nil() {
+            vec.push(LpcType::Nil.mangle());
+        }
         if self.void() {
             vec.push(LpcType::Void.mangle())
         }
@@ -355,7 +365,7 @@ mod tests {
         let mut union = LpcTypeUnion::new();
         union.set_string(true);
 
-        union.insert(LpcType::Union(other));
+        union.insert(LpcType::Union(other)).unwrap();
 
         assert!(union.string());
         assert!(union.function());

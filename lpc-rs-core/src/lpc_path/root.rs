@@ -209,7 +209,7 @@ impl<'a> LibRoot<'a> {
             .map_or_else(|| path.clone(), |p| LpcPath::in_game(p.into_owned()))
     }
 
-    /// The include directory; an unrestricted outside source keeps its host cwd internally.
+    /// The source directory; an unrestricted outside source keeps its host cwd internally.
     pub fn source_cwd(&self, path: &LpcPath) -> PathBuf {
         let game = self
             .game_path(path)
@@ -217,15 +217,9 @@ impl<'a> LibRoot<'a> {
         game.parent().unwrap_or_else(|| Path::new("/")).to_owned()
     }
 
-    /// The existing inheritance base, including host-origin compilation's filename base.
+    /// The source directory used as the base for relative inherit paths.
     pub fn inheritance_cwd(&self, path: &LpcPath) -> PathBuf {
-        match &path.0 {
-            PathKind::Server(_) => self
-                .game_path(path)
-                .unwrap_or_else(|| Cow::Borrowed(path.as_ref()))
-                .into_owned(),
-            PathKind::InGame(_) => path.cwd().to_path_buf(),
-        }
+        self.source_cwd(path)
     }
 
     fn game_path<'p>(&self, path: &'p LpcPath) -> Option<Cow<'p, Path>> {
@@ -390,14 +384,18 @@ mod tests {
     }
 
     #[test]
-    fn source_and_inheritance_keep_their_existing_directory_rules() {
+    fn source_and_inheritance_use_the_same_directory_for_both_input_origins() {
         let root = LibRoot::new("/home/mud/lib");
-        let host = LpcPath::new_server("/home/mud/lib/room/child.c");
-        let game = LpcPath::from("/room/child.c");
-        assert_eq!(root.source_cwd(&host), Path::new("/room"));
-        assert_eq!(root.source_cwd(&game), Path::new("/room"));
-        assert_eq!(root.inheritance_cwd(&host), Path::new("/room/child.c"));
-        assert_eq!(root.inheritance_cwd(&game), Path::new("/room"));
+        for (host, game, expected) in [
+            ("/home/mud/lib/room/child.c", "/room/child.c", "/room"),
+            ("/home/mud/lib/room/child", "/room/child", "/room"),
+            ("/home/mud/lib/child.c", "/child.c", "/"),
+        ] {
+            for path in [LpcPath::new_server(host), LpcPath::from(game)] {
+                assert_eq!(root.source_cwd(&path), Path::new(expected));
+                assert_eq!(root.inheritance_cwd(&path), Path::new(expected));
+            }
+        }
     }
 
     #[test]

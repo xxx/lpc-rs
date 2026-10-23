@@ -52,6 +52,8 @@ pub struct CallOutSchedule {
     /// physical [`CallOut`]); the owner is kept alive by its commit into the
     /// object space, so no strong ref is needed across the flush.
     pub process: std::sync::Weak<Process>,
+    /// The command giver captured at scheduling, without retaining a destructed object.
+    pub player: Option<std::sync::Weak<Process>>,
     /// The function to run.
     pub func_ref: LpcRef,
     /// The delay before the first run.
@@ -80,6 +82,10 @@ static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 pub(crate) enum Effect {
     /// A line for the in-game debug log (where unreceived `write`s go).
     DebugLog(String),
+    /// Stop a committed registration and wake its delivery worker.
+    StopSnoop(Arc<crate::interpreter::snooping::Registration>),
+    /// A warning emitted only by the committed attempt.
+    Warning(String),
 
     /// A socket operation, with the channel it must be sent on. The op is
     /// `Clone`, so this is a copy of what the efun would have sent directly.
@@ -140,8 +146,7 @@ pub(crate) enum Effect {
         contents: String,
     },
 
-    /// A save efun's committed write through a temporary sibling renamed over the target.
-    /// The temporary name is unique per flush, including concurrent writes to one target.
+    /// Whole-file replacement through a uniquely named temporary sibling renamed over the target.
     WriteFile {
         path: ResolvedPath,
         contents: String,
@@ -207,6 +212,21 @@ pub(crate) enum PendingFileOp {
 }
 
 impl Effect {
+    /// Whether this effect changes `server`, without copying its payload.
+    pub(crate) fn affects_file(&self, server: &std::path::Path) -> bool {
+        match self {
+            Self::WriteFile { path, .. }
+            | Self::AppendFile { path, .. }
+            | Self::RemoveFile { path }
+            | Self::WriteBytes { path, .. }
+            | Self::ReplaceChars { path, .. }
+            | Self::CreateDir { path }
+            | Self::RemoveDir { path } => path.server() == server,
+            Self::Rename { path, to } => path.server() == server || to.server() == server,
+            _ => false,
+        }
+    }
+
     /// This effect's change to the file at `server`, if it touches it.
     pub(crate) fn pending_file_op(&self, server: &std::path::Path) -> Option<PendingFileOp> {
         match self {
@@ -258,6 +278,14 @@ impl Effect {
     pub(crate) async fn flush(self, global_state: &GlobalState) {
         match self {
             Self::DebugLog(msg) => global_state.config.debug_log(msg).await,
+            Self::StopSnoop(registration) => registration.close(),
+            Self::Warning(msg) => {
+                tracing::warn!("{msg}");
+                global_state
+                    .config
+                    .debug_log(format!("warning: {msg}"))
+                    .await;
+            }
             Self::Socket { op, tx } => {
                 let _ = tx.send(op);
             }
@@ -471,6 +499,10 @@ impl std::fmt::Debug for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DebugLog(msg) => f.debug_tuple("DebugLog").field(msg).finish(),
+            Self::StopSnoop(registration) => {
+                f.debug_tuple("StopSnoop").field(&registration.id).finish()
+            }
+            Self::Warning(msg) => f.debug_tuple("Warning").field(msg).finish(),
             Self::Socket { op, .. } => f.debug_tuple("Socket").field(op).finish(),
             Self::InsertObject { key, .. } => f.debug_tuple("InsertObject").field(key).finish(),
             Self::RemoveObject { key, .. } => f.debug_tuple("RemoveObject").field(key).finish(),
@@ -535,6 +567,7 @@ mod tests {
         Effect::ScheduleCallOut(CallOutSchedule {
             id: 0,
             process: Arc::downgrade(&owner),
+            player: None,
             func_ref: 0.into(),
             delay: chrono::Duration::seconds(100),
             repeat: None,
@@ -646,6 +679,31 @@ mod tests {
         .flush(&global_state())
         .await;
         assert_eq!(std::fs::read_to_string(&server).unwrap(), "b 2\n");
+    }
+
+    #[tokio::test]
+    async fn failed_replacement_preserves_the_target_and_cleans_up_the_temporary_file() {
+        let root = crate::test_support::TempLib::new("write-file-effect-failure");
+        let server = root.join("target");
+        std::fs::create_dir(&server).unwrap();
+        std::fs::write(server.join("original.txt"), "original").unwrap();
+        Effect::WriteFile {
+            path: lpc_rs_core::lpc_path::LibRoot::new(&*root)
+                .resolve("/target", "/")
+                .unwrap(),
+            contents: "replacement".to_owned(),
+        }
+        .flush(&global_state())
+        .await;
+        assert_eq!(
+            std::fs::read_to_string(server.join("original.txt")).unwrap(),
+            "original"
+        );
+        let entries: Vec<_> = std::fs::read_dir(&*root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries, ["target"]);
     }
 
     #[tokio::test]

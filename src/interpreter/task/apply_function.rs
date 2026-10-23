@@ -299,7 +299,17 @@ pub async fn apply_runtime_error(
 
     // A cell minted into `ctx`'s transaction here is discarded when the
     // task opens its own.
-    let args = vec![SeedArg::FreshMapping(LpcMapping::new(mapping))];
+    let mapping = LpcMapping::new(mapping);
+    let argument = match error.error_frames() {
+        Some(frames) if !frames.frames.is_empty() => {
+            SeedArg::FreshErrorMapping(Box::new(crate::interpreter::error_frames::ErrorMapping {
+                mapping,
+                frames: frames.clone(),
+            }))
+        }
+        _ => SeedArg::FreshMapping(mapping),
+    };
+    let args = vec![argument];
     // TODO wire the timeout up to config
     let seed = TaskSeed {
         process: ctx.process.clone(),
@@ -452,9 +462,11 @@ mod tests {
                 indoc! { r#"
                     string last;
                     string diagnostic;
+                    int has_frames;
                     void error_handler(mapping m) {
                         last = m["error"];
                         diagnostic = m["diagnostic"];
+                        has_frames = has_key(m, "frames");
                     }
                 "# },
             )
@@ -480,6 +492,10 @@ mod tests {
             "the rendered key: {d}"
         );
         assert!(!d.to_str().contains('\u{1b}'), "plain text: {d:?}");
+        assert_eq!(
+            vm.global_state.committed_global(&master, 2u16),
+            LpcRef::from(0)
+        );
     }
 
     #[tokio::test]

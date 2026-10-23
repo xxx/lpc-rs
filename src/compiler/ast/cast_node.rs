@@ -4,8 +4,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::{Result, span::Span};
+
+use super::parsed_type::ParsedType;
 
 use crate::compiler::{
     ast::{
@@ -20,7 +21,7 @@ use crate::compiler::{
 #[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub struct CastNode {
     pub expr: Box<ExpressionNode>,
-    pub type_: LpcType,
+    pub type_: ParsedType,
     pub span: Option<Span>,
 }
 

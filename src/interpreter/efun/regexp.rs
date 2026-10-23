@@ -1,8 +1,8 @@
 //! `regexp(strings, pattern [, flag])`: the strings a regular expression
 //! matches, in the `regex` crate's dialect.
 
+use crate::interpreter::vm::regex_cache::RegexOptions;
 use lpc_rs_errors::Result;
-use regex::Regex;
 
 use crate::interpreter::{
     efun::{callback::array_arg, efun_context::EfunContext},
@@ -32,7 +32,11 @@ pub fn regexp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
             }
         }
     };
-    let re = Regex::new(pattern)
+    let re = context
+        .task_context()
+        .global_state
+        .regex_cache
+        .get(pattern, RegexOptions::default())
         .map_err(|e| context.runtime_error(format!("regexp: invalid pattern {pattern:?}: {e}")))?;
     let (indexed, invert) = (flag & 1 != 0, flag & 2 != 0);
     let mut result = Vec::new();
@@ -123,5 +127,51 @@ mod tests {
         let code = r#"mixed create() { mixed s = "a"; return regexp(({ "a" }), "a", s); }"#;
         let err = try_run_prog(code).await.unwrap_err().to_string();
         assert!(err.contains("regexp: string is not an int"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn cached_patterns_are_shared_with_regmatch_without_sharing_result_flags() {
+        use crate::test_support::run_prog;
+
+        let task = run_prog(
+            r#"
+            mixed *create() {
+                regmatch("A", "a", 4);
+                regmatch("ab", "a", 0x1000);
+                regexp(({"a", "b"}), "a");
+                return regexp(({"A", "a", "b"}), "a", 3);
+            }
+        "#,
+        )
+        .await;
+        let result = task
+            .result()
+            .unwrap()
+            .with_array(task.context.txn(), |a| {
+                a.iter().map(|x| x.to_string()).collect::<Vec<_>>()
+            })
+            .unwrap();
+        assert_eq!(result, ["1", "A", "3", "b"]);
+        assert_eq!(task.context.global_state.regex_cache.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn validation_still_runs_for_cached_patterns_and_empty_inputs() {
+        use crate::test_support::run_prog;
+
+        let task = run_prog(
+            r#"
+            int create() {
+                mixed bad = "bad";
+                regexp(({"a"}), "a");
+                if (strindex(catch(regexp(bad, "a")), "not an array") < 0) return 0;
+                if (strindex(catch(regexp(({}), "(", bad)), "not an int") < 0) return 0;
+                if (strindex(catch(regexp(({}), "(")), "invalid pattern") < 0) return 0;
+                return strindex(catch(regexp(({}), "(")), "invalid pattern") >= 0;
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(task.result(), Some(1.into()));
     }
 }

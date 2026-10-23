@@ -8,7 +8,7 @@ use crate::interpreter::{
     },
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
-    save_format::{read_value, split_line},
+    save_format::{read_value_counted, split_line},
 };
 
 /// `restore_map(file)`: the `name value` lines of `<file>.o` as a mapping,
@@ -16,6 +16,7 @@ use crate::interpreter::{
 /// path. A file that cannot be read is an empty mapping; a corrupt line is
 /// an error.
 pub async fn restore_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    let mut collapsed = 0;
     let access = authorize_save(context, "restore_map", VALID_READ, 0).await?;
     let mut entries: IndexMap<LpcRef, LpcRef> = IndexMap::new();
     if let Some(text) = access.read_save(context).await {
@@ -23,9 +24,16 @@ pub async fn restore_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         for (index, line) in text.lines().enumerate() {
             let err = |e| access.line_error(context, index + 1, e);
             let (name, value_text) = split_line(line).map_err(err)?;
-            let value = read_value(value_text, context.txn(), &resolve).map_err(err)?;
+            let (value, count) =
+                read_value_counted(value_text, context.txn(), &resolve).map_err(err)?;
+            collapsed += count;
             entries.insert(LpcRef::from(name), value);
         }
+    }
+    if collapsed != 0 {
+        context.record_effect(crate::interpreter::stm::Effect::Warning(format!(
+            "restore_map: {access}: converted {collapsed} nil value(s) to 0 (NULL_MODE=zero)"
+        )));
     }
     context.return_mapping(LpcMapping::new(entries));
     Ok(())
@@ -51,6 +59,115 @@ mod tests {
             .await
             .unwrap();
         vm
+    }
+
+    #[tokio::test]
+    async fn generic_helpers_restore_multiple_class_views_after_a_driver_restart() {
+        use crate::{interpreter::lpc_ref::LpcRef, test_support::lib_holding};
+        let header = r#"
+            #ifdef EVOLVED
+            class record { string changed; int added, n; }
+            #else
+            class record { int n, changed; int *removed; }
+            #endif
+        "#;
+        let root = lib_holding(
+            "restore-class-restart",
+            &[
+                ("record.h", header),
+                (
+                    "generic.c",
+                    r#"void save(mixed r) { save_map(([ "record": r ]), "/m"); }"#,
+                ),
+                (
+                    "evolved.c",
+                    r#"
+                #define EVOLVED
+                #include "record.h"
+                void change(class record r) { r.changed = "new"; r.added = 10; r.n = 70; }
+            "#,
+                ),
+            ],
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            &format!(
+                "{ALLOWING}\nint valid_load(string p, string f, object c, string g) {{ return 1; }}"
+            ),
+        )
+        .await
+        .unwrap();
+        vm.initialize_process_from_code(
+            "/owner.c",
+            r#"
+            #include "record.h"
+            void create() {
+                class record r = new(class record, n: 7, changed: 8, removed: ({ 9 }));
+                "/evolved"->change(r);
+                "/generic"->save(r);
+            }
+        "#,
+        )
+        .await
+        .unwrap();
+        let text = std::fs::read_to_string(root.join("m.o")).unwrap();
+        drop(vm);
+        std::fs::remove_file(root.join("record.h")).unwrap();
+        let vm = allowing_vm(&root).await;
+        let result = vm
+            .initialize_process_from_code(
+                "/generic.c",
+                r#"
+            mapping data;
+            mixed record() { return data["record"]; }
+            int create() {
+                data = restore_map("/m");
+                if (!classp(data["record"])) return 0;
+                data["record"] = copy_class(data["record"]);
+                save_map(data, "/again");
+                return 1;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+        assert_eq!(std::fs::read_to_string(root.join("again.o")).unwrap(), text);
+        assert!(vm.global_state.object_space.lookup("/record.h").is_none());
+        vm.global_state.gc().await.unwrap().unwrap();
+        std::fs::write(root.join("record.h"), header).unwrap();
+        let result = vm
+            .initialize_process_from_code(
+                "/new_reader.c",
+                r#"
+            #define EVOLVED
+            #include "record.h"
+            int create() {
+                class record r = "/generic"->record();
+                if (r.changed != "new" || r.added != 10 || r.n != 70) return 0;
+                r.n++;
+                return 1;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+        let result = vm
+            .initialize_process_from_code(
+                "/old_reader.c",
+                r#"
+            #include "record.h"
+            int create() {
+                class record r = "/generic"->record();
+                return r.n == 71 && r.changed == 8 && r.removed[0] == 9;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
     }
 
     /// `check` is the mapping's keys and one value, or "empty".

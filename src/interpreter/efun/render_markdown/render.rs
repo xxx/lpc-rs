@@ -664,7 +664,7 @@ mod tests {
             assert!(output.starts_with("# terminal_colour\n"));
             assert!(output.contains("%^BOLD%^%^RED%^"));
             assert!(!output.contains('\x1b'));
-            assert!(output.contains("Compatibility"));
+            assert!(output.contains("Formatting"));
         }
     }
 }

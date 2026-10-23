@@ -5,16 +5,14 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::{arg_or_this_object, efun_context::EfunContext},
-    lpc_int::LpcInt,
     lpc_ref::LpcRef,
 };
 
 /// List visible function names, optionally excluding inherited definitions.
 pub async fn functions<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    if !matches!(
-        context.arg(0),
-        LpcRef::Int(LpcInt(0)) | LpcRef::Object(_) | LpcRef::String(_)
-    ) {
+    if context.arg(0) != &context.txn().nil()
+        && !matches!(context.arg(0), LpcRef::Object(_) | LpcRef::String(_))
+    {
         return Err(context.runtime_error("functions: expected an object or string"));
     }
     let LpcRef::Int(local_only) = context.arg(1) else {

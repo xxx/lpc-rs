@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use super::{Verdict, attempt::Target};
+use super::{RejectionCode, attempt::Target};
 use crate::{
-    command::frontend::parser::ParserRule,
+    command::frontend::parser::{HandlerArg, ParserRule},
     interpreter::{
-        apply::{apply_on, as_actor, diagnostics},
+        apply::{apply_nested, as_actor, diagnostics},
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
@@ -20,33 +20,101 @@ use crate::{
 /// Which handler is being called.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Family {
-    /// `can_<verb>_<slug>`: on the verb object, before any object slot is
-    /// filled.
+    /// Permission before any object slot is filled, on the actor then owner.
     Can,
-    /// `direct_<verb>_<slug>`: on a direct-object candidate.
+    /// Permission on a direct-object candidate, then the owner.
     Direct,
-    /// `indirect_<verb>_<slug>`: on an indirect-object candidate.
+    /// Permission on an indirect-object candidate, then the owner.
     Indirect,
     /// `do_<verb>_<slug>`: on the verb object, once every slot is chosen.
     Do,
 }
 
+/// The name and argument layout selected on one target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Tier {
+    Exact,
+    Words,
+    Shape,
+    Rule,
+}
+
 impl Family {
-    /// The specific name (`can_look_at_obj`) and the generic fallback
-    /// (`can_verb_rule`).
-    pub(crate) fn names(self, rule: &ParserRule) -> (String, &'static str) {
-        let (prefix, generic, slug) = match self {
-            Family::Can => ("can", "can_verb_rule", &rule.can_slug),
-            Family::Direct => ("direct", "direct_verb_rule", &rule.can_slug),
-            Family::Indirect => ("indirect", "indirect_verb_rule", &rule.can_slug),
-            Family::Do => ("do", "do_verb_rule", &rule.do_slug),
+    /// Names in lookup order, retaining the earliest layout on a collision.
+    fn names(self, rule: &ParserRule) -> Vec<(String, Tier)> {
+        let prefix = match self {
+            Self::Can => "can",
+            Self::Direct => "direct",
+            Self::Indirect => "indirect",
+            Self::Do => "do",
         };
-        let specific = if slug.is_empty() {
-            format!("{prefix}_{}", rule.verb)
+        let (slug, words) = if self == Self::Do {
+            (rule.do_slug, rule.do_word_slug)
         } else {
-            format!("{prefix}_{}_{slug}", rule.verb)
+            (rule.can_slug, rule.can_word_slug)
         };
-        (specific, generic)
+        let name = |verb: &str, slug: &str| {
+            if slug.is_empty() {
+                format!("{prefix}_{verb}")
+            } else {
+                format!("{prefix}_{verb}_{slug}")
+            }
+        };
+        let mut names = Vec::with_capacity(4);
+        for entry in [
+            (name(rule.verb.as_str(), slug.as_str()), Tier::Exact),
+            (name(rule.verb.as_str(), words.as_str()), Tier::Words),
+            (name("verb", words.as_str()), Tier::Shape),
+            (format!("{prefix}_verb_rule"), Tier::Rule),
+        ] {
+            if !names.iter().any(|(name, _)| name == &entry.0) {
+                names.push(entry);
+            }
+        }
+        names
+    }
+}
+
+impl Tier {
+    /// Lay out arguments using the matched phrase's current source spelling.
+    pub(crate) fn arguments(
+        self,
+        ctx: &TaskContext,
+        rule: &ParserRule,
+        args: &[LpcRef],
+    ) -> Vec<LpcRef> {
+        let typed = ctx.with_command(|state| {
+            state
+                .map(|state| state.verb_typed.clone())
+                .unwrap_or_default()
+        });
+        self.with_typed_verb(rule, args, &typed)
+    }
+
+    /// Capture values precede the source-text tail supplied by the protocol.
+    fn with_typed_verb(self, rule: &ParserRule, args: &[LpcRef], typed_verb: &str) -> Vec<LpcRef> {
+        let (captures, words) = args.split_at(rule.compiled.kinds.len());
+        let generic = matches!(self, Self::Shape | Self::Rule);
+        let mut result = Vec::new();
+        if generic {
+            result.push(LpcRef::from(rule.verb.as_str()));
+        }
+        if self == Self::Rule {
+            result.push(LpcRef::from(rule.rule.as_str()));
+        }
+        if matches!(self, Self::Words | Self::Shape) {
+            result.extend(rule.word_args.iter().map(|arg| match arg {
+                HandlerArg::Capture(index) => captures[*index].clone(),
+                HandlerArg::Literal(word) => LpcRef::from(word.as_str()),
+            }));
+        } else {
+            result.extend_from_slice(captures);
+        }
+        if generic {
+            result.push(LpcRef::from(typed_verb));
+        }
+        result.extend_from_slice(words);
+        result
     }
 }
 
@@ -63,26 +131,30 @@ pub(crate) enum Reply {
         text: String,
         /// Whether the reason was `#`-prefixed.
         soft: bool,
+        /// The object whose handler returned this reason.
+        object: Target,
     },
-    /// Neither the specific nor the generic function exists.
+    /// No handler exists on any eligible target.
     Absent,
 }
 
-impl From<&LpcRef> for Reply {
+impl Reply {
     /// Read a handler's return value.
-    fn from(value: &LpcRef) -> Self {
+    pub(crate) fn from_value(value: &LpcRef, object: Target) -> Self {
         match value {
-            LpcRef::Int(LpcInt(0)) => Reply::No,
+            LpcRef::Nil | LpcRef::Int(LpcInt(0)) => Reply::No,
             LpcRef::String(_) => {
                 let text = value.as_str().unwrap_or_default();
                 match text.strip_prefix('#') {
                     Some(rest) => Reply::Reason {
                         text: rest.to_owned(),
                         soft: true,
+                        object,
                     },
                     None => Reply::Reason {
                         text: text.to_owned(),
                         soft: false,
+                        object,
                     },
                 }
             }
@@ -91,9 +163,7 @@ impl From<&LpcRef> for Reply {
     }
 }
 
-/// Call `family`'s handler of `rule` on `target`: the specific name, else
-/// the generic one with the verb and rule text prepended; `Absent` when
-/// `target` defines neither.
+/// Call the first defined tier on this target; only absence permits fallback.
 pub(crate) async fn call(
     ctx: &TaskContext,
     actor: &Arc<Process>,
@@ -101,33 +171,29 @@ pub(crate) async fn call(
     family: Family,
     rule: &ParserRule,
     args: &[LpcRef],
-) -> Result<Reply> {
-    let (specific, generic) = family.names(rule);
-    let functions = &target.program(ctx.txn()).unmangled_functions;
-    let (function, args): (_, Vec<LpcRef>) = if let Some(f) = functions.get(specific.as_str()) {
-        (f.clone(), args.to_vec())
-    } else if let Some(f) = functions.get(generic) {
-        let mut prefixed = vec![
-            LpcRef::from(rule.verb.as_str()),
-            LpcRef::from(rule.rule.as_str()),
-        ];
-        prefixed.extend_from_slice(args);
-        (f.clone(), prefixed)
-    } else {
-        diagnostics::missing(&specific, Some(target));
-        diagnostics::missing(generic, Some(target));
-        return Ok(Reply::Absent);
-    };
-    let result = apply_on(ctx, as_actor(ctx, actor), target, actor, function, &args).await?;
-    Ok(Reply::from(&result))
+) -> Result<Option<LpcRef>> {
+    let program = target.program(ctx.txn());
+    for (name, tier) in family.names(rule) {
+        let Some(function) = program.unmangled_functions.get(name.as_str()) else {
+            diagnostics::missing(&name, Some(target));
+            continue;
+        };
+        let args = tier.arguments(ctx, rule, args);
+        return apply_nested(ctx, as_actor(ctx, actor), target, function.clone(), &args)
+            .await
+            .map(Some);
+    }
+    Ok(None)
 }
 
 /// The reason to report when no candidate qualified: the earliest plain
-/// one, else the earliest soft one, with the candidate it came from.
-pub(crate) fn best_reason(reasons: &[(usize, Reply)]) -> Option<(usize, String)> {
+/// one, else the earliest soft one, with the object that answered.
+pub(crate) fn best_reason(reasons: &[(usize, Reply)]) -> Option<(Target, String)> {
     let pick = |want_soft: bool| {
-        reasons.iter().find_map(|(candidate, reply)| match reply {
-            Reply::Reason { text, soft } if *soft == want_soft => Some((*candidate, text.clone())),
+        reasons.iter().find_map(|(_, reply)| match reply {
+            Reply::Reason { text, soft, object } if *soft == want_soft => {
+                Some((*object, text.clone()))
+            }
             _ => None,
         })
     };
@@ -140,11 +206,11 @@ pub(crate) fn best_reason(reasons: &[(usize, Reply)]) -> Option<(usize, String)>
 pub(crate) enum Kind {
     /// A living slot's phrase matched only non-livings.
     NotLiving = 2,
-    /// A match exists but nothing on its path is `inventory_accessible()`.
+    /// An unmodified slot has visible matches but cannot reach them.
     NotAccessible = 3,
     /// Several qualifiers survived filtering with no ordinal to choose one.
     Ambig = 4,
-    /// An ordinal named a position past the number of qualifiers.
+    /// An ordinal named a position past the available matches.
     Ordinal = 5,
     /// A handler's own string reason, `#` stripped.
     Allocated = 6,
@@ -163,7 +229,7 @@ pub(crate) enum Arg {
     None,
     /// A phrase or a handler's reason text.
     Text(String),
-    /// The qualifier count an ordinal reached past.
+    /// The available count an ordinal reached past.
     Count(i64),
     /// The qualifying candidates of an ambiguous slot.
     Objects(Vec<usize>),
@@ -181,13 +247,13 @@ pub(crate) struct Failure {
     pub(crate) arg: Arg,
     /// The message's fourth argument: whether the phrase named a many slot.
     pub(crate) flag: bool,
-    /// Object slots chosen before failing.
+    /// Object slots resolved before failing.
     pub(crate) progress: usize,
     /// The verdict when the master's `parser_error_message` gives no
     /// string: `Refused` from the actor's own handlers (`can_`, the
-    /// re-ask, a missing `do_`), `Unresolved` from resolving or
+    /// pair checks, the re-ask, a missing `do_`), `Unresolved` from resolving or
     /// disambiguating an object slot.
-    pub(crate) silent: Verdict,
+    pub(crate) silent: RejectionCode,
 }
 
 /// The failure to report: the furthest, ties to the earliest.
@@ -208,42 +274,69 @@ mod tests {
     }
 
     #[test]
-    fn names_are_verb_slug_and_the_generic_fallback() {
+    fn names_preserve_plural_actions_and_literal_word_tiers() {
         let r = rule("look", "at OBS");
-        assert_eq!(
-            Family::Can.names(&r),
-            ("can_look_at_obj".to_owned(), "can_verb_rule")
-        );
-        assert_eq!(
-            Family::Direct.names(&r),
-            ("direct_look_at_obj".to_owned(), "direct_verb_rule")
-        );
-        assert_eq!(
-            Family::Do.names(&r),
-            ("do_look_at_obs".to_owned(), "do_verb_rule")
-        );
-        let bare = rule("look", "");
-        assert_eq!(Family::Can.names(&bare).0, "can_look");
+        for (family, prefix, token) in [
+            (Family::Can, "can", "obj"),
+            (Family::Direct, "direct", "obj"),
+            (Family::Indirect, "indirect", "obj"),
+            (Family::Do, "do", "obs"),
+        ] {
+            assert_eq!(
+                family.names(&r),
+                vec![
+                    (format!("{prefix}_look_at_{token}"), Tier::Exact),
+                    (format!("{prefix}_look_word_{token}"), Tier::Words),
+                    (format!("{prefix}_verb_word_{token}"), Tier::Shape),
+                    (format!("{prefix}_verb_rule"), Tier::Rule),
+                ]
+            );
+        }
     }
 
     #[test]
-    fn a_reply_is_read_from_the_lpc_value() {
-        assert_eq!(Reply::from(&LpcRef::from(1)), Reply::Yes);
-        assert_eq!(Reply::from(&LpcRef::from(0)), Reply::No);
+    fn duplicate_names_keep_the_first_layout() {
         assert_eq!(
-            Reply::from(&LpcRef::from("no way")),
-            Reply::Reason {
-                text: "no way".into(),
-                soft: false
-            }
+            Family::Do.names(&rule("verb", "word STR")),
+            vec![
+                ("do_verb_word_str".into(), Tier::Exact),
+                ("do_verb_rule".into(), Tier::Rule),
+            ]
         );
         assert_eq!(
-            Reply::from(&LpcRef::from("#not me")),
-            Reply::Reason {
-                text: "not me".into(),
-                soft: true
-            }
+            Family::Can.names(&rule("look", "")),
+            vec![
+                ("can_look".into(), Tier::Exact),
+                ("can_verb".into(), Tier::Shape),
+                ("can_verb_rule".into(), Tier::Rule),
+            ]
         );
+    }
+
+    #[test]
+    fn a_reply_retains_the_object_that_answered() {
+        assert_eq!(
+            Reply::from_value(&LpcRef::from(1), Target::Owner),
+            Reply::Yes
+        );
+        assert_eq!(
+            Reply::from_value(&LpcRef::from(0), Target::Owner),
+            Reply::No
+        );
+        assert_eq!(Reply::from_value(&LpcRef::Nil, Target::Actor), Reply::No);
+        for (value, text, soft, object) in [
+            ("no way", "no way", false, Target::Owner),
+            ("#not me", "not me", true, Target::Actor),
+        ] {
+            assert_eq!(
+                Reply::from_value(&LpcRef::from(value), object),
+                Reply::Reason {
+                    text: text.into(),
+                    soft,
+                    object,
+                }
+            );
+        }
     }
 
     #[test]
@@ -251,35 +344,19 @@ mod tests {
         let reasons = vec![
             (
                 0,
-                Reply::Reason {
-                    text: "a".into(),
-                    soft: true,
-                },
+                Reply::from_value(&LpcRef::from("#a"), Target::Candidate(0)),
             ),
-            (
-                1,
-                Reply::Reason {
-                    text: "b".into(),
-                    soft: false,
-                },
-            ),
+            (1, Reply::from_value(&LpcRef::from("b"), Target::Owner)),
             (
                 2,
-                Reply::Reason {
-                    text: "c".into(),
-                    soft: false,
-                },
+                Reply::from_value(&LpcRef::from("c"), Target::Candidate(2)),
             ),
         ];
-        assert_eq!(best_reason(&reasons), Some((1, "b".to_owned())));
-        let soft_only = vec![(
-            3,
-            Reply::Reason {
-                text: "z".into(),
-                soft: true,
-            },
-        )];
-        assert_eq!(best_reason(&soft_only), Some((3, "z".to_owned())));
+        assert_eq!(best_reason(&reasons), Some((Target::Owner, "b".to_owned())));
+        assert_eq!(
+            best_reason(&reasons[..1]),
+            Some((Target::Candidate(0), "a".to_owned()))
+        );
         assert_eq!(best_reason(&[]), None);
     }
 
@@ -291,7 +368,7 @@ mod tests {
             arg: Arg::Text("x".into()),
             flag: false,
             progress: 1,
-            silent: Verdict::Unresolved,
+            silent: RejectionCode::Unresolved,
         };
         let b = Failure {
             kind: Kind::Refused,
@@ -299,7 +376,7 @@ mod tests {
             arg: Arg::None,
             flag: false,
             progress: 2,
-            silent: Verdict::Refused,
+            silent: RejectionCode::Refused,
         };
         let c = Failure {
             kind: Kind::ThereIsNo,
@@ -307,11 +384,11 @@ mod tests {
             arg: Arg::Text("y".into()),
             flag: false,
             progress: 2,
-            silent: Verdict::Unresolved,
+            silent: RejectionCode::Unresolved,
         };
         assert_eq!(
             furthest(vec![a.clone(), b.clone(), c]).map(|f| (f.arg, f.silent)),
-            Some((Arg::None, Verdict::Refused))
+            Some((Arg::None, RejectionCode::Refused))
         );
         assert_eq!(furthest(vec![a.clone()]).map(|f| f.progress), Some(1));
         assert!(furthest(vec![]).is_none());

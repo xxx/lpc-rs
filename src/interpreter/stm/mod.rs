@@ -1,5 +1,6 @@
 //! Software transactional memory implementation
 
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     collections::{HashMap, HashSet},
     marker::PhantomData,
@@ -12,8 +13,10 @@ use lpc_rs_errors::{LpcError, Result, span::Span};
 use crate::{
     command::registry::RuleList,
     interpreter::{
+        file_view::{FileMetadata, PendingDirectoryView, PendingEntryView},
         function_type::function_ptr::{FunctionPtr, ResolvedCall},
         lpc_array::LpcArray,
+        lpc_class::LpcClass,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
@@ -32,6 +35,7 @@ mod committer;
 mod diagnostics;
 mod effects;
 mod merge;
+mod reclaimer;
 mod retry;
 mod snapshot;
 mod world_value;
@@ -53,7 +57,7 @@ pub(crate) use retry::{
 };
 #[cfg(test)]
 pub(crate) use retry::{RetryStats, run_attempts};
-pub(crate) use snapshot::Snapshot;
+pub(crate) use snapshot::{ObjectChange, Snapshot};
 pub(crate) use world_value::WorldValue;
 
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -117,6 +121,7 @@ pub(crate) struct Transaction {
 struct InterruptedExecution {
     span: Option<Span>,
     frames: Vec<String>,
+    values: lpc_rs_errors::error_frames::ErrorFrames,
 }
 
 impl Transaction {
@@ -230,7 +235,44 @@ impl Transaction {
     /// strongly so the object stays alive between this write and the commit
     /// that makes it resolvable (the physical map is applied after commit).
     pub(crate) fn write_process(&mut self, var_id: VarId, process: Arc<Process>) {
+        self.changeset
+            .object_changes
+            .push(ObjectChange::new(&process, true));
         self.changeset.write(var_id, WorldValue::Process(process));
+    }
+
+    pub(crate) fn remove_object(&mut self, var_id: VarId, process: Arc<Process>) {
+        self.changeset
+            .object_changes
+            .push(ObjectChange::new(&process, false));
+        self.drop_var(var_id);
+    }
+
+    /// Bootstrap objects have no committed identity cell until their first removal.
+    pub(crate) fn bootstrap_object_is_live(&self, process: &Process) -> bool {
+        if !self.joinable {
+            return true;
+        }
+        let filename = process.filename();
+        let key = if filename.starts_with('/') {
+            filename
+        } else {
+            ObjectSpace::with_leading_slash(&filename).into()
+        };
+        self.snapshot.objects.get(key.as_ref()).map_or_else(
+            || process.cell.get().is_none(),
+            |current| std::ptr::eq(current.as_ref(), process),
+        )
+    }
+
+    /// Loaded objects from this snapshot with the attempt's own placements applied.
+    pub(crate) fn objects(&mut self) -> impl Iterator<Item = Arc<Process>> {
+        self.track_read(self.snapshot.object_membership);
+        let mut objects = self.snapshot.objects.clone();
+        for change in &self.changeset.object_changes {
+            change.apply(&mut objects);
+        }
+        objects.into_iter().map(|(_, process)| process)
     }
 
     pub(crate) fn write_image(
@@ -322,6 +364,36 @@ impl Transaction {
         id
     }
 
+    pub(crate) fn mint_class(&mut self, instance: LpcClass) -> SVar<LpcClass> {
+        let cell = SVar::new();
+        self.changeset
+            .write(cell.id, WorldValue::Class(Arc::new(instance)));
+        cell
+    }
+
+    pub(crate) fn read_class(&mut self, var_id: VarId) -> Option<Arc<LpcClass>> {
+        self.read_value(var_id)?.into_class()
+    }
+
+    /// Apply a validated update to the attempt's private class payload.
+    pub(crate) fn with_class_cow<R>(
+        &mut self,
+        var_id: VarId,
+        f: impl FnOnce(&mut LpcClass) -> R,
+    ) -> Result<R> {
+        if let Some(own) = self.changeset.written_class_mut(var_id) {
+            return Ok(f(Arc::make_mut(own)));
+        }
+        let current = self
+            .read_class(var_id)
+            .ok_or_else(|| LpcError::runtime("class is not in this transaction's world"))?;
+        let mut clone = (*current).clone();
+        let result = f(&mut clone);
+        self.changeset
+            .write(var_id, WorldValue::Class(Arc::new(clone)));
+        Ok(result)
+    }
+
     /// The committed array contents for a cell var, or `None` if the var is
     /// absent from both the changeset and the world.
     pub(crate) fn read_array(&mut self, var_id: VarId) -> Option<Arc<LpcArray>> {
@@ -341,6 +413,49 @@ impl Transaction {
     /// a concurrent create of this cell conflict and re-run.
     pub(crate) fn read_object(&mut self, var_id: VarId) -> Option<Arc<Process>> {
         self.read_value(var_id)?.into_process()
+    }
+
+    pub(crate) fn write_snoop(
+        &mut self,
+        var_id: VarId,
+        registration: Arc<crate::interpreter::snooping::Registration>,
+    ) {
+        self.changeset
+            .write(var_id, WorldValue::Snoop(registration));
+    }
+
+    pub(crate) fn write_socket(&mut self, cell: VarId, value: crate::interpreter::sockets::Value) {
+        self.changeset
+            .write(cell, WorldValue::Socket(Arc::new(value)));
+    }
+
+    /// Every command changes a socket cell, preventing the read-only commit path from dropping it.
+    pub(crate) fn publish_socket(
+        &mut self,
+        cell: VarId,
+        value: Option<crate::interpreter::sockets::Value>,
+        sender: &flume::Sender<crate::interpreter::sockets::SocketCommands>,
+        command: crate::interpreter::sockets::SocketCommand,
+    ) {
+        match value {
+            Some(value) => self.write_socket(cell, value),
+            None => self.drop_var(cell),
+        }
+        if let Some(publication) = self
+            .changeset
+            .socket_publications
+            .iter_mut()
+            .find(|publication| publication.sender.same_channel(sender))
+        {
+            publication.commands.push(command);
+        } else {
+            self.changeset
+                .socket_publications
+                .push(crate::interpreter::sockets::Publication {
+                    sender: sender.clone(),
+                    commands: thin_vec::thin_vec![command],
+                });
+        }
     }
 
     /// Write the connection-binding cell: the `Connection` attached to a
@@ -419,12 +534,36 @@ impl Transaction {
         self.effects.push(effect);
     }
 
+    /// Whether this attempt has recorded any changes to the file at `server`.
+    pub(crate) fn has_pending_file_ops(&self, server: &std::path::Path) -> bool {
+        self.effects.iter().any(|e| e.affects_file(server))
+    }
+
     /// This attempt's recorded changes to the file at `server`, in order.
     pub(crate) fn pending_file_ops(&self, server: &std::path::Path) -> Vec<PendingFileOp> {
         self.effects
             .iter()
             .filter_map(|e| e.pending_file_op(server))
             .collect()
+    }
+
+    /// Inspect this attempt's size effects without cloning file payloads.
+    pub(crate) fn pending_file_metadata(
+        &self,
+        server: &std::path::Path,
+        disk: FileMetadata,
+    ) -> Option<FileMetadata> {
+        disk.after_effects(&self.effects, server)
+    }
+
+    /// Snapshot entry changes without copying file contents or performing IO.
+    pub(crate) fn pending_entry_view(&self, server: &std::path::Path) -> PendingEntryView {
+        PendingEntryView::new(&self.effects, server)
+    }
+
+    /// Snapshot directory membership without copying file contents or performing IO.
+    pub(crate) fn pending_directory_view(&self, server: &std::path::Path) -> PendingDirectoryView {
+        PendingDirectoryView::new(&self.effects, server)
     }
 
     /// Whether this attempt has recorded a `mkdir` of `server`.
@@ -508,6 +647,11 @@ impl Transaction {
         self.changeset.clone()
     }
 
+    /// Validate a failed attempt while discarding all writes and physical publications.
+    pub(crate) fn validation_changeset(&self) -> Changeset {
+        self.changeset.validation_only()
+    }
+
     /// Commit the changeset and take the effects for delivery.
     pub(crate) async fn commit(
         mut self,
@@ -559,11 +703,28 @@ impl AuthorityView {
 /// cloning this handle, so a joiner's reads, writes, effects and call outs
 /// are the parent's attempt's and ride the parent's single commit.
 #[derive(Debug, Clone)]
-pub(crate) struct TxnHandle(Arc<spin::Mutex<Transaction>>, Option<Arc<AuthorityView>>);
+pub(crate) struct TxnHandle(
+    Arc<spin::Mutex<Transaction>>,
+    Option<Arc<AuthorityView>>,
+    NullMode,
+);
 
 impl TxnHandle {
+    pub(crate) fn same_transaction(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    pub(crate) fn null_mode(&self) -> NullMode {
+        self.2
+    }
+
+    pub(crate) fn nil(&self) -> LpcRef {
+        LpcRef::nil(self.2)
+    }
+
     pub(crate) fn new(txn: Transaction) -> Self {
-        Self(Arc::new(spin::Mutex::new(txn)), None)
+        let mode = txn.snapshot.null_mode;
+        Self(Arc::new(spin::Mutex::new(txn)), None, mode)
     }
 
     /// Empty, uncommitted transaction (top-level defaults, fresh
@@ -593,7 +754,7 @@ impl TxnHandle {
     }
 
     pub(crate) fn with_authority(&self, view: Arc<AuthorityView>) -> Self {
-        Self(self.0.clone(), Some(view))
+        Self(self.0.clone(), Some(view), self.2)
     }
 
     /// Whether this handle wraps a live attempt that can be joined by a nested task.
@@ -602,22 +763,37 @@ impl TxnHandle {
     }
 
     /// Capture cancelled tasks as they unwind, preserving the innermost location.
-    pub(crate) fn record_interruption(&self, span: Option<Span>, mut frames: Vec<String>) {
+    pub(crate) fn record_interruption(
+        &self,
+        span: Option<Span>,
+        mut frames: Vec<String>,
+        mut values: lpc_rs_errors::error_frames::ErrorFrames,
+    ) {
         self.with(|txn| {
             let span = if let Some(inner) = txn.interrupted.take() {
                 frames.extend(inner.frames);
+                let mut merged = inner.values;
+                merged.prepend(values);
+                values = merged;
                 inner.span.or(span)
             } else {
                 span
             };
-            txn.interrupted = Some(InterruptedExecution { span, frames });
+            txn.interrupted = Some(InterruptedExecution {
+                span,
+                frames,
+                values,
+            });
         });
     }
 
     /// Attach and consume the trace saved when evaluation was cancelled.
     pub(crate) fn with_interruption(&self, error: LpcError) -> LpcError {
         self.with(|txn| match txn.interrupted.take() {
-            Some(trace) => error.or_span(trace.span).with_stack_trace(trace.frames),
+            Some(trace) => error
+                .or_span(trace.span)
+                .with_stack_trace(trace.frames)
+                .with_error_frames(trace.values),
             None => error,
         })
     }
@@ -629,10 +805,10 @@ impl Default for TxnHandle {
     }
 }
 
-/// Find the object at `path` in the committed world seen by `txn`. An
-/// object with no cell (bootstrap, created outside any transaction) is found
-/// in the physical map; once a cell exists, only the cell counts, so a
-/// committed-but-unflushed destruct reads as a miss.
+/// Find the object at `path` in the world seen by `txn`. Bootstrap objects
+/// with no cell are found in the physical map. An allocated but empty cell
+/// falls back to snapshot membership, so an aborted first removal preserves
+/// the object and a committed-but-unflushed removal remains absent.
 pub(crate) fn txn_find_object(
     txn: &TxnHandle,
     object_space: &ObjectSpace,
@@ -647,7 +823,10 @@ pub(crate) fn txn_find_object(
             if t.is_removed(var_id) {
                 return ObjectLookup::Removed;
             }
-            match t.read_object(var_id) {
+            match t
+                .read_object(var_id)
+                .or_else(|| t.snapshot.objects.get(key.as_str()).cloned())
+            {
                 Some(process) => ObjectLookup::Found(process),
                 None => ObjectLookup::NotCreated,
             }
@@ -702,7 +881,7 @@ pub(crate) fn txn_undo_insert(
     let key = object_space.process_key(process);
     let var_id = *process.cell.get_or_init(|| object_space.cell_id(&key));
     txn.with(|t| {
-        t.drop_var(var_id);
+        t.remove_object(var_id, process.clone());
         if process.is_clone() {
             let clones = process.image_in(t).program.clones.id;
             t.merge(

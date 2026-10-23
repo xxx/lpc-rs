@@ -279,6 +279,29 @@ impl ScopeWalker {
                 .ancestors(&self.context.scopes.scopes)
                 .contains(&closure_scope_id)
     }
+
+    fn reference_callable(&mut self, name: Ustr, span: Option<Span>) {
+        if let Some(symbol) = self.context.lookup_callable_var(&name) {
+            Self::note_reference(&mut self.referenced, symbol, name);
+            let upvalue = self.should_upvalue_symbol(symbol);
+            self.check_ambiguity(name, span);
+            if upvalue {
+                self.context.lookup_var_mut(name).unwrap().upvalue = true;
+            }
+        } else if !self
+            .context
+            .contains_function_complete(&name, &CallNamespace::Local)
+            && let Some(symbol) = self.context.lookup_var(name)
+            && let Some(error) = Self::visibility_error(
+                name,
+                symbol,
+                self.context.scopes.lookup(&name).is_some(),
+                span,
+            )
+        {
+            self.context.diagnostics.record(error);
+        }
+    }
 }
 
 impl ContextHolder for ScopeWalker {
@@ -328,12 +351,12 @@ impl TreeWalker for ScopeWalker {
             argument.visit(self).await?;
         }
 
-        // An implicit efun lvalue (e.g. `sscanf`'s trailing variables) promotes
-        // its bare-variable argument the same way an explicit `ref` does; an
-        // indexed argument gets a hidden cell instead.
-        if receiver.is_none() {
+        // Efun outputs alias variables, while indexed elements and members use hidden cells.
+        let calls_variable =
+            namespace == &CallNamespace::Local && self.context.lookup_callable_var(name).is_some();
+        if receiver.is_none() && !calls_variable {
             let mut to_mark: Vec<Ustr> = Vec::new();
-            let mut indexed: Vec<usize> = Vec::new();
+            let mut output_temps: Vec<usize> = Vec::new();
             if let Some(callee) = self.context.lookup_function_complete(*name, namespace) {
                 let prototype = callee.as_ref();
                 let is_efun = matches!(callee, Callee::Efun(_));
@@ -349,10 +372,11 @@ impl TreeWalker for ScopeWalker {
                     }
                     match argument {
                         ExpressionNode::Var(var) => to_mark.push(var.name),
+                        ExpressionNode::Member(_) if is_efun => output_temps.push(index),
                         ExpressionNode::BinaryOp(BinaryOpNode {
                             op: BinaryOperation::Index,
                             ..
-                        }) if is_efun => indexed.push(index),
+                        }) if is_efun => output_temps.push(index),
                         _ => {}
                     }
                 }
@@ -360,7 +384,7 @@ impl TreeWalker for ScopeWalker {
             for var_name in to_mark {
                 self.mark_cell(var_name);
             }
-            for index in indexed {
+            for index in output_temps {
                 let temp = self.context.next_lvalue_temp_name();
                 let mut symbol = Symbol::new(&temp, LpcType::Mixed(false));
                 symbol.scope_id = self.context.scopes.current().and_then(|scope| scope.id);
@@ -371,19 +395,8 @@ impl TreeWalker for ScopeWalker {
             }
         }
 
-        // A function-typed variable answers a bare name only.
-        if namespace == &CallNamespace::Local
-            && let Some(symbol) = self.context.lookup_var(&name)
-            && symbol.type_.matches_type(LpcType::Function(false))
-        {
-            Self::note_reference(&mut self.referenced, symbol, *name);
-            let upvalue = self.should_upvalue_symbol(symbol);
-            self.check_ambiguity(*name, node.span);
-            if upvalue {
-                trace!("upvaluing called function var {}", name);
-                let symbol = self.context.lookup_var_mut(name).unwrap();
-                symbol.upvalue = true;
-            }
+        if receiver.is_none() && namespace == &CallNamespace::Local {
+            self.reference_callable(*name, node.span);
         }
 
         Ok(())
@@ -423,7 +436,10 @@ impl TreeWalker for ScopeWalker {
             }
         }
 
-        if node.flags.ellipsis() {
+        if let Some(collector) = &mut node.variadic {
+            collector.visit(self).await?;
+            self.referenced.insert((scope_id, collector.name));
+        } else if node.flags.ellipsis() {
             self.define_argv(scope_id, node.span);
         }
 
@@ -479,7 +495,10 @@ impl TreeWalker for ScopeWalker {
             self.referenced.insert((scope_id, parameter.name));
         }
 
-        if node.flags.ellipsis() {
+        if let Some(collector) = &mut node.variadic {
+            collector.visit(self).await?;
+            self.referenced.insert((scope_id, collector.name));
+        } else if node.flags.ellipsis() {
             self.define_argv(scope_id, node.span);
         }
 
@@ -494,19 +513,8 @@ impl TreeWalker for ScopeWalker {
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         walk_function_ptr(self, node).await?;
 
-        // A function-typed variable answers a bare name only.
-        if node.receiver.is_none()
-            && let Some(symbol) = self.context.lookup_var(node.name)
-            && symbol.type_.matches_type(LpcType::Function(false))
-        {
-            Self::note_reference(&mut self.referenced, symbol, node.name);
-            let upvalue = self.should_upvalue_symbol(symbol);
-            self.check_ambiguity(node.name, node.span);
-            if upvalue {
-                trace!("upvaluing captured function var {}", node.name);
-                let symbol = self.context.lookup_var_mut(node.name).unwrap();
-                symbol.upvalue = true;
-            }
+        if node.receiver.is_none() {
+            self.reference_callable(node.name, node.span);
         }
 
         Ok(())
@@ -613,6 +621,26 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
+    async fn visit_capture_initializer(&mut self, node: &mut VarInitNode) -> Result<()> {
+        let expr = node
+            .value
+            .as_mut()
+            .ok_or_else(|| lpc_bug!(node.span, "capture has no initializer"))?;
+        expr.visit(self).await?;
+        let type_ = crate::compiler::semantic::semantic_checks::node_type(expr, &self.context)?;
+        if type_ == LpcType::Void {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "cannot capture a void expression")));
+        }
+        node.type_ = type_.into();
+        let mut symbol = Symbol::try_from(&mut *node)?;
+        symbol.upvalue = true;
+        self.insert_symbol(symbol);
+        Ok(())
+    }
+
     async fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         let scope = self.context.scopes.current();
 
@@ -646,7 +674,7 @@ impl TreeWalker for ScopeWalker {
         }
 
         // Inserted first, so a closure in the initializer can capture the variable.
-        let mut symbol = Symbol::from(&mut *node);
+        let mut symbol = Symbol::try_from(&mut *node)?;
         symbol.by_ref = node.by_ref;
         if node.by_ref {
             // A `ref` parameter's cell is the caller's variable, for its
@@ -676,7 +704,6 @@ impl Default for ScopeWalker {
 #[cfg(test)]
 mod tests {
     use claims::assert_ok;
-    use factori_imp::create;
     use ustr::ustr;
 
     use super::*;
@@ -793,7 +820,8 @@ mod tests {
         async fn sets_up_argv_for_ellipsis() {
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("marf"),
                 flags: FunctionFlags::default().with_ellipsis(true),
                 parameters: vec![],
@@ -827,7 +855,7 @@ mod tests {
         fn setup() -> (ScopeWalker, VarInitNode) {
             let mut walker = ScopeWalker::default();
             let node = VarInitNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 name: ustr("foo"),
                 value: None,
                 array: false,

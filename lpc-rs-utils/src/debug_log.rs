@@ -1,9 +1,13 @@
 use std::{borrow::Cow, fmt::Debug};
 
-use tokio::{io::AsyncWriteExt, sync::mpsc};
+use tokio::{
+    io::AsyncWriteExt,
+    sync::{mpsc, oneshot},
+};
 
 pub enum LogOp {
     Message(Cow<'static, str>),
+    Flush(oneshot::Sender<()>),
     Shutdown,
 }
 
@@ -29,6 +33,10 @@ impl DebugLog {
                 match op {
                     LogOp::Message(msg) => {
                         let _ = writer.write_all(msg.as_bytes()).await;
+                    }
+                    LogOp::Flush(done) => {
+                        let _ = writer.flush().await;
+                        let _ = done.send(());
                     }
                     LogOp::Shutdown => {
                         break;
@@ -75,6 +83,14 @@ impl DebugLog {
         M: Into<Cow<'static, str>>,
     {
         let _ = self.tx.send(LogOp::Message(msg.into())).await;
+    }
+
+    /// Wait for previously queued messages to be written and flushed.
+    pub async fn flush(&self) {
+        let (done, flushed) = oneshot::channel();
+        if self.tx.send(LogOp::Flush(done)).await.is_ok() {
+            let _ = flushed.await;
+        }
     }
 
     /// Shut down the task, and flush the log.

@@ -34,7 +34,8 @@ derive_builder = "0.20.2"
 dns-lookup = "4.0.1"
 educe = "0.8.1"
 flume = "0.12.0"
-imbl = "7.0.2"
+# Owned-branch disposal extension; update procedure: doc/maintaining-imbl.md.
+imbl = { git = "https://github.com/xxx/imbl.git", rev = "5fa322d043faee90d32c63430b51a52be3ad121d" }
 fastrand = "2.5.0"
 hex = "0.4.3"
 indexmap = "2.14.2"
@@ -50,6 +51,7 @@ path-dedot = "4.0.1"
 phf = { version = "0.14.0", features = ["macros"] }
 pwhash = "1.0.0"
 pulldown-cmark = { version = "0.13.4", default-features = false }
+rayon = "1.12.0"
 readonly = "0.2.14"
 regex = "1.13.1"
 regex-automata = "0.4.18"
@@ -83,6 +85,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"
 jemalloc-ctl = "0.5.4"
+
+[target.'cfg(all(unix, not(any(target_os = "redox", target_os = "fuchsia", target_os = "solaris", target_os = "haiku"))))'.dependencies]
+nix = { version = "0.31.3", default-features = false, features = ["resource"] }
 
 [features]
 default = ["max_level_trace", "release_max_level_debug"]
@@ -132,6 +137,18 @@ harness = false
 
 [[bench]]
 name = "bench_source_cache"
+harness = false
+
+[[bench]]
+name = "bench_preprocessor"
+harness = false
+
+[[bench]]
+name = "bench_index_assignment"
+harness = false
+
+[[bench]]
+name = "bench_arithmetic"
 harness = false
 
 [workspace]

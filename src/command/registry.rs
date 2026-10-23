@@ -216,6 +216,34 @@ impl PartialEq for Rule {
 
 impl Eq for Rule {}
 
+/// A parser registration and its original input slices after matching its verb.
+pub(crate) struct ParserMatch<'a> {
+    pub(crate) rule: Rule,
+    pub(crate) typed: &'a str,
+    pub(crate) rest: &'a str,
+}
+
+impl<'a> ParserMatch<'a> {
+    fn new(rule: &Rule, line: &'a str) -> Option<Self> {
+        let trimmed = line.trim_start();
+        let mut rest = trimmed;
+        let mut end = 0;
+        for word in rule.verb.split(' ') {
+            let boundary = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            if word.is_empty() || word != &rest[..boundary] {
+                return None;
+            }
+            end = trimmed.len() - rest.len() + boundary;
+            rest = rest[boundary..].trim_start();
+        }
+        Some(Self {
+            rule: rule.clone(),
+            typed: &trimmed[..end],
+            rest,
+        })
+    }
+}
+
 /// The verb-attached rules — every verb object's, driver-wide — read and
 /// changed through one transaction.
 pub(crate) struct VerbRules<'a> {
@@ -237,14 +265,22 @@ impl<'a> VerbRules<'a> {
         self.txn.with(|t| t.read_rules(self.cell))
     }
 
-    /// The rules for `verb` (exact) whose owner is live.
-    pub(crate) fn for_verb(&self, verb: &str) -> Vec<Rule> {
-        self.all()
+    /// Longest matching phrase first, retaining registration order within each phrase.
+    pub(crate) fn for_line<'s>(&self, line: &'s str) -> Vec<ParserMatch<'s>> {
+        let mut matches: Vec<_> = self
+            .all()
             .iter()
-            .filter(|rule| rule.verb.as_str() == verb)
-            .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(self.txn)))
-            .cloned()
-            .collect()
+            .filter_map(|rule| ParserMatch::new(rule, line))
+            .filter(|matched| {
+                matched
+                    .rule
+                    .owner()
+                    .is_some_and(|owner| owner.is_live(self.txn))
+            })
+            .collect();
+        // Matching prefixes of one line grow monotonically in both words and bytes.
+        matches.sort_by_key(|matched| std::cmp::Reverse(matched.typed.len()));
+        matches
     }
 
     /// The rules `owner` registered, in registration order.
@@ -336,6 +372,43 @@ pub(crate) mod tests {
         process::Process,
     };
 
+    #[test]
+    fn parser_phrases_keep_raw_utf8_slices_and_longest_first_order() {
+        let mut world = World::new();
+        let owner = Arc::new(Process::default());
+        let cell = VarId::new();
+        let (_live, txn) = world.begin();
+        let rules = VerbRules { txn: &txn, cell };
+        for (verb, rule) in [
+            ("préndre", "STR"),
+            ("préndre ça", "OBJ"),
+            ("préndre ça", "WRD"),
+        ] {
+            rules.register(
+                &owner,
+                crate::command::frontend::parser::compile(verb, rule).unwrap(),
+            );
+        }
+        let matched = rules.for_line("  préndre\u{2003}\tça   MiXeD  text ");
+        assert_eq!(
+            matched
+                .iter()
+                .map(|entry| (
+                    entry.rule.protocol().unwrap().rule.as_str(),
+                    entry.typed,
+                    entry.rest,
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("OBJ", "préndre\u{2003}\tça", "MiXeD  text "),
+                ("WRD", "préndre\u{2003}\tça", "MiXeD  text "),
+                ("STR", "préndre", "ça   MiXeD  text "),
+            ]
+        );
+        assert_eq!(rules.for_line("préndre çaaa").len(), 1);
+        assert!(rules.for_line("Préndre ça").is_empty());
+    }
+
     /// A rule for `verb` owned by `owner`, with a dynamic (receiver-less)
     /// handler; enough for identity and scope tests.
     pub(crate) fn rule(owner: &Arc<Process>, verb: &str) -> Rule {
@@ -358,13 +431,7 @@ pub(crate) mod tests {
 
     /// A parser rule for `verb` with rule text `text`, owned by `owner`.
     pub(crate) fn parser_rule(owner: &Arc<Process>, verb: &str, text: &str) -> Rule {
-        let parser = Arc::new(ParserRule {
-            verb: verb.into(),
-            rule: text.to_owned(),
-            can_slug: text.to_lowercase().replace(' ', "_").into(),
-            do_slug: text.to_lowercase().replace(' ', "_").into(),
-            compiled: crate::command::frontend::native::compile_pattern("%w").unwrap(),
-        });
+        let parser = Arc::new(crate::command::frontend::parser::compile(verb, text).unwrap());
         Rule::new(owner, verb.into(), Family::Parser(parser))
     }
 
@@ -609,9 +676,9 @@ pub(crate) mod tests {
             selected.iter().map(|rule| rule.id).collect::<Vec<_>>(),
             inspected.iter().map(|rule| rule.id).collect::<Vec<_>>()
         );
-        let parsers = VerbRules { txn: &txn, cell }.for_verb("look");
+        let parsers = VerbRules { txn: &txn, cell }.for_line("look");
         assert_eq!(parsers.len(), 2);
-        assert!(parsers[0].id > parsers[1].id);
+        assert!(parsers[0].rule.id > parsers[1].rule.id);
     }
 
     #[test]

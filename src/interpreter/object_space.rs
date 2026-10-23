@@ -17,7 +17,7 @@ use crate::{
         lpc_ref::LpcRef,
         process::Process,
         program::Program,
-        stm::{SVar, VarId},
+        stm::{CommitProtocol, SVar, VarId},
     },
     util::process_builder::{compile_process_from_code, log_warnings},
 };
@@ -25,12 +25,22 @@ use crate::{
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
 
+/// Native compiler-cache retention and cumulative lookup counters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompilerCacheStats {
+    pub parser: crate::compiler::cache::CacheStats,
+    pub definitions: crate::compiler::cache::CacheStats,
+}
+
 /// A wrapper around a [`DashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
 /// uses.
 #[derive(Debug)]
 pub struct ObjectSpace {
     pub(crate) code_pool: Arc<crate::interpreter::program::code_pool::CodePool>,
+    pub(crate) definition_cache:
+        Arc<crate::compiler::preprocessor::definition_cache::DefinitionCache>,
+    pub(crate) parser_cache: Arc<crate::compiler::parser_cache::ParserCache>,
     /// The actual mapping of "paths" to processes. This is the *committed*
     /// object space: the physical state, read directly by non-transactional
     /// consumers (GC, the committed reader, function-pointer lookup) and kept
@@ -59,9 +69,14 @@ pub struct ObjectSpace {
 
     /// Invalidates readers of bootstrap fixtures when system objects change.
     pub(crate) system_revision: SVar<LpcRef>,
+    bootstrap_tx: ArcSwapAny<Option<Arc<flume::Sender<CommitProtocol>>>>,
 }
 
 impl ObjectSpace {
+    pub(crate) fn set_committer(&self, tx: flume::Sender<CommitProtocol>) {
+        self.bootstrap_tx.store(Some(Arc::new(tx)));
+    }
+
     delegate! {
         to self.processes {
             /// Get the number of objects in the space
@@ -83,10 +98,27 @@ impl ObjectSpace {
     where
         T: Into<Arc<Config>>,
     {
+        let config = config.into();
         Self {
-            config: config.into(),
+            definition_cache: Arc::new(
+                crate::compiler::preprocessor::definition_cache::DefinitionCache::new(&config),
+            ),
+            parser_cache: Arc::new(crate::compiler::parser_cache::ParserCache::new(&config)),
+            config,
             ..Default::default()
         }
+    }
+
+    /// Current cache charges and cumulative lookups; charges are not allocator measurements.
+    pub fn compiler_cache_stats(&self) -> CompilerCacheStats {
+        CompilerCacheStats {
+            parser: self.parser_cache.stats(),
+            definitions: self.definition_cache.stats(),
+        }
+    }
+
+    pub(crate) fn expire_compiler_caches(&self) -> usize {
+        self.parser_cache.expire() + self.definition_cache.expire()
     }
 
     /// The [`Config`] this space (and every compile into it) runs under.
@@ -263,6 +295,11 @@ impl ObjectSpace {
     {
         let process = process.into();
         process.physical.store(true, Ordering::Release);
+        if let Some(tx) = object_space.bootstrap_tx.load().as_ref() {
+            let _ = tx.send(CommitProtocol::BootstrapObject(
+                crate::interpreter::stm::ObjectChange::new(&process, true),
+            ));
+        }
         object_space.apply_insert(&object_space.process_key(&process), process);
     }
 
@@ -282,6 +319,8 @@ impl Default for ObjectSpace {
 
         Self {
             code_pool: Arc::default(),
+            definition_cache: Arc::default(),
+            parser_cache: Arc::default(),
             processes,
             cell_ids: DashMap::new(),
             clone_count: AtomicUsize::new(0),
@@ -289,6 +328,7 @@ impl Default for ObjectSpace {
             master_object: ArcSwapAny::from(None),
             verb_rules: SVar::new(),
             system_revision: SVar::new(),
+            bootstrap_tx: ArcSwapAny::from(None),
         }
     }
 }

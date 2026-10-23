@@ -1,21 +1,27 @@
 pub(crate) mod apply;
 pub mod bank;
 pub mod call_frame;
+pub mod call_origin;
 pub mod call_outs;
 pub mod call_stack;
 pub(crate) mod compile_gate;
 pub(crate) mod continuation;
 pub mod efun;
+pub mod error_frames;
 pub(crate) mod file_view;
 pub mod function_type;
 pub(crate) mod json;
 pub(crate) mod save_format;
+pub mod snooping;
+pub mod sockets;
 
 pub mod lpc_array;
+pub mod lpc_class;
 pub mod lpc_float;
 pub mod lpc_int;
 pub mod lpc_mapping;
 pub mod lpc_ref;
+pub(crate) mod memory;
 pub mod object_space;
 #[cfg(feature = "opcode-profile")]
 pub mod opcode_profile;
@@ -45,10 +51,18 @@ pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 pub const MODIFY_COMMAND: &str = "modify_command";
 /// Master apply: whether the calling program may `exec` (`doc/apply/master/valid_exec.md`).
 pub const VALID_EXEC: &str = "valid_exec";
+/// Master apply: authorizes snoop attachment, removal and inspection.
+pub const VALID_SNOOP: &str = "valid_snoop";
+/// Master apply: authorizes native TCP operations and inspection.
+pub const VALID_SOCKET: &str = "valid_socket";
+/// Observer apply: receives decoded input or output from a snooped connection.
+pub const RECEIVE_SNOOP: &str = "receive_snoop";
 /// Master apply: whether calling code may destroy an object (`doc/apply/master/valid_destruct.md`).
 pub const VALID_DESTRUCT: &str = "valid_destruct";
 /// Master apply: whether calling code may inspect another object's globals.
 pub const VALID_VARIABLE_INFO: &str = "valid_variable_info";
+/// Master apply: whether calling code may replace another object's named global.
+pub const VALID_STORE_VARIABLE: &str = "valid_store_variable";
 /// Master apply: whether the calling object may shadow another (`doc/apply/master/query_allow_shadow.md`).
 pub const QUERY_ALLOW_SHADOW: &str = "query_allow_shadow";
 /// Master apply: whether the calling code may `shutdown` (`doc/apply/master/valid_shutdown.md`).
@@ -65,6 +79,8 @@ pub const VALID_LOAD: &str = "valid_load";
 pub const COMPILE_OBJECT: &str = "compile_object";
 /// Master apply: whether a program being compiled may inherit another (`doc/apply/master/valid_inherit.md`).
 pub const VALID_INHERIT: &str = "valid_inherit";
+/// Optional master apply: whether source may compile an explicit efun call.
+pub const VALID_OVERRIDE: &str = "valid_override";
 /// Master apply: returns the object a new connection becomes (`doc/apply/master/connect.md`).
 pub const CONNECT: &str = "connect";
 /// Master apply: the files to preload at boot (`doc/apply/master/epilog.md`).
@@ -117,3 +133,6 @@ pub const SHUTDOWN: &str = "shutdown";
 pub const WINDOW_SIZE: &str = "window_size";
 /// Body apply: the prompt after a command (`doc/apply/special/write_prompt.md`).
 pub const WRITE_PROMPT: &str = "write_prompt";
+
+#[cfg(test)]
+mod null_mode_tests;

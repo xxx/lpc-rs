@@ -2,6 +2,7 @@ pub mod code_pool;
 mod function;
 mod function_scope;
 pub(crate) mod linker;
+mod memory;
 
 pub use function::Function;
 pub use function_scope::FunctionScope;
@@ -11,15 +12,16 @@ use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use derive_builder::Builder;
+use educe::Educe;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
-    INIT_GLOBALS, INIT_PROGRAM, RegisterSize, global_var_flags::GlobalVarFlags, lpc_path::LpcPath,
-    lpc_type::LpcType, pragma_flags::PragmaFlags,
+    INIT_GLOBALS, INIT_PROGRAM, RegisterSize, class::ClassScope, global_var_flags::GlobalVarFlags,
+    lpc_path::LpcPath, lpc_type::LpcType, pragma_flags::PragmaFlags,
 };
 use lpc_rs_function_support::symbol::Symbol;
 use path_dedot::*;
@@ -85,9 +87,13 @@ pub struct Target {
 /// functions first, in inherit order, the program's own last.
 pub fn dispatch_table(
     functions: &IndexMap<Ustr, Function, ahash::RandomState>,
+    frozen: &HashMap<Ustr, Ustr>,
 ) -> IndexMap<Ustr, Target, ahash::RandomState> {
     let mut latest: HashMap<&str, &Function> = HashMap::new();
-    for function in functions.values().filter(|f| !f.is_closure()) {
+    for function in functions
+        .values()
+        .filter(|f| !f.is_closure() && !f.hidden())
+    {
         latest.insert(function.prototype.name.as_ref(), function);
     }
     functions
@@ -98,7 +104,16 @@ pub fn dispatch_table(
                 || function.prototype.flags.private()
                 || name == INIT_GLOBALS
                 || name == INIT_PROGRAM;
-            let target = if own { function } else { latest[name] };
+            let target = if function.hidden() {
+                frozen
+                    .get(&mangled)
+                    .and_then(|name| functions.get(name))
+                    .unwrap_or(function)
+            } else if own {
+                function
+            } else {
+                latest[name]
+            };
             (
                 mangled,
                 Target {
@@ -110,9 +125,15 @@ pub fn dispatch_table(
         .collect()
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Builder)]
+#[derive(Debug, Default, Educe, Builder)]
+#[educe(Clone, PartialEq, Eq)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Program {
+    // Cloning starts an editable program, so its diagnostic cache must be recomputed.
+    #[educe(Clone(method(memory::fresh_cache)), PartialEq(ignore))]
+    #[builder(setter(skip))]
+    pub(crate) memory_size: OnceLock<Option<usize>>,
+
     /// The in-game source identity, retaining host origin for unrestricted outside sources.
     #[builder(setter(into))]
     pub filename: Arc<LpcPath>,
@@ -135,6 +156,8 @@ pub struct Program {
 
     /// Function lookup in this program's own source scope.
     pub function_scope: Arc<FunctionScope>,
+    /// Class definitions visible in this program's own source scope.
+    pub class_scope: Arc<ClassScope>,
 
     /// Source scopes retained for qualified lookup by inherited code.
     pub inherited_function_scopes: Box<HashMap<Arc<LpcPath>, Arc<FunctionScope>>>,
@@ -379,7 +402,7 @@ mod tests {
             functions.insert(ustr(&f.mangle()), Arc::clone(f).into());
         }
 
-        let dispatch = dispatch_table(&functions);
+        let dispatch = dispatch_table(&functions, &Default::default());
 
         let target = |f: &Arc<ProgramFunction>| &dispatch[&ustr(&f.mangle())];
         assert!(Arc::ptr_eq(&target(&parents_g).function.code, &childs_g));

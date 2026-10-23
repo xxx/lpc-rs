@@ -10,7 +10,7 @@ Convert `value` to a float:
   optional sign, digits, an optional fraction and an optional exponent are
   read, and the rest is ignored. `to_float("1.5abc")` is `1.5`; a string
   with no leading digits is `0.0`.
-- A destructed object is `0.0`.
+- In zero mode, a destructed object is `0.0`; distinct mode rejects it as nil.
 
 Anything else (a live object, an array, a mapping, a function) is an error.
 

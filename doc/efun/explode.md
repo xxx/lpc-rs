@@ -26,7 +26,3 @@ array:
 explode("ab", "")        // ({ "a", "b" })
 explode("", "")          // ({})
 ```
-
-Other drivers differ on empty fields, empty input and character boundaries;
-see the [porting comparison](../driver-comparison.md#explode) for examples and
-configuration-dependent behaviour.

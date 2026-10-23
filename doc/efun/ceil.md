@@ -7,4 +7,4 @@ Return the smallest whole number not below `x`, as a float: `ceil(4.5)` is
 
 ### See also
 
-`floor`, `to_int`
+`floor`, `round`, `to_int`

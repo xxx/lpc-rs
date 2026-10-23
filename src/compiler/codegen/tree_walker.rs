@@ -12,6 +12,7 @@ use crate::compiler::{
         break_node::BreakNode,
         call_node::{CallChain, CallNode},
         cast_node::CastNode,
+        catch_node::CatchNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         continue_node::ContinueNode,
@@ -28,6 +29,7 @@ use crate::compiler::{
         label_node::LabelNode,
         labeled_statement_node::LabeledStatementNode,
         mapping_node::MappingNode,
+        nil_node::NilNode,
         operator_node::OperatorNode,
         program_node::ProgramNode,
         range_node::RangeNode,
@@ -95,6 +97,16 @@ pub async fn apply<P: Pass>(
 // delegate here. `let _ =` children are deliberate: those nodes keep walking
 // their remaining children after a failed one, so one pass can report more
 // than one error.
+
+pub async fn walk_class_init<W: TreeWalker + Send>(
+    walker: &mut W,
+    node: &mut crate::compiler::ast::class_expression::ClassInitNode,
+) -> Result<()> {
+    for (_, value) in &mut node.initializers {
+        value.visit(walker).await?;
+    }
+    Ok(())
+}
 
 /// Visit each element of an array literal, in order.
 pub async fn walk_array<W>(walker: &mut W, node: &mut ArrayNode) -> Result<()>
@@ -201,6 +213,10 @@ where
         }
     }
 
+    if let Some(collector) = &mut node.variadic {
+        collector.visit(walker).await?;
+    }
+
     for expression in &mut node.body {
         expression.visit(walker).await?;
     }
@@ -292,6 +308,10 @@ where
 {
     for parameter in &mut node.parameters {
         parameter.visit(walker).await?;
+    }
+
+    if let Some(collector) = &mut node.variadic {
+        collector.visit(walker).await?;
     }
 
     for expression in &mut node.body {
@@ -503,6 +523,13 @@ where
 /// A trait for types that can walk abstract syntax trees
 #[async_trait]
 pub trait TreeWalker {
+    async fn visit_class_def(
+        &mut self,
+        _node: &mut crate::compiler::ast::class_def_node::ClassDefNode,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     /// Called by the node dispatch layer before visiting a node that owns a
     /// scope (block, closure, do_while, for, foreach, if, while), with the
     /// node's `scope_id`: the scope walker writes a fresh id through it, and
@@ -544,6 +571,14 @@ pub trait TreeWalker {
         walk_block(self, node).await
     }
 
+    /// Visit a catch block in its own lexical scope.
+    async fn visit_catch(&mut self, node: &mut CatchNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.body.visit(self).await
+    }
+
     /// Visit a break node
     async fn visit_break(&mut self, _node: &mut BreakNode) -> Result<()>
     where
@@ -576,6 +611,56 @@ pub trait TreeWalker {
         Self: Sized,
     {
         walk_call_chain(self, node).await
+    }
+
+    async fn visit_class_init(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::ClassInitNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        walk_class_init(self, node).await
+    }
+
+    async fn visit_member(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::MemberNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.receiver.visit(self).await
+    }
+
+    async fn visit_compound_assignment(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::CompoundAssignmentNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.lhs.visit(self).await?;
+        node.rhs.visit(self).await
+    }
+
+    /// Visit an explicit capture's expression or lowered variable read.
+    async fn visit_capture(
+        &mut self,
+        node: &mut crate::compiler::ast::capture_node::CaptureNode,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.expr.visit(self).await
+    }
+
+    /// Visit a hidden capture initialization in the closure's creation scope.
+    async fn visit_capture_initializer(&mut self, node: &mut VarInitNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        self.visit_var_init(node).await
     }
 
     /// Visit a closure node
@@ -669,6 +754,10 @@ pub trait TreeWalker {
     }
 
     /// Visit an int (literal) node
+    async fn visit_nil(&mut self, _node: &mut NilNode) -> Result<()> {
+        Ok(())
+    }
+
     async fn visit_int(&mut self, _node: &mut IntNode) -> Result<()> {
         Ok(())
     }
@@ -898,6 +987,7 @@ mod tests {
         #[tokio::test]
         async fn assignment_visits_lhs_then_rhs() {
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: var("a").into(),
                 rhs: var("b").into(),
                 span: None,
@@ -971,13 +1061,16 @@ mod tests {
         #[tokio::test]
         async fn closure_visits_parameters_then_body() {
             let mut node = ClosureNode {
+                variadic: None,
                 name: "closure-0".into(),
-                return_type: LpcType::Mixed(false),
+                return_type: LpcType::Mixed(false).into(),
                 flags: FunctionFlags::default(),
                 parameters: Some(vec![init("p")]),
                 body: vec![stmt("b1"), stmt("b2")],
                 span: None,
                 scope_id: None,
+                captures: Vec::new(),
+                capture_scope_id: None,
             };
             let mut walker = spy();
             walker.visit_closure(&mut node).await.unwrap();
@@ -998,7 +1091,7 @@ mod tests {
         #[tokio::test]
         async fn decl_visits_initializations_in_order() {
             let mut node = DeclNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 initializations: vec![init("x"), init("y")],
             };
             let mut walker = spy();
@@ -1042,7 +1135,7 @@ mod tests {
             let mut node = ForEachNode::new(
                 ForEachInit::Mapping {
                     key: init("k"),
-                    value: init("v"),
+                    value: Box::new(init("v")),
                 },
                 var("l"),
                 stmt("b"),
@@ -1056,7 +1149,8 @@ mod tests {
         #[tokio::test]
         async fn function_def_visits_parameters_then_body() {
             let mut node = FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("f"),
                 parameters: vec![init("p")],
                 flags: FunctionFlags::default(),
@@ -1115,6 +1209,7 @@ mod tests {
         async fn program_visits_inherits_then_body() {
             let mut node = ProgramNode {
                 inherits: vec![InheritNode {
+                    visibility: Default::default(),
                     path: ustr("/p"),
                     namespace: None,
                     span: None,
@@ -1218,7 +1313,8 @@ mod tests {
         #[tokio::test]
         async fn function_def_propagates_a_parameter_error_and_stops() {
             let mut node = FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("f"),
                 parameters: vec![init("p")],
                 flags: FunctionFlags::default(),
@@ -1324,17 +1420,42 @@ mod scope_hook_tests {
     #[tokio::test]
     async fn a_closure_is_entered_and_exited_around_its_children() {
         let mut node = ExpressionNode::Closure(ClosureNode {
+            variadic: None,
             name: "closure-0".into(),
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             flags: FunctionFlags::default(),
             parameters: Some(vec![init("p")]),
             body: vec![stmt("b1")],
             span: None,
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         });
         let mut walker = spy();
         node.visit(&mut walker).await.unwrap();
         assert_eq!(walker.visited, ["enter", "p", "b1", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn explicit_capture_initializers_are_outside_the_closures_scope() {
+        let mut node = ClosureNode {
+            variadic: None,
+            name: "closure-0".into(),
+            return_type: LpcType::Mixed(false).into(),
+            flags: FunctionFlags::default(),
+            parameters: Some(vec![init("p")]),
+            body: vec![stmt("body")],
+            captures: vec![init("capture")],
+            span: None,
+            scope_id: None,
+            capture_scope_id: None,
+        };
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(
+            walker.visited,
+            ["enter", "capture", "enter", "p", "body", "exit", "exit"]
+        );
     }
 
     #[tokio::test]

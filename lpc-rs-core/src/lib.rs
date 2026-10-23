@@ -4,6 +4,7 @@ use decorum::Total;
 use indextree::NodeId;
 
 pub mod call_namespace;
+pub mod class;
 pub mod function_arity;
 #[allow(clippy::identity_op)]
 pub mod function_flags;
@@ -15,6 +16,7 @@ pub mod lpc_type;
 #[allow(clippy::identity_op)]
 pub mod lpc_type_union;
 pub mod mangle;
+pub mod null_mode;
 #[allow(clippy::identity_op)]
 pub mod pragma_flags;
 pub mod register;

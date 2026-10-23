@@ -4,5 +4,5 @@
 
 Return the number of items in the passed array or mapping, the number
 of characters in a string, or the number of bytes in a `bytes`; 0 for
-anything else. `&sizeof()` is a pointer to it.
+anything else. The bare name `sizeof` is a pointer to it.
 

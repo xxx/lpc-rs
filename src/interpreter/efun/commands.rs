@@ -4,11 +4,7 @@ use lpc_rs_errors::Result;
 
 use crate::{
     command::registry::{ActorRules, Family},
-    interpreter::{
-        efun,
-        efun::efun_context::EfunContext,
-        lpc_ref::{LpcRef, NULL},
-    },
+    interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
 /// `commands([ob])`: the rules the object (the caller by default) can
@@ -31,10 +27,12 @@ pub async fn commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
             let owner = rule
                 .owner()
                 .filter(|owner| owner.is_live(context.txn()))
-                .map_or(NULL, |owner| LpcRef::from(Arc::downgrade(&owner)));
+                .map_or(context.txn().nil(), |owner| {
+                    LpcRef::from(Arc::downgrade(&owner))
+                });
             let function = rule
                 .pointer()
-                .map_or(NULL, |pointer| LpcRef::from(pointer.name()));
+                .map_or(context.txn().nil(), |pointer| LpcRef::from(pointer.name()));
             context.mint_array([
                 LpcRef::from(rule.verb.as_str()),
                 LpcRef::from(flag),

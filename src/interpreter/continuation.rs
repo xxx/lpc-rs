@@ -9,6 +9,7 @@ use smallvec::SmallVec;
 
 use crate::interpreter::{
     call_frame::{CollectionCall, FrameReceiver},
+    call_origin::CallOrigin,
     function_type::function_ptr::FunctionPtr,
     lpc_ref::LpcRef,
     process::Process,
@@ -23,6 +24,11 @@ pub(crate) trait Continuation: Send + Sync + Debug {
 
     /// A copy, for the frame's `Clone`.
     fn clone_box(&self) -> Box<dyn Continuation>;
+
+    /// An ownership offer exists only while its efun callback is on this stack.
+    fn socket_offer(&self) -> Option<&Arc<crate::interpreter::efun::sockets::Offer>> {
+        None
+    }
 }
 
 impl Clone for Box<dyn Continuation> {
@@ -70,6 +76,8 @@ pub(crate) struct EfunContinuation {
     pub span: Option<Span>,
     /// The callee the async arm owes when a step suspended.
     pub suspended: Option<Callee>,
+    /// A callback dispatcher override; `None` uses the pointer's own kind.
+    pub origin: Option<CallOrigin>,
 }
 
 /// The call a frame has in flight; the eval loop advances it on every

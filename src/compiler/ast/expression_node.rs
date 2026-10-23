@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use super::class_expression::{ClassInitNode, CompoundAssignmentNode, MemberNode};
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcIntInner};
@@ -13,15 +14,18 @@ use crate::compiler::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNodeTrait, SpannedNode},
-        binary_op_node::BinaryOpNode,
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
+        capture_node::CaptureNode,
         cast_node::CastNode,
+        catch_node::CatchNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         float_node::FloatNode,
         function_ptr_node::FunctionPtrNode,
         int_node::IntNode,
         mapping_node::MappingNode,
+        nil_node::NilNode,
         operator_node::OperatorNode,
         range_node::RangeNode,
         ref_node::RefNode,
@@ -39,14 +43,20 @@ use crate::compiler::{
 #[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
+    ClassInit(ClassInitNode),
+    Member(MemberNode),
+    CompoundAssignment(CompoundAssignmentNode),
     BinaryOp(BinaryOpNode),
     Call(CallNode),
     Cast(CastNode),
+    Catch(CatchNode),
+    Capture(CaptureNode),
     Closure(ClosureNode),
     CommaExpression(CommaExpressionNode),
     Float(FloatNode),
     FunctionPtr(FunctionPtrNode),
     Int(IntNode),
+    Nil(NilNode),
     Range(RangeNode),
     String(StringNode),
     Ternary(TernaryNode),
@@ -57,6 +67,21 @@ pub enum ExpressionNode {
     Array(ArrayNode),
     Mapping(MappingNode),
     Operator(OperatorNode),
+}
+
+impl ExpressionNode {
+    /// Whether this expression names an owner that can receive a replacement value.
+    pub(crate) fn has_assignment_owner(&self) -> bool {
+        match self {
+            Self::Var(_) | Self::Member(_) => true,
+            Self::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                r,
+                ..
+            }) => !matches!(**r, Self::Range(_)),
+            _ => false,
+        }
+    }
 }
 
 macro_rules! delegated_traits {
@@ -95,15 +120,21 @@ macro_rules! delegated_traits {
 }
 
 delegated_traits!(
+    ExpressionNode::ClassInit,
+    ExpressionNode::Member,
+    ExpressionNode::CompoundAssignment,
     ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
     ExpressionNode::Call,
     ExpressionNode::Cast,
+    ExpressionNode::Catch,
+    ExpressionNode::Capture,
     ExpressionNode::Closure,
     ExpressionNode::CommaExpression,
     ExpressionNode::Float,
     ExpressionNode::FunctionPtr,
     ExpressionNode::Int,
+    ExpressionNode::Nil,
     ExpressionNode::Range,
     ExpressionNode::String,
     ExpressionNode::Ternary,
@@ -251,7 +282,6 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-    use factori_imp::create;
     use lpc_rs_core::LpcFloatInner;
 
     use super::*;
@@ -283,6 +313,7 @@ mod tests {
     #[test]
     fn test_from_assignment_node() {
         let node = AssignmentNode {
+            is_compound: false,
             lhs: Box::new(VarNode::new("adsf").into()),
             rhs: Box::new(IntNode::new(324).into()),
             span: None,

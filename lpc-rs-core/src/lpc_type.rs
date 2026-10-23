@@ -2,13 +2,14 @@ use std::{fmt, ops::BitOr};
 
 use fmt::{Display, Formatter};
 
-use crate::{lpc_type_union::LpcTypeUnion, mangle::Mangle};
+use crate::{class::ClassId, lpc_type_union::LpcTypeUnion, mangle::Mangle};
 
 /// The enumeration of types that a variable can be declared as.
 /// The bool is whether it's an array.
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Hash)]
 pub enum LpcType {
     Void,
+    Nil,
     Int(bool),
     Float(bool),
     Object(bool),
@@ -17,17 +18,30 @@ pub enum LpcType {
     Mapping(bool),
     Mixed(bool),
     Function(bool),
+    Class(ClassId, bool),
 
     // To allow efuns to declare prototypes with multiple allowed types
     Union(LpcTypeUnion),
 }
 
 impl LpcType {
+    /// Whether this type can hold a distinct nil value.
+    pub fn accepts_nil(self) -> bool {
+        match self {
+            Self::Void | Self::Int(false) | Self::Float(false) => false,
+            Self::Union(types) => types.types().into_iter().any(Self::accepts_nil),
+            _ => true,
+        }
+    }
+
     /// See if I match another type. Handles unions seamlessly.
     /// This is the main type-checking routine.
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
     pub fn matches_type(self, other: LpcType) -> bool {
+        if other == Self::Nil {
+            return self.accepts_nil();
+        }
         // A value that may be any member is only taken when every member is.
         if let LpcType::Union(other_union) = other {
             other_union
@@ -58,7 +72,7 @@ impl LpcType {
     /// Return if we're an array or not
     pub fn is_array(self) -> bool {
         match self {
-            LpcType::Void => false,
+            LpcType::Void | LpcType::Nil => false,
             LpcType::Int(arr)
             | LpcType::String(arr)
             | LpcType::Bytes(arr)
@@ -66,7 +80,8 @@ impl LpcType {
             | LpcType::Object(arr)
             | LpcType::Mapping(arr)
             | LpcType::Mixed(arr)
-            | LpcType::Function(arr) => arr,
+            | LpcType::Function(arr)
+            | LpcType::Class(_, arr) => arr,
             LpcType::Union(union) => union.is_array(),
         }
     }
@@ -82,7 +97,8 @@ impl LpcType {
             LpcType::Mixed(_) => LpcType::Mixed(arr),
             LpcType::Object(_) => LpcType::Object(arr),
             LpcType::Function(_) => LpcType::Function(arr),
-            LpcType::Void => self,
+            LpcType::Class(id, _) => LpcType::Class(id, arr),
+            LpcType::Void | LpcType::Nil => self,
             LpcType::Union(_) => self,
         }
     }
@@ -91,6 +107,7 @@ impl LpcType {
 impl Mangle for LpcType {
     fn mangle(&self) -> String {
         match self {
+            LpcType::Nil => String::from("n"),
             LpcType::Void => String::from("v"),
             LpcType::Int(a) => {
                 if *a {
@@ -148,8 +165,21 @@ impl Mangle for LpcType {
                     String::from("F")
                 }
             }
+            LpcType::Class(id, array) => {
+                format!("{}{}", id.mangle(), if *array { "*" } else { "" })
+            }
             LpcType::Union(union) => union.mangle(),
         }
+    }
+}
+
+impl LpcType {
+    /// Build a primitive union, returning the nominal class it cannot represent.
+    pub fn try_union(self, rhs: Self) -> Result<Self, ClassId> {
+        let mut union = LpcTypeUnion::new();
+        union.insert(self)?;
+        union.insert(rhs)?;
+        Ok(Self::Union(union))
     }
 }
 
@@ -157,23 +187,8 @@ impl BitOr for LpcType {
     type Output = LpcType;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        let mut union = if let LpcType::Union(u) = self {
-            u
-        } else {
-            let mut u = LpcTypeUnion::new();
-            u.insert(self);
-            u
-        };
-
-        let final_union = match rhs {
-            LpcType::Union(u) => union | u,
-            x => {
-                union.insert(x);
-                union
-            }
-        };
-
-        LpcType::Union(final_union)
+        self.try_union(rhs)
+            .expect("nominal classes require checked union construction")
     }
 }
 
@@ -182,6 +197,7 @@ impl Display for LpcType {
         let to_star = |array: &bool| -> &str { if *array { " *" } else { "" } };
 
         let type_ = match self {
+            LpcType::Nil => "nil".to_string(),
             LpcType::Void => String::from("void"),
             LpcType::Int(array) => format!("int{}", to_star(array)),
             LpcType::Float(array) => format!("float{}", to_star(array)),
@@ -191,6 +207,7 @@ impl Display for LpcType {
             LpcType::Mapping(array) => format!("mapping{}", to_star(array)),
             LpcType::Mixed(array) => format!("mixed{}", to_star(array)),
             LpcType::Function(array) => format!("function{}", to_star(array)),
+            LpcType::Class(id, array) => format!("{id}{}", to_star(array)),
             LpcType::Union(union) => format!("{union}"),
         };
 
@@ -217,6 +234,65 @@ impl From<&str> for LpcType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn class(source: &str, name: &str) -> LpcType {
+        LpcType::Class(
+            ClassId {
+                source: source.into(),
+                name: name.into(),
+            },
+            false,
+        )
+    }
+
+    #[test]
+    fn nominal_classes_match_only_their_own_identity_or_mixed() {
+        let record = class("/record.h", "record");
+        assert!(record.matches_type(record));
+        assert!(!record.matches_type(class("/other.h", "record")));
+        assert!(!record.matches_type(class("/record.h", "other")));
+        assert!(record.matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Mixed(false).matches_type(record));
+        assert!(!LpcType::Mixed(true).matches_type(record));
+    }
+
+    #[test]
+    fn class_array_types_retain_nominal_identity() {
+        let record = class("/record.h", "record");
+        let array = record.as_array(true);
+        assert!(array.is_array());
+        assert_eq!(array.as_array(false), record);
+        assert!(!array.matches_type(record));
+        assert!(!array.matches_type(class("/other.h", "record").as_array(true)));
+        assert!(LpcType::Mixed(true).matches_type(array));
+    }
+
+    #[test]
+    fn nominal_type_mangling_preserves_path_name_and_array_kind() {
+        let record = class("/record.h", "record");
+        assert_eq!(record.to_string(), "class record (/record.h)");
+        assert_eq!(
+            record.as_array(true).to_string(),
+            "class record (/record.h) *"
+        );
+        assert_ne!(record.mangle(), record.as_array(true).mangle());
+        assert_ne!(class("/a", "bc").mangle(), class("/ab", "c").mangle());
+    }
+
+    #[test]
+    fn checked_union_construction_rejects_nominal_classes() {
+        let record = class("/record.h", "record");
+        assert!(record.try_union(LpcType::Int(false)).is_err());
+        assert!(
+            LpcType::Int(false)
+                .try_union(record.as_array(true))
+                .is_err()
+        );
+        let primitives = LpcType::Int(false) | LpcType::String(false);
+        assert!(!primitives.matches_type(record));
+        assert!((primitives | LpcType::Mixed(false)).matches_type(record));
+        assert!((primitives | LpcType::Mixed(true)).matches_type(record.as_array(true)));
+    }
 
     #[test]
     fn a_type_does_not_take_a_union_with_a_member_it_rejects() {

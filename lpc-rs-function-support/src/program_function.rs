@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -12,8 +13,8 @@ use lpc_rs_asm::{
     instruction::{Arg, ArgList, Instruction},
 };
 use lpc_rs_core::{
-    RegisterSize, function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle,
-    register::RegisterVariant,
+    RegisterSize, class::ClassScope, function_arity::FunctionArity, lpc_type::LpcType,
+    mangle::Mangle, register::RegisterVariant,
 };
 use lpc_rs_errors::span::Span;
 use tracing::trace;
@@ -34,8 +35,19 @@ use crate::{
 #[derive(Debug, Clone, Eq, PartialEq, Builder)]
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct ProgramFunction {
+    /// Null semantics used when compiling this code.
+    #[builder(default)]
+    pub null_mode: NullMode,
     /// My prototype from compilation
     pub prototype: FunctionPrototype,
+
+    /// Definitions retained by this code, including inherited and closure bodies.
+    #[builder(default)]
+    pub class_scope: Arc<ClassScope>,
+
+    /// Runtime type assertions referenced by instruction operands.
+    #[builder(default)]
+    pub types: Vec<LpcType>,
 
     /// The number of non-argument, non-return-value locals.
     /// Used for register allocation.
@@ -73,7 +85,7 @@ pub struct ProgramFunction {
     /// pool order.
     #[builder(default)]
     pub constants: Vec<LpcConstant>,
-    /// The argument lists this function's calls read, one per call site,
+    /// The value lists this function's calls and spreading array constructors read,
     /// named by `ArgList` operands.
     #[builder(default)]
     pub arg_lists: Vec<Vec<Arg>>,
@@ -103,7 +115,10 @@ impl ProgramFunction {
 
     pub fn new(prototype: FunctionPrototype, num_locals: RegisterSize) -> Self {
         Self {
+            null_mode: Default::default(),
             prototype,
+            class_scope: Arc::default(),
+            types: vec![],
             num_locals,
             num_upvalues: 0,
             instructions: vec![],
@@ -116,7 +131,7 @@ impl ProgramFunction {
         }
     }
 
-    /// The arguments the call with `list` reads.
+    /// The values the instruction with `list` reads.
     #[inline]
     pub fn args(&self, list: ArgList) -> &[Arg] {
         &self.arg_lists[usize::from(list.0)]
@@ -201,6 +216,9 @@ impl ProgramFunction {
         for (index, constant) in self.constants.iter().enumerate() {
             v.push(format!("    k{index} = {constant}"));
         }
+        for (index, type_) in self.types.iter().enumerate() {
+            v.push(format!("    t{index} = {type_}"));
+        }
         for (index, list) in self.arg_lists.iter().enumerate() {
             let args: Vec<String> = list.iter().map(ToString::to_string).collect();
             v.push(format!("    a{index} = ({})", args.join(", ")));
@@ -283,6 +301,20 @@ mod tests {
 
     fn local(i: RegisterSize) -> RegisterVariant {
         RegisterVariant::Local(Register(i))
+    }
+
+    #[test]
+    fn the_listing_resolves_runtime_type_table_entries() {
+        let mut func = function(FunctionKind::Local);
+        func.types = vec![LpcType::Int(false)];
+        func.instructions = vec![Instruction::Cast(
+            local(1),
+            lpc_rs_asm::instruction::TypeIndex(0),
+            local(2),
+        )];
+        let listing = func.listing().join("\n");
+        assert!(listing.contains("t0 = int"));
+        assert!(listing.contains(&func.instructions[0].to_string()));
     }
 
     #[test]

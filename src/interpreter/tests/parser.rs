@@ -17,12 +17,12 @@ const VERB: (&str, &str) = (
             parse_add_synonym("examine", "look", "at OBJ");
         }
         void drop() { parse_remove("look"); }
-        string *rules() { return parse_my_rules(); }
+        string *rules() { return query_parser_rules(); }
     "# },
 );
 
 #[tokio::test]
-async fn my_rules_lists_verb_and_rule_in_registration_order() {
+async fn query_parser_rules_lists_verb_and_rule_in_registration_order() {
     let r = run(
         "",
         &[VERB],
@@ -86,7 +86,7 @@ const CHAIN: (&str, &str) = (
             parse_add_synonym("x", "give");
         }
         void drop() { parse_remove("give"); }
-        string *rules() { return parse_my_rules(); }
+        string *rules() { return query_parser_rules(); }
     "# },
 );
 
@@ -141,10 +141,10 @@ async fn add_rule_without_init_and_bad_rules_are_errors() {
         fails(
             "",
             &[],
-            r#"mixed *create() { parse_init(); parse_add_rule("x", "STR STR"); return ({}); }"#
+            r#"mixed *create() { parse_init(); parse_add_rule("x", "OBJ OBJ OBJ"); return ({}); }"#
         )
         .await
-        .contains("parse_add_rule: two STR tokens in 'STR STR'")
+        .contains("parse_add_rule: more than two object slots in 'OBJ OBJ OBJ'")
     );
     assert!(
         fails(
@@ -342,9 +342,10 @@ async fn two_qualifiers_are_ambiguous_and_the_master_says_so() {
         int r = command("take sword");
         return ({ r, heard });
     "#;
+    let single_only = VERBS.1.replace("parse_add_rule(\"take\", \"OBS\");", "");
     let r = run(
         MASTER,
-        &[SWORD, SWORD2, KNIFE, VERBS, ROOM],
+        &[SWORD, SWORD2, KNIFE, (VERBS.0, &single_only), ROOM],
         &custom_main(body),
     )
     .await;
@@ -579,11 +580,7 @@ const LOG_BOB: (&str, &str) = (
 );
 
 #[tokio::test]
-async fn a_candidates_own_slot_holds_itself_while_filtered_and_reverts_to_zero() {
-    // Q7's sequence for `give OBJ to LIV`: filtering the direct slot puts
-    // the sword candidate in its own (still-empty) slot; filtering the
-    // indirect slot puts bob in its, with the direct slot already chosen;
-    // the all-filled re-ask hands both handlers every object.
+async fn two_object_permissions_receive_both_objects_during_filtering_and_recheck() {
     let body = r#"
         object room = find_object("/room");
         move_object(room);
@@ -609,7 +606,7 @@ async fn a_candidates_own_slot_holds_itself_while_filtered_and_reverts_to_zero()
         r,
         vec![
             LpcRef::from(1),
-            s("self 0 sword bob"),
+            s("self other sword bob"),
             s("self other sword bob"),
             s("other self sword bob"),
             s("other self sword bob"),
@@ -883,7 +880,7 @@ const PEAR: (&str, &str) = (
 );
 
 #[tokio::test]
-async fn a_nested_scope_array_flattens_and_skips_non_objects() {
+async fn a_nested_scope_array_uses_default_parent_hooks_and_skips_non_objects() {
     let dead = ("/dead_thing.c", "");
     let r = run(
         crate::test_support::ALLOW_DESTRUCT,
@@ -933,8 +930,8 @@ async fn a_self_referential_scope_is_bounded() {
         r#"mixed *create() {
             enable_commands();
             set_this_player(this_object());
-            mixed *a = ({ 0 });
-            a[0] = a;
+            mixed *a = ({ this_object(), 0 });
+            a[1] = a;
             parse_sentence("take it", 0, a);
             return ({});
         }"#,
@@ -1198,8 +1195,9 @@ async fn the_all_filled_reask_can_still_refuse_after_filtering_qualified() {
         "/reask_refuses.c",
         indoc! { r#"
         string *parse_command_id_list() { return ({ "sword" }); }
+        int calls;
         mixed direct_give_obj_to_liv(mixed a, mixed b, string x, string y) {
-            return b == 0 ? 1 : 0;
+            return ++calls == 1;
         }
         void go(object d) { move_object(d); }
     "# },
@@ -1222,8 +1220,9 @@ async fn the_all_filled_reask_can_still_be_a_reason_after_filtering_qualified() 
         "/reask_reasons.c",
         indoc! { r#"
         string *parse_command_id_list() { return ({ "sword" }); }
+        int calls;
         mixed direct_give_obj_to_liv(mixed a, mixed b, string x, string y) {
-            if (b == 0) return 1;
+            if (++calls == 1) return 1;
             return "not now";
         }
         void go(object d) { move_object(d); }
@@ -1246,11 +1245,11 @@ const GENERIC_VERB: (&str, &str) = (
     indoc! { r#"
     string seen_verb; string seen_rule;
     void create() { parse_init(); parse_add_rule("poke", "OBJ"); }
-    mixed can_verb_rule(string verb, string rule, mixed o, string w) {
+    mixed can_verb_rule(string verb, string rule, mixed o, string typed, string w) {
         seen_verb = verb; seen_rule = rule;
         return 1;
     }
-    void do_verb_rule(string verb, string rule, mixed o, string w) { }
+    void do_verb_rule(string verb, string rule, mixed o, string typed, string w) { }
     string query_seen_verb() { return seen_verb; }
     string query_seen_rule() { return seen_rule; }
 "# },
@@ -1260,7 +1259,7 @@ const GENERIC_TARGET: (&str, &str) = (
     indoc! { r#"
     string *parse_command_id_list() { return ({ "thing" }); }
     string seen_verb; string seen_rule;
-    mixed direct_verb_rule(string verb, string rule, mixed o, string w) {
+    mixed direct_verb_rule(string verb, string rule, mixed o, string typed, string w) {
         seen_verb = verb; seen_rule = rule;
         return 1;
     }
@@ -1300,8 +1299,8 @@ const QUOTED_VERB: (&str, &str) = (
     indoc! { r#"
     string seen_rule;
     void create() { parse_init(); parse_add_rule("look", "at bob's OBJ"); }
-    mixed can_verb_rule(string verb, string rule, mixed o, string w) { return 1; }
-    void do_verb_rule(string verb, string rule, mixed o, string w) { seen_rule = rule + " " + file_name(o); }
+    mixed can_verb_rule(string verb, string rule, mixed o, string typed, string w) { return 1; }
+    void do_verb_rule(string verb, string rule, mixed o, string typed, string w) { seen_rule = rule + " " + file_name(o); }
     string query_seen_rule() { return seen_rule; }
 "# },
 );

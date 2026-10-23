@@ -7,7 +7,6 @@ pub(crate) mod command_task;
 pub mod dispatch;
 pub mod frontend;
 pub mod grammar;
-pub(crate) mod memo;
 pub(crate) mod parser;
 pub mod presence;
 pub mod registry;

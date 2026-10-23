@@ -924,3 +924,31 @@ async fn missing_configuration_and_missing_resident_are_refused() {
     assert_eq!(status.state, "failed");
     assert!(status.error.contains("no simul-efun object"));
 }
+
+#[tokio::test]
+async fn enumeration_keeps_identities_without_conflicting_on_recompilation() {
+    let original = master("");
+    let (root, mut vm, admin) = setup("system-enumeration", &original, SIMUL).await;
+    let mut live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let mut reader = Transaction::new(live.inner.clone());
+    let before: Vec<_> = reader.objects().collect();
+    std::fs::write(root.join("secure/master.c"), master("int added; ")).unwrap();
+    std::fs::write(root.join("secure/simul_efuns.c"), SIMUL.replace("10", "20")).unwrap();
+    let status = run(&mut vm, &admin, LpcRef::from("both")).await;
+    assert_eq!(status.state, "succeeded", "{}", status.error);
+    let fresh = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let after: Vec<_> = Transaction::new(fresh.inner.clone()).objects().collect();
+    assert_eq!(before.len(), after.len());
+    assert!(
+        before
+            .iter()
+            .all(|old| after.iter().any(|new| Arc::ptr_eq(old, new)))
+    );
+    live.disarm();
+    assert!(
+        commit_changeset(&vm.global_state.committer_tx, reader.take_changeset())
+            .await
+            .unwrap()
+            .is_ok()
+    );
+}

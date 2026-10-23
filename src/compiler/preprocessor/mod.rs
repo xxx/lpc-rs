@@ -5,7 +5,8 @@ use lpc_rs_core::{
     LpcIntInner,
     lpc_path::LpcPath,
     pragma_flags::{
-        NO_CLONE, NO_INCLUDE, NO_INHERIT, NO_SHADOW, RESIDENT, SAVE_BINARY, STRICT_TYPES,
+        NO_CLONE, NO_INHERIT, NO_SHADOW, NO_WARNINGS, RESIDENT, SAVE_BINARY, SAVE_TYPES,
+        STRICT_TYPES, WARNINGS,
     },
 };
 use lpc_rs_errors::{
@@ -28,13 +29,16 @@ use crate::{
 };
 use conditional::Conditionals;
 use directive::{Directive, DirectiveKind};
-use include::{IncludeSource, IncludeWalk, ONCE};
+use include::{IncludeSource, IncludeWalk, NO_INCLUDE, ONCE};
+use predefined::Predefined;
 
 mod conditional;
 pub mod define;
+pub mod definition_cache;
 pub mod directive;
 mod expand;
 mod include;
+mod predefined;
 pub mod preprocessor_node;
 
 /// Recursion budget for evaluating one `#if`: tree levels and macro levels
@@ -55,6 +59,9 @@ pub struct Preprocessor {
 
     /// The include walk: `#include` traversal state for this compile.
     includes: IncludeWalk,
+
+    /// Warning switches follow textual includes, including changes made inside them.
+    warnings_suppressed: bool,
 }
 
 impl Preprocessor {
@@ -221,6 +228,10 @@ impl Preprocessor {
             while let Some(next) = iter.next() {
                 match next {
                     Ok(token) => {
+                        let span = token
+                            .span()
+                            .with_warnings_suppressed(self.warnings_suppressed);
+                        let token = token.with_span(span);
                         let mut end = token.span().r();
 
                         match &token {
@@ -228,24 +239,31 @@ impl Preprocessor {
                                 self.handle_directive(t, prev_end, src, &mut output).await?;
                             }
 
-                            // Handle macro expansion
-                            Token::Id(st) => {
+                            _ => {
                                 if self.conditionals.live() {
-                                    let appends = expand::Expander::new(&self.defines)
-                                        .expand_use(st, &mut iter)?;
+                                    let appends = expand::Expander::new(
+                                        &self.defines,
+                                        &self.context.diagnostic_sources,
+                                        self.context.config.port,
+                                    )
+                                    .expand_use(&token, &mut iter)?;
 
                                     match appends {
-                                        Some(mut expanded) => {
-                                            output.append(&mut expanded.tokens);
-                                            // Anchor placement past the whole use — the Id, or
-                                            // through the top-level `)` the capture consumed.
+                                        Some(expanded) => {
+                                            // Captured arguments bypass this scan loop's token marking.
+                                            for token in expanded.tokens {
+                                                let span = token.span().with_warnings_suppressed(
+                                                    self.warnings_suppressed,
+                                                );
+                                                output.push(token.with_span(span));
+                                            }
+                                            // Consumed macro arguments count toward directive placement.
                                             end = expanded.use_span.r();
                                         }
                                         None => self.append(&mut output, token),
                                     }
                                 }
                             }
-                            _ => self.append(&mut output, token),
                         }
 
                         prev_end = end;
@@ -311,6 +329,17 @@ impl Preprocessor {
             }
         }
 
+        if let Some(definition) = self
+            .context
+            .definition_cache
+            .get(token.0, &self.context.diagnostic_sources)
+        {
+            return self.install_define(
+                token.0,
+                definition.name.clone(),
+                definition.replacement.clone(),
+            );
+        }
         let directive = directive::parse(&token.1, token.0)?;
 
         match directive {
@@ -329,6 +358,12 @@ impl Preprocessor {
                 body_span,
             } => self.handle_define(token.0, name, params, body, body_span),
             Directive::Undef { name } => {
+                if Predefined::from_name(&name).is_some() {
+                    return Err(lpc_error!(
+                        Some(token.0),
+                        "cannot undefine predefined macro `{name}`"
+                    ));
+                }
                 self.defines.remove(&name);
                 Ok(())
             }
@@ -339,12 +374,12 @@ impl Preprocessor {
                 Ok(())
             }
             Directive::IfDef { name } => {
-                let taken = self.defines.contains_key(&name);
+                let taken = self.is_defined(&name);
                 self.conditionals.enter(token.0, taken);
                 Ok(())
             }
             Directive::IfNDef { name } => {
-                let taken = !self.defines.contains_key(&name);
+                let taken = !self.is_defined(&name);
                 self.conditionals.enter(token.0, taken);
                 Ok(())
             }
@@ -378,9 +413,13 @@ impl Preprocessor {
         body: String,
         body_span: Span,
     ) -> Result<()> {
-        // Lex the body in place — tokens are born with their true
-        // definition-site spans. A directive line inside a
-        // body has no legal reading (LPC has no `#` operator).
+        if Predefined::from_name(&name).is_some() {
+            return Err(lpc_error!(
+                Some(span),
+                "cannot redefine predefined macro `{name}`"
+            ));
+        }
+        // Definition-site spans retain the spelling needed when a later macro stringifies the expansion.
         let lex_body = |body: &str| -> Result<Vec<Token>> {
             let tokens = LexWrapper::new_at(body, body_span.file_id(), body_span.l())
                 .collect::<Result<Vec<_>>>()?;
@@ -394,7 +433,29 @@ impl Preprocessor {
         };
 
         let define = if let Some(args) = params {
-            Define::new_function(lex_body(&body)?, args)
+            let tokens = LexWrapper::macro_body(&body, body_span).collect::<Result<Vec<_>>>()?;
+            let mut cursor = tokens.iter();
+            while let Some(token) = cursor.next() {
+                if matches!(token, Token::DirectiveLine(_)) {
+                    let operand = cursor.next();
+                    if matches!(operand, Some(Token::DirectiveLine(_))) {
+                        return Err(lpc_error!(
+                            Some(token.span()),
+                            "token pasting (`##`) is not supported"
+                        ));
+                    }
+                    if !operand
+                        .and_then(define::identifier_name)
+                        .is_some_and(|name| args.iter().any(|arg| arg == name))
+                    {
+                        return Err(lpc_error!(
+                            Some(token.span()),
+                            "`#` must be followed by a macro parameter"
+                        ));
+                    }
+                }
+            }
+            Define::new_function(tokens, args)
         } else if body.is_empty() {
             // A bare `#define FOO` expands to nothing and is no
             // expression.
@@ -407,8 +468,19 @@ impl Preprocessor {
             Define::new_object(tokens, expr)
         };
 
+        self.context.definition_cache.insert(
+            span,
+            span.r() - span.l(),
+            &name,
+            &define,
+            &self.context.diagnostic_sources,
+        );
+        self.install_define(span, name, define)
+    }
+
+    fn install_define(&mut self, span: Span, name: String, define: Define) -> Result<()> {
         if let Some(existing) = self.defines.get(&name) {
-            if existing.same_as(&define) {
+            if existing.same_as(&define, &self.context.diagnostic_sources.read()) {
                 return Ok(());
             }
             return Err(
@@ -436,6 +508,10 @@ impl Preprocessor {
         let taken = self.eval_expr_for_skipping(&expr, Some(span), &mut Vec::new(), 1)?;
         self.conditionals.take_elif(taken);
         Ok(())
+    }
+
+    fn is_defined(&self, name: &str) -> bool {
+        Predefined::from_name(name).is_some() || self.defines.contains_key(name)
     }
 
     fn not_an_expression(name: &str, span: Option<Span>) -> LpcError {
@@ -524,6 +600,11 @@ impl Preprocessor {
         }
         match expr {
             PreprocessorNode::Var(x) => {
+                match Predefined::from_name(x) {
+                    Some(Predefined::Port) => return Ok(self.context.config.port != 0),
+                    Some(_) => return Ok(true),
+                    None => {}
+                }
                 if hide.contains(&x.as_str()) {
                     return Ok(false); // hidden name reads as undefined
                 }
@@ -547,7 +628,7 @@ impl Preprocessor {
             }
             PreprocessorNode::Int(i) => Ok(i != &0),
             PreprocessorNode::String(_) => Ok(true),
-            PreprocessorNode::Defined(x, negated) => Ok(self.defines.contains_key(x) != *negated),
+            PreprocessorNode::Defined(x, negated) => Ok(self.is_defined(x) != *negated),
             PreprocessorNode::BinaryOp(op, l, r) => match op {
                 // Short-circuit at bool level, so `#if 0 && 1/0` is fine (C's rule).
                 BinaryOperation::AndAnd => {
@@ -593,6 +674,9 @@ impl Preprocessor {
         }
         match expr {
             PreprocessorNode::Var(x) => {
+                if matches!(Predefined::from_name(x), Some(Predefined::Port)) {
+                    return Ok(self.context.config.port.into());
+                }
                 if hide.contains(&x.as_str()) {
                     // hidden name reads as undefined
                     return Err(lpc_error!(span, "unable to resolve into an int: `{}`", x));
@@ -621,7 +705,7 @@ impl Preprocessor {
             }
             PreprocessorNode::Int(i) => Ok(*i),
             PreprocessorNode::Defined(x, negated) => {
-                Ok((self.defines.contains_key(x) != *negated) as LpcIntInner)
+                Ok((self.is_defined(x) != *negated) as LpcIntInner)
             }
             PreprocessorNode::BinaryOp(op, l, r) => {
                 let li = self.resolve_int(l, span, hide, depth + 1)?;
@@ -689,10 +773,21 @@ impl Preprocessor {
         for arg in names {
             match arg.as_str() {
                 ONCE => self.includes.mark_once(),
+                NO_INCLUDE => {
+                    if !self.includes.at_root() {
+                        return Err(lpc_error!(
+                            Some(span),
+                            "`#pragma no_include` forbids including this file"
+                        ));
+                    }
+                }
                 NO_CLONE => self.context.pragmas.set_no_clone(true),
                 NO_INHERIT => self.context.pragmas.set_no_inherit(true),
                 NO_SHADOW => self.context.pragmas.set_no_shadow(true),
                 RESIDENT => self.context.pragmas.set_resident(true),
+                WARNINGS => self.warnings_suppressed = false,
+                NO_WARNINGS => self.warnings_suppressed = true,
+                SAVE_TYPES => {}
                 STRICT_TYPES => {
                     self.context
                         .strict_types_from
@@ -702,8 +797,8 @@ impl Preprocessor {
                         self.context.pragmas.set_strict_types(true);
                     }
                 }
-                SAVE_BINARY | NO_INCLUDE => self.context.diagnostics.record(lpc_warning!(
-                    Some(span),
+                SAVE_BINARY => self.context.diagnostics.record(lpc_warning!(
+                    Some(span.with_warnings_suppressed(self.warnings_suppressed)),
                     "pragma `{}` has no effect in lpc-rs",
                     arg
                 )),
@@ -822,6 +917,249 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stringification_distinguishes_raw_expanded_and_ordinary_arguments() {
+        test_valid(
+            r#"
+                #define STR(x) #x
+                #define EXPAND(x) STR(x)
+                #define BOTH(x) #x x #x
+                #define VALUE 0xCA_FE
+                STR(VALUE) EXPAND(VALUE) BOTH(VALUE)
+                EXPAND(STR(a+b))
+            "#,
+            &["VALUE", "0xCA_FE", "VALUE", "51966", "VALUE", "\"a+b\""],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn keyword_macros_expand_direct_uses_aliases_and_arguments() {
+        test_valid(
+            r#"
+                #define nosave static
+                #define protected private
+                #define KEEP(x) x
+                #define STORAGE nosave
+                STORAGE int a;
+                nosave int b;
+                KEEP(nosave) int c;
+                protected int d;
+                "nosave" nosave_cache
+            "#,
+            &[
+                "static",
+                "int",
+                "a",
+                ";",
+                "static",
+                "int",
+                "b",
+                ";",
+                "static",
+                "int",
+                "c",
+                ";",
+                "private",
+                "int",
+                "d",
+                ";",
+                "nosave",
+                "nosave_cache",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn keyword_macros_support_calls_and_bound_recursive_expansion() {
+        test_valid(
+            r#"
+                #define nosave(x) x
+                #define WRAP(x) nosave(x)
+                WRAP(7) nosave(8) nosave
+                #undef nosave
+                #define nosave nosave
+                nosave
+                #undef nosave
+                #define nosave protected
+                #define protected nosave
+                nosave protected
+                #if 0
+                nosave(
+                #endif
+            "#,
+            &["7", "8", "nosave", "nosave", "nosave", "protected"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn keyword_macros_work_in_defined_tests_and_if_expressions() {
+        test_valid(
+            r#"
+                #define nosave 7
+                #define STORAGE nosave
+                #if defined(nosave) && nosave == 7 && STORAGE == 7
+                int enabled;
+                #endif
+                #ifdef nosave
+                int present;
+                #endif
+                #undef nosave
+                #ifdef nosave
+                #error still defined
+                #endif
+                #if not defined(nosave)
+                int absent;
+                #endif
+                #ifndef nosave
+                int missing;
+                #endif
+            "#,
+            &[
+                "int", "enabled", ";", "int", "present", ";", "int", "absent", ";", "int",
+                "missing", ";",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_preserves_literal_spelling_and_normalizes_separators() {
+        test_valid(
+            r##"
+                #define STR(x) #x
+                STR(  a+b   /* comment */ c
+                       + d  )
+                STR(0xCA_FE 0017 1.20e+03 'x' '\n' "a\n\"b\\" "é")
+                STR(/* empty */)
+                STR("#not_a_directive")
+            "##,
+            &[
+                "a+b c + d",
+                r#"0xCA_FE 0017 1.20e+03 'x' '\n' "a\n\"b\\" "é""#,
+                "",
+                "\"#not_a_directive\"",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_keeps_spacing_across_nested_replacements() {
+        test_valid(
+            r#"
+                #define STR(x) #x
+                #define EXPAND(x) STR(x)
+                #define VALUE 0x10+2
+                #define WRAP(x) STR(left+x)
+                #define EMPTY
+                EXPAND(1+VALUE*3)
+                EXPAND(1 + VALUE * 3)
+                WRAP( VALUE )
+                EXPAND(a EMPTY+b)
+            "#,
+            &["1+0x10+2*3", "1 + 0x10+2 * 3", "left+0x10+2", "a +b"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_does_not_expand_raw_or_unused_arguments() {
+        test_valid(
+            r#"
+                #define ONE(x) x
+                #define STR(x) #x
+                #define IGNORE(x) 7
+                #define KEYWORD(int) #int
+                STR(ONE(1, 2)) IGNORE(ONE(1, 2)) KEYWORD(void)
+            "#,
+            &["ONE(1, 2)", "7", "void"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn invalid_stringification_is_rejected_at_definition() {
+        for body in ["#", "#unknown", "#1", "#\"x\"", "#(x)"] {
+            test_invalid(
+                &format!("#define STR(x) {body}\n"),
+                "`#` must be followed by a macro parameter",
+            )
+            .await;
+        }
+        test_invalid("#define JOIN(x, y) x ## y\n", "token pasting").await;
+        test_valid("#if 0\n#define BAD(x) #unknown\n#endif\n1", &["1"]).await;
+    }
+
+    #[tokio::test]
+    async fn macro_redefinition_preserves_stringifiable_spelling_and_spacing() {
+        for (first, second) in [("0x10", "16"), ("a+b", "a + b"), (r#""\q""#, r#""q""#)] {
+            test_invalid(
+                &format!("#define X {first}\n#define X {second}\n"),
+                "duplicate `#define`",
+            )
+            .await;
+        }
+        test_valid(
+            "#define X a + b\n#define X a\t+ /* comment */ b\n#define STR(x) #x\n#define EXPAND(x) STR(x)\nEXPAND(X)",
+            &["a + b"],
+        ).await;
+    }
+
+    #[tokio::test]
+    async fn stringification_uses_scoped_sources_and_reports_the_use_site() {
+        let mut preprocessor = fixture();
+        preprocessor.context.diagnostic_sources =
+            lpc_rs_errors::source_map::DiagnosticSources::scoped();
+        preprocessor.includes = IncludeWalk::new(preprocessor.context.diagnostic_sources.clone());
+        let tokens = preprocessor
+            .scan("/stringify.c", "#define STR(x) #x\nSTR(0x2A)")
+            .await
+            .unwrap();
+        let Token::StringLiteral(value) = &tokens[0] else {
+            panic!("expected a string")
+        };
+        assert_eq!(value.1, "0x2A");
+        assert_eq!(
+            value
+                .0
+                .code_in(&preprocessor.context.diagnostic_sources.read())
+                .as_deref(),
+            Some("STR(0x2A)")
+        );
+    }
+
+    #[tokio::test]
+    async fn recursive_stringification_hits_the_text_budget() {
+        let mut source =
+            String::from("#define STR(x) #x\n#define EXPAND(x) STR(x)\n#define TEXT0 \"x\"\n");
+        for i in 1..25 {
+            source.push_str(&format!("#define TEXT{i} EXPAND(TEXT{})\n", i - 1));
+        }
+        source.push_str("TEXT24\n");
+        test_invalid(&source, "stringification in `TEXT24` exceeds 1048576 bytes").await;
+    }
+
+    #[tokio::test]
+    async fn lima_module_macros_compile_and_produce_paths() {
+        let values = crate::test_support::strings_of(
+            r#"
+            #define STRRR(y) #y
+            #define STRINGIZE(z) STRRR(z)
+            #define MODULE(x, y) SUBDIR x "/" STRRR(y)
+            #define SUBDIR "/std/combat/"
+            #define DEATH_CORPSES 2
+            string *create() {
+                return ({ MODULE("death", corpse), STRINGIZE(DEATH_CORPSES), STRRR("a\n") });
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(values, ["/std/combat/death/corpse", "2", "\"a\\n\""]);
+    }
+
+    #[tokio::test]
     async fn multiline_directive_comments_can_contain_conditional_directives() {
         let input = "#if 1 /*\n#endif\n*/\nint live;\n#endif /*\n end */\n";
 
@@ -866,6 +1204,28 @@ mod tests {
             ],
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn stringification_preserves_header_spelling_and_continued_definitions() {
+        let root = crate::test_support::lib_holding(
+            "stringification-header",
+            &[(
+                "macros.h",
+                "#define STR(x) # \\\n x\n#define EXPAND(x) STR(x)\n#define VALUE 0x2A + \\\n 01\n",
+            )],
+        );
+        let config = crate::test_support::temp_lib_config(&root);
+        let context = CompilationContextBuilder::default()
+            .source(CompilerSource::new("/consumer.c", &config))
+            .config(config)
+            .build()
+            .unwrap();
+        let tokens = Preprocessor::new(context)
+            .scan("/consumer.c", "#include \"macros.h\"\nEXPAND(VALUE)\n")
+            .await
+            .unwrap();
+        assert!(matches!(&tokens[..], [Token::StringLiteral(value)] if value.1 == "0x2A + 01"));
     }
 
     mod test_system_includes {
@@ -2684,19 +3044,15 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn cd_pragmas_are_accepted_and_warned_about() {
+        async fn save_binary_is_accepted_and_warned_about() {
             let prog = indoc! { r##"
-                #pragma save_binary
-                #pragma no_include, strict_types
+                #pragma save_binary, strict_types
                 int x;
             "## };
             test_valid(prog, &["int", "x", ";"]).await;
             assert_eq!(
                 warnings_of(prog).await,
-                [
-                    "pragma `save_binary` has no effect in lpc-rs",
-                    "pragma `no_include` has no effect in lpc-rs",
-                ]
+                ["pragma `save_binary` has no effect in lpc-rs"]
             );
             let mut preprocessor = fixture();
             preprocessor.scan("/test.c", prog).await.unwrap();
@@ -2706,6 +3062,13 @@ mod tests {
         #[tokio::test]
         async fn an_unknown_pragma_is_still_an_error() {
             test_invalid("#pragma frobnicate\n", "unknown pragma `frobnicate`").await;
+        }
+
+        #[tokio::test]
+        async fn no_include_is_silent_when_compiling_the_marked_file() {
+            let code = "#pragma no_include, no_include\nint value;\n";
+            test_valid(code, &["int", "value", ";"]).await;
+            assert!(warnings_of(code).await.is_empty());
         }
     }
 
@@ -3272,6 +3635,83 @@ mod tests {
 
         async fn rendered_of(root: &TempLib, code: &str) -> String {
             error_of(root, code).await.diagnostic_string()
+        }
+
+        #[tokio::test]
+        async fn no_include_rejects_local_and_system_includes() {
+            let root = TempLib::new("no-include-direct");
+            std::fs::write(root.join("sealed.c"), "#pragma no_include\n").unwrap();
+            for code in ["#include \"/sealed.c\"\n", "#include </sealed.c>\n"] {
+                let error = error_of(&root, code).await;
+                assert_eq!(
+                    error.message(),
+                    "`#pragma no_include` forbids including this file"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn no_include_reports_the_nested_include_chain() {
+            let root = TempLib::new("no-include-chain");
+            std::fs::write(root.join("outer.h"), "#include \"sealed.c\"\n").unwrap();
+            std::fs::write(root.join("sealed.c"), "#pragma no_include\n").unwrap();
+            assert_eq!(
+                rendered_of(&root, "#include \"outer.h\"\n").await,
+                "error: `#pragma no_include` forbids including this file\n  ┌─ /sealed.c:1:1\n  │\n1 │ #pragma no_include\n  │ ^^^^^^^^^^^^^^^^^^\n  │\n  ┌─ /outer.h:1:1\n  │\n1 │ #include \"sealed.c\"\n  │ ------------------- included from here\n  │\n  ┌─ /main.c:1:1\n  │\n1 │ #include \"outer.h\"\n  │ ------------------ included from here\n\n"
+            );
+        }
+
+        #[tokio::test]
+        async fn no_include_rejects_the_configured_auto_include() {
+            let root = TempLib::new("no-include-auto");
+            std::fs::write(root.join("auto.h"), "#pragma no_include\n").unwrap();
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .auto_include_file("/auto.h")
+                .build()
+                .unwrap();
+            let context = CompilationContextBuilder::default()
+                .source(CompilerSource::new("/main.c", &config))
+                .config(config)
+                .build()
+                .unwrap();
+            let error = Preprocessor::new(context)
+                .scan("/main.c", "int value;\n")
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.message(),
+                "`#pragma no_include` forbids including this file"
+            );
+            assert!(error.diagnostic_string().contains("/auto.h:1:1"));
+        }
+
+        #[tokio::test]
+        async fn no_include_allows_the_marked_file_to_include_headers() {
+            let root = TempLib::new("no-include-own-headers");
+            std::fs::write(root.join("ordinary.h"), "int from_header;\n").unwrap();
+            assert_eq!(
+                tokens_of(
+                    &root,
+                    "#pragma no_include\n#include \"ordinary.h\"\nint from_root;\n"
+                )
+                .await,
+                ["int", "from_header", ";", "int", "from_root", ";"]
+            );
+        }
+
+        #[tokio::test]
+        async fn an_inactive_no_include_allows_inclusion() {
+            let root = TempLib::new("no-include-inactive");
+            std::fs::write(
+                root.join("ordinary.h"),
+                "#if 0\n#pragma no_include\n#endif\nint value;\n",
+            )
+            .unwrap();
+            assert_eq!(
+                tokens_of(&root, "#include \"ordinary.h\"\n").await,
+                ["int", "value", ";"]
+            );
         }
 
         #[tokio::test]
