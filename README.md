@@ -254,10 +254,15 @@ for repository conventions and profiling commands.
 
 ### Mutation testing
 
-The mutation-testing pilot covers
-[`RegisterCounter`](lpc-rs-core/src/register_counter.rs), the compiler's register
-allocator counter. [cargo-mutants](https://mutants.rs/) changes the code and checks
-whether the tests detect each change. The file allowlist in
+Mutation testing covers two small modules in `lpc-rs-core`:
+
+- [`RegisterCounter`](lpc-rs-core/src/register_counter.rs): register allocation
+  counts and nested scopes.
+- [`FunctionFlags`](lpc-rs-core/src/function_flags.rs): visibility queries,
+  declaration modifiers and signature mangling.
+
+[cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
+detect each change. The file allowlist in
 [`.cargo/mutants.toml`](.cargo/mutants.toml) keeps the workload small.
 
 Install the version used by CI, then run from the repository root:
