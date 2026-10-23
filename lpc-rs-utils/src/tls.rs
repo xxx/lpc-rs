@@ -172,6 +172,10 @@ impl Identity {
             .duration_since(UNIX_EPOCH)
             .map_err(|e| lpc_error!("cannot determine certificate validity: {e}"))?
             .as_secs() as i64;
+        self.check_validity_at(now)
+    }
+
+    fn check_validity_at(&self, now: i64) -> Result<()> {
         if now < self.not_before {
             return Err(lpc_error!("TLS certificate is not yet valid"));
         }
@@ -202,7 +206,12 @@ pub fn outside_mudlib(path: &Path, lib_dir: &str) -> Result<()> {
         .map_err(|e| lpc_error!("cannot resolve LIB_DIR: {e}"))?;
     let mut existing = path.to_path_buf();
     let mut suffix = Vec::new();
-    while !existing.exists() {
+    loop {
+        match fs::symlink_metadata(&existing) {
+            Ok(_) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(lpc_error!("cannot resolve TLS path: {error}")),
+        }
         let name = existing
             .file_name()
             .ok_or_else(|| lpc_error!("invalid TLS path {}", path.display()))?
@@ -234,6 +243,63 @@ mod tests {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn certificate_lifetime_includes_its_start_and_excludes_its_end() {
+        let generated = generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        let identity = Identity::from_pem(
+            generated.cert.pem().as_bytes(),
+            generated.signing_key.serialize_pem().as_bytes(),
+        )
+        .unwrap();
+
+        assert!(identity.check_validity_at(identity.not_before - 1).is_err());
+        assert!(identity.check_validity_at(identity.not_before).is_ok());
+        assert!(identity.check_validity_at(identity.not_after - 1).is_ok());
+        assert!(identity.check_validity_at(identity.not_after).is_err());
+    }
+
+    #[test]
+    fn certificate_comparison_detects_a_different_served_identity() {
+        let first = generate_simple_self_signed(vec!["one.example.org".into()]).unwrap();
+        let second = generate_simple_self_signed(vec!["two.example.org".into()]).unwrap();
+        let first = Identity::from_pem(
+            first.cert.pem().as_bytes(),
+            first.signing_key.serialize_pem().as_bytes(),
+        )
+        .unwrap();
+        let second = Identity::from_pem(
+            second.cert.pem().as_bytes(),
+            second.signing_key.serialize_pem().as_bytes(),
+        )
+        .unwrap();
+
+        assert!(first.same_certificate(&first));
+        assert!(!first.same_certificate(&second));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dangling_symlinks_cannot_hide_future_private_material_inside_the_mudlib() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = dir.path().join("lib");
+        fs::create_dir(&lib).unwrap();
+        let link = dir.path().join("outside-key.pem");
+        std::os::unix::fs::symlink(lib.join("future-key.pem"), &link).unwrap();
+
+        assert!(outside_mudlib(&link, lib.to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn invalid_ancestor_types_are_not_treated_as_missing_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = dir.path().join("lib");
+        fs::create_dir(&lib).unwrap();
+        let file = dir.path().join("not-a-directory");
+        fs::write(&file, "").unwrap();
+
+        assert!(outside_mudlib(&file.join("private.key"), lib.to_str().unwrap()).is_err());
     }
 
     #[test]

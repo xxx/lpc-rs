@@ -272,6 +272,8 @@ The reviewed scope includes:
   runtime-safe shutdown/drop behavior.
 - [Configuration](lpc-rs-utils/src/config.rs): defaults, environment precedence,
   validation, listener combinations and log destinations.
+- [TLS helpers](lpc-rs-utils/src/tls.rs): certificate identity/lifetime checks,
+  settings and private-material path validation.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
