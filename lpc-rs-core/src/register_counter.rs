@@ -1,6 +1,7 @@
 use crate::{RegisterSize, register::Register};
 
 /// A [`Register`]-aware counter, used during code generation.
+/// Iteration stops when advancing the count would exceed [`RegisterSize`].
 #[derive(Debug, Clone, Default)]
 pub struct RegisterCounter {
     base_count: RegisterSize,
@@ -64,7 +65,7 @@ impl Iterator for RegisterCounter {
 
     fn next(&mut self) -> Option<Register> {
         let c = self.count;
-        self.count += 1;
+        self.count = self.count.checked_add(1)?;
         Some(Register(c))
     }
 }
@@ -72,6 +73,51 @@ impl Iterator for RegisterCounter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iteration_stops_before_the_register_count_overflows() {
+        for base in [0, 1, 5] {
+            let mut counter = RegisterCounter::new(base);
+            for index in base..RegisterSize::MAX {
+                assert_eq!(counter.next(), Some(Register(index)));
+            }
+
+            assert_eq!(counter.next(), None);
+            assert_eq!(counter.next(), None);
+            assert_eq!(counter.number_emitted(), RegisterSize::MAX - base);
+        }
+    }
+
+    #[test]
+    fn nested_scopes_restore_an_exhausted_counter() {
+        let mut counter = RegisterCounter::new(1);
+        counter.set(RegisterSize::MAX);
+        assert_eq!(counter.next(), None);
+
+        assert_eq!(counter.push(), RegisterSize::MAX);
+        assert_eq!(counter.next(), Some(Register(1)));
+        assert_eq!(counter.pop(), RegisterSize::MAX);
+        assert_eq!(counter.next(), None);
+    }
+
+    #[test]
+    fn setting_a_lower_count_resumes_allocation_after_exhaustion() {
+        let mut counter = RegisterCounter::new(1);
+        counter.set(RegisterSize::MAX);
+        assert_eq!(counter.next(), None);
+
+        counter.set(2);
+
+        assert_eq!(counter.next(), Some(Register(2)));
+    }
+
+    #[test]
+    fn a_counter_with_no_remaining_capacity_never_allocates() {
+        let mut counter = RegisterCounter::new(RegisterSize::MAX);
+
+        assert_eq!(counter.next(), None);
+        assert_eq!(counter.number_emitted(), 0);
+    }
 
     #[test]
     fn next_increments_and_returns() {

@@ -24,6 +24,25 @@ fn default_compiler() -> Compiler {
     CompilerBuilder::default().config(config).build().unwrap()
 }
 
+#[tokio::test]
+async fn register_exhaustion_returns_a_source_diagnostic() {
+    let code = format!(
+        "void create() {{ int value;\n{} }}",
+        "value += 1;\n".repeat(usize::from(RegisterSize::MAX))
+    );
+    let error = default_compiler()
+        .compile_string("/register_limit.c", &code)
+        .await
+        .expect_err("register exhaustion must stop compilation");
+
+    assert_eq!(
+        error.message(),
+        "register allocation limit of 65535 exceeded"
+    );
+    assert!(!error.is_bug());
+    assert!(error.span().is_some());
+}
+
 mod callable_visibility {
     use lpc_rs::{
         compile_time_config::MAX_CALL_STACK_SIZE,

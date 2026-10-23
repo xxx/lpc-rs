@@ -201,6 +201,21 @@ fn expect_value(arg: Arg, span: Option<Span>) -> Result<RegisterVariant> {
     }
 }
 
+#[cold]
+#[inline(never)]
+fn register_limit_error(span: Option<Span>) -> LpcError {
+    lpc_error!(
+        span,
+        "register allocation limit of {} exceeded",
+        RegisterSize::MAX
+    )
+}
+
+#[inline]
+fn allocate_register(counter: &mut RegisterCounter, span: Option<Span>) -> Result<Register> {
+    counter.next().ok_or_else(|| register_limit_error(span))
+}
+
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug)]
 pub struct CodegenWalker {
@@ -329,7 +344,7 @@ impl CodegenWalker {
             })
         {
             let args = if takes_args {
-                let args = self.register_counter.next().unwrap().as_local();
+                let args = allocate_register(&mut self.register_counter, None)?.as_local();
                 populate_argv_index = Some(self.current_address());
                 push_instruction!(self, Instruction::PopulateArgv(args, 0, 0), None);
                 vec![Arg::Spread(args)]
@@ -516,7 +531,7 @@ impl CodegenWalker {
 
     async fn member_target(&mut self, node: &mut MemberNode) -> Result<RegisterVariant> {
         node.receiver.visit(self).await?;
-        let target = self.register_counter.next().unwrap().as_local();
+        let target = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(
             self,
             Instruction::Copy(self.current_result, target),
@@ -647,9 +662,9 @@ impl CodegenWalker {
         }
 
         let current_register = if sym.is_global() {
-            self.global_counter.next().unwrap().as_global()
+            allocate_register(&mut self.global_counter, sym.span)?.as_global()
         } else {
-            self.register_counter.next().unwrap().as_local()
+            allocate_register(&mut self.register_counter, sym.span)?.as_local()
         };
 
         trace!("Assigning location {} to {}", current_register, sym);
@@ -682,7 +697,7 @@ impl CodegenWalker {
     ) -> Result<RegisterVariant> {
         let (index, from_end) = self.emit_index_bound(expr).await?;
         if from_end {
-            let result = self.register_counter.next().unwrap().as_local();
+            let result = allocate_register(&mut self.register_counter, expr.span())?.as_local();
             push_instruction!(
                 self,
                 Instruction::IndexFromEnd(container, index, result),
@@ -712,23 +727,23 @@ impl CodegenWalker {
             return Err(lpc_bug!(span, "compound target must be indexed"));
         };
         container.visit(self).await?;
-        let saved_container = self.register_counter.next().unwrap().as_local();
+        let saved_container = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(
             self,
             Instruction::Copy(self.current_result, saved_container),
             span
         );
         let index = self.emit_index(saved_container, index).await?;
-        let saved_index = self.register_counter.next().unwrap().as_local();
+        let saved_index = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(self, Instruction::Copy(index, saved_index), span);
-        let old = self.register_counter.next().unwrap().as_local();
+        let old = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(
             self,
             Instruction::Load(saved_container, saved_index, old),
             span
         );
         self.guard_class(old, target, span)?;
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, span)?.as_local();
         let short = matches!(op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
         let end = self.new_label("indexed-assignment-end");
         if short {
@@ -791,14 +806,14 @@ impl CodegenWalker {
             && !matches!(reference, RegisterVariant::Constant(_))
         {
             self.current_result = reference;
-            self.save_result(node.span)
+            self.save_result(node.span)?
         } else {
             reference
         };
         let (first_index, start_from_end) = if let Some(expr) = &mut *node.l {
             let (value, from_end) = self.emit_index_bound(expr).await?;
             let value = if end_may_mutate && !matches!(value, RegisterVariant::Constant(_)) {
-                self.save_result(expr.span())
+                self.save_result(expr.span())?
             } else {
                 value
             };
@@ -806,7 +821,10 @@ impl CodegenWalker {
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
             // 0.
-            (self.register_counter.next().unwrap().as_local(), false)
+            (
+                allocate_register(&mut self.register_counter, node.span)?.as_local(),
+                false,
+            )
         };
 
         let (second_index, end_from_end) = if let Some(expr) = &mut *node.r {
@@ -816,7 +834,7 @@ impl CodegenWalker {
             (self.constant(LpcConstant::Int(-1), node.span)?, false)
         };
 
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = result;
         let direction = match (start_from_end, end_from_end) {
             (true, true) => Some(ReverseRange::Both),
@@ -835,10 +853,10 @@ impl CodegenWalker {
         Ok(())
     }
 
-    fn save_result(&mut self, span: Option<Span>) -> RegisterVariant {
-        let saved = self.register_counter.next().unwrap().as_local();
+    fn save_result(&mut self, span: Option<Span>) -> Result<RegisterVariant> {
+        let saved = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(self, Instruction::Copy(self.current_result, saved), span);
-        saved
+        Ok(saved)
     }
 
     async fn capture_assignment_owner(
@@ -846,7 +864,7 @@ impl CodegenWalker {
         owner: &mut ExpressionNode,
         span: Option<Span>,
     ) -> Result<(RegisterVariant, Instruction)> {
-        let value = self.register_counter.next().unwrap().as_local();
+        let value = allocate_register(&mut self.register_counter, span)?.as_local();
         let writeback = match owner {
             ExpressionNode::Var(_) => {
                 owner.visit(self).await?;
@@ -870,9 +888,9 @@ impl CodegenWalker {
                 ..
             }) => {
                 l.visit(self).await?;
-                let container = self.save_result(l.span());
+                let container = self.save_result(l.span())?;
                 self.current_result = self.emit_index(container, r).await?;
-                let key = self.save_result(r.span());
+                let key = self.save_result(r.span())?;
                 push_instruction!(self, Instruction::Load(container, key, value), span);
                 Instruction::Store(value, container, key)
             }
@@ -897,7 +915,7 @@ impl CodegenWalker {
             owner.visit(self).await?;
             (replacement, self.current_result, None)
         } else {
-            let replacement = self.save_result(rhs.span());
+            let replacement = self.save_result(rhs.span())?;
             let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
             (replacement, value, Some(writeback))
         };
@@ -925,12 +943,12 @@ impl CodegenWalker {
         span: Option<Span>,
     ) -> Result<()> {
         rhs.visit(self).await?;
-        let replacement = self.save_result(rhs.span());
+        let replacement = self.save_result(rhs.span())?;
         let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
         let (start, start_from_end) = if let Some(expr) = &mut *range.l {
             let (value, reverse) = self.emit_index_bound(expr).await?;
             self.current_result = value;
-            (self.save_result(expr.span()), reverse)
+            (self.save_result(expr.span())?, reverse)
         } else {
             (self.constant(LpcConstant::Int(0), span)?, false)
         };
@@ -1038,7 +1056,7 @@ impl CodegenWalker {
         body: &mut T,
         span: Option<Span>,
     ) -> Result<()> {
-        let result_register = self.register_counter.next().unwrap().as_local();
+        let result_register = allocate_register(&mut self.register_counter, span)?.as_local();
         let start_address = self.current_address();
         push_instruction!(
             self,
@@ -1518,12 +1536,12 @@ impl CodegenWalker {
         let container_result = self.current_result;
         let index_result = self.emit_index(container_result, index).await?;
 
-        let element = self.register_counter.next().unwrap().as_local();
+        let element = allocate_register(&mut self.register_counter, span)?.as_local();
         let load = Instruction::Load(container_result, index_result, element);
         push_instruction!(self, load, span);
 
         let result = if is_post {
-            let before = self.register_counter.next().unwrap().as_local();
+            let before = allocate_register(&mut self.register_counter, span)?.as_local();
             let copy = Instruction::Copy(element, before);
             push_instruction!(self, copy, span);
             before
@@ -1588,7 +1606,8 @@ impl TreeWalker for CodegenWalker {
                 let mut value = self.current_result;
                 if !matches!(value, RegisterVariant::Constant(_)) {
                     // Later expressions may reassign the register that supplied this value.
-                    let saved = self.register_counter.next().unwrap().as_local();
+                    let saved = allocate_register(&mut self.register_counter, expression.span())?
+                        .as_local();
                     push_instruction!(self, Instruction::Copy(value, saved), expression.span());
                     value = saved;
                 }
@@ -1599,7 +1618,7 @@ impl TreeWalker for CodegenWalker {
                 });
             }
             let list = self.arg_list(items, node.span)?;
-            let destination = self.register_counter.next().unwrap().as_local();
+            let destination = allocate_register(&mut self.register_counter, node.span)?.as_local();
             push_instruction!(
                 self,
                 Instruction::AConstSpread(list, destination),
@@ -1611,11 +1630,11 @@ impl TreeWalker for CodegenWalker {
 
         let mut items = Vec::with_capacity(node.value.len());
         for member in &mut node.value {
-            let _ = member.visit(self).await;
+            member.visit(self).await?;
             items.push(self.current_result);
         }
 
-        let register = self.register_counter.next().unwrap().as_local();
+        let register = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = register;
         for item in items.iter() {
             let instruction = Instruction::PushArrayItem(*item);
@@ -1629,7 +1648,7 @@ impl TreeWalker for CodegenWalker {
     async fn visit_class_init(&mut self, node: &mut ClassInitNode) -> Result<()> {
         let target = node.type_.resolved()?;
         let index = self.type_index(target, node.span)?;
-        let instance = self.register_counter.next().unwrap().as_local();
+        let instance = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(self, Instruction::ClassConst(index, instance), node.span);
         for (name, value) in &mut node.initializers {
             value.visit(self).await?;
@@ -1645,7 +1664,7 @@ impl TreeWalker for CodegenWalker {
 
     async fn visit_member(&mut self, node: &mut MemberNode) -> Result<()> {
         node.receiver.visit(self).await?;
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(
             self,
             Instruction::MemberLoad(self.current_result, node.name, result),
@@ -1663,13 +1682,13 @@ impl TreeWalker for CodegenWalker {
         };
         let receiver = self.member_target(member).await?;
         let name = member.name;
-        let old = self.register_counter.next().unwrap().as_local();
+        let old = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(
             self,
             Instruction::MemberLoad(receiver, name, old),
             node.span
         );
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         let short = matches!(node.op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
         let end = self.new_label("member-assignment-end");
         if short {
@@ -1820,7 +1839,7 @@ impl TreeWalker for CodegenWalker {
             // A loop re-enters with the last iteration's value still in the
             // result register.
             let end_label = self.new_label("andand-end");
-            let reg_result = self.register_counter.next().unwrap().as_local();
+            let reg_result = allocate_register(&mut self.register_counter, node.span)?.as_local();
             let zero = self.constant(LpcConstant::Int(0), node.span)?;
             push_instruction!(self, Instruction::Copy(zero, reg_result), node.span);
 
@@ -1854,7 +1873,8 @@ impl TreeWalker for CodegenWalker {
                 // Handle short-circuit behavior
                 let end_label = self.new_label("oror-end");
 
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
                 let instruction = Instruction::Copy(reg_left, reg_result);
                 push_instruction!(self, instruction, node.span);
 
@@ -1888,7 +1908,8 @@ impl TreeWalker for CodegenWalker {
                     node.span
                 );
 
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
                 let instruction =
                     Instruction::Copy(RegisterVariant::Local(Register(0)), reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -1907,7 +1928,7 @@ impl TreeWalker for CodegenWalker {
             self.current_result
         };
 
-        let reg_result = self.register_counter.next().unwrap().as_local();
+        let reg_result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = reg_result;
 
         let instruction = self.choose_op_instruction(node.op, reg_left, reg_right, reg_result);
@@ -2078,7 +2099,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         if !has_receiver && name.as_str() == SIZEOF {
-            let result = self.register_counter.next().unwrap().as_local();
+            let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
             // `sizeof`'s arity is checked by the semantic walker, fatal before codegen runs.
             let arg = expect_value(*arg_results.first().unwrap(), node.span)?;
             let instruction = Instruction::Sizeof(arg, result);
@@ -2153,8 +2174,9 @@ impl TreeWalker for CodegenWalker {
 
         push_instruction!(self, instruction, node.span);
 
-        let push_copy = |walker: &mut Self| {
-            let next_register = walker.register_counter.next().unwrap().as_local();
+        let push_copy = |walker: &mut Self| -> Result<()> {
+            let next_register =
+                allocate_register(&mut walker.register_counter, node_span)?.as_local();
 
             push_instruction!(
                 walker,
@@ -2163,16 +2185,17 @@ impl TreeWalker for CodegenWalker {
             );
 
             walker.current_result = next_register;
+            Ok(())
         };
 
         // Take care of the result after the call returns.
         if has_receiver || calls_variable {
-            push_copy(self);
+            push_copy(self)?;
         } else if let Some(func) = self.context.lookup_function_complete(name, namespace) {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
             } else {
-                push_copy(self);
+                push_copy(self)?;
             }
         } else {
             return Err(lpc_bug!(
@@ -2215,7 +2238,7 @@ impl TreeWalker for CodegenWalker {
         let list = self.arg_list(arg_results, node.span)?;
         push_instruction!(self, Instruction::CallFp(fp_loc, list), node.span);
 
-        let next_register = self.register_counter.next().unwrap().as_local();
+        let next_register = allocate_register(&mut self.register_counter, node.span)?.as_local();
 
         push_instruction!(
             self,
@@ -2234,11 +2257,7 @@ impl TreeWalker for CodegenWalker {
         node: &mut crate::compiler::ast::capture_node::CaptureNode,
     ) -> Result<()> {
         node.expr.visit(self).await?;
-        let result = self
-            .register_counter
-            .next()
-            .ok_or_else(|| lpc_bug!(node.span, "capture has no result register"))?
-            .as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         // A local initialized from this value must not alias the hidden capture cell.
         push_instruction!(
             self,
@@ -2355,7 +2374,7 @@ impl TreeWalker for CodegenWalker {
 
         // At this point, the closure has been generated and stored.
         // We just need to store a reference to it in the current result.
-        let location = self.register_counter.next().unwrap().as_local();
+        let location = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = location;
 
         // closures are just pointers to functions
@@ -2477,7 +2496,7 @@ impl TreeWalker for CodegenWalker {
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         node.collection.visit(self).await?;
         // Rebinding the source variable must not redirect later element loads.
-        let collection_location = self.save_result(node.collection.span());
+        let collection_location = self.save_result(node.collection.span())?;
 
         let index_location = self.assign_sym_location(FOREACH_INDEX)?;
         // Only the first run of the foreach gets the frame's NULL fill for its index.
@@ -2698,7 +2717,7 @@ impl TreeWalker for CodegenWalker {
 
         self.stage_partial_arguments(&applied_arguments, node.span);
 
-        let location = self.register_counter.next().unwrap().as_local();
+        let location = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = location;
 
         let instruction = Instruction::FunctionPtrConst {
@@ -2796,7 +2815,7 @@ impl TreeWalker for CodegenWalker {
             push_instruction!(self, Instruction::PushArrayItem(item), node.span);
         }
 
-        let register = self.register_counter.next().unwrap().as_local();
+        let register = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = register;
         push_instruction!(self, Instruction::MapConst(register), node.span);
 
@@ -3022,7 +3041,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
-        let result_reg = self.register_counter.next().unwrap().as_local();
+        let result_reg = allocate_register(&mut self.register_counter, node.span)?.as_local();
         let else_label = self.new_label("ternary-else");
         let end_label = self.new_label("ternary-end");
 
@@ -3062,7 +3081,7 @@ impl TreeWalker for CodegenWalker {
         node.expr.visit(self).await?;
         let location = self.current_result;
 
-        let reg_result = self.register_counter.next().unwrap().as_local();
+        let reg_result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         let target = node.type_.resolved()?;
         let index = self.type_index(target, node.span)?;
         let instruction = Instruction::Cast(location, index, reg_result);
@@ -3078,14 +3097,14 @@ impl TreeWalker for CodegenWalker {
             && let ExpressionNode::Member(member) = &mut *node.expr
         {
             let receiver = self.member_target(member).await?;
-            let value = self.register_counter.next().unwrap().as_local();
+            let value = allocate_register(&mut self.register_counter, node.span)?.as_local();
             push_instruction!(
                 self,
                 Instruction::MemberLoad(receiver, member.name, value),
                 node.span
             );
             let result = if node.is_post {
-                let before = self.register_counter.next().unwrap().as_local();
+                let before = allocate_register(&mut self.register_counter, node.span)?.as_local();
                 push_instruction!(self, Instruction::Copy(value, before), node.span);
                 before
             } else {
@@ -3131,7 +3150,8 @@ impl TreeWalker for CodegenWalker {
                 ));
             }
             UnaryOperation::Negate => {
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
 
                 let instruction = Instruction::Negate(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -3147,7 +3167,7 @@ impl TreeWalker for CodegenWalker {
 
                 if node.is_post {
                     // TODO: only copy if pre-operation value is needed elsewhere
-                    let temp = self.register_counter.next().unwrap().as_local();
+                    let temp = allocate_register(&mut self.register_counter, node.span)?.as_local();
                     let copy = Instruction::Copy(location, temp);
                     push_instruction!(self, copy, node.span);
                     push_instruction!(self, instruction, node.span);
@@ -3158,7 +3178,8 @@ impl TreeWalker for CodegenWalker {
                 }
             }
             UnaryOperation::Bang => {
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
 
                 let instruction = Instruction::Not(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -3166,7 +3187,8 @@ impl TreeWalker for CodegenWalker {
                 reg_result
             }
             UnaryOperation::BitwiseNot => {
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
 
                 let instruction = Instruction::BitwiseNot(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -3280,7 +3302,8 @@ impl TreeWalker for CodegenWalker {
                 );
                 next_register
             } else if global {
-                let next_register = self.global_counter.next().unwrap().as_global();
+                let next_register =
+                    allocate_register(&mut self.global_counter, node.span)?.as_global();
 
                 trace!("Copying global to {:?}", next_register);
                 push_instruction!(
@@ -3301,7 +3324,8 @@ impl TreeWalker for CodegenWalker {
             {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one, or living in the pool.
-                let next_register = self.register_counter.next().unwrap().as_local();
+                let next_register =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
                 trace!("Copying var to {:?}", next_register);
                 push_instruction!(
                     self,
@@ -3471,6 +3495,93 @@ mod tests {
         );
 
         walker
+    }
+
+    #[test]
+    fn allocation_exhaustion_reports_the_source_span_without_advancing() {
+        let span = Some(Span::new(0, 3..8));
+        let mut counter = RegisterCounter::new(1);
+        counter.set(RegisterSize::MAX - 1);
+
+        assert_eq!(
+            allocate_register(&mut counter, span).unwrap(),
+            Register(RegisterSize::MAX - 1)
+        );
+        let error = allocate_register(&mut counter, span).unwrap_err();
+
+        assert_eq!(error.span(), span);
+        assert!(!error.is_bug());
+        assert_eq!(
+            error.message(),
+            "register allocation limit of 65535 exceeded"
+        );
+        assert_eq!(counter.number_emitted(), RegisterSize::MAX - 1);
+    }
+
+    #[test]
+    fn exhausted_symbol_allocation_keeps_the_symbol_unassigned() {
+        for global in [false, true] {
+            let mut context = CompilationContext::default();
+            context.scopes.push_new();
+            if !global {
+                context.scopes.push_new();
+            }
+            let scope_id = context.scopes.current().unwrap().id;
+            let mut walker = CodegenWalker::new(context);
+            let span = Some(Span::new(0, 4..9));
+            insert_symbol(
+                &mut walker,
+                Symbol {
+                    scope_id,
+                    span,
+                    ..Symbol::new("value", LpcType::Int(false))
+                },
+            );
+            if global {
+                walker.global_counter.set(RegisterSize::MAX);
+            } else {
+                walker.register_counter.set(RegisterSize::MAX);
+            }
+
+            let error = walker.assign_sym_location("value").unwrap_err();
+
+            assert_eq!(error.span(), span);
+            assert!(!error.is_bug());
+            assert_eq!(walker.context.lookup_var("value").unwrap().location, None);
+        }
+    }
+
+    #[test]
+    fn saving_a_result_propagates_allocation_failure_before_emitting_code() {
+        let mut walker = default_walker();
+        walker.register_counter.set(RegisterSize::MAX);
+        let span = Some(Span::new(0, 4..9));
+        let address = walker.current_address();
+
+        let error = walker.save_result(span).unwrap_err();
+
+        assert_eq!(error.span(), span);
+        assert_eq!(walker.current_address(), address);
+    }
+
+    #[tokio::test]
+    async fn array_members_propagate_the_original_allocation_failure() {
+        let mut walker = default_walker();
+        walker.register_counter.set(RegisterSize::MAX);
+        let child_span = Some(Span::new(0, 3..5));
+        let mut array = ArrayNode {
+            value: vec![ExpressionNode::UnaryOp(UnaryOpNode {
+                expr: Box::new(ExpressionNode::from(1)),
+                op: UnaryOperation::Negate,
+                is_post: false,
+                span: child_span,
+            })],
+            span: Some(Span::new(0, 0..8)),
+        };
+
+        let error = walker.visit_array(&mut array).await.unwrap_err();
+
+        assert_eq!(error.span(), child_span);
     }
 
     async fn walk_prog(prog: &str) -> CodegenWalker {
