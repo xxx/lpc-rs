@@ -284,6 +284,8 @@ The reviewed scope includes:
   trace merging, omissions and snapshot budgets.
 - [Source maps](lpc-rs-errors/src/source_map.rs): registry identity, version reuse,
   hash-collision fallback, retained storage and diagnostic lookup.
+  [Line indexes](lpc-rs-errors/src/source_map/source_file.rs) cover compact/wide
+  offsets and parity with codespan's reference locations.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
