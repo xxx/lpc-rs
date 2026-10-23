@@ -298,7 +298,8 @@ The reviewed scope includes:
   separators, entry comparisons and owned iteration order.
 - [Array values](src/interpreter/lpc_array.rs): comparison lengths and contents,
   construction, capacity, formatting, mutable access, iteration and concatenation.
-- [Telnet protocol](lpc-rs-telnet/src/lib.rs): option-byte conversions and round trips.
+- [Telnet protocol](lpc-rs-telnet/src/lib.rs): option-byte conversions, input
+  framing, split feeds and malformed subnegotiation handling.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
