@@ -294,6 +294,8 @@ The reviewed scope includes:
   values, comparison with integers and decimal display.
 - [Float values](src/interpreter/lpc_float.rs): comparison with primitive floats
   and numeric display.
+- [Mapping values](src/interpreter/lpc_mapping.rs): display/debug contents and
+  separators, entry comparisons and owned iteration order.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

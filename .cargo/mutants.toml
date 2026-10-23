@@ -35,6 +35,7 @@ examine_globs = [
     "src/interpreter/efun/abs.rs",
     "src/interpreter/lpc_int.rs",
     "src/interpreter/lpc_float.rs",
+    "src/interpreter/lpc_mapping.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
