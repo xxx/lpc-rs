@@ -36,3 +36,20 @@ impl PartialEq<BaseFloat> for LpcFloat {
         self.0 == *other
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LpcFloat;
+
+    #[test]
+    fn comparison_with_base_floats_distinguishes_unequal_values() {
+        for (left, right, expected) in [
+            (-2.5, -2.5, true),
+            (-2.5, 2.5, false),
+            (-0.0, 0.0, true),
+            (1.5, -1.5, false),
+        ] {
+            assert_eq!(LpcFloat::from(left) == right, expected, "{left}, {right}");
+        }
+    }
+}

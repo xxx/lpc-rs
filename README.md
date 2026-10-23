@@ -292,6 +292,8 @@ The reviewed scope includes:
   float zero and invalid input.
 - [Integer values](src/interpreter/lpc_int.rs): full-width conversions, truth
   values, comparison with integers and decimal display.
+- [Float values](src/interpreter/lpc_float.rs): comparison with primitive floats
+  and numeric display.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
