@@ -66,3 +66,79 @@ impl ClassScope {
             .map(AsRef::as_ref)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn definition(source: &str, name: &str) -> Arc<ClassDefinition> {
+        Arc::new(ClassDefinition {
+            id: ClassId {
+                source: source.into(),
+                name: name.into(),
+            },
+            fields: vec![ClassField {
+                name: "value".into(),
+                type_: LpcType::Int(false),
+            }]
+            .into_boxed_slice(),
+        })
+    }
+
+    #[test]
+    fn lookup_uses_both_defining_source_and_class_name() {
+        let first = definition("/first.h", "Record");
+        let another_file = definition("/second.h", "Record");
+        let another_name = definition("/first.h", "Other");
+        let scope = ClassScope {
+            definitions: vec![first.clone(), another_file.clone(), another_name.clone()]
+                .into_boxed_slice(),
+            visibility: HashMap::new(),
+        };
+
+        for expected in [first, another_file, another_name] {
+            assert_eq!(scope.get(expected.id), Some(expected.as_ref()));
+        }
+        assert_eq!(
+            scope.get(ClassId {
+                source: "/missing.h".into(),
+                name: "Record".into()
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn visibility_uses_explicit_restrictions_and_defaults_to_public() {
+        let private = definition("/records.h", "PrivateRecord");
+        let protected = definition("/records.h", "ProtectedRecord");
+        let public = definition("/records.h", "PublicRecord");
+        let scope = ClassScope {
+            definitions: vec![private.clone(), protected.clone(), public.clone()]
+                .into_boxed_slice(),
+            visibility: HashMap::from([
+                (private.id, Visibility::Private),
+                (protected.id, Visibility::Protected),
+            ]),
+        };
+
+        assert_eq!(scope.visibility(private.id), Visibility::Private);
+        assert_eq!(scope.visibility(protected.id), Visibility::Protected);
+        assert_eq!(scope.visibility(public.id), Visibility::Public);
+    }
+
+    #[test]
+    fn mangling_prefixes_utf8_byte_lengths_to_prevent_identity_collisions() {
+        for (source, name, expected) in [
+            ("/a.h", "record", "c4:/a.h6:record"),
+            ("/é.h", "Point", "c5:/é.h5:Point"),
+        ] {
+            let id = ClassId {
+                source: source.into(),
+                name: name.into(),
+            };
+
+            assert_eq!(id.mangle(), expected);
+        }
+    }
+}

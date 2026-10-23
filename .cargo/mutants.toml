@@ -9,6 +9,7 @@ examine_globs = [
     "lpc-rs-core/src/lpc_type.rs",
     "lpc-rs-core/src/lpc_path.rs",
     "lpc-rs-core/src/lpc_path/root.rs",
+    "lpc-rs-core/src/class.rs",
 ]
 additional_cargo_args = ["--locked"]
 minimum_test_timeout = 20

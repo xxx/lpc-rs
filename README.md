@@ -274,6 +274,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
   path transformations and host versus in-game identity.
 - [`LibRoot`](lpc-rs-core/src/lpc_path/root.rs): path confinement, paired source
   identities and safe source diagnostics.
+- [Classes](lpc-rs-core/src/class.rs): nominal identities, definition lookup,
+  visibility and mangling.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
