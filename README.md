@@ -262,6 +262,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
   declaration modifiers and signature mangling.
 - [`LpcTypeUnion`](lpc-rs-core/src/lpc_type_union.rs): primitive membership,
   array detection, type compatibility and signature mangling.
+- [`Visibility`](lpc-rs-core/src/visibility.rs): inheritance restrictions and
+  declaration modifier names.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
