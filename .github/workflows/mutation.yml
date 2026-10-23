@@ -137,7 +137,7 @@ jobs:
         env:
           MUTATION_SHARD: ${{ matrix.shard }}
         run: >-
-          cargo mutants --workspace --jobs 1 --in-place --no-shuffle
+          cargo mutants --workspace --in-place --no-shuffle
           --in-diff /tmp/lpc-rs-mutants.diff --shard "$MUTATION_SHARD" --sharding round-robin
           --build-timeout 120 --timeout 30 --output /tmp/lpc-rs-mutants
 
