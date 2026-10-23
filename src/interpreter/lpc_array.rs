@@ -140,10 +140,12 @@ where
     T: Into<LpcRef> + Copy,
 {
     fn eq(&self, other: &[T]) -> bool {
-        self.array
-            .iter()
-            .zip(other.iter())
-            .all(|(a, b)| a == &Into::<LpcRef>::into(*b))
+        self.array.len() == other.len()
+            && self
+                .array
+                .iter()
+                .zip(other.iter())
+                .all(|(a, b)| a == &Into::<LpcRef>::into(*b))
     }
 }
 
@@ -155,5 +157,113 @@ impl Add<LpcArray> for LpcArray {
         let mut array = self.array;
         array.extend(rhs.array);
         Self::new(array)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_core::LpcIntInner;
+
+    use super::{LpcArray, LpcRef};
+
+    fn array_from_ints(values: &[LpcIntInner]) -> LpcArray {
+        LpcArray::new(values.iter().copied().map(LpcRef::from).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn slice_comparison_checks_lengths_and_contents() {
+        let cases: &[(&[LpcIntInner], &[LpcIntInner], bool)] = &[
+            (&[1, 2], &[1], false),
+            (&[1], &[1, 2], false),
+            (&[], &[1], false),
+            (&[1], &[], false),
+            (&[], &[], true),
+            (&[1, 2], &[1, 2], true),
+            (&[1, 2], &[1, 3], false),
+        ];
+        for &(left, right, expected) in cases {
+            assert_eq!(
+                array_from_ints(left).eq(right),
+                expected,
+                "{left:?} compared with {right:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn collection_constructors_preserve_values_and_order() {
+        let expected = vec![LpcRef::from(7), LpcRef::from(3), LpcRef::from(-1)];
+        let from_slice = LpcArray::from(expected.as_slice());
+        let from_borrowed: LpcArray = expected.iter().collect();
+        let from_owned: LpcArray = expected.clone().into_iter().collect();
+        for array in [from_slice, from_borrowed, from_owned] {
+            assert_eq!(&*array, expected.as_slice());
+        }
+    }
+
+    #[test]
+    fn reserved_capacity_does_not_add_elements() {
+        for capacity in [0, 3, 128] {
+            let array = LpcArray::with_capacity(capacity);
+            assert!(array.is_empty());
+            assert!(array.array.capacity() >= capacity);
+        }
+    }
+
+    #[test]
+    fn formatting_preserves_contents_and_separators() {
+        for (values, display, debug) in [
+            ([].as_slice(), "[]", "LpcArray { array: [] }"),
+            ([7].as_slice(), "[7]", "LpcArray { array: [7] }"),
+            ([7, 3].as_slice(), "[7, 3]", "LpcArray { array: [7, 3] }"),
+        ] {
+            let array = array_from_ints(values);
+            assert_eq!(array.to_string(), display);
+            assert_eq!(format!("{array:?}"), debug);
+        }
+    }
+
+    #[test]
+    fn mutable_dereference_updates_the_same_array() {
+        let mut array = array_from_ints(&[7, 3]);
+        array[1] = LpcRef::from(11);
+        assert_eq!(&*array, [LpcRef::from(7), LpcRef::from(11)].as_slice());
+    }
+
+    #[test]
+    fn owned_iteration_preserves_values_and_order() {
+        let expected = vec![LpcRef::from(7), LpcRef::from(3)];
+        let actual: Vec<_> = LpcArray::new(expected.clone()).into_iter().collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn vector_comparison_checks_lengths_and_contents() {
+        let array = array_from_ints(&[7, 3]);
+        for (values, expected) in [
+            ([7, 3].as_slice(), true),
+            ([7, 4].as_slice(), false),
+            ([7].as_slice(), false),
+            ([7, 3, 1].as_slice(), false),
+            ([].as_slice(), false),
+        ] {
+            let other: Vec<_> = values.iter().copied().map(LpcRef::from).collect();
+            assert_eq!(array == other, expected, "{values:?}");
+        }
+    }
+
+    #[test]
+    fn concatenation_preserves_left_then_right_values() {
+        let array = array_from_ints(&[7, 3]) + array_from_ints(&[11, 5]);
+        assert_eq!(
+            &*array,
+            [
+                LpcRef::from(7),
+                LpcRef::from(3),
+                LpcRef::from(11),
+                LpcRef::from(5),
+            ]
+            .as_slice()
+        );
     }
 }
