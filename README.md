@@ -286,6 +286,8 @@ The reviewed scope includes:
   hash-collision fallback, retained storage and diagnostic lookup.
   [Line indexes](lpc-rs-errors/src/source_map/source_file.rs) cover compact/wide
   offsets and parity with codespan's reference locations.
+- [Diagnostics](lpc-rs-errors/src/lib.rs): error kinds, attached errors/frames,
+  catch rendering and terminal output.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
