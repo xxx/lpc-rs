@@ -262,6 +262,8 @@ The reviewed scope includes:
   symbol scope, instruction metadata and register renaming.
 - [Byte helpers](lpc-rs-utils/src/lpc_bytes.rs): literal encoding and capped
   concatenation.
+- [String helpers](lpc-rs-utils/src/string.rs): repetition limits, concatenation
+  and closure argument numbers.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
