@@ -268,6 +268,8 @@ The reviewed scope includes:
   lengths, comparison/hash consistency, borrowed views and concatenation.
 - [Source decoding](lpc-rs-utils/src/lib.rs): UTF-8/Latin-1 contents and trailing
   newline preservation.
+- [`DebugLog`](lpc-rs-utils/src/debug_log.rs): queued writes, flush barriers and
+  runtime-safe shutdown/drop behavior.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
