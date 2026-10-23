@@ -278,6 +278,8 @@ The reviewed scope includes:
   equality, offsets and hexadecimal display.
 - [Instructions](lpc-rs-asm/src/instruction.rs): operand mapping, branch targets,
   comparison semantics, range directions and opcode metadata.
+- [Diagnostic spans](lpc-rs-errors/src/span.rs): packed locations, warning policy,
+  source extraction and file-position rendering.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -301,9 +303,9 @@ normal validation. Reports and per-mutation logs are written under
 Review `missed.txt` for changes the tests did not detect, and add tests for the
 missing observable behaviour. Check `timeout.txt` and `unviable.txt` separately:
 a timeout or compilation failure does not establish that an assertion caught the
-change. One equivalent mutation is excluded with a specific regex and explanation:
-changing `<` to `<=` in `RegisterCounter::set` leaves the result unchanged when
-the requested count equals the base.
+change. Reviewed equivalent mutations have specific regexes and explanations:
+`<` and `<=` assign the same value at equality in `RegisterCounter::set`; OR and
+XOR set the same warning flag after `Span::file_id` clears that bit.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out

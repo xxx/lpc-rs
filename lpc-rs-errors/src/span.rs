@@ -186,6 +186,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn positions_and_text_resolve_the_registered_occurrence() {
+        let id = SOURCE_MAP
+            .write()
+            .add("/position.c".into(), "é\nvalue".into());
+        let span = Span::new(id, 3..8).with_warnings_suppressed(true);
+
+        assert_eq!(span.file_position(), Some(("/position.c".into(), 2, 1)));
+        assert_eq!(span.to_string(), "/position.c:2:1");
+        assert_eq!(span.code().as_deref(), Some("value"));
+        assert_eq!(Span::new(id, 0..1).code(), None);
+        assert_eq!(Span::new(id, Range { start: 8, end: 3 }).code(), None);
+    }
+
+    #[test]
+    fn missing_sources_have_no_position_and_use_a_debug_fallback() {
+        let span = Span::new(usize::MAX, 0..1);
+
+        assert_eq!(span.file_position(), None);
+        assert_eq!(span.to_string(), format!("{span:?}"));
+        assert!(span.to_string().starts_with("Span {"));
+    }
+
+    #[test]
+    fn warning_flags_are_idempotent_at_file_id_boundaries() {
+        for id in [0, 7, FILE_ID_MASK as usize - 1] {
+            let original = Span::new(id, 3..8);
+            let suppressed = original.with_warnings_suppressed(true);
+
+            assert_eq!(suppressed.file_id(), id);
+            assert_eq!(suppressed.with_warnings_suppressed(true), suppressed);
+            assert_eq!(suppressed.with_warnings_suppressed(false), original);
+        }
+    }
+
+    #[test]
     fn a_span_is_twelve_bytes_and_option_shares_them() {
         assert_eq!(std::mem::size_of::<Span>(), 12);
         assert_eq!(std::mem::size_of::<Option<Span>>(), 12);
