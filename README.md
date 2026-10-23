@@ -278,6 +278,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
   visibility and mangling.
 - [`CallNamespace`](lpc-rs-core/src/call_namespace.rs): lookup keys and displayed
   qualifiers for local, parent and named calls.
+- [`FunctionReceiver`](lpc-rs-core/src/function_receiver.rs): receiver roles and
+  the register banks that carry objects or function values.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
