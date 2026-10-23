@@ -75,12 +75,11 @@ impl LpcPath {
         })
     }
 
-    /// Whether the final `#`-separated part parses as a clone number.
+    /// Whether the input ends in `#` followed by a clone number.
     pub fn is_clone(&self) -> bool {
         self.to_str().is_some_and(|s| {
-            s.rsplit('#')
-                .next()
-                .is_some_and(|n| n.parse::<u64>().is_ok())
+            s.rsplit_once('#')
+                .is_some_and(|(_, number)| number.parse::<u64>().is_ok())
         })
     }
 
@@ -163,6 +162,100 @@ impl Deref for LpcPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clone_names_require_a_numeric_hash_suffix() {
+        for (name, expected) in [
+            ("123", false),
+            ("/123", false),
+            ("/room/object", false),
+            ("/room/object#", false),
+            ("/room/object#abc", false),
+            ("/room/object#-1", false),
+            ("/room/object#1/child", false),
+            ("/room/object#18446744073709551616", false),
+            ("/room/object#0", true),
+            ("/room/object#7", true),
+            ("/room/object#18446744073709551615", true),
+            ("relative#7", true),
+        ] {
+            assert_eq!(LpcPath::in_game(name.into()).is_clone(), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn object_names_strip_one_source_suffix_before_cloning() {
+        for (given, expected) in [
+            ("/room/object.c", "/room/object"),
+            ("/room/object.h", "/room/object.h"),
+            ("/room/object.c.c", "/room/object.c"),
+        ] {
+            for (path, object, clone) in [
+                (
+                    LpcPath::from(given),
+                    LpcPath::from(expected),
+                    LpcPath::from(format!("{expected}#7")),
+                ),
+                (
+                    LpcPath::new_server(format!("/mud/lib{given}")),
+                    LpcPath::new_server(format!("/mud/lib{expected}")),
+                    LpcPath::new_server(format!("/mud/lib{expected}#7")),
+                ),
+            ] {
+                assert_eq!(path.object_file(None), object);
+                assert_eq!(path.object_file(Some(7)), clone);
+            }
+        }
+    }
+
+    #[test]
+    fn extension_and_parent_changes_preserve_path_origin() {
+        for (path, header, parent) in [
+            (
+                LpcPath::from("/room/object.c"),
+                LpcPath::from("/room/object.h"),
+                LpcPath::from("/room"),
+            ),
+            (
+                LpcPath::new_server("/mud/lib/room/object.c"),
+                LpcPath::new_server("/mud/lib/room/object.h"),
+                LpcPath::new_server("/mud/lib/room"),
+            ),
+        ] {
+            assert_eq!(path.with_extension("h"), header);
+            assert_eq!(path.cwd(), parent);
+        }
+    }
+
+    #[test]
+    fn in_game_inputs_obey_the_root_and_relative_directory() {
+        assert_eq!(
+            LpcPath::new_in_game("../target.c", "/room/deep", "/mud/lib"),
+            LpcPath::from("/room/target.c")
+        );
+        assert_eq!(
+            LpcPath::new_in_game("../outside.c", "/", "/mud/lib"),
+            LpcPath::in_game(PathBuf::new())
+        );
+    }
+
+    #[test]
+    fn borrowed_views_keep_the_native_path_identity() {
+        for (path, expected) in [
+            (LpcPath::from("/room/object.c"), "/room/object.c"),
+            (
+                LpcPath::new_server("/mud/lib/room/object.c"),
+                "/mud/lib/room/object.c",
+            ),
+        ] {
+            let text: &str = path.as_ref();
+            let native: &Path = path.as_ref();
+
+            assert_eq!(text, expected);
+            assert_eq!(native, Path::new(expected));
+            assert_eq!(path.deref(), native);
+        }
+    }
 
     #[test]
     fn source_file_is_the_object_key_plus_dot_c() {

@@ -7,6 +7,7 @@ examine_globs = [
     "lpc-rs-core/src/global_var_flags.rs",
     "lpc-rs-core/src/register.rs",
     "lpc-rs-core/src/lpc_type.rs",
+    "lpc-rs-core/src/lpc_path.rs",
 ]
 additional_cargo_args = ["--locked"]
 minimum_test_timeout = 20

@@ -270,6 +270,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
   display across the full register width.
 - [`LpcType`](lpc-rs-core/src/lpc_type.rs): primitive names, nil compatibility,
   array projection, nominal identities and unions.
+- [`LpcPath`](lpc-rs-core/src/lpc_path.rs): clone suffixes, source/object names,
+  path transformations and host versus in-game identity.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
