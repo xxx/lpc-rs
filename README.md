@@ -276,6 +276,8 @@ The reviewed scope includes:
   settings and private-material path validation.
 - [Assembly addresses](lpc-rs-asm/src/address.rs): program-counter conversions,
   equality, offsets and hexadecimal display.
+- [Instructions](lpc-rs-asm/src/instruction.rs): operand mapping, branch targets,
+  comparison semantics, range directions and opcode metadata.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
