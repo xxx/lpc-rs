@@ -20,6 +20,8 @@ pub fn abs<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_core::LpcIntInner;
+
     use crate::{
         interpreter::lpc_ref::LpcRef,
         test_support::{run_prog, try_run_prog},
@@ -35,6 +37,21 @@ mod tests {
     async fn abs_of_a_positive_int_is_itself() {
         let code = "int create() { return abs(5); }";
         assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(5)));
+    }
+
+    #[tokio::test]
+    async fn abs_of_the_smallest_int_wraps_to_itself() {
+        let code = "int create() { return abs(-9223372036854775807 - 1); }";
+        assert_eq!(
+            run_prog(code).await.result(),
+            Some(LpcRef::from(LpcIntInner::MIN))
+        );
+    }
+
+    #[tokio::test]
+    async fn abs_of_float_zero_preserves_its_type() {
+        let code = "float create() { return abs(0.0); }";
+        assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(0.0)));
     }
 
     #[tokio::test]

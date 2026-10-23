@@ -32,8 +32,10 @@ examine_globs = [
     "lpc-rs-errors/src/source_map.rs",
     "lpc-rs-errors/src/source_map/source_file.rs",
     "lpc-rs-errors/src/lib.rs",
+    "src/interpreter/efun/abs.rs",
 ]
 additional_cargo_args = ["--locked"]
+test_tool = "nextest"
 minimum_test_timeout = 20
 gitignore = true
 copy_target = false

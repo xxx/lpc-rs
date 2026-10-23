@@ -288,6 +288,8 @@ The reviewed scope includes:
   offsets and parity with codespan's reference locations.
 - [Diagnostics](lpc-rs-errors/src/lib.rs): error kinds, attached errors/frames,
   catch rendering and terminal output.
+- [`abs()`](src/interpreter/efun/abs.rs): numeric results, integer overflow,
+  float zero and invalid input.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -297,14 +299,17 @@ Install the version used by CI, then run from the repository root:
 
 ```sh
 cargo install --locked cargo-mutants --version 27.1.0
+cargo install --locked cargo-nextest
 cargo mutants --workspace --list
 CARGO_TARGET_DIR="$PWD/target" cargo mutants --workspace --jobs 1 --output /tmp/lpc-rs-mutants
 ```
 
 The run first checks the unmodified tests, then tests each mutation in a temporary
-source copy. `CARGO_TARGET_DIR` keeps build output in the workspace's shared
-`target/`. The allowlist limits which files are mutated, even with `--workspace`;
-only the mutated crate's tests run. Continue using the workspace checks above for
+source copy. Mutation tests use nextest for process isolation, as normal CI does;
+doctests remain part of normal workspace validation. `CARGO_TARGET_DIR` keeps build
+output in the workspace's shared `target/`. The allowlist limits which files are
+mutated, even with `--workspace`; only the mutated crate's tests run. Continue
+using the workspace checks above for
 normal validation. Reports and per-mutation logs are written under
 `/tmp/lpc-rs-mutants/mutants.out/`.
 
@@ -323,9 +328,10 @@ push. Manual runs compare with `base_ref`, which defaults to `HEAD^`.
 CI counts mutations on changed production lines and splits them across at most
 four matrix jobs, skipping the test jobs when the diff selects no mutations.
 Every shard uses the same diff and runs only its share of mutations, with one
-mutation at a time. Each shard has a 10-minute job limit, a 120-second build
-timeout and a 30-second test timeout; preparation has a five-minute limit. Hitting
-a limit fails the run. Reports are uploaded separately for each shard even when
+mutation at a time, with incremental compilation enabled to reuse build artifacts.
+Each shard has a 10-minute job limit and a 30-second test timeout; preparation has
+a five-minute limit. Hitting a limit fails the run. Reports are uploaded
+separately for each shard even when
 mutations survive. The workflow is independent of the required `ci` check.
 
 Diff mode selects mutations in production code, so changes confined to tests or

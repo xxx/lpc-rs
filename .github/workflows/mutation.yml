@@ -34,7 +34,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: "0"
+  CARGO_INCREMENTAL: "1"
   RUST_BACKTRACE: "1"
 
 jobs:
@@ -133,13 +133,18 @@ jobs:
         with:
           tool: cargo-mutants@27.1.0
 
+      - name: Install nextest
+        uses: taiki-e/install-action@9114bf4d891761788c546334fd37538eae1bf8b3 # v2.87.16
+        with:
+          tool: cargo-nextest
+
       - name: Run mutation tests
         env:
           MUTATION_SHARD: ${{ matrix.shard }}
         run: >-
           cargo mutants --workspace --in-place --no-shuffle
           --in-diff /tmp/lpc-rs-mutants.diff --shard "$MUTATION_SHARD" --sharding round-robin
-          --build-timeout 120 --timeout 30 --output /tmp/lpc-rs-mutants
+          --timeout 30 --output /tmp/lpc-rs-mutants
 
       - name: Upload mutation results
         if: always()
