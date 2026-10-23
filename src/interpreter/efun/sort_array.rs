@@ -30,6 +30,11 @@ pub fn sort_array<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             );
         }
     };
+    if context.arg_count() < 2 {
+        let sorted = natural_sort(context, items, false)?;
+        context.return_array(sorted);
+        return Ok(());
+    }
     match context.arg(1) {
         LpcRef::Function(_) => {
             let ptr = function_arg(context, "sort_array", 1)?;

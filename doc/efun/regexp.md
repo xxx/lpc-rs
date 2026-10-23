@@ -9,7 +9,12 @@ Elements that are not strings are ignored. `flag` is a bit set:
 - Bit 1 (`1`): put each string's one-based index in `strings` before it, so
   the result is `({ index1, match1, index2, match2, ... })`.
 
-The pattern is compiled once per call. An invalid pattern is an error.
+An invalid pattern raises a runtime error, including when `strings` is empty.
+Patterns compile on first use and share the VM's bounded cache with
+[regmatch](regmatch.md). The cache retains up to 64 pattern/compilation-option
+pairs, evicting the least recently used entry when full. `flag` affects the
+result only, so all its values reuse the same compiled pattern. Invalid
+patterns are not cached; evicted patterns compile again on their next use.
 
 ### Dialect
 
@@ -18,11 +23,6 @@ Patterns are the Rust `regex` crate's: Perl-style classes (`\d`, `\w`,
 lazy repeats (`a*?`), alternation, non-capturing groups (`(?:...)`), flags
 (`(?i)`), and Unicode by default. It has no back-references and no
 look-around, so `\1` and `(?=...)` are errors.
-
-CD uses a traditional regex engine. LDMud can select traditional or optional
-PCRE engines; FluffOS provides traditional `regexp` and separate `pcre_*` efuns.
-Patterns and option flags need review when porting; see the public sources in
-the [driver comparison](../driver-comparison.md#differences-when-porting).
 
 ### Examples
 

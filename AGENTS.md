@@ -121,6 +121,16 @@ Upstream claims need publicly accessible sources pinned to a reviewed revision;
 record the review date and relevant build options. Distinguish source review
 from cross-driver execution tests, and leave unchecked behaviour labelled as such.
 
+Keep driver-specific porting notes in the comparison's per-driver sections.
+Efun, apply, and language references describe native behavior; link to them from
+the comparison instead of duplicating migration advice in individual references.
+
+Mudlib-specific guides belong under `doc/mudlibs/`, with configuration, adaptation
+requirements, qualification and limitations. Keep mudlib port status and history
+out of the driver comparison. Personal investigation notes and handoffs belong
+under `local/`; the archived Lima port history preserves existing records rather
+than serving as a log for new work.
+
 ## Architecture facts that constrain changes
 
 - **The STM committer is the sole serialization control.** There is no GIL, no
@@ -146,9 +156,18 @@ from cross-driver execution tests, and leave unchecked behaviour labelled as suc
 
 ## Conventions
 
+- LPC documentation examples prefer bare function names when no arguments are
+  bound (`evaluate(strindex, text, needle)`). Use `&name(args)` for partial
+  application, and `&name()` when explaining that syntax itself.
 - **No phase/step tokens** ("D1", "C5", "step 2", "candidate") in filenames, code,
   comments, or commit messages. Handoff/plan docs under `local/` may carry them;
-  `local/` is gitignored by design and holds personal notes, handoffs, and scratch.
+  `local/` is gitignored by design and holds personal notes and handoffs.
+  Put disposable scripts and diagnostic artifacts in `/tmp/`, and Cargo build
+  output in the workspace's shared `target/`.
+- **Mudlib ports use dedicated Git checkouts.** Keep source changes there and
+  record the active checkout, branch and configuration in the port handoff.
+  Use `/tmp/` for disposable test harnesses and logs; keep compatibility notes
+  under `local/` rather than creating another source copy for each change.
 - **Comments carry one fact the reader cannot get from the code, in one sentence.**
   Exceptions: hazard comments (name the wrong edit), external facts, and public API
   docs. Multi-sentence argument comments get cut to the fact.

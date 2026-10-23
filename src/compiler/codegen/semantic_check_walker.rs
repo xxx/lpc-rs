@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lpc_rs_core::{EFUN, ScopeId, call_namespace::CallNamespace, lpc_type::LpcType};
+use lpc_rs_core::{ScopeId, call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_error, lpc_warning, span::Span};
 use lpc_rs_utils::string::closure_arg_number;
 
@@ -14,6 +14,7 @@ use crate::{
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             cast_node::CastNode,
+            catch_node::CatchNode,
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             do_while_node::DoWhileNode,
@@ -27,6 +28,7 @@ use crate::{
             program_node::ProgramNode,
             range_node::RangeNode,
             return_node::ReturnNode,
+            spread_node::SpreadNode,
             switch_node::SwitchNode,
             unary_op_node::{UnaryOpNode, UnaryOperation},
             var_init_node::VarInitNode,
@@ -36,9 +38,8 @@ use crate::{
         callee::Callee,
         codegen::tree_walker::{
             ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
-            walk_cast, walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
-            walk_function_ptr, walk_label, walk_operator, walk_range, walk_return, walk_switch,
-            walk_unary_op, walk_var_init,
+            walk_cast, walk_closure, walk_do_while, walk_function_def, walk_function_ptr,
+            walk_label, walk_operator, walk_range, walk_return, walk_unary_op, walk_var_init,
         },
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
@@ -59,6 +60,9 @@ pub struct SemanticCheckWalker {
     /// Track the current function, so we can type check returns.
     current_function: Option<FunctionDefNode>,
 
+    /// Whether the innermost callable reserves `argv`, and its declaration span.
+    implicit_argv: (bool, Option<Span>),
+
     /// Are break / continue allowed at this time?
     valid_jumps: Vec<(BreakAllowed, ContinueAllowed)>,
 
@@ -75,6 +79,7 @@ impl SemanticCheckWalker {
         Self {
             context,
             current_function: None,
+            implicit_argv: (false, None),
             valid_jumps: vec![],
             valid_labels: vec![],
             closure_depth: 0,
@@ -150,17 +155,6 @@ impl SemanticCheckWalker {
             return Ok(());
         };
 
-        for argument in arguments {
-            let ExpressionNode::Spread(spread) = argument else {
-                continue;
-            };
-            let ty = node_type(&spread.expr, &self.context)?;
-            if !ty.matches_type(LpcType::Mixed(true)) {
-                let e = lpc_error!(spread.span, "`...` spreads an array, not {}", ty);
-                self.context.diagnostics.record(e);
-            }
-        }
-
         let spread_span = arguments[first].span();
         match callee {
             Some(name @ (CATCH | SIZEOF)) => {
@@ -224,6 +218,24 @@ impl Pass for SemanticCheckWalker {
 
 #[async_trait]
 impl TreeWalker for SemanticCheckWalker {
+    async fn visit_spread(&mut self, node: &mut SpreadNode) -> Result<()> {
+        node.expr.visit(self).await?;
+        let type_ = node_type(&node.expr, &self.context)?;
+        let array_or_mixed = |ty: LpcType| ty.is_array() || ty == LpcType::Mixed(false);
+        let valid = match type_ {
+            LpcType::Union(types) => types.types().into_iter().all(array_or_mixed),
+            ty => array_or_mixed(ty),
+        };
+        if !valid {
+            self.context.diagnostics.record(lpc_error!(
+                node.span,
+                "`...` spreads an array, not {}",
+                type_
+            ));
+        }
+        Ok(())
+    }
+
     fn enter_scope(&mut self, scope_id: &mut Option<ScopeId>) {
         self.context.scopes.goto(*scope_id);
     }
@@ -232,8 +244,130 @@ impl TreeWalker for SemanticCheckWalker {
         self.context.scopes.pop();
     }
 
+    async fn visit_class_init(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::ClassInitNode,
+    ) -> Result<()> {
+        super::tree_walker::walk_class_init(self, node).await?;
+        let LpcType::Class(id, false) = node.type_.resolved()? else {
+            return Err(lpc_error!(node.span, "constructor requires a class"));
+        };
+        let definition = self
+            .context
+            .class_scope
+            .get(id)
+            .ok_or_else(|| lpc_error!(node.span, "no visible definition for {id}"))?;
+        let mut names = std::collections::HashSet::new();
+        for (name, value) in &node.initializers {
+            if !names.insert(*name) {
+                return Err(lpc_error!(value.span(), "duplicate initializer `{name}`"));
+            }
+            let field = definition
+                .fields
+                .iter()
+                .find(|field| field.name == *name)
+                .ok_or_else(|| lpc_error!(value.span(), "unknown field `{name}` in {id}"))?;
+            if let Some(actual) = mismatch(field.type_, value, &self.context)? {
+                return Err(lpc_error!(
+                    value.span(),
+                    "initializer `{name}` expects {}, found {actual}",
+                    field.type_
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    async fn visit_member(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::MemberNode,
+    ) -> Result<()> {
+        node.receiver.visit(self).await?;
+        crate::compiler::semantic::semantic_checks::member_type(node, &self.context)?;
+        Ok(())
+    }
+
+    async fn visit_compound_assignment(
+        &mut self,
+        node: &mut crate::compiler::ast::class_expression::CompoundAssignmentNode,
+    ) -> Result<()> {
+        node.lhs.visit(self).await?;
+        node.rhs.visit(self).await?;
+        let binary = BinaryOpNode {
+            l: node.lhs.clone(),
+            r: node.rhs.clone(),
+            op: node.op,
+            span: node.span,
+        };
+        check_binary_operation_types(&binary, &self.context)?;
+        let target = node_type(&node.lhs, &self.context)?;
+        if let Some(actual) = mismatch(target, &ExpressionNode::BinaryOp(binary), &self.context)? {
+            return Err(lpc_error!(
+                node.span,
+                "compound assignment expects {target}, found {actual}"
+            ));
+        }
+        Ok(())
+    }
+
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        if matches!(*node.lhs, ExpressionNode::Capture(_)) {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "`$()` is not assignable")));
+        }
         walk_assignment(self, node).await?;
+
+        if let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            l,
+            r,
+            ..
+        }) = &*node.lhs
+            && matches!(**r, ExpressionNode::Range(_))
+        {
+            if !l.has_assignment_owner() {
+                return Err(self.context.diagnostics.fail(lpc_error!(
+                    node.span,
+                    "Slice assignment requires an assignable array or string target"
+                )));
+            }
+            for operand in [&**l, &*node.rhs] {
+                let type_ = node_type(operand, &self.context)?;
+                if !type_.is_array()
+                    && !matches!(type_, LpcType::Mixed(false) | LpcType::String(false))
+                {
+                    return Err(self.context.diagnostics.fail(lpc_error!(
+                        operand.span(),
+                        "Slice assignment requires arrays or strings, found `{type_}`"
+                    )));
+                }
+            }
+        }
+
+        if let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            l,
+            r,
+            ..
+        }) = &*node.lhs
+            && !matches!(**r, ExpressionNode::Range(_))
+            && node_type(l, &self.context)? == LpcType::String(false)
+        {
+            if node.is_compound {
+                return Err(self.context.diagnostics.fail(lpc_error!(
+                    node.span,
+                    "Compound indexed string assignment is not supported"
+                )));
+            }
+            if !l.has_assignment_owner() {
+                return Err(self.context.diagnostics.fail(lpc_error!(
+                    node.span,
+                    "Indexed string assignment requires an assignable target"
+                )));
+            }
+        }
 
         let left_type = node_type(&node.lhs, &self.context)?;
 
@@ -308,12 +442,11 @@ impl TreeWalker for SemanticCheckWalker {
                 self.context.diagnostics.record(e);
             }
 
-            // call_other is not type checked
-            return Ok(());
+            // The target signature is unknown, but its receiver and arguments still need checking.
+            return super::tree_walker::walk_call_root(self, node).await;
         }
 
-        let unknown_namespace = matches!(namespace, CallNamespace::Named(ns)
-            if !self.context.inherit_names.contains_key(ns.as_str()) && ns.as_str() != EFUN);
+        let unknown_namespace = !self.context.valid_namespace(namespace);
         if unknown_namespace {
             let e = lpc_error!(node.span, "unknown namespace `{}`", namespace.as_str());
             self.context.diagnostics.record(e);
@@ -323,12 +456,8 @@ impl TreeWalker for SemanticCheckWalker {
             argument.visit(self).await?;
         }
 
-        // A function-typed variable answers a bare name only.
-        let is_function_pointer = namespace == &CallNamespace::Local
-            && self
-                .context
-                .lookup_var(*name)
-                .is_some_and(|sym| sym.type_.matches_type(LpcType::Function(false)));
+        let is_function_pointer =
+            namespace == &CallNamespace::Local && self.context.lookup_callable_var(name).is_some();
 
         // An unknown namespace is reported above, not searched.
         if !unknown_namespace
@@ -362,6 +491,10 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
+        if is_function_pointer {
+            return Ok(());
+        }
+
         // Further checks require access to the function prototype for error messaging
         let proto_opt = self.context.lookup_function_complete(&name, namespace);
 
@@ -369,13 +502,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let Some(callee) = proto_opt {
             let prototype = callee.as_ref();
-            if prototype.flags.private()
-                && !self
-                    .context
-                    .function_prototypes
-                    .values()
-                    .any(|val| val == prototype)
-            {
+            if !self.context.function_accessible(name, namespace) {
                 let e = LpcError::new(format!("call to private function `{}`", name))
                     .with_span(node.span)
                     .with_label("defined here", prototype.span);
@@ -407,17 +534,26 @@ impl TreeWalker for SemanticCheckWalker {
                     let is_ref_arg = matches!(arg, ExpressionNode::Ref(_));
                     let wants_ref = prototype.is_ref_param(index);
                     if wants_ref && !is_ref_arg {
-                        // An implicit efun lvalue accepts a bare variable or an indexed element.
+                        // Efun outputs can write variables, indexed elements, and class members.
                         if is_efun
                             && matches!(
                                 arg,
                                 ExpressionNode::Var(_)
+                                    | ExpressionNode::Member(_)
                                     | ExpressionNode::BinaryOp(BinaryOpNode {
                                         op: BinaryOperation::Index,
                                         ..
                                     })
                             )
                         {
+                            if let ExpressionNode::BinaryOp(BinaryOpNode { r, .. }) = arg
+                                && matches!(**r, ExpressionNode::Range(_))
+                            {
+                                errors.push(lpc_error!(
+                                    arg.span(),
+                                    "A slice cannot be an output argument"
+                                ));
+                            }
                             continue;
                         }
                         let e = if is_efun {
@@ -514,8 +650,19 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
+    async fn visit_catch(&mut self, node: &mut CatchNode) -> Result<()> {
+        self.valid_labels.push(LabelAllowed(false));
+        let result = node.body.visit(self).await;
+        self.prevent_labels();
+        result
+    }
+
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.closure_depth += 1;
+        let enclosing_argv = std::mem::replace(
+            &mut self.implicit_argv,
+            (node.flags.ellipsis() && node.variadic.is_none(), node.span),
+        );
 
         // A closure has no caller frame to alias into, so it cannot take `ref`.
         if let Some(parameters) = &node.parameters {
@@ -533,13 +680,14 @@ impl TreeWalker for SemanticCheckWalker {
         self.valid_jumps
             .push((BreakAllowed(false), ContinueAllowed(false)));
         self.valid_labels.push(LabelAllowed(false));
-        walk_closure(self, node).await?;
+        let result = walk_closure(self, node).await;
+        self.implicit_argv = enclosing_argv;
         self.prevent_labels();
         self.prevent_jumps();
 
         self.closure_depth -= 1;
 
-        Ok(())
+        result
     }
 
     async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
@@ -562,17 +710,22 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+        if let Some(initializer) = &mut *node.initializer {
+            let _ = initializer.visit(self).await;
+        }
         self.allow_jumps();
-
-        walk_for(self, node).await?;
-
+        if let Some(condition) = &mut node.condition {
+            let _ = condition.visit(self).await;
+        }
+        let _ = node.body.visit(self).await;
+        if let Some(incrementer) = &mut node.incrementer {
+            let _ = incrementer.visit(self).await;
+        }
         self.prevent_jumps();
         Ok(())
     }
 
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
-        self.allow_jumps();
-
         let collection_type = node_type(&node.collection, &self.context)?;
         if !collection_type.is_array()
             && !collection_type.matches_type(LpcType::Mapping(false))
@@ -589,7 +742,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let ForEachInit::Array(init) = &node.initializer
             && let Some(element) = element_type(collection_type)
-            && !init.type_.matches_type(element)
+            && !init.type_.resolved()?.matches_type(element)
         {
             let e = lpc_error!(
                 init.span,
@@ -619,8 +772,18 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        walk_foreach(self, node).await?;
-
+        match &mut node.initializer {
+            ForEachInit::Array(init) => {
+                let _ = init.visit(self).await;
+            }
+            ForEachInit::Mapping { key, value } => {
+                let _ = key.visit(self).await;
+                let _ = value.visit(self).await;
+            }
+        }
+        let _ = node.collection.visit(self).await;
+        self.allow_jumps();
+        let _ = node.body.visit(self).await;
         self.prevent_jumps();
         Ok(())
     }
@@ -630,6 +793,10 @@ impl TreeWalker for SemanticCheckWalker {
 
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
+        let enclosing_argv = std::mem::replace(
+            &mut self.implicit_argv,
+            (node.flags.ellipsis() && node.variadic.is_none(), node.span),
+        );
 
         if let Some(prototype) = self.context.function_prototypes.get(node.name.as_str()) {
             let arity = prototype.arity;
@@ -647,25 +814,25 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         self.check_unreachable(&node.body);
-        walk_function_def(self, node).await?;
+        let result = walk_function_def(self, node).await;
+        self.current_function = None;
+        self.implicit_argv = enclosing_argv;
 
         self.context.scopes.pop();
-        Ok(())
+        result
     }
 
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
-        let proto_opt = self
-            .context
-            .lookup_function_complete(node.name, &CallNamespace::default());
-
-        if let Some(callee) = proto_opt {
+        if node.receiver.is_none()
+            && self.context.lookup_callable_var(&node.name).is_none()
+            && let Some(callee) = self
+                .context
+                .lookup_function_complete(node.name, &CallNamespace::Local)
+        {
             let prototype = callee.as_ref();
-            if prototype.flags.private()
-                && !self
-                    .context
-                    .function_prototypes
-                    .values()
-                    .any(|val| val == prototype)
+            if !self
+                .context
+                .function_accessible(node.name.as_str(), &CallNamespace::Local)
             {
                 let e = LpcError::new(format!(
                     "attempt to point to private function `{}`",
@@ -784,9 +951,11 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let Some(function_def) = &self.current_function {
             if let Some(expression) = &node.value {
-                if let Some(return_type) =
-                    mismatch(function_def.return_type, expression, &self.context)?
-                {
+                if let Some(return_type) = mismatch(
+                    function_def.return_type.resolved()?,
+                    expression,
+                    &self.context,
+                )? {
                     let error = LpcError::new(format!(
                         "invalid return type {}. Expected {}.",
                         return_type, function_def.return_type
@@ -797,7 +966,7 @@ impl TreeWalker for SemanticCheckWalker {
                     self.context.diagnostics.record(error);
                 }
             } else if !matches!(
-                function_def.return_type,
+                function_def.return_type.resolved()?,
                 LpcType::Void | LpcType::Mixed(false)
             ) {
                 // CD and LDMud take a bare `return` in a `mixed` function
@@ -812,24 +981,37 @@ impl TreeWalker for SemanticCheckWalker {
 
                 self.context.diagnostics.record(error);
             }
-        } // else warn?
+        } else {
+            self.context
+                .diagnostics
+                .record(lpc_error!(node.span, "`return` outside a function"));
+        }
 
         Ok(())
     }
 
     async fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
+        node.expression.visit(self).await?;
         self.allow_labels();
         self.allow_breaks();
 
-        walk_switch(self, node).await?;
+        let result = node.body.visit(self).await;
 
         self.prevent_jumps();
         self.prevent_labels();
 
-        Ok(())
+        result
     }
 
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        if matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
+            && matches!(*node.expr, ExpressionNode::Capture(_))
+        {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "`$()` is not assignable")));
+        }
         walk_unary_op(self, node).await?;
 
         match check_unary_operation_types(node, &self.context) {
@@ -840,7 +1022,7 @@ impl TreeWalker for SemanticCheckWalker {
                         return Err(self.context.diagnostics.fail(err));
                     }
 
-                    // A slice is a value, not a place.
+                    // Slices support replacement, not element stepping.
                     if let ExpressionNode::BinaryOp(BinaryOpNode {
                         op: BinaryOperation::Index,
                         r,
@@ -875,7 +1057,7 @@ impl TreeWalker for SemanticCheckWalker {
                 source,
                 node.type_
             );
-            if let Some(efun) = conversion_efun(node.type_) {
+            if let Some(efun) = conversion_efun(node.type_.resolved()?) {
                 e = e.with_note(format!("a cast converts nothing; `{efun}` does"));
             }
             self.context.diagnostics.record(e);
@@ -915,21 +1097,18 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        if node.name == ARGV
-            && let Some(FunctionDefNode { flags, span, .. }) = self.current_function
-            && flags.ellipsis()
-        {
+        if node.name == ARGV && self.implicit_argv.0 {
             let e: LpcError =
                 LpcError::new("redeclaration of `argv` in a function with ellipsis arguments")
                     .with_span(node.span)
-                    .with_label("Declared here", span);
+                    .with_label("Declared here", self.implicit_argv.1);
             return Err(self.context.diagnostics.fail(e));
         }
 
         walk_var_init(self, node).await?;
 
         if let Some(expression) = &node.value
-            && let Some(expr_type) = mismatch(node.type_, expression, &self.context)?
+            && let Some(expr_type) = mismatch(node.type_.resolved()?, expression, &self.context)?
         {
             let e = lpc_error!(
                 node.span,
@@ -962,7 +1141,6 @@ mod tests {
     use std::{collections::HashMap, default::Default, sync::Arc};
 
     use claims::*;
-    use factori_imp::create;
     use indoc::indoc;
     use lpc_rs_core::{
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
@@ -1026,6 +1204,7 @@ mod tests {
         #[tokio::test]
         async fn validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
                 span: None,
@@ -1049,6 +1228,7 @@ mod tests {
         #[tokio::test]
         async fn always_allows_0() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
                 span: None,
@@ -1072,6 +1252,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_differing_types() {
             let mut node = ExpressionNode::from(AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
                 span: None,
@@ -1095,7 +1276,7 @@ mod tests {
         #[tokio::test]
         async fn allows_mixed() {
             let mut init_node = VarInitNode {
-                type_: LpcType::Mixed(false),
+                type_: LpcType::Mixed(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
@@ -1108,6 +1289,7 @@ mod tests {
             let var_node = VarNode::new("foo");
 
             let mut assignment_node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(var_node)),
                 rhs: Box::new(ExpressionNode::from("foobar")),
                 span: None,
@@ -1135,7 +1317,7 @@ mod tests {
         #[tokio::test]
         async fn allows_array_items() {
             let mut init_node = VarInitNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
@@ -1148,6 +1330,7 @@ mod tests {
             let var_node = VarNode::new("foo");
 
             let mut assignment_node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(var_node)),
                 rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(vec![1, 2, 3])),
@@ -1180,7 +1363,7 @@ mod tests {
         #[tokio::test]
         async fn allows_array_ranges() {
             let mut init_node = VarInitNode {
-                type_: LpcType::Int(true),
+                type_: LpcType::Int(true).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(vec![324])),
                 array: false,
@@ -1193,6 +1376,7 @@ mod tests {
             let var_node = VarNode::new("foo");
 
             let mut assignment_node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(var_node)),
                 rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(vec![1, 2, 3])),
@@ -2532,7 +2716,7 @@ mod tests {
         #[tokio::test]
         async fn handles_scopes() {
             let _global = VarInitNode {
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 name: ustr("a"),
                 value: Some(ExpressionNode::from(1)),
                 array: false,
@@ -2543,7 +2727,7 @@ mod tests {
             };
 
             let param1 = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("a"),
                 value: Some(ExpressionNode::from("foo")),
                 array: false,
@@ -2554,7 +2738,7 @@ mod tests {
             };
 
             let param2 = VarInitNode {
-                type_: LpcType::Int(true),
+                type_: LpcType::Int(true).into(),
                 name: ustr("a"),
                 value: Some(ExpressionNode::from(vec![1, 2, 3, 4])),
                 array: true,
@@ -2565,7 +2749,8 @@ mod tests {
             };
 
             let mut function_def1 = FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("foo"),
                 parameters: vec![param1],
                 flags: FunctionFlags::default(),
@@ -2584,7 +2769,8 @@ mod tests {
             };
 
             let mut function_def2 = FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("snuh"),
                 parameters: vec![param2],
                 flags: FunctionFlags::default(),
@@ -2609,7 +2795,8 @@ mod tests {
         #[tokio::test]
         async fn disallows_keyword_name() {
             let mut node = FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("while"),
                 parameters: vec![],
                 flags: FunctionFlags::default(),
@@ -2872,7 +3059,7 @@ mod tests {
             let mut node = ProgramNode {
                 inherits: vec![],
                 body: vec![AstNode::from(VarInitNode {
-                    type_: LpcType::String(false),
+                    type_: LpcType::String(false).into(),
                     by_ref: false,
                     name: ustr("mapping"),
                     value: None,
@@ -3005,13 +3192,13 @@ mod tests {
 
             let void_function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("foo")
             );
 
             let int_function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Int(false),
+                return_type: LpcType::Int(false).into(),
                 name: ustr("snuh")
             );
 
@@ -3057,7 +3244,7 @@ mod tests {
 
             let void_function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Void,
+                return_type: LpcType::Void.into(),
                 name: ustr("foo")
             );
 
@@ -3086,7 +3273,7 @@ mod tests {
 
             let function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Mixed(false),
+                return_type: LpcType::Mixed(false).into(),
                 name: ustr("foo"),
             );
 
@@ -3103,7 +3290,7 @@ mod tests {
         async fn allows_return_of_differing_type_within_closure() {
             let function_def = create!(
                 FunctionDefNode,
-                return_type: LpcType::Float(false),
+                return_type: LpcType::Float(false).into(),
                 name: ustr("foo"),
             );
 
@@ -3349,6 +3536,18 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn mixed_numeric_comparisons_emit_no_diagnostics() {
+            let code = r#"
+                int compare(int i, float f) {
+                    return (i < f) + (f <= i) + (i > f) + (f >= i)
+                         + (i == f) + (f != i);
+                }
+            "#;
+            let context = walk_code(code).await.unwrap();
+            assert!(context.diagnostics.errors().is_empty());
+        }
+
+        #[tokio::test]
         async fn call_other_ignores_a_same_named_variable() {
             let code = r#"
                 object copy = "/x"->copy();
@@ -3434,7 +3633,7 @@ mod tests {
         async fn validates_both_sides() {
             let mut node = VarInitNode {
                 name: ustr("foo"),
-                type_: LpcType::Int(false),
+                type_: LpcType::Int(false).into(),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 global: false,
@@ -3453,7 +3652,7 @@ mod tests {
         #[tokio::test]
         async fn always_allows_0() {
             let mut node = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(0)),
                 array: false,
@@ -3473,7 +3672,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_differing_types() {
             let mut node = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("foo"),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
@@ -3499,7 +3698,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_keyword_name() {
             let mut node = VarInitNode {
-                type_: LpcType::String(false),
+                type_: LpcType::String(false).into(),
                 name: ustr("switch"),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
@@ -3523,7 +3722,7 @@ mod tests {
         #[tokio::test]
         async fn disallows_argv_in_ellipsis_function() {
             let mut node = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("argv"),
                 value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
                 array: false,
@@ -3535,10 +3734,12 @@ mod tests {
 
             let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
+            walker.implicit_argv = (true, None);
 
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("moop"),
                 parameters: vec![],
                 flags: FunctionFlags::default().with_ellipsis(true),
@@ -3561,7 +3762,7 @@ mod tests {
         #[tokio::test]
         async fn allows_argv_in_non_ellipsis_function() {
             let mut node = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("argv"),
                 value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
                 array: false,
@@ -3576,7 +3777,8 @@ mod tests {
 
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
-                return_type: LpcType::Void,
+                variadic: None,
+                return_type: LpcType::Void.into(),
                 name: ustr("moop"),
                 parameters: vec![],
                 flags: FunctionFlags::default(),

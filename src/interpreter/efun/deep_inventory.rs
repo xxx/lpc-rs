@@ -16,10 +16,13 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
 mod tests {
     use indoc::indoc;
     use itertools::Itertools;
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use crate::{
-        interpreter::{CommittedReader, vm::Vm},
-        test_support::test_config,
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
+        test_config_builder,
+        test_support::{permissive_master, test_config},
     };
 
     #[tokio::test]
@@ -103,5 +106,81 @@ mod tests {
             globals,
             &["/deep_inv_bar", "/deep_inv_baz", "/deep_inv_foo"]
         );
+    }
+
+    #[tokio::test]
+    async fn destruction_preserves_depth_first_order_of_surviving_members() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let vm = Vm::new(test_config_builder!().null_mode(mode).build().unwrap());
+            permissive_master(&vm.global_state.object_space).await;
+            vm.initialize_process_from_code("/room.c", "")
+                .await
+                .unwrap();
+            let mut members = Vec::new();
+            for (name, parent) in [
+                ("box", "room"),
+                ("dead_leaf", "box"),
+                ("leaf", "box"),
+                ("dead_sibling", "room"),
+                ("last", "room"),
+            ] {
+                members.push(
+                    vm.initialize_process_from_code(
+                        format!("/{name}.c"),
+                        format!("void create() {{ move_object(\"/{parent}\"); }}"),
+                    )
+                    .await
+                    .unwrap(),
+                );
+            }
+            let probe = vm
+                .initialize_process_from_code(
+                    "/probe.c",
+                    indoc! { r#"
+                        int create() {
+                            destruct(find_object("/dead_leaf"));
+                            destruct(find_object("/dead_sibling"));
+                            return implode(map(deep_inventory("/room"), file_name), ",")
+                                == "/box,/leaf,/last";
+                        }
+                    "# },
+                )
+                .await
+                .unwrap();
+            assert_eq!(probe.result().unwrap(), LpcRef::from(1), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn destroyed_containers_are_not_traversed() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let vm = Vm::new(test_config_builder!().null_mode(mode).build().unwrap());
+            permissive_master(&vm.global_state.object_space).await;
+            vm.initialize_process_from_code("/room.c", "")
+                .await
+                .unwrap();
+            let _box = vm
+                .initialize_process_from_code("/box.c", "void create() { move_object(\"/room\"); }")
+                .await
+                .unwrap();
+            let _leaf = vm
+                .initialize_process_from_code("/leaf.c", "void create() { move_object(\"/box\"); }")
+                .await
+                .unwrap();
+            let probe = vm
+                .initialize_process_from_code(
+                    "/probe.c",
+                    indoc! { r#"
+                        int create() {
+                            destruct(find_object("/box"));
+                            return sizeof(deep_inventory("/room")) == 0
+                                && objectp(find_object("/leaf"));
+                        }
+                    "# },
+                )
+                .await
+                .unwrap();
+            assert_eq!(probe.result().unwrap(), LpcRef::from(1), "{mode:?}");
+        }
     }
 }

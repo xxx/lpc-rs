@@ -13,12 +13,13 @@ use ustr::Ustr;
 
 use crate::interpreter::{
     call_frame::CallFrame,
+    call_origin::CallOrigin,
     efun::{CALL_OTHER, Efun},
     function_type::{
         function_address::FunctionAddress,
         function_ptr::{FunctionPtr, ResolvedCall, call_other_name, first_arg},
     },
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::{Liveness, Process, shadow::ShadowEntry},
     task::{
         Task, advance::Advance, eval_loop::AsyncCall, get_location, handle_call::check_arg_type,
@@ -105,13 +106,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         location: RegisterVariant,
         list: ArgList,
     ) -> Result<Option<AsyncCall>> {
-        match self.call_pointer_now(Passed::List {
-            pointer: location,
-            list,
-        }) {
+        match self.call_pointer_now(
+            Passed::List {
+                pointer: location,
+                list,
+            },
+            None,
+        ) {
             Ok(Called::Framed) => Ok(None),
             Ok(Called::Unresolved) => {
-                self.stack.current_frame_mut()?.registers[0] = NULL;
+                self.stack.current_frame_mut()?.registers[0] = self.context.txn.nil();
                 Ok(None)
             }
             Ok(Called::Suspends) => Ok(Some(AsyncCall::FunctionPointer(location, list))),
@@ -123,7 +127,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Call the pointer `passed` names where no loading is needed: a frame
     /// pushed with the arguments bound in place, an efun run in its entry
     /// frame.
-    pub(crate) fn call_pointer_now(&mut self, passed: Passed<'_>) -> Result<Called> {
+    pub(crate) fn call_pointer_now(
+        &mut self,
+        passed: Passed<'_>,
+        dispatcher: Option<CallOrigin>,
+    ) -> Result<Called> {
+        let origin;
         let resolved = {
             let held;
             let ptr = match passed {
@@ -140,6 +149,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
                 Passed::Values { ptr, .. } => ptr,
             };
+            origin = dispatcher.unwrap_or_else(|| ptr.call_origin());
             match &ptr.address {
                 FunctionAddress::Local(receiver, function) => {
                     let Some(process) = receiver.upgrade() else {
@@ -163,6 +173,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let Some(function) = simul_efuns
                         .program(&self.context.txn)
                         .lookup_function(name)
+                        .filter(|function| function.public())
                         .cloned()
                     else {
                         return Err(LpcError::runtime(format!(
@@ -210,30 +221,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
         match resolved {
-            Resolved::Frame(frame) => {
+            Resolved::Frame(mut frame) => {
+                frame.origin = origin;
                 self.stack.push(frame)?;
                 Ok(Called::Framed)
             }
             Resolved::Suspends => Ok(Called::Suspends),
             Resolved::Efun { ptr, efun, owner } => {
-                let args = ptr.bound_args(&self.passed_values(passed)?);
+                let args =
+                    ptr.bound_args(&self.passed_values(passed)?, self.context.txn.null_mode());
                 self.refuse_ref_params(efun)?;
-                self.push_entry_frame(owner.clone())?;
+                self.push_entry_frame(owner.clone(), origin)?;
                 match self.call_fired_efun_now(efun, args, owner, ptr.origin.clone())? {
                     Advance::Running => Ok(Called::Framed),
                     Advance::Suspends => Ok(Called::Pending),
                 }
             }
             Resolved::Dynamic { ptr, name } => {
-                let mut args = ptr.bound_args(&self.passed_values(passed)?);
-                let receiver = first_arg(&mut args);
-                self.call_dynamic(name, receiver, args)
+                let mut args =
+                    ptr.bound_args(&self.passed_values(passed)?, self.context.txn.null_mode());
+                let receiver = first_arg(&mut args, &self.context.txn);
+                self.call_dynamic(name, receiver, args, origin)
             }
             Resolved::CallOther { ptr } => {
-                let mut args = ptr.bound_args(&self.passed_values(passed)?);
-                let receiver = first_arg(&mut args);
-                let name = call_other_name(&first_arg(&mut args))?;
-                self.call_dynamic(name, receiver, args)
+                let mut args =
+                    ptr.bound_args(&self.passed_values(passed)?, self.context.txn.null_mode());
+                let receiver = first_arg(&mut args, &self.context.txn);
+                let name = call_other_name(&first_arg(&mut args, &self.context.txn))?;
+                self.call_dynamic(name, receiver, args, origin)
             }
         }
     }
@@ -294,8 +309,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             num_args,
             Some(ptr.upvalue_ptrs.as_slice()),
         );
+        frame.initialize_parameters(txn);
         let prototype = &function.prototype;
-        ptr.each_bound(passed, |i, value| {
+        ptr.each_bound(passed, txn.nil(), |i, value| {
             check_arg_type(
                 txn,
                 &value,
@@ -353,7 +369,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Call `name` on `receiver` with `args`: resident, or the call suspends.
-    fn call_dynamic(&mut self, name: Ustr, receiver: LpcRef, args: Vec<LpcRef>) -> Result<Called> {
+    fn call_dynamic(
+        &mut self,
+        name: Ustr,
+        receiver: LpcRef,
+        args: Vec<LpcRef>,
+        origin: CallOrigin,
+    ) -> Result<Called> {
         let process = match &receiver {
             LpcRef::Object(_) | LpcRef::String(_) => {
                 match Self::standing(&receiver, &self.context)? {
@@ -421,7 +443,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 &prototype.name,
             )?;
         }
-        self.push_external_frame(process, function, args.into_iter())?;
+        self.push_external_frame(process, function, args.into_iter(), origin)?;
         Ok(Called::Framed)
     }
 
@@ -431,7 +453,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         ptr: &Arc<FunctionPtr>,
         passed: Vec<LpcRef>,
+        dispatcher: Option<CallOrigin>,
     ) -> Result<Called> {
+        let origin = dispatcher.unwrap_or_else(|| ptr.call_origin());
         let ResolvedCall {
             process,
             function,
@@ -463,7 +487,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if function.prototype.is_efun() {
             let efun = self.efun_of(&function)?;
             self.refuse_ref_params(efun)?;
-            self.push_entry_frame(process.clone())?;
+            self.push_entry_frame(process.clone(), origin)?;
             self.call_fired_efun(efun, args, process, ptr.origin.clone())
                 .await?;
             return Ok(Called::Framed);
@@ -477,10 +501,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             num_args,
             Some(ptr.upvalue_ptrs.as_slice()),
         );
+        new_frame.initialize_parameters(&self.context.txn);
         for (i, arg) in args.into_iter().enumerate() {
             new_frame.push_arg(&self.context.txn, i, arg)?;
         }
         new_frame.external = true;
+        new_frame.origin = origin;
         self.stack.push(new_frame)?;
         Ok(Called::Framed)
     }
@@ -506,8 +532,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             pointer: location,
             list,
         })?;
-        if let Called::Unresolved = self.call_pointer_slow(&ptr, passed).await? {
-            self.stack.current_frame_mut()?.registers[0] = NULL;
+        if let Called::Unresolved = self.call_pointer_slow(&ptr, passed, None).await? {
+            self.stack.current_frame_mut()?.registers[0] = self.context.txn.nil();
         }
         Ok(())
     }

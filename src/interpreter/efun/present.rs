@@ -10,8 +10,7 @@ use smallvec::SmallVec;
 use crate::interpreter::{
     continuation::{Callee, Continuation, Next},
     efun::efun_context::EfunContext,
-    lpc_int::LpcInt,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::{Process, shadow::ShadowEntry},
     stm::TxnHandle,
 };
@@ -23,11 +22,11 @@ pub fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let txn = context.txn();
     let this = context.process().clone();
     let env = match context.arg(1) {
-        LpcRef::Int(LpcInt(0)) => None,
+        value if value == &context.txn().nil() => None,
         arg @ LpcRef::Object(_) => match arg.live_object(txn) {
             Some(env) => Some(env),
             None => {
-                context.return_efun_result(NULL);
+                context.return_efun_result(context.txn().nil());
                 return Ok(());
             }
         },
@@ -51,7 +50,7 @@ pub fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
                 }
             };
             if n == 0 || candidates.is_empty() {
-                context.return_efun_result(NULL);
+                context.return_efun_result(context.txn().nil());
                 return Ok(());
             }
             context.continue_with(Box::new(Present {
@@ -75,15 +74,19 @@ pub fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
                                     .is_some_and(|around| Arc::ptr_eq(h, &around))
                         }),
                     };
-                    if here { arg.clone() } else { NULL }
+                    if here {
+                        arg.clone()
+                    } else {
+                        context.txn().nil()
+                    }
                 }
-                None => NULL,
+                None => context.txn().nil(),
             };
             context.return_efun_result(result);
             Ok(())
         }
         LpcRef::Int(_) => {
-            context.return_efun_result(NULL);
+            context.return_efun_result(context.txn().nil());
             Ok(())
         }
         other => Err(context.runtime_error(format!(
@@ -156,7 +159,7 @@ impl Continuation for Present {
                 args: SmallVec::from_vec(vec![self.id.clone()]),
             }));
         }
-        Ok(Next::Done(NULL))
+        Ok(Next::Done(txn.nil()))
     }
 
     fn clone_box(&self) -> Box<dyn Continuation> {

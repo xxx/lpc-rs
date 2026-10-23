@@ -93,6 +93,14 @@ impl Child<'_> {
 fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
     match node {
         Child::Expr(e) => match e {
+            ExpressionNode::ClassInit(n) => {
+                out.extend(n.initializers.iter().map(|(_, value)| Child::Expr(value)))
+            }
+            ExpressionNode::Member(n) => out.push(Child::Expr(&n.receiver)),
+            ExpressionNode::CompoundAssignment(n) => {
+                out.push(Child::Expr(&n.lhs));
+                out.push(Child::Expr(&n.rhs));
+            }
             ExpressionNode::Assignment(n) => {
                 out.push(Child::Expr(&n.lhs));
                 out.push(Child::Expr(&n.rhs));
@@ -102,6 +110,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 out.push(Child::Expr(&n.r));
             }
             ExpressionNode::Call(n) => push_children(Child::Call(n), out),
+            ExpressionNode::Catch(n) => out.push(Child::Block(&n.body)),
             ExpressionNode::Closure(n) => push_children(Child::Closure(n), out),
             ExpressionNode::CommaExpression(n) => out.extend(n.value.iter().map(Child::Expr)),
             ExpressionNode::FunctionPtr(n) => {
@@ -124,6 +133,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 out.push(Child::Expr(&n.else_clause));
             }
             ExpressionNode::UnaryOp(n) => out.push(Child::Expr(&n.expr)),
+            ExpressionNode::Capture(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Cast(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Spread(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Array(n) => out.extend(n.value.iter().map(Child::Expr)),
@@ -134,12 +144,14 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 }
             }
             ExpressionNode::Float(_)
+            | ExpressionNode::Nil(_)
             | ExpressionNode::Int(_)
             | ExpressionNode::String(_)
             | ExpressionNode::Var(_)
             | ExpressionNode::Ref(_) => {}
         },
         Child::Stmt(s) => match s {
+            AstNode::ClassDef(_) => {}
             AstNode::Block(n) => push_children(Child::Block(n), out),
             AstNode::Call(n) => push_children(Child::Call(n), out),
             AstNode::Decl(n) => push_children(Child::Decl(n), out),
@@ -190,11 +202,14 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
         },
         Child::Block(n) => out.extend(n.body.iter().map(Child::Stmt)),
         Child::Closure(n) => {
+            out.extend(n.captures.iter().map(Child::VarInit));
             out.extend(n.parameters.iter().flatten().map(Child::VarInit));
+            out.extend(n.variadic.as_deref().map(Child::VarInit));
             out.extend(n.body.iter().map(Child::Stmt));
         }
         Child::FunctionDef(n) => {
             out.extend(n.parameters.iter().map(Child::VarInit));
+            out.extend(n.variadic.as_deref().map(Child::VarInit));
             out.extend(n.body.iter().map(Child::Stmt));
         }
         Child::Decl(n) => out.extend(n.initializations.iter().map(Child::VarInit)),
@@ -219,6 +234,18 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
         // Inherits are leaves.
         Child::Program(n) => out.extend(n.body.iter().map(Child::Stmt)),
     }
+}
+
+/// Whether folding away this expression would discard an explicit capture.
+pub fn contains_capture(expr: &ExpressionNode) -> bool {
+    let mut pending = vec![Child::Expr(expr)];
+    while let Some(node) = pending.pop() {
+        if matches!(node, Child::Expr(ExpressionNode::Capture(_))) {
+            return true;
+        }
+        push_children(node, &mut pending);
+    }
+    false
 }
 
 /// Where a tree crossed the cap: the first node found more than `max`
@@ -298,6 +325,25 @@ mod tests {
 
     async fn height_of(code: &str) -> usize {
         height(&parsed(code).await)
+    }
+
+    #[tokio::test]
+    async fn explicit_capture_expressions_count_toward_the_nesting_cap() {
+        let plain = height_of("function f() { return (: 1 :); }").await;
+        let captured = height_of("function f() { return (: $(1) :); }").await;
+        assert_eq!(captured, plain + 1);
+
+        let depth = MAX_NESTING_DEPTH + 1;
+        let code = format!(
+            "function f() {{ return (: {}1{} :); }}",
+            "$(".repeat(depth),
+            ")".repeat(depth)
+        );
+        let error = Compiler::new(test_config())
+            .parse_string(&LpcPath::from("/nest.c"), &code)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("code nests too deeply"));
     }
 
     #[tokio::test]
@@ -477,6 +523,7 @@ mod tests {
             "mapping_value" => expr(nest("([ 1 : ", " ])", "1")),
             "mapping_key" => expr(nest("([ ", " : 1 ])", "1")),
             "block" => stmt(nest("{ ", " }", "")),
+            "catch_block" => stmt(nest("catch { ", " };", "a;")),
             "if" => stmt(format!("{}{{}}", rep("if (a) "))),
             "elseif" => stmt(format!("if (a) {{}}{}", " else if (a) {}".repeat(n - 1))),
             "while" => stmt(format!("{}{{}}", rep("while (a) "))),
@@ -536,6 +583,7 @@ mod tests {
         ("mapping_value", 252),
         ("mapping_key", 252),
         ("block", 254),
+        ("catch_block", 126),
         ("if", 253),
         ("elseif", 253),
         ("while", 253),

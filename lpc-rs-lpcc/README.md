@@ -3,6 +3,9 @@
 Compile, inspect or run a single LPC file. See the root
 [README](../README.md#develop-and-debug-lpc) for installation instructions.
 
+Start with [Write your first LPC program](../doc/lpc/first_program.md)
+for a guided introduction to the language and runner.
+
 ## Try a single object
 
 From the repository root, create a directory for your LPC code:

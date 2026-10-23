@@ -133,15 +133,15 @@ least as wide as a nonzero wrap, and widths/indentation exceeding 1 MiB are runt
 errors. Input, expanded text, and output are each limited to 1 MiB; overflow
 raises an error rather than returning truncated text.
 
-## Compatibility
+## Formatting with other efuns
 
 `sprintf` preserves `%^` in its format string and measures expanded ANSI colours
 by visible width. Format plain arguments before expanding surrounding markup;
 expand markup inside an argument before passing it to a width-sensitive field.
 See `sprintf` for examples and precision behavior.
 
-Unlike FluffOS, ordinary words are never looked up as tokens and input mappings are
-not modified. Unlike LDMud, `0` strips tokens rather than selecting pure wrapping.
+Ordinary words are never looked up as tokens, input mappings are not modified,
+and a second argument of `0` strips tokens.
 `break_string` remains available for ordinary text wrapping.
 
 See also: `render_markdown`, `query_connection`, `break_string`, `sprintf`, `write_socket`.

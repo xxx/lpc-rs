@@ -25,6 +25,7 @@ use crate::compiler::{
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub enum AstNode {
     Block(BlockNode),
+    ClassDef(super::class_def_node::ClassDefNode),
     Break(BreakNode),
     Call(CallNode),
     Continue(ContinueNode),
@@ -69,6 +70,7 @@ impl AstNodeTrait for AstNode {
     async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
         let future = {
             match self {
+                AstNode::ClassDef(y) => y.visit(tree_walker),
                 AstNode::Block(y) => y.visit(tree_walker),
                 AstNode::Break(y) => y.visit(tree_walker),
                 AstNode::Call(y) => y.visit(tree_walker),
@@ -99,6 +101,7 @@ impl SpannedNode for AstNode {
     fn span(&self) -> Option<Span> {
         match self {
             AstNode::Block(_) | AstNode::Decl(_) | AstNode::Program(_) | AstNode::NoOp => None,
+            AstNode::ClassDef(n) => Some(n.span),
             AstNode::Break(n) => n.span,
             AstNode::Call(n) => n.span,
             AstNode::Continue(n) => n.span,

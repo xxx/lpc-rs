@@ -21,6 +21,55 @@ const X: (&str, &str) = (
 );
 
 #[tokio::test]
+async fn trailing_call_commas_preserve_defaults_and_variadic_counts() {
+    let result = run(
+        "",
+        &[],
+        indoc! { r#"
+        int add(int a, int b = 7) { return a + b; }
+        int count(mixed args...) { return sizeof(args); }
+        mixed *create() {
+            return ({ add(3,), add(add(1,),), count(), count(1,2,), count(({})...,),
+                this_object()->add(3,), efun::sizeof("猫",) });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(result, [10, 15, 0, 2, 0, 10, 1].map(LpcRef::from));
+}
+
+#[tokio::test]
+async fn trailing_call_commas_support_inherited_calls_and_spreads() {
+    let result = run(
+        "",
+        &[],
+        indoc! { r#"
+        inherit "/spread_base" base;
+        mixed *create() {
+            int *tail = ({2,3});
+            return ({ ::add(1,2,3,), base::add(1,tail...,) });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(result, vec![LpcRef::from(6), LpcRef::from(6)]);
+}
+
+#[tokio::test]
+async fn trailing_call_commas_preserve_reference_arguments() {
+    let task = run_prog(indoc! { r#"
+        void increment(int ref value) { value++; }
+        int create() {
+            int n = 41;
+            increment(ref n,);
+            return n;
+        }
+    "# })
+    .await;
+    assert_eq!(task.result(), Some(LpcRef::from(42)));
+}
+
+#[tokio::test]
 async fn a_call_other_callee_sees_the_calling_function_and_its_file() {
     let r = run(
         "",

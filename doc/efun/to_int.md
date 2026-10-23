@@ -10,7 +10,7 @@ Convert `value` to an int:
   an optional sign and decimal digits are read, and the rest is ignored.
   `to_int("12abc")` is `12`; a string with no leading digits is `0`. Digits
   past the int range are an error.
-- A destructed object is `0`.
+- In zero mode, a destructed object is `0`; distinct mode rejects it as nil.
 
 Anything else (a live object, an array, a mapping, a function) is an error.
 

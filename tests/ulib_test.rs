@@ -1,5 +1,6 @@
 //! Keep the distributed learning material aligned with the compiler and apply API.
 
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -205,6 +206,12 @@ async fn live_objects_and_enabled_examples_cover_every_documented_apply() {
                 "missing {category}/{name} reference"
             );
             if name == "parser_handlers" {
+                for handler in ["can_cast_str_at_str", "do_cast_str_at_str"] {
+                    assert!(
+                        functions["examples/verb.c"].contains_key(handler),
+                        "missing {handler}"
+                    );
+                }
                 for family in ["can", "direct", "indirect", "do"] {
                     for suffix in ["give_obj_to_liv", "verb_rule"] {
                         let handler = format!("{family}_{suffix}");
@@ -243,6 +250,14 @@ async fn live_objects_and_enabled_examples_cover_every_documented_apply() {
                 );
                 for source in &sources {
                     if let Some(function) = functions[*source].get(name) {
+                        // Constructor parameters are object-defined, but must accept values.
+                        if name == CREATE_FUNCTION {
+                            assert!(
+                                function.prototype.first_ref_param().is_none(),
+                                "{source}: create cannot take reference parameters"
+                            );
+                            continue;
+                        }
                         assert_apply_signature(
                             &function.prototype,
                             expected,
@@ -321,6 +336,52 @@ fn documentation_links_stay_inside_the_copyable_directory() {
 }
 
 #[tokio::test]
+async fn policy_refuses_loading_code_that_bypasses_efun_resolution() {
+    let root = tempfile::TempDir::new().unwrap();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("ulib");
+    for path in files_below(&source) {
+        let destination = root.path().join(path.strip_prefix(&source).unwrap());
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        fs::copy(path, destination).unwrap();
+    }
+    fs::write(
+        root.path().join("obj/forbidden.c"),
+        "int value() { return efun::sizeof(({ 1 })); }",
+    )
+    .unwrap();
+    let mut vm = Vm::new(
+        ConfigBuilder::default()
+            .lib_dir(root.path().to_str().unwrap())
+            .system_include_dirs(vec!["/include"])
+            .build()
+            .unwrap(),
+    );
+    vm.bootstrap().await.unwrap();
+    let task = vm
+        .initialize_process_from_code(
+            "/obj/probe.c",
+            r#"
+        int create() {
+            mixed error=catch("/obj/forbidden"->value());
+            return stringp(error) && strindex(error, "efun::sizeof: permission denied") >= 0;
+        }
+    "#,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        task.result(),
+        Some(lpc_rs::interpreter::lpc_ref::LpcRef::from(1))
+    );
+    assert!(
+        vm.global_state
+            .object_space
+            .lookup("/obj/forbidden")
+            .is_none()
+    );
+}
+
+#[tokio::test]
 async fn policy_allows_game_objects_and_refuses_privileged_operations() {
     let mut vm = Vm::new(config());
     vm.bootstrap().await.unwrap();
@@ -347,9 +408,12 @@ async fn policy_allows_game_objects_and_refuses_privileged_operations() {
             require_denied(catch(read_file("/include/ulib.h")), "ordinary reads");
             require_denied(catch(write_file("/unexpected", "data")), "writes");
             require_denied(catch(destruct(room)), "destructing another object");
+            require_denied(catch(store_variable(player, "name", "changed")), "replacing another object's global");
             require_denied(catch(compile_string("/obj/injected", "void create() {}")), "source injection");
+            require_denied(catch(syntax_tree("/obj/inspected", "void create() {}")), "source inspection");
             require(!master->valid_load("/secure/other.c", "load_object", this_object(), "/obj/probe.c"), "secure loads must fail");
             require(!master->valid_inherit("/obj/player.c", "/obj/probe.c"), "player inheritance must fail");
+            require_denied(catch(query_sockets()), "raw TCP inspection");
             require(!master->valid_exec("/obj/probe.c", this_object(), player), "exec must fail");
             require(!master->valid_variable_info(this_object(), player, "/obj/probe.c"), "inspection must fail");
             require(!master->valid_recompile(player, this_object(), "/obj/probe.c"), "recompile must fail");
@@ -366,4 +430,37 @@ async fn policy_allows_game_objects_and_refuses_privileged_operations() {
     .await
     .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
     assert!(vm.global_state.object_space.lookup("/obj/probe").is_none());
+}
+
+#[tokio::test]
+async fn ulib_compiles_with_distinct_nil() {
+    let config = Arc::new(
+        ConfigBuilder::default()
+            .lib_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/ulib"))
+            .system_include_dirs(vec!["/include"])
+            .null_mode(NullMode::Distinct)
+            .build()
+            .unwrap(),
+    );
+    let root = Path::new(config.lib_dir.as_str());
+    let compiler = CompilerBuilder::default()
+        .config(config.clone())
+        .build()
+        .unwrap();
+    for path in files_below(root) {
+        if path.extension().is_none_or(|ext| ext != "c") {
+            continue;
+        }
+        let relative = path.strip_prefix(root).unwrap().to_str().unwrap();
+        let code = fs::read_to_string(&path)
+            .unwrap()
+            .replace("#if 0\n", "#if 1\n");
+        compiler
+            .compile_string(
+                LpcPath::new_in_game(relative, "/", config.lib_dir.as_str()),
+                code,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("{relative}: {}", e.diagnostic_string()));
+    }
 }

@@ -3,7 +3,7 @@
 `mapping *variable_info(object ob)`
 
 Return every global declaration in `ob`, including inherited, hidden, private,
-protected, and static variables. Entries follow storage order: ancestor blocks
+protected, and `nosave`/`static` variables. Entries follow storage order: ancestor blocks
 first, then the object's own declarations, each block in declaration order.
 An ancestor shared through multiple parents appears once. Different declarations
 with the same name have separate entries.
@@ -15,12 +15,15 @@ Each entry has these fields:
 | `name` | string | Declared variable name |
 | `program` | string | Declaring program's source path, including `.c` |
 | `type` | string | Declared LPC type, such as `int` or `mixed *` |
-| `flags` | string | Visibility, followed by `static` and `nomask` when present |
+| `flags` | string | Declared visibility, followed by `static` (for either `static` or `nosave`) and `nomask` when present |
 | `value` | mixed | Value read through the caller's transaction |
 
+Inheritance restrictions do not rewrite the declaring source's flags.
 Pending writes in the same transaction are visible. The returned array and
 entry mappings are new containers: replacing an entry's `value` does not assign
-the original global. Values retain normal LPC sharing, however. Mutating an
+the original global. Use [`store_variable`](store_variable.md) to replace a
+global by name and, when needed, declaring source. Values retain normal LPC
+sharing, however. Mutating an
 array or mapping obtained through `value` changes that value in the object too;
 objects and function pointers retain their normal behavior.
 
@@ -43,4 +46,4 @@ foreach (mapping variable : variable_info(ob)) {
 
 ## See also
 
-`inherit_list`, `deep_inherit_list`, `function_info`, `dump`
+`store_variable`, `inherit_list`, `deep_inherit_list`, `function_info`, `dump`

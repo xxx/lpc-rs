@@ -10,6 +10,9 @@ mod symbol;
 mod var_init_node;
 mod var_node;
 
+// The facade's trailing semicolon triggers Rust 1.99's expression-macro lint.
+pub use factori_imp::factori_imp_impl::create;
+
 pub use call_chain::*;
 pub use call_node::*;
 pub use closure_node::*;

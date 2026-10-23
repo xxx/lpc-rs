@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -8,7 +9,7 @@ use bit_set::BitSet;
 use indexmap::IndexMap;
 use lpc_rs_asm::{
     address::{Address, Label},
-    instruction::{Arg, ArgList, Comparison, Instruction},
+    instruction::{Arg, ArgList, Comparison, Instruction, ReverseRange},
 };
 use lpc_rs_core::{
     CREATE_FUNCTION, INIT_GLOBALS, INIT_PROGRAM, LpcIntInner, RegisterSize, ScopeId,
@@ -42,6 +43,8 @@ use crate::{
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             cast_node::CastNode,
+            catch_node::CatchNode,
+            class_expression::{ClassInitNode, CompoundAssignmentNode, MemberNode},
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             decl_node::DeclNode,
@@ -73,6 +76,7 @@ use crate::{
         codegen::{tree_walker, tree_walker::ContextHolder},
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
+        semantic::semantic_checks::node_type,
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
@@ -94,14 +98,16 @@ macro_rules! push_instruction {
 struct JumpTarget {
     pub break_target: Label,
     /// `None` inside a `switch` that no loop encloses.
-    pub continue_target: Option<Label>,
+    pub continue_target: Option<(Label, usize)>,
+    pub break_catch_depth: usize,
 }
 
 impl JumpTarget {
-    fn new(break_target: Label, continue_target: Label) -> Self {
+    fn new(break_target: Label, continue_target: Label, catch_depth: usize) -> Self {
         Self {
             break_target,
-            continue_target: Some(continue_target),
+            continue_target: Some((continue_target, catch_depth)),
+            break_catch_depth: catch_depth,
         }
     }
 }
@@ -145,6 +151,7 @@ fn as_comparison(
 /// `-0.0` are two entries.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum ConstantKey {
+    Nil,
     Int(LpcIntInner),
     Float(u64),
     String(Ustr),
@@ -153,6 +160,7 @@ enum ConstantKey {
 impl From<&LpcConstant> for ConstantKey {
     fn from(constant: &LpcConstant) -> Self {
         match constant {
+            LpcConstant::Nil => Self::Nil,
             LpcConstant::Int(x) => Self::Int(*x),
             LpcConstant::Float(x) => Self::Float(x.into_inner().to_bits()),
             LpcConstant::String(x) => Self::String(ustr(x.to_str())),
@@ -235,6 +243,9 @@ pub struct CodegenWalker {
     /// Labels where jumps at any particular time need to go to.
     jump_targets: Vec<JumpTarget>,
 
+    /// Active catch handlers in the function being emitted.
+    catch_depth: usize,
+
     /// The labels of each open `switch`'s cases in visit order, taken by
     /// `visit_label` as the bodies are emitted.
     case_labels: Vec<VecDeque<Label>>,
@@ -287,11 +298,12 @@ impl CodegenWalker {
     /// The function that initializes a new object: each inherited block's
     /// globals in layout order, this program's own, then `create()` if any
     /// program in the chain defines it.
-    async fn build_initializer(&mut self, init_globals: Ustr) -> Result<ProgramFunction> {
+    fn build_initializer(&mut self, init_globals: Ustr) -> Result<ProgramFunction> {
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
             .filename(self.context.source.input().clone())
             .return_type(LpcType::Void)
+            .flags(FunctionFlags::default().with_ellipsis(true))
             .build()
             .expect("Failed to build initializer prototype");
 
@@ -305,28 +317,33 @@ impl CodegenWalker {
             push_instruction!(self, Instruction::Call(init, list), None);
         }
 
-        if self
+        let mut populate_argv_index = None;
+        if let Some((create, takes_args)) = self
             .context
             .lookup_function(CREATE_FUNCTION, &CallNamespace::Local)
-            .is_some()
+            .map(|prototype| {
+                (
+                    ustr(&prototype.mangle()),
+                    prototype.arity.num_args > 0 || prototype.flags.ellipsis(),
+                )
+            })
         {
-            let mut call = CallNode {
-                chain: CallChain::Root {
-                    receiver: None,
-                    name: ustr(CREATE_FUNCTION),
-                    namespace: CallNamespace::Local,
-                },
-                arguments: vec![],
-                span: None,
-                lvalue_temps: Vec::new(),
+            let args = if takes_args {
+                let args = self.register_counter.next().unwrap().as_local();
+                populate_argv_index = Some(self.current_address());
+                push_instruction!(self, Instruction::PopulateArgv(args, 0, 0), None);
+                vec![Arg::Spread(args)]
+            } else {
+                vec![]
             };
-            call.visit(self).await?;
+            let list = self.arg_list(args, None)?;
+            push_instruction!(self, Instruction::Call(create, list), None);
         }
 
         // The initializer's value is `create()`'s, still in register 0.
         push_instruction!(self, Instruction::Ret, None);
 
-        let func = self.finalize_function(None, None)?;
+        let func = self.finalize_function(populate_argv_index, None)?;
         self.register_counter.pop();
 
         Ok(func)
@@ -374,6 +391,7 @@ impl CodegenWalker {
         let mut inherited_function_scopes = HashMap::new();
         let mut linker = ProgramLinker::new(num_globals);
         let mut functions: IndexMap<ustr::Ustr, Function, ahash::RandomState> = IndexMap::default();
+        let mut frozen_dispatch = HashMap::new();
         let mut global_variable_info = Vec::new();
         let mut global_variables: HashMap<String, Symbol> = HashMap::new();
         for parent in inherits {
@@ -386,8 +404,20 @@ impl CodegenWalker {
             inherited_function_scopes
                 .insert(parent.filename.clone(), parent.function_scope.clone());
             functions.extend(parent.functions(&mut linker)?);
+            for (&name, function) in parent.functions.iter() {
+                if function.private() || function.hidden() {
+                    if let Some(target) = parent.target(name) {
+                        frozen_dispatch.insert(name, ustr(&target.function.mangle()));
+                    }
+                } else {
+                    frozen_dispatch.remove(&name);
+                }
+            }
             global_variable_info.extend(parent.global_variable_info.into_vec());
-            for (name, symbol) in *parent.global_variables {
+            for (name, mut symbol) in *parent.global_variables {
+                symbol
+                    .flags
+                    .set_visibility(symbol.flags.visibility().restricted_by(parent.visibility));
                 if symbol.visible_to_children()
                     || !global_variables
                         .get(&name)
@@ -425,19 +455,22 @@ impl CodegenWalker {
             .filter(|f| !f.is_closure())
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _, ahash::RandomState>>();
-        let dispatch = dispatch_table(&functions);
+        let dispatch = dispatch_table(&functions, &frozen_dispatch);
         let function_scope = Arc::new(FunctionScope::new(
-            &functions,
+            &filename,
+            &unmangled_functions,
             parent_scopes,
             std::mem::take(&mut self.context.inherit_names),
         ));
         Ok(Program {
+            memory_size: Default::default(),
             filename,
             functions: Box::new(functions),
             dispatch: Box::new(dispatch),
             initializer,
             unmangled_functions: Box::new(unmangled_functions),
             function_scope,
+            class_scope: self.context.class_scope.clone(),
             inherited_function_scopes: Box::new(inherited_function_scopes),
             global_variables: Box::new(global_variables),
             global_variable_info: global_variable_info.into_boxed_slice(),
@@ -448,6 +481,48 @@ impl CodegenWalker {
             pragmas: self.context.pragmas,
             clones: Default::default(),
         })
+    }
+
+    fn type_index(
+        &mut self,
+        target: LpcType,
+        span: Option<Span>,
+    ) -> Result<lpc_rs_asm::instruction::TypeIndex> {
+        let function = self
+            .function_stack
+            .last_mut()
+            .ok_or_else(|| lpc_bug!(span, "type operand outside a function"))?;
+        let index = if let Some(index) = function.types.iter().position(|type_| *type_ == target) {
+            index
+        } else {
+            function.types.push(target);
+            function.types.len() - 1
+        };
+        Ok(lpc_rs_asm::instruction::TypeIndex(u16::try_from(index)?))
+    }
+
+    fn guard_class(
+        &mut self,
+        location: RegisterVariant,
+        target: LpcType,
+        span: Option<Span>,
+    ) -> Result<()> {
+        if matches!(target, LpcType::Class(_, false)) {
+            let index = self.type_index(target, span)?;
+            push_instruction!(self, Instruction::Guard(location, index), span);
+        }
+        Ok(())
+    }
+
+    async fn member_target(&mut self, node: &mut MemberNode) -> Result<RegisterVariant> {
+        node.receiver.visit(self).await?;
+        let target = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::Copy(self.current_result, target),
+            node.span
+        );
+        Ok(target)
     }
 
     fn ensure_sync(&self) -> Result<()> {
@@ -480,12 +555,12 @@ impl CodegenWalker {
     /// operation
     fn choose_op_instruction(
         &self,
-        node: &BinaryOpNode,
+        op: BinaryOperation,
         reg_left: RegisterVariant,
         reg_right: RegisterVariant,
         reg_result: RegisterVariant,
     ) -> Instruction {
-        match node.op {
+        match op {
             BinaryOperation::Add => Instruction::Add(reg_left, reg_right, reg_result),
             BinaryOperation::Sub => Instruction::Sub(reg_left, reg_right, reg_result),
             BinaryOperation::Mul => Instruction::Mul(reg_left, reg_right, reg_result),
@@ -584,37 +659,299 @@ impl CodegenWalker {
         Ok(current_register)
     }
 
-    /// Emit the instruction(s) to take the range of an array or string
+    async fn emit_index_bound(
+        &mut self,
+        expr: &mut ExpressionNode,
+    ) -> Result<(RegisterVariant, bool)> {
+        let (expr, from_end) = match expr {
+            ExpressionNode::UnaryOp(UnaryOpNode {
+                op: UnaryOperation::FromEnd,
+                expr,
+                ..
+            }) => (&mut **expr, true),
+            expr => (expr, false),
+        };
+        expr.visit(self).await?;
+        Ok((self.current_result, from_end))
+    }
+
+    async fn emit_index(
+        &mut self,
+        container: RegisterVariant,
+        expr: &mut ExpressionNode,
+    ) -> Result<RegisterVariant> {
+        let (index, from_end) = self.emit_index_bound(expr).await?;
+        if from_end {
+            let result = self.register_counter.next().unwrap().as_local();
+            push_instruction!(
+                self,
+                Instruction::IndexFromEnd(container, index, result),
+                expr.span()
+            );
+            Ok(result)
+        } else {
+            Ok(index)
+        }
+    }
+
+    async fn emit_compound_index_assignment(
+        &mut self,
+        lhs: &mut ExpressionNode,
+        rhs: &mut ExpressionNode,
+        op: BinaryOperation,
+        span: Option<Span>,
+    ) -> Result<()> {
+        let target = node_type(lhs, &self.context)?;
+        let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            l: container,
+            r: index,
+            ..
+        }) = lhs
+        else {
+            return Err(lpc_bug!(span, "compound target must be indexed"));
+        };
+        container.visit(self).await?;
+        let saved_container = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::Copy(self.current_result, saved_container),
+            span
+        );
+        let index = self.emit_index(saved_container, index).await?;
+        let saved_index = self.register_counter.next().unwrap().as_local();
+        push_instruction!(self, Instruction::Copy(index, saved_index), span);
+        let old = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::Load(saved_container, saved_index, old),
+            span
+        );
+        self.guard_class(old, target, span)?;
+        let result = self.register_counter.next().unwrap().as_local();
+        let short = matches!(op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
+        let end = self.new_label("indexed-assignment-end");
+        if short {
+            let initial = if op == BinaryOperation::AndAnd {
+                self.constant(LpcConstant::Int(0), span)?
+            } else {
+                old
+            };
+            push_instruction!(self, Instruction::Copy(initial, result), span);
+            self.schedule_backpatch(&end, self.current_address())?;
+            let jump = if op == BinaryOperation::AndAnd {
+                Instruction::Jz(old, Address(0))
+            } else {
+                Instruction::Jnz(old, Address(0))
+            };
+            push_instruction!(self, jump, span);
+        }
+        rhs.visit(self).await?;
+        if short {
+            push_instruction!(self, Instruction::Copy(self.current_result, result), span);
+            self.insert_label(end, self.current_address());
+        } else {
+            let instruction = self.choose_op_instruction(op, old, self.current_result, result);
+            push_instruction!(self, instruction, span);
+        }
+        self.guard_class(result, target, span)?;
+        push_instruction!(
+            self,
+            Instruction::Store(result, saved_container, saved_index),
+            span
+        );
+        self.current_result = result;
+        Ok(())
+    }
+
+    fn bound_may_mutate(expr: &ExpressionNode) -> bool {
+        match expr {
+            ExpressionNode::Int(_) | ExpressionNode::Var(_) => false,
+            ExpressionNode::UnaryOp(node) => {
+                matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
+                    || Self::bound_may_mutate(&node.expr)
+            }
+            ExpressionNode::BinaryOp(node) => {
+                Self::bound_may_mutate(&node.l) || Self::bound_may_mutate(&node.r)
+            }
+            ExpressionNode::Cast(node) => Self::bound_may_mutate(&node.expr),
+            _ => true,
+        }
+    }
+
+    /// Emit the instruction(s) to take the range of an array, string or bytes
     /// # Arguments
     /// `reference` - The [`Register`] holding the reference to the ref we're
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
     async fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
-        let first_index = if let Some(expr) = &mut *node.l {
-            expr.visit(self).await?;
-            self.current_result
+        let start_may_mutate = node.l.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
+        let end_may_mutate = node.r.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
+        let reference = if (start_may_mutate || end_may_mutate)
+            && !matches!(reference, RegisterVariant::Constant(_))
+        {
+            self.current_result = reference;
+            self.save_result(node.span)
+        } else {
+            reference
+        };
+        let (first_index, start_from_end) = if let Some(expr) = &mut *node.l {
+            let (value, from_end) = self.emit_index_bound(expr).await?;
+            let value = if end_may_mutate && !matches!(value, RegisterVariant::Constant(_)) {
+                self.save_result(expr.span())
+            } else {
+                value
+            };
+            (value, from_end)
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
             // 0.
-            self.register_counter.next().unwrap().as_local()
+            (self.register_counter.next().unwrap().as_local(), false)
         };
 
-        let second_index = if let Some(expr) = &mut *node.r {
-            expr.visit(self).await?;
-            self.current_result
+        let (second_index, end_from_end) = if let Some(expr) = &mut *node.r {
+            self.emit_index_bound(expr).await?
         } else {
             // A missing range end means just go to the end of the array.
-            self.constant(LpcConstant::Int(-1), node.span)?
+            (self.constant(LpcConstant::Int(-1), node.span)?, false)
         };
 
         let result = self.register_counter.next().unwrap().as_local();
         self.current_result = result;
+        let direction = match (start_from_end, end_from_end) {
+            (true, true) => Some(ReverseRange::Both),
+            (true, false) => Some(ReverseRange::Start),
+            (false, true) => Some(ReverseRange::End),
+            (false, false) => None,
+        };
+        let instruction = match direction {
+            Some(kind) => {
+                Instruction::RangeFromEnd(kind, reference, first_index, second_index, result)
+            }
+            None => Instruction::Range(reference, first_index, second_index, result),
+        };
+        push_instruction!(self, instruction, node.span);
+
+        Ok(())
+    }
+
+    fn save_result(&mut self, span: Option<Span>) -> RegisterVariant {
+        let saved = self.register_counter.next().unwrap().as_local();
+        push_instruction!(self, Instruction::Copy(self.current_result, saved), span);
+        saved
+    }
+
+    async fn capture_assignment_owner(
+        &mut self,
+        owner: &mut ExpressionNode,
+        span: Option<Span>,
+    ) -> Result<(RegisterVariant, Instruction)> {
+        let value = self.register_counter.next().unwrap().as_local();
+        let writeback = match owner {
+            ExpressionNode::Var(_) => {
+                owner.visit(self).await?;
+                let location = self.current_result;
+                push_instruction!(self, Instruction::Copy(location, value), span);
+                Instruction::Copy(value, location)
+            }
+            ExpressionNode::Member(member) => {
+                let receiver = self.member_target(member).await?;
+                push_instruction!(
+                    self,
+                    Instruction::MemberLoad(receiver, member.name, value),
+                    span
+                );
+                Instruction::MemberStore(value, receiver, member.name)
+            }
+            ExpressionNode::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                l,
+                r,
+                ..
+            }) => {
+                l.visit(self).await?;
+                let container = self.save_result(l.span());
+                self.current_result = self.emit_index(container, r).await?;
+                let key = self.save_result(r.span());
+                push_instruction!(self, Instruction::Load(container, key, value), span);
+                Instruction::Store(value, container, key)
+            }
+            _ => return Err(lpc_bug!(span, "invalid assignment owner")),
+        };
+        Ok((value, writeback))
+    }
+
+    async fn emit_index_assignment(
+        &mut self,
+        owner: &mut ExpressionNode,
+        index: &mut ExpressionNode,
+        rhs: &mut ExpressionNode,
+        span: Option<Span>,
+    ) -> Result<()> {
+        rhs.visit(self).await?;
+        let (replacement, value, writeback) = if matches!(owner, ExpressionNode::Var(_))
+            && matches!(index, ExpressionNode::Int(_) | ExpressionNode::Var(_))
+        {
+            // A literal or variable index cannot reassign the RHS or owner.
+            let replacement = self.current_result;
+            owner.visit(self).await?;
+            (replacement, self.current_result, None)
+        } else {
+            let replacement = self.save_result(rhs.span());
+            let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
+            (replacement, value, Some(writeback))
+        };
+        let index = self.emit_index(value, index).await?;
+        let end = self.new_label("index-assignment-end");
+        self.schedule_backpatch(&end, self.current_address())?;
         push_instruction!(
             self,
-            Instruction::Range(reference, first_index, second_index, result,),
-            node.span
+            Instruction::AssignIndex(replacement, value, index, Address(0)),
+            span
         );
+        if let Some(writeback) = writeback {
+            push_instruction!(self, writeback, span);
+        }
+        self.insert_label(end, self.current_address());
+        self.current_result = replacement;
+        Ok(())
+    }
 
+    async fn emit_slice_assignment(
+        &mut self,
+        owner: &mut ExpressionNode,
+        range: &mut RangeNode,
+        rhs: &mut ExpressionNode,
+        span: Option<Span>,
+    ) -> Result<()> {
+        rhs.visit(self).await?;
+        let replacement = self.save_result(rhs.span());
+        let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
+        let (start, start_from_end) = if let Some(expr) = &mut *range.l {
+            let (value, reverse) = self.emit_index_bound(expr).await?;
+            self.current_result = value;
+            (self.save_result(expr.span()), reverse)
+        } else {
+            (self.constant(LpcConstant::Int(0), span)?, false)
+        };
+        let (end, end_from_end) = if let Some(expr) = &mut *range.r {
+            self.emit_index_bound(expr).await?
+        } else {
+            (self.constant(LpcConstant::Int(-1), span)?, false)
+        };
+        let direction = match (start_from_end, end_from_end) {
+            (true, true) => Some(ReverseRange::Both),
+            (true, false) => Some(ReverseRange::Start),
+            (false, true) => Some(ReverseRange::End),
+            (false, false) => None,
+        };
+        push_instruction!(
+            self,
+            Instruction::ReplaceRange(direction, value, start, end, replacement),
+            span
+        );
+        push_instruction!(self, writeback, span);
+        self.current_result = replacement;
         Ok(())
     }
 
@@ -696,40 +1033,38 @@ impl CodegenWalker {
         Ok(())
     }
 
-    // special case for `catch()`
-    async fn emit_catch(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn emit_catch<T: AstNodeTrait + Send>(
+        &mut self,
+        body: &mut T,
+        span: Option<Span>,
+    ) -> Result<()> {
         let result_register = self.register_counter.next().unwrap().as_local();
-        let label = self.new_label("catch_end");
-
         let start_address = self.current_address();
         push_instruction!(
             self,
             Instruction::CatchStart(result_register, Address(0)),
-            node.span
+            span
         );
 
-        for argument in &mut node.arguments {
-            argument.visit(self).await?;
-        }
+        let enclosing_depth = self.catch_depth;
+        self.catch_depth += 1;
+        let result = body.visit(self).await;
+        self.catch_depth = enclosing_depth;
+        result?;
 
-        // get the address of the `catch_end` pseudo-instruction, so we can jump to a
-        // location that is both guaranteed to have an instruction, as well as
-        // clean up the handled catch point
-        let label_address = self.current_address();
-        self.insert_label(label, label_address);
-
-        // backpatch the `catch_start` instruction with the address of the `catchend`
-        let instructions = &mut self.function_stack.last_mut().unwrap().instructions;
-        let _ = std::mem::replace(
-            &mut instructions[start_address.0],
-            Instruction::CatchStart(result_register, label_address),
-        );
-
-        push_instruction!(self, Instruction::CatchEnd, node.span);
-
+        // Error unwinding resumes at CatchEnd so it removes the handled catch too.
+        let end_address = self.current_address();
+        self.function_stack.last_mut().unwrap().instructions[start_address.0] =
+            Instruction::CatchStart(result_register, end_address);
+        push_instruction!(self, Instruction::CatchEnd, span);
         self.current_result = result_register;
-
         Ok(())
+    }
+
+    fn leave_catches(&mut self, target_depth: usize, span: Option<Span>) {
+        for _ in target_depth..self.catch_depth {
+            push_instruction!(self, Instruction::CatchEnd, span);
+        }
     }
 
     /// The operand of `constant` in the current function's pool, interned
@@ -759,16 +1094,17 @@ impl CodegenWalker {
         Ok(Register(index).as_constant())
     }
 
-    /// Store 0 in register 0, which otherwise still holds the last callee's
-    /// result.
-    fn zero_result(&mut self, span: Option<Span>) -> Result<()> {
-        let zero = self.constant(LpcConstant::Int(0), span)?;
+    /// Replace the last callee's result with this function's default return value.
+    fn default_result(&mut self, span: Option<Span>) -> Result<()> {
+        let type_ = self.function_stack.last().unwrap().return_type();
+        let value = LpcConstant::default_for(type_, self.context.config.null_mode);
+        let zero = self.constant(value, span)?;
         push_instruction!(self, Instruction::Copy(zero, Register(0).as_local()), span);
         Ok(())
     }
 
     /// The operand naming `args` in the current function's argument lists,
-    /// a fresh entry per call site.
+    /// a fresh entry per call or spreading array literal.
     fn arg_list(&mut self, args: Vec<Arg>, span: Option<Span>) -> Result<ArgList> {
         let Some(function) = self.function_stack.last_mut() else {
             return Err(lpc_bug!(
@@ -779,7 +1115,7 @@ impl CodegenWalker {
         let Ok(index) = u16::try_from(function.arg_lists.len()) else {
             return Err(lpc_error!(
                 span,
-                "too many calls in one function (the limit is {})",
+                "too many calls or spreading array literals in one function (the limit is {})",
                 usize::from(u16::MAX) + 1
             ));
         };
@@ -1011,27 +1347,23 @@ impl CodegenWalker {
     fn setup_populate_argv(
         &mut self,
         ellipsis: bool,
+        collector: Option<&VarInitNode>,
         span: Option<Span>,
         passed_param_count: RegisterSize,
     ) -> Result<Option<Address>> {
         if ellipsis {
-            let argv_location = self.assign_sym_location(ARGV)?;
+            let name = collector.map_or(ARGV, |param| param.name.as_str());
+            let argv_location = self.assign_sym_location(name)?;
 
-            if let Some(sym) = self.context.lookup_var(ARGV)
+            if let Some(sym) = self.context.lookup_var(name)
                 && let Some(func) = self.function_stack.last_mut()
             {
                 func.local_variables.push(sym.clone())
             }
 
-            // We don't set `argv_location` as `self.current_result`, because it's
-            // being assigned implicitly, and doesn't need to be made available
-            // to more complex expressions. Expressions that use `argv` explicitly
-            // are handled elsewhere, as any other expr would be.
-
             let result = Some(self.current_address());
 
-            // The number of locals isn't known yet, so just set it to zero for now.
-            // This gets backpatched after the function body is generated.
+            // The local count is backpatched after the function body is generated.
             let instruction = Instruction::PopulateArgv(argv_location, passed_param_count, 0);
             push_instruction!(self, instruction, span);
 
@@ -1057,6 +1389,11 @@ impl CodegenWalker {
                 // generate code for only the value, then copy by hand, because we
                 // pre-generated locations of the parameters above.
                 value.visit(self).await?;
+                self.guard_class(
+                    self.current_result,
+                    parameter.type_.resolved()?,
+                    parameter.span,
+                )?;
                 let instruction =
                     Instruction::Copy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
@@ -1098,6 +1435,8 @@ impl CodegenWalker {
     ) -> Result<ProgramFunction> {
         let backpatch_map = self.backpatch_maps.pop().unwrap();
         let mut func = self.function_stack.pop().unwrap();
+        func.null_mode = self.context.config.null_mode;
+        func.class_scope = self.context.class_scope.clone();
         self.constant_keys.truncate(self.function_stack.len());
         Self::backpatch(&backpatch_map, &mut func)?;
         super::peephole::peephole(&mut func);
@@ -1177,8 +1516,7 @@ impl CodegenWalker {
     ) -> Result<()> {
         container.visit(self).await?;
         let container_result = self.current_result;
-        index.visit(self).await?;
-        let index_result = self.current_result;
+        let index_result = self.emit_index(container_result, index).await?;
 
         let element = self.register_counter.next().unwrap().as_local();
         let load = Instruction::Load(container_result, index_result, element);
@@ -1235,6 +1573,42 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
+        if node
+            .value
+            .iter()
+            .any(|item| matches!(item, ExpressionNode::Spread(_)))
+        {
+            let mut items = Vec::with_capacity(node.value.len());
+            for item in &mut node.value {
+                let (expression, spread) = match item {
+                    ExpressionNode::Spread(node) => (&mut *node.expr, true),
+                    expression => (expression, false),
+                };
+                expression.visit(self).await?;
+                let mut value = self.current_result;
+                if !matches!(value, RegisterVariant::Constant(_)) {
+                    // Later expressions may reassign the register that supplied this value.
+                    let saved = self.register_counter.next().unwrap().as_local();
+                    push_instruction!(self, Instruction::Copy(value, saved), expression.span());
+                    value = saved;
+                }
+                items.push(if spread {
+                    Arg::Spread(value)
+                } else {
+                    Arg::Value(value)
+                });
+            }
+            let list = self.arg_list(items, node.span)?;
+            let destination = self.register_counter.next().unwrap().as_local();
+            push_instruction!(
+                self,
+                Instruction::AConstSpread(list, destination),
+                node.span
+            );
+            self.current_result = destination;
+            return Ok(());
+        }
+
         let mut items = Vec::with_capacity(node.value.len());
         for member in &mut node.value {
             let _ = member.visit(self).await;
@@ -1252,16 +1626,158 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    async fn visit_class_init(&mut self, node: &mut ClassInitNode) -> Result<()> {
+        let target = node.type_.resolved()?;
+        let index = self.type_index(target, node.span)?;
+        let instance = self.register_counter.next().unwrap().as_local();
+        push_instruction!(self, Instruction::ClassConst(index, instance), node.span);
+        for (name, value) in &mut node.initializers {
+            value.visit(self).await?;
+            push_instruction!(
+                self,
+                Instruction::MemberStore(self.current_result, instance, *name),
+                value.span()
+            );
+        }
+        self.current_result = instance;
+        Ok(())
+    }
+
+    async fn visit_member(&mut self, node: &mut MemberNode) -> Result<()> {
+        node.receiver.visit(self).await?;
+        let result = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::MemberLoad(self.current_result, node.name, result),
+            node.span
+        );
+        let target = crate::compiler::semantic::semantic_checks::member_type(node, &self.context)?;
+        self.guard_class(result, target, node.span)?;
+        self.current_result = result;
+        Ok(())
+    }
+
+    async fn visit_compound_assignment(&mut self, node: &mut CompoundAssignmentNode) -> Result<()> {
+        let ExpressionNode::Member(member) = &mut *node.lhs else {
+            return Err(lpc_bug!(node.span, "compound target must be a member"));
+        };
+        let receiver = self.member_target(member).await?;
+        let name = member.name;
+        let old = self.register_counter.next().unwrap().as_local();
+        push_instruction!(
+            self,
+            Instruction::MemberLoad(receiver, name, old),
+            node.span
+        );
+        let result = self.register_counter.next().unwrap().as_local();
+        let short = matches!(node.op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
+        let end = self.new_label("member-assignment-end");
+        if short {
+            let initial = if node.op == BinaryOperation::AndAnd {
+                self.constant(LpcConstant::Int(0), node.span)?
+            } else {
+                old
+            };
+            push_instruction!(self, Instruction::Copy(initial, result), node.span);
+            self.schedule_backpatch(&end, self.current_address())?;
+            let jump = if node.op == BinaryOperation::AndAnd {
+                Instruction::Jz(old, Address(0))
+            } else {
+                Instruction::Jnz(old, Address(0))
+            };
+            push_instruction!(self, jump, node.span);
+        }
+        node.rhs.visit(self).await?;
+        if short {
+            push_instruction!(
+                self,
+                Instruction::Copy(self.current_result, result),
+                node.span
+            );
+            self.insert_label(end, self.current_address());
+        } else {
+            let instruction = self.choose_op_instruction(node.op, old, self.current_result, result);
+            push_instruction!(self, instruction, node.span);
+        }
+        push_instruction!(
+            self,
+            Instruction::MemberStore(result, receiver, name),
+            node.span
+        );
+        self.current_result = result;
+        Ok(())
+    }
+
     #[instrument(skip_all)]
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        if node.is_compound
+            && matches!(
+                &*node.lhs,
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    op: BinaryOperation::Index,
+                    ..
+                })
+            )
+            && let ExpressionNode::BinaryOp(binary) = &mut *node.rhs
+        {
+            // The desugared RHS contains another copy of the target expression.
+            return self
+                .emit_compound_index_assignment(&mut node.lhs, &mut binary.r, binary.op, node.span)
+                .await;
+        }
+        if let ExpressionNode::BinaryOp(BinaryOpNode {
+            op: BinaryOperation::Index,
+            l,
+            r,
+            ..
+        }) = &mut *node.lhs
+            && let ExpressionNode::Range(range) = &mut **r
+        {
+            return self
+                .emit_slice_assignment(l, range, &mut node.rhs, node.span)
+                .await;
+        }
+        if !node.is_compound
+            && let ExpressionNode::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                l,
+                r,
+                ..
+            }) = &mut *node.lhs
+            && l.has_assignment_owner()
+            && matches!(
+                node_type(l, &self.context)?,
+                LpcType::String(false) | LpcType::Mixed(false)
+            )
+        {
+            return self
+                .emit_index_assignment(l, r, &mut node.rhs, node.span)
+                .await;
+        }
+        if let ExpressionNode::Member(member) = &mut *node.lhs {
+            let receiver = self.member_target(member).await?;
+            node.rhs.visit(self).await?;
+            push_instruction!(
+                self,
+                Instruction::MemberStore(self.current_result, receiver, member.name),
+                node.span
+            );
+            return Ok(());
+        }
         node.rhs.visit(self).await?;
         let rhs_result = self.current_result;
+        let target = node_type(&node.lhs, &self.context)?;
+        self.guard_class(rhs_result, target, node.span)?;
         let lhs = &mut *node.lhs;
 
         match lhs {
-            ExpressionNode::Var(_) => {
-                lhs.visit(self).await?;
-                let lhs_result = self.current_result;
+            ExpressionNode::Var(var) => {
+                let lhs_result = if var.is_closure_arg_var() {
+                    self.visit_var(var).await?;
+                    self.current_result
+                } else {
+                    self.location_of(&var.name)?
+                };
                 trace!("assignment: lhs: {}, rhs: {}", lhs_result, rhs_result);
 
                 let assign = Instruction::Copy(rhs_result, lhs_result);
@@ -1278,8 +1794,7 @@ impl TreeWalker for CodegenWalker {
             }) => {
                 l.visit(self).await?;
                 let var_result = self.current_result;
-                r.visit(self).await?;
-                let index_result = self.current_result;
+                let index_result = self.emit_index(var_result, r).await?;
 
                 let store = Instruction::Store(rhs_result, var_result, index_result);
 
@@ -1385,22 +1900,38 @@ impl TreeWalker for CodegenWalker {
             _ => { /* fallthrough */ }
         }
 
-        node.r.visit(self).await?;
-        let reg_right = self.current_result;
+        let reg_right = if node.op == BinaryOperation::Index {
+            self.emit_index(reg_left, &mut node.r).await?
+        } else {
+            node.r.visit(self).await?;
+            self.current_result
+        };
 
         let reg_result = self.register_counter.next().unwrap().as_local();
         self.current_result = reg_result;
 
-        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
+        let instruction = self.choose_op_instruction(node.op, reg_left, reg_right, reg_result);
         push_instruction!(self, instruction, node.span);
+        if node.op == BinaryOperation::Index
+            && let LpcType::Class(id, true) = node_type(&node.l, &self.context)?
+        {
+            self.guard_class(reg_result, LpcType::Class(id, false), node.span)?;
+        }
 
         Ok(())
     }
 
     #[instrument(skip_all)]
+    async fn visit_catch(&mut self, node: &mut CatchNode) -> Result<()> {
+        self.emit_catch(&mut node.body, node.span).await
+    }
+
+    #[instrument(skip_all)]
     async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
-        if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
-            self.schedule_backpatch(&break_target.clone(), self.current_address())?;
+        if let Some(target) = self.jump_targets.last() {
+            let label = target.break_target.clone();
+            self.leave_catches(target.break_catch_depth, node.span);
+            self.schedule_backpatch(&label, self.current_address())?;
             let instruction = Instruction::Jmp(0.into());
             push_instruction!(self, instruction, node.span);
             return Ok(());
@@ -1426,7 +1957,11 @@ impl TreeWalker for CodegenWalker {
         let has_receiver = receiver.is_some();
 
         if !has_receiver && name.as_str() == CATCH {
-            return self.emit_catch(node).await;
+            let argument = node
+                .arguments
+                .first_mut()
+                .ok_or_else(|| lpc_bug!(node.span, "catch has no expression"))?;
+            return self.emit_catch(argument, node.span).await;
         }
 
         let argument_len = node.arguments.len();
@@ -1434,11 +1969,8 @@ impl TreeWalker for CodegenWalker {
         // Resolved before the arguments are visited: an implicit efun lvalue
         // is pushed as a cell, never evaluated.
         // A function-typed variable answers a bare name only.
-        let calls_variable = namespace == &CallNamespace::Local
-            && self
-                .context
-                .lookup_var(name)
-                .is_some_and(|v| v.type_.matches_type(LpcType::Function(false)));
+        let calls_variable =
+            namespace == &CallNamespace::Local && self.context.lookup_callable_var(name).is_some();
         let implicit_refs: Vec<bool> = if receiver.is_none() && !calls_variable {
             self.context
                 .lookup_function_complete(name, namespace)
@@ -1463,8 +1995,8 @@ impl TreeWalker for CodegenWalker {
 
         let mut arg_results: Vec<Arg> = Vec::with_capacity(argument_len);
         let mut spread_seen = false;
-        // (cell, container, key) for each indexed lvalue: stored back after the call.
-        let mut write_backs: Vec<(RegisterVariant, RegisterVariant, RegisterVariant)> = Vec::new();
+        // Output targets retain their evaluated operands until writeback after the call.
+        let mut write_backs: Vec<Instruction> = Vec::new();
         let lvalue_temps = node.lvalue_temps.clone();
         for (index, argument) in node.arguments.iter_mut().enumerate() {
             if let ExpressionNode::Spread(spread) = argument {
@@ -1474,22 +2006,6 @@ impl TreeWalker for CodegenWalker {
                 continue;
             }
             if let Some((_, temp)) = lvalue_temps.iter().find(|(i, _)| *i == index) {
-                let ExpressionNode::BinaryOp(BinaryOpNode {
-                    op: BinaryOperation::Index,
-                    l,
-                    r,
-                    ..
-                }) = argument
-                else {
-                    return Err(lpc_bug!(
-                        node.span,
-                        "hidden cell `{temp}` stands in for a non-indexed argument"
-                    ));
-                };
-                l.visit(self).await?;
-                let container = self.current_result;
-                r.visit(self).await?;
-                let key = self.current_result;
                 let cell = self.location_of(temp)?;
                 if !matches!(cell, RegisterVariant::Upvalue(_)) {
                     return Err(lpc_bug!(
@@ -1497,10 +2013,39 @@ impl TreeWalker for CodegenWalker {
                         "hidden cell `{temp}` resolved to a register, not a cell"
                     ));
                 }
+                let (load, store) = match argument {
+                    ExpressionNode::Member(member) => {
+                        let receiver = self.member_target(member).await?;
+                        (
+                            Instruction::MemberLoad(receiver, member.name, cell),
+                            Instruction::MemberStore(cell, receiver, member.name),
+                        )
+                    }
+                    ExpressionNode::BinaryOp(BinaryOpNode {
+                        op: BinaryOperation::Index,
+                        l,
+                        r,
+                        ..
+                    }) => {
+                        l.visit(self).await?;
+                        let container = self.current_result;
+                        let key = self.emit_index(container, r).await?;
+                        (
+                            Instruction::Load(container, key, cell),
+                            Instruction::Store(cell, container, key),
+                        )
+                    }
+                    _ => {
+                        return Err(lpc_bug!(
+                            node.span,
+                            "hidden cell `{temp}` has an invalid output target"
+                        ));
+                    }
+                };
                 push_instruction!(self, Instruction::NewUpvalue(cell), node.span);
-                push_instruction!(self, Instruction::Load(container, key, cell), node.span);
+                push_instruction!(self, load, node.span);
                 arg_results.push(Arg::Ref(cell));
-                write_backs.push((cell, container, key));
+                write_backs.push(store);
                 continue;
             }
             let by_ref = match argument {
@@ -1621,28 +2166,14 @@ impl TreeWalker for CodegenWalker {
         };
 
         // Take care of the result after the call returns.
-        if let Some(func) = self.context.lookup_function_complete(name, namespace) {
+        if has_receiver || calls_variable {
+            push_copy(self);
+        } else if let Some(func) = self.context.lookup_function_complete(name, namespace) {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
             } else {
                 push_copy(self);
             }
-        } else if let Some(Symbol {
-            type_: LpcType::Function(false) | LpcType::Mixed(false),
-            ..
-        }) = self.context.lookup_var(name)
-        {
-            push_copy(self);
-        } else if has_receiver
-            || matches!(
-                self.context.scopes.lookup(name),
-                Some(Symbol {
-                    type_: LpcType::Function(false),
-                    ..
-                })
-            )
-        {
-            push_copy(self);
         } else {
             return Err(lpc_bug!(
                 node.span,
@@ -1652,8 +2183,8 @@ impl TreeWalker for CodegenWalker {
             ));
         }
 
-        for (cell, container, key) in write_backs {
-            push_instruction!(self, Instruction::Store(cell, container, key), node.span);
+        for store in write_backs {
+            push_instruction!(self, store, node.span);
         }
 
         Ok(())
@@ -1698,7 +2229,30 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
+    async fn visit_capture(
+        &mut self,
+        node: &mut crate::compiler::ast::capture_node::CaptureNode,
+    ) -> Result<()> {
+        node.expr.visit(self).await?;
+        let result = self
+            .register_counter
+            .next()
+            .ok_or_else(|| lpc_bug!(node.span, "capture has no result register"))?
+            .as_local();
+        // A local initialized from this value must not alias the hidden capture cell.
+        push_instruction!(
+            self,
+            Instruction::Copy(self.current_result, result),
+            node.span
+        );
+        self.current_result = result;
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+        let enclosing_catch_depth = std::mem::take(&mut self.catch_depth);
+        let enclosing_jumps = std::mem::take(&mut self.jump_targets);
         let Some(prototype) = self.context.function_prototypes.get(&*node.name) else {
             return Err(lpc_error!(
                 node.span,
@@ -1737,8 +2291,12 @@ impl TreeWalker for CodegenWalker {
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
-        let populate_argv_index =
-            self.setup_populate_argv(node.flags.ellipsis(), node.span, declared_arg_count)?;
+        let populate_argv_index = self.setup_populate_argv(
+            node.flags.ellipsis(),
+            node.variadic.as_deref(),
+            node.span,
+            declared_arg_count,
+        )?;
 
         let start_label = self.new_label("closure-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -1751,7 +2309,7 @@ impl TreeWalker for CodegenWalker {
             let target = Register(0).as_local();
             // A skipped explicit return has no expression result to copy.
             if self.function_stack.last().unwrap().instructions.last() == Some(&Instruction::Ret) {
-                self.zero_result(node.span)?;
+                self.default_result(node.span)?;
             } else if self.current_result != target {
                 push_instruction!(
                     self,
@@ -1792,6 +2350,9 @@ impl TreeWalker for CodegenWalker {
 
         self.register_counter.pop();
 
+        self.catch_depth = enclosing_catch_depth;
+        self.jump_targets = enclosing_jumps;
+
         // At this point, the closure has been generated and stored.
         // We just need to store a reference to it in the current result.
         let location = self.register_counter.next().unwrap().as_local();
@@ -1812,11 +2373,13 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if let Some(JumpTarget {
-            continue_target: Some(continue_target),
+            continue_target: Some((continue_target, catch_depth)),
             ..
         }) = self.jump_targets.last()
         {
-            self.schedule_backpatch(&continue_target.clone(), self.current_address())?;
+            let label = continue_target.clone();
+            self.leave_catches(*catch_depth, node.span);
+            self.schedule_backpatch(&label, self.current_address())?;
             let instruction = Instruction::Jmp(Address(0));
             push_instruction!(self, instruction, node.span);
             return Ok(());
@@ -1842,7 +2405,8 @@ impl TreeWalker for CodegenWalker {
         let start_label = self.new_label("do-while-start");
         let end_label = self.new_label("do-while-end");
         let continue_label = self.new_label("do-while-continue");
-        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        let jump_target =
+            JumpTarget::new(end_label.clone(), continue_label.clone(), self.catch_depth);
         self.jump_targets.push(jump_target);
 
         let start_addr = self.current_address();
@@ -1879,7 +2443,8 @@ impl TreeWalker for CodegenWalker {
         let test_label = self.new_label("for-test");
         let end_label = self.new_label("for-end");
         let continue_label = self.new_label("for-continue");
-        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        let jump_target =
+            JumpTarget::new(end_label.clone(), continue_label.clone(), self.catch_depth);
         self.jump_targets.push(jump_target);
 
         self.emit_loop_entry(node.condition.as_ref(), &test_label, node.span)?;
@@ -1911,7 +2476,8 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         node.collection.visit(self).await?;
-        let collection_location = self.current_result;
+        // Rebinding the source variable must not redirect later element loads.
+        let collection_location = self.save_result(node.collection.span());
 
         let index_location = self.assign_sym_location(FOREACH_INDEX)?;
         // Only the first run of the foreach gets the frame's NULL fill for its index.
@@ -1942,7 +2508,8 @@ impl TreeWalker for CodegenWalker {
         let test_label = self.new_label("foreach-test");
         let end_label = self.new_label("foreach-end");
         let continue_label = self.new_label("foreach-continue");
-        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        let jump_target =
+            JumpTarget::new(end_label.clone(), continue_label.clone(), self.catch_depth);
         self.jump_targets.push(jump_target);
 
         self.emit_jump(&test_label, node.span)?;
@@ -1958,6 +2525,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction =
                     Instruction::Load(collection_location, index_location, locations[0]);
                 push_instruction!(self, instruction, node.span);
+                self.guard_class(locations[0], node.type_.resolved()?, node.span)?;
             }
             ForEachInit::Mapping { key, value } => {
                 debug_assert!(locations.len() == 2);
@@ -1969,6 +2537,8 @@ impl TreeWalker for CodegenWalker {
                 let instruction =
                     Instruction::Load(collection_location, locations[0], locations[1]);
                 push_instruction!(self, instruction, value.span());
+                self.guard_class(locations[0], key.type_.resolved()?, key.span)?;
+                self.guard_class(locations[1], value.type_.resolved()?, value.span)?;
             }
         }
 
@@ -2030,8 +2600,12 @@ impl TreeWalker for CodegenWalker {
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
-        let populate_argv_index =
-            self.setup_populate_argv(node.flags.ellipsis(), node.span, declared_arg_count)?;
+        let populate_argv_index = self.setup_populate_argv(
+            node.flags.ellipsis(),
+            node.variadic.as_deref(),
+            node.span,
+            declared_arg_count,
+        )?;
 
         let start_label = self.new_label("function-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -2045,10 +2619,11 @@ impl TreeWalker for CodegenWalker {
             if sym.return_type() != LpcType::Void {
                 self.context.diagnostics.record(lpc_warning!(
                     node.span,
-                    "non-void function does not return a value. defaulting to 0."
+                    "non-void function does not return a value. defaulting to {}.",
+                    LpcConstant::default_for(sym.return_type(), self.context.config.null_mode)
                 ));
             }
-            self.zero_result(node.span)?;
+            self.default_result(node.span)?;
             push_instruction!(self, Instruction::Ret, node.span);
         }
 
@@ -2100,11 +2675,7 @@ impl TreeWalker for CodegenWalker {
                 // `&` used as the receiver
                 FunctionPtrReceiver::Dynamic => FunctionReceiver::Dynamic,
             }
-        } else if self
-            .context
-            .lookup_var(node.name)
-            .is_some_and(|v| v.type_.matches_type(LpcType::Function(false)))
-        {
+        } else if self.context.lookup_callable_var(&node.name).is_some() {
             // A function-typed variable shadows a function of the same name, as a bare-name call does.
             FunctionReceiver::Value(self.location_of(&node.name)?)
         } else {
@@ -2168,6 +2739,20 @@ impl TreeWalker for CodegenWalker {
             self.insert_label(end_label, addr);
         }
 
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn visit_nil(
+        &mut self,
+        node: &mut crate::compiler::ast::nil_node::NilNode,
+    ) -> Result<()> {
+        let value = if self.context.config.null_mode == NullMode::Distinct {
+            LpcConstant::Nil
+        } else {
+            LpcConstant::Int(0)
+        };
+        self.current_result = self.constant(value, node.span)?;
         Ok(())
     }
 
@@ -2249,6 +2834,16 @@ impl TreeWalker for CodegenWalker {
         };
         ret.visit(self).await?;
 
+        let num_upvalues = self
+            .context
+            .scopes
+            .current()
+            .ok_or_else(|| lpc_bug!("global initializer has no scope"))?
+            .num_upvalues;
+        self.function_stack
+            .last_mut()
+            .ok_or_else(|| lpc_bug!("global initializer has no function"))?
+            .num_upvalues = num_upvalues;
         let init_globals = self.finalize_function(None, None)?;
         debug_assert!(init_globals.name() == INIT_GLOBALS);
         let init_globals_name = ustr(&init_globals.mangle());
@@ -2260,7 +2855,7 @@ impl TreeWalker for CodegenWalker {
             node.visit(self).await?;
         }
 
-        self.initializer = Some(Arc::new(self.build_initializer(init_globals_name).await?));
+        self.initializer = Some(Arc::new(self.build_initializer(init_globals_name)?));
 
         self.context.scopes.pop();
 
@@ -2300,9 +2895,10 @@ impl TreeWalker for CodegenWalker {
             let copy = Instruction::Copy(self.current_result, Register(0).as_local());
             push_instruction!(self, copy, expression.span());
         } else {
-            self.zero_result(node.span)?;
+            self.default_result(node.span)?;
         }
 
+        self.leave_catches(0, node.span);
         push_instruction!(self, Instruction::Ret, node.span);
 
         Ok(())
@@ -2401,6 +2997,7 @@ impl TreeWalker for CodegenWalker {
             .and_then(|target| target.continue_target.clone());
         self.jump_targets.push(JumpTarget {
             break_target: end_label.clone(),
+            break_catch_depth: self.catch_depth,
             continue_target,
         });
         self.case_labels.push(labels);
@@ -2466,7 +3063,9 @@ impl TreeWalker for CodegenWalker {
         let location = self.current_result;
 
         let reg_result = self.register_counter.next().unwrap().as_local();
-        let instruction = Instruction::Cast(location, node.type_, reg_result);
+        let target = node.type_.resolved()?;
+        let index = self.type_index(target, node.span)?;
+        let instruction = Instruction::Cast(location, index, reg_result);
         push_instruction!(self, instruction, node.span);
 
         self.current_result = reg_result;
@@ -2475,6 +3074,38 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        if matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
+            && let ExpressionNode::Member(member) = &mut *node.expr
+        {
+            let receiver = self.member_target(member).await?;
+            let value = self.register_counter.next().unwrap().as_local();
+            push_instruction!(
+                self,
+                Instruction::MemberLoad(receiver, member.name, value),
+                node.span
+            );
+            let result = if node.is_post {
+                let before = self.register_counter.next().unwrap().as_local();
+                push_instruction!(self, Instruction::Copy(value, before), node.span);
+                before
+            } else {
+                value
+            };
+            let step = if node.op == UnaryOperation::Inc {
+                Instruction::Inc(value)
+            } else {
+                Instruction::Dec(value)
+            };
+            push_instruction!(self, step, node.span);
+            push_instruction!(
+                self,
+                Instruction::MemberStore(value, receiver, member.name),
+                node.span
+            );
+            self.current_result = result;
+            return Ok(());
+        }
+
         if matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
             && let ExpressionNode::BinaryOp(BinaryOpNode {
                 op: BinaryOperation::Index,
@@ -2493,6 +3124,12 @@ impl TreeWalker for CodegenWalker {
         let location = self.current_result;
 
         self.current_result = match node.op {
+            UnaryOperation::FromEnd => {
+                return Err(lpc_bug!(
+                    node.span,
+                    "Reverse index outside an index or slice"
+                ));
+            }
             UnaryOperation::Negate => {
                 let reg_result = self.register_counter.next().unwrap().as_local();
 
@@ -2582,6 +3219,8 @@ impl TreeWalker for CodegenWalker {
         }
 
         self.current_result = self.location_of(&node.name)?;
+        let target = self.context.lookup_var(node.name).unwrap().type_;
+        self.guard_class(self.current_result, target, node.span)?;
 
         Ok(())
     }
@@ -2613,8 +3252,17 @@ impl TreeWalker for CodegenWalker {
             push_instruction!(self, Instruction::NewUpvalue(cell), node.span());
         }
 
+        if node.value.is_some() && self.context.config.null_mode == NullMode::Distinct {
+            let location = self.assign_sym_location(&node.name)?;
+            let value =
+                LpcConstant::default_for(node.type_.resolved()?, self.context.config.null_mode);
+            let default = self.constant(value, node.span())?;
+            push_instruction!(self, Instruction::Copy(default, location), node.span());
+        }
+
         let current_register = if let Some(expression) = &mut node.value {
             expression.visit(self).await?;
+            self.guard_class(self.current_result, node.type_.resolved()?, node.span)?;
             // A read of the variable inside the initializer already gave it a location.
             let assigned = self
                 .context
@@ -2668,8 +3316,12 @@ impl TreeWalker for CodegenWalker {
         } else {
             let location = self.assign_sym_location(&node.name)?;
             // Only the first run of a declaration gets the frame's NULL fill.
-            if !global && !upvalue && self.inside_a_loop() {
-                let zero = self.constant(LpcConstant::Int(0), node.span())?;
+            if self.context.config.null_mode == NullMode::Distinct
+                || (!global && !upvalue && self.inside_a_loop())
+            {
+                let value =
+                    LpcConstant::default_for(node.type_.resolved()?, self.context.config.null_mode);
+                let zero = self.constant(value, node.span())?;
                 push_instruction!(self, Instruction::Copy(zero, location), node.span());
             }
             location
@@ -2693,8 +3345,11 @@ impl TreeWalker for CodegenWalker {
         let start_label = self.new_label("while-start");
         let test_label = self.new_label("while-test");
         let end_label = self.new_label("while-end");
-        self.jump_targets
-            .push(JumpTarget::new(end_label.clone(), test_label.clone()));
+        self.jump_targets.push(JumpTarget::new(
+            end_label.clone(),
+            test_label.clone(),
+            self.catch_depth,
+        ));
 
         self.emit_loop_entry(Some(&node.condition), &test_label, node.span)?;
 
@@ -2735,6 +3390,7 @@ impl Default for CodegenWalker {
             global_counter,
             context: Default::default(),
             jump_targets: vec![],
+            catch_depth: 0,
             case_labels: vec![],
             visit_range_results: None,
             closure_arg_locations: vec![],
@@ -2747,7 +3403,6 @@ mod tests {
     use std::sync::Arc;
 
     use claims::assert_some;
-    use factori_imp::create;
     use lpc_rs_asm::instruction::Comparison;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
@@ -2903,6 +3558,7 @@ mod tests {
             insert_symbol(&mut walker, sym);
 
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode {
                     name: ustr("marf"),
                     span: None,
@@ -2941,6 +3597,7 @@ mod tests {
             insert_symbol(&mut walker, sym);
 
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
                 rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
                 span: None,
@@ -2974,6 +3631,7 @@ mod tests {
             insert_symbol(&mut walker, sym);
 
             let mut node = AssignmentNode {
+                is_compound: false,
                 lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
                     r: Box::new(ExpressionNode::from(1)),
@@ -4572,7 +5230,7 @@ mod tests {
 
             let mut node = ForNode {
                 initializer: Box::new(Some(AstNode::VarInit(VarInitNode {
-                    type_: LpcType::Int(false),
+                    type_: LpcType::Int(false).into(),
                     name: ustr("i"),
                     value: Some(ExpressionNode::from(10)),
                     array: false,
@@ -4583,6 +5241,7 @@ mod tests {
                 }))),
                 condition: Some(ExpressionNode::Var(var.clone())),
                 incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
+                    is_compound: false,
                     lhs: Box::new(ExpressionNode::Var(var.clone())),
                     rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(var.clone())),
@@ -5843,24 +6502,25 @@ mod tests {
         async fn a_mapping_foreach_loads_the_key_then_the_value_after_its_entry_jump() {
             let code = "void create() { mapping m; foreach (k, v : m) { } }";
             let expected = vec![
-                Sizeof(Register(1).as_local(), Register(5).as_local()),
-                Jmp(Address(5)),
+                Copy(Register(1).as_local(), Register(4).as_local()),
+                Sizeof(Register(4).as_local(), Register(6).as_local()),
+                Jmp(Address(6)),
                 LoadMappingKey(
-                    Register(1).as_local(),
                     Register(4).as_local(),
+                    Register(5).as_local(),
                     Register(2).as_local(),
                 ),
                 Load(
-                    Register(1).as_local(),
+                    Register(4).as_local(),
                     Register(2).as_local(),
                     Register(3).as_local(),
                 ),
-                Inc(Register(4).as_local()),
+                Inc(Register(5).as_local()),
                 Jncmp(
                     Comparison::Eq,
-                    Register(4).as_local(),
                     Register(5).as_local(),
-                    Address(2),
+                    Register(6).as_local(),
+                    Address(3),
                 ),
                 Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
@@ -6340,17 +7000,17 @@ mod tests {
                     global: false,
                     function_name: false,
                 })),
-                type_: LpcType::String(true),
+                type_: LpcType::String(true).into(),
                 span: None,
             };
             walker.visit_cast(&mut node).await.unwrap();
 
+            let types = walker.function_stack.last().unwrap().types.clone();
             let instructions = walker_init_instructions(&mut walker);
-            let Some(Instruction::Cast(source, LpcType::String(true), dest)) =
-                instructions.last().copied()
-            else {
+            let Some(Instruction::Cast(source, index, dest)) = instructions.last().copied() else {
                 panic!("expected a cast, got {instructions:?}");
             };
+            assert_eq!(types[usize::from(index.0)], LpcType::String(true));
             assert_eq!(source, RegisterVariant::Local(Register(9)));
             assert_eq!(dest, walker.current_result);
             assert_ne!(source, dest);
@@ -6755,12 +7415,13 @@ mod tests {
             assert_eq!(
                 instructions_of_f(code).await,
                 vec![
-                    Instruction::Sizeof(local(1), local(5)),
-                    Instruction::Jmp(Address(5)),
-                    Instruction::Load(local(1), local(4), local(3)),
+                    Instruction::Copy(local(1), local(4)),
+                    Instruction::Sizeof(local(4), local(6)),
+                    Instruction::Jmp(Address(6)),
+                    Instruction::Load(local(4), local(5), local(3)),
                     Instruction::Add(local(2), local(3), local(2)),
-                    Instruction::Inc(local(4)),
-                    Instruction::Jncmp(Comparison::Eq, local(4), local(5), Address(2)),
+                    Instruction::Inc(local(5)),
+                    Instruction::Jncmp(Comparison::Eq, local(5), local(6), Address(3)),
                     Instruction::Copy(local(2), local(0)),
                     Instruction::Ret,
                 ]
@@ -6960,7 +7621,7 @@ mod tests {
             insert_symbol(walker, sym);
 
             let mut node = VarInitNode {
-                type_,
+                type_: type_.into(),
                 name: ustr("muffins"),
                 value: Some(ExpressionNode::Var(VarNode::new("marf"))),
                 array: false,
@@ -6970,7 +7631,7 @@ mod tests {
                 by_ref: false,
             };
 
-            let mut new_sym = Symbol::from(&mut node.clone());
+            let mut new_sym = Symbol::try_from(&mut node.clone()).unwrap();
             new_sym.scope_id = scope_id;
             insert_symbol(walker, new_sym);
 
@@ -6979,7 +7640,7 @@ mod tests {
 
         async fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker) {
             let mut node = VarInitNode {
-                type_,
+                type_: type_.into(),
                 name: ustr("muffins"),
                 value: Some(value),
                 array: false,
@@ -6989,7 +7650,7 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(walker, Symbol::from(&mut node));
+            insert_symbol(walker, Symbol::try_from(&mut node).unwrap());
 
             let _ = walker.visit_var_init(&mut node).await;
         }
@@ -7166,7 +7827,7 @@ mod tests {
             let mut walker = setup();
 
             let mut node = VarInitNode {
-                type_: LpcType::Object(false),
+                type_: LpcType::Object(false).into(),
                 name: ustr("muffins"),
                 value: Some(ExpressionNode::Call(CallNode {
                     chain: create!(CallChain, name: ustr("clone_object")),
@@ -7181,7 +7842,7 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+            insert_symbol(&mut walker, Symbol::try_from(&mut node.clone()).unwrap());
 
             let _ = walker.visit_var_init(&mut node).await;
 
@@ -7204,7 +7865,7 @@ mod tests {
             let mut walker = CodegenWalker::new(context);
 
             let mut node = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("arr"),
                 value: Some(ExpressionNode::from(vec![
                     ExpressionNode::from(12),
@@ -7223,10 +7884,10 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+            insert_symbol(&mut walker, Symbol::try_from(&mut node.clone()).unwrap());
 
             let mut node2 = VarInitNode {
-                type_: LpcType::Mixed(true),
+                type_: LpcType::Mixed(true).into(),
                 name: ustr("str"),
                 value: Some(ExpressionNode::from("sup")),
                 array: false,
@@ -7236,8 +7897,8 @@ mod tests {
                 by_ref: false,
             };
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
-            insert_symbol(&mut walker, Symbol::from(&mut node2.clone()));
+            insert_symbol(&mut walker, Symbol::try_from(&mut node.clone()).unwrap());
+            insert_symbol(&mut walker, Symbol::try_from(&mut node2.clone()).unwrap());
 
             let _ = walker.visit_var_init(&mut node).await;
             let _ = walker.visit_var_init(&mut node2).await;
@@ -7281,7 +7942,7 @@ mod tests {
                 value: Some(ExpressionNode::from(create!(VarNode, name: ustr(existing_name)))),
             );
 
-            let mut sym = Symbol::from(&mut node.clone());
+            let mut sym = Symbol::try_from(&mut node.clone()).unwrap();
             sym.upvalue = true;
             sym.location = Some(RegisterVariant::Upvalue(Register(3)));
 
@@ -7318,7 +7979,7 @@ mod tests {
                 value: Some(ExpressionNode::from(666))
             );
 
-            let mut sym = Symbol::from(&mut node.clone());
+            let mut sym = Symbol::try_from(&mut node.clone()).unwrap();
             sym.upvalue = true;
             sym.location = Some(RegisterVariant::Upvalue(Register(3)));
 

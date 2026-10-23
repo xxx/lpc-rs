@@ -15,7 +15,12 @@ A spread may sit in any argument position, any number of times, and works
 for every kind of call: a local or inherited function, an efun, a simul
 efun, `ob->f(...)`, `call_other(ob, "f", ...)`, a function-typed variable,
 and a chained call `make()(...)`. An empty array spreads to nothing. Extra
-arguments past the callee's parameters land in `argv` as usual.
+arguments past the callee's fixed parameters land in its named variadic
+collector, or in `argv` for a bare `...` declaration. See
+[variadic parameters](variadic_parameters.md).
+
+The same `xs...` syntax inserts elements into an
+[array literal](array_spreading.md).
 
 ## Rules the compiler enforces
 

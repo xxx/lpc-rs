@@ -34,12 +34,12 @@ must be a quoted verb; the rest describe the words after it.
 | `%L` | words naming one living | object |
 | `%p` | a preposition | the matched preposition from the master's list, as a string |
 
-`%d` matches digits only: `-5` and spelled-out numbers do not, unlike
-`parse_command` in other drivers. `%L` takes the first living that
-matches, like `%o` restricted to livings — no numeral, and never several.
+`%d` matches digits only: `-5` and spelled-out numbers do not match.
+`%L` takes the first living that matches, like `%o` restricted to livings —
+no numeral, and never several.
 
-Matching is by whole words and case-sensitive — unlike `parse_command` in
-other drivers, and like `add_action` here. A quoted word cannot contain `'`.
+Matching is by whole words and case-sensitive, as with `add_action`.
+A quoted word cannot contain `'`.
 `%s` is greedy: in `'say' %s 'to' %w`, the line `say hi to bob to sam` gives
 `%s` the text `hi to bob` and `%w` the word `sam`. A `%d` too large for an int
 does not match. A bare unquoted word, an unclosed quote or bracket, a quoted
@@ -51,6 +51,10 @@ environment, its own inventory, then the environment's other contents, in
 that order — through the identification protocol described in
 `parse_command`; a line whose noun captures name nothing under any parse
 passes to the next rule.
+
+Vocabulary callbacks and the handler use the command's actor as `this_player()`
+and immediate `previous_object()`. See
+[`command`'s callback context](command.md#callback-context).
 
 `query_verb()` inside the handler reports the verb alternative the player
 typed. Rules registered from `init()` last until the player leaves the

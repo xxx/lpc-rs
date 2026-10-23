@@ -104,6 +104,60 @@ fn read_global(gs: &Arc<GlobalState>, proc: &Process, index: usize) -> LpcRef {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn explicit_captures_keep_each_committed_attempts_value() {
+    let vm = boot_vm(race_config()).await;
+    let task = vm
+        .initialize_process_from_code(
+            "/captures.c",
+            r#"
+        int count;
+        function *saved = ({});
+        int snapshot() {
+            function f = (: $(count) :);
+            count = count + 1;
+            saved += ({ f });
+            return f();
+        }
+        int check() {
+            for (int i = 0; i < sizeof(saved); i++) {
+                if (saved[i]() != i) return 0;
+            }
+            return sizeof(saved) == count;
+        }
+    "#,
+        )
+        .await
+        .unwrap();
+    let process = task.context.process().clone();
+    drop(task);
+
+    let results = spawn_applies(&vm, process.clone(), "snapshot", 8, 10).await;
+    assert_all_ok(&results);
+    let mut actual = results
+        .into_iter()
+        .map(|result| match result.unwrap() {
+            LpcRef::Int(value) => value.0,
+            other => panic!("expected an integer, got {other}"),
+        })
+        .collect::<Vec<_>>();
+    actual.sort_unstable();
+    assert_eq!(actual, (0..80).collect::<Vec<_>>());
+
+    vm.global_state.gc().await.unwrap().unwrap();
+    let result = apply_function_by_name(
+        "check",
+        &[],
+        process,
+        TaskTemplate::from(vm.global_state.clone()),
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(result, LpcRef::from(1));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn lost_update_racy() {
     let counter = r#"
         int count = 0;

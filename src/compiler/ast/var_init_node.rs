@@ -4,10 +4,12 @@ use std::{
 };
 
 use async_trait::async_trait;
-use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
+use lpc_rs_core::global_var_flags::GlobalVarFlags;
 use lpc_rs_errors::{Result, span::Span};
 use lpc_rs_function_support::symbol::Symbol;
 use ustr::{Ustr, ustr};
+
+use super::parsed_type::ParsedType;
 
 use crate::compiler::{
     ast::{
@@ -21,7 +23,7 @@ use crate::compiler::{
 #[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Hash)]
 pub struct VarInitNode {
     /// The LPC type.
-    pub type_: LpcType,
+    pub type_: ParsedType,
 
     /// The var name
     pub name: Ustr,
@@ -47,10 +49,10 @@ pub struct VarInitNode {
 }
 
 impl VarInitNode {
-    pub fn new(name: &str, type_: LpcType) -> Self {
+    pub fn new(name: &str, type_: impl Into<ParsedType>) -> Self {
         Self {
             name: ustr(name),
-            type_,
+            type_: type_.into(),
             value: None,
             array: false,
             global: false,
@@ -61,21 +63,8 @@ impl VarInitNode {
     }
 
     /// Set a new type on this node, in a way that maintains the array state
-    pub fn update_type(&mut self, new_type: LpcType) {
-        let updated = match new_type {
-            LpcType::Void => LpcType::Void,
-            LpcType::Int(_) => LpcType::Int(self.array),
-            LpcType::String(_) => LpcType::String(self.array),
-            LpcType::Bytes(_) => LpcType::Bytes(self.array),
-            LpcType::Float(_) => LpcType::Float(self.array),
-            LpcType::Object(_) => LpcType::Object(self.array),
-            LpcType::Mapping(_) => LpcType::Mapping(self.array),
-            LpcType::Mixed(_) => LpcType::Mixed(self.array),
-            LpcType::Function(_) => LpcType::Function(self.array),
-            LpcType::Union(x) => LpcType::Union(x),
-        };
-
-        self.type_ = updated;
+    pub fn update_type(&mut self, new_type: impl Into<ParsedType>) {
+        self.type_ = new_type.into().as_array(self.array);
     }
 }
 
@@ -104,26 +93,28 @@ impl Display for VarInitNode {
     }
 }
 
-impl From<&mut VarInitNode> for Symbol {
-    fn from(node: &mut VarInitNode) -> Self {
-        let s = Self::new(&node.name, node.type_);
+impl TryFrom<&mut VarInitNode> for Symbol {
+    type Error = lpc_rs_errors::LpcError;
+    fn try_from(node: &mut VarInitNode) -> Result<Self> {
+        let s = Self::new(&node.name, node.type_.resolved()?);
 
-        Self {
+        Ok(Self {
             span: node.span,
             flags: node.flags.unwrap_or_default(),
             ..s
-        }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lpc_rs_core::lpc_type::LpcType;
 
     #[test]
     fn test_update_type_maintains_the_array_state() {
         let mut node = VarInitNode {
-            type_: LpcType::Void,
+            type_: LpcType::Void.into(),
             name: ustr("marf"),
             value: None,
             array: true,

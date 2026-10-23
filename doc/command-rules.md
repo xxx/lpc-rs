@@ -22,7 +22,10 @@ original base verb used to choose handlers and remove the registration.
 Actor candidates are filtered for owner liveness and scope, then sorted by
 descending identity. Concurrent registrations can commit out of identity order,
 so reversing the stored list would give different precedence. Parser candidates
-and inspection follow stored registration order. Parser selection happens only
+match complete leading verb phrases, longest first, preserving stored registration
+order within each phrase. Inspection retains registration order. Parser verb keys
+normalize Unicode whitespace but preserve case and punctuation; matching retains
+raw verb and remainder slices for handlers and query context. Parser selection happens only
 after actor candidates decline, preserving parser edits made by those handlers
 and avoiding a global parser read for successfully handled actor commands.
 

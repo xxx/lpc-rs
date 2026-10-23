@@ -49,9 +49,12 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     let new_prog = prototype.program(context.txn());
     let clone_process = context.object_space().create_clone_process(new_prog);
     debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
+    let args: Vec<_> = (1..context.arg_count())
+        .map(|i| context.arg(i).clone())
+        .collect();
     context
         .task_context()
-        .insert_and_initialize(Some(context.chain()), &clone_process)
+        .insert_and_initialize_with_args(Some(context.chain()), &clone_process, &args)
         .await?;
 
     let result = LpcRef::from(Arc::downgrade(&clone_process));
@@ -79,7 +82,9 @@ mod tests {
             task_context::TaskContext,
             vm::{Vm, global_state::GlobalState, vm_op::VmOp},
         },
-        test_support::{compile_prog, permissive_master, test_config},
+        test_support::{
+            compile_prog, lib_holding, permissive_master, temp_lib_config, test_config,
+        },
     };
 
     /// Committed global values by name, read through the committer.
@@ -281,6 +286,288 @@ mod tests {
                 "{key}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn forwards_arguments_only_to_the_clone_after_inherited_globals() {
+        let root = lib_holding(
+            "clone-constructor-inherited",
+            &[
+                (
+                    "base.c",
+                    r#"
+                    int value = 10;
+                    int observed;
+                    void create(int amount, int bonus = 7) {
+                        observed = value + this_object()->query_child() + amount + bonus;
+                    }
+                "#,
+                ),
+                (
+                    "child.c",
+                    r#"
+                    inherit "/base";
+                    int child = 100;
+                    int query_child() { return child; }
+                "#,
+                ),
+            ],
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        permissive_master(&vm.global_state.object_space).await;
+        vm.initialize_process_from_code(
+            "caller.c",
+            r#"
+            object copy = clone_object("/child", 20);
+        "#,
+        )
+        .await
+        .unwrap();
+
+        let prototype = vm.global_state.object_space.lookup("/child").unwrap();
+        let clone = vm.global_state.object_space.lookup("/child#0").unwrap();
+        for (process, expected) in [(&prototype, 117), (&clone, 137)] {
+            assert!(vm.global_state.is_initialized(process));
+            assert_eq!(
+                committed_globals_by_name(&vm.global_state, process)["observed"],
+                LpcRef::from(expected)
+            );
+        }
+        assert!(Arc::ptr_eq(
+            prototype.initial_program(),
+            clone.initial_program()
+        ));
+    }
+
+    #[tokio::test]
+    async fn forwards_spread_values_and_preserves_context_and_collection_identity() {
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code(
+            "target.c",
+            r#"
+            object caller;
+            object player;
+            object owner;
+            int result;
+            int extras;
+            void create(object who, int *items, mapping data, function callback, ...) {
+                caller = previous_object();
+                player = this_player();
+                owner = who;
+                items[0] = 42;
+                data["value"] = 99;
+                result = callback();
+                extras = argv[0] + argv[1];
+            }
+        "#,
+        )
+        .await
+        .unwrap();
+        let caller = vm
+            .initialize_process_from_code(
+                "caller.c",
+                r#"
+            int *items = ({ 1 });
+            mapping data = ([ "value": 2 ]);
+            object copy;
+            int array_value;
+            int mapping_value;
+            void create() {
+                enable_commands();
+                set_this_player(this_object());
+                mixed *args = ({ this_object(), items, data, (: 123 :), 5, 6 });
+                copy = clone_object("/target", args...);
+                array_value = items[0];
+                mapping_value = data["value"];
+            }
+        "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let clone = vm.global_state.object_space.lookup("/target#0").unwrap();
+        let values = committed_globals_by_name(&vm.global_state, &clone);
+        for name in ["caller", "player", "owner"] {
+            assert_eq!(
+                values[name],
+                LpcRef::from(Arc::downgrade(&caller)),
+                "{name}"
+            );
+        }
+        assert_eq!(values["result"], LpcRef::from(123));
+        assert_eq!(values["extras"], LpcRef::from(11));
+        let values = committed_globals_by_name(&vm.global_state, &caller);
+        assert_eq!(values["array_value"], LpcRef::from(42));
+        assert_eq!(values["mapping_value"], LpcRef::from(99));
+    }
+
+    #[tokio::test]
+    async fn applies_constructor_defaults_and_ignores_unused_arguments() {
+        let root = lib_holding(
+            "clone-constructor-defaults",
+            &[
+                (
+                    "target.c",
+                    "int value; void create(int amount = 7) { value = amount; }",
+                ),
+                ("empty.c", "int value = 3;"),
+                ("noargs.c", "int value; void create() { value = 4; }"),
+            ],
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        permissive_master(&vm.global_state.object_space).await;
+        vm.initialize_process_from_code(
+            "caller.c",
+            r#"
+            object a = clone_object("/target");
+            object b = clone_object("/target", 0);
+            object c = clone_object("/target", 12, "unused");
+            object d = clone_object("/empty", "unused");
+            object e = clone_object("/noargs", "unused");
+        "#,
+        )
+        .await
+        .unwrap();
+        for (name, expected) in [
+            ("/target", 7),
+            ("/target#0", 7),
+            ("/target#1", 0),
+            ("/target#2", 12),
+            ("/empty#3", 3),
+            ("/noargs#4", 4),
+        ] {
+            let process = vm.global_state.object_space.lookup(name).unwrap();
+            assert_eq!(
+                committed_globals_by_name(&vm.global_state, &process)["value"],
+                LpcRef::from(expected),
+                "{name}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_constructor_type_mismatches_without_leaving_a_clone() {
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code(
+            "target.c",
+            r#"
+            void create(int amount) {}
+        "#,
+        )
+        .await
+        .unwrap();
+        let caller = vm
+            .initialize_process_from_code(
+                "caller.c",
+                r#"
+            string failure;
+            object copy;
+            void create() {
+                failure = catch(clone_object("/target", "wrong type"));
+                copy = clone_object("/target", 42);
+            }
+        "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let values = committed_globals_by_name(&vm.global_state, &caller);
+        assert!(
+            values["failure"]
+                .with_string(|s| s.to_str().contains("unexpected argument type to `create`"))
+                .unwrap()
+        );
+        assert!(vm.global_state.object_space.lookup("/target#0").is_none());
+        assert!(vm.global_state.object_space.lookup("/target#1").is_some());
+    }
+
+    #[tokio::test]
+    async fn rejects_reference_parameters_and_oversized_constructor_spreads() {
+        for (target, arguments, message) in [
+            (
+                "void create(int ref value) {}",
+                "",
+                "must be passed by reference",
+            ),
+            (
+                "void create(int ref value) {}",
+                ", 1",
+                "must be passed by reference",
+            ),
+            (
+                "void create(...) {}",
+                ", allocate(65535)...",
+                "cannot pass 65535 arguments",
+            ),
+        ] {
+            let vm = Vm::new(test_config());
+            vm.create_process_from_code("target.c", target)
+                .await
+                .unwrap();
+            let caller = vm
+                .initialize_process_from_code(
+                    "caller.c",
+                    format!("string failure = catch(clone_object(\"/target\"{arguments}));"),
+                )
+                .await
+                .unwrap()
+                .context
+                .process;
+            let values = committed_globals_by_name(&vm.global_state, &caller);
+            let failure = values["failure"].with_string(|s| s.to_string()).unwrap();
+            assert!(failure.contains(message), "{failure}");
+            assert!(vm.global_state.object_space.lookup("/target#0").is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn rolls_back_constructor_effects_and_loaded_objects_on_uncaught_error() {
+        let root = lib_holding(
+            "clone-constructor-rollback",
+            &[(
+                "target.c",
+                r#"
+            void create(int fail) {
+                if (fail) {
+                    "/state"->set_value(42);
+                    throw("constructor failed");
+                }
+            }
+        "#,
+            )],
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        permissive_master(&vm.global_state.object_space).await;
+        let state = vm
+            .initialize_process_from_code(
+                "state.c",
+                r#"
+            int value = 7;
+            void set_value(int amount) { value = amount; }
+        "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let error = vm
+            .initialize_process_from_code(
+                "caller.c",
+                r#"
+            object copy = clone_object("/target", 1);
+        "#,
+            )
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("constructor failed"), "{error}");
+        assert_eq!(
+            committed_globals_by_name(&vm.global_state, &state)["value"],
+            LpcRef::from(7)
+        );
+        assert!(vm.global_state.object_space.lookup("/target").is_none());
+        assert!(vm.global_state.object_space.lookup("/target#0").is_none());
     }
 
     #[tokio::test]

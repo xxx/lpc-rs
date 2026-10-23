@@ -9,7 +9,7 @@ use crate::interpreter::{
     save_format::write_line,
 };
 
-/// The globals `save_object` writes: every non-static one by name, in slot
+/// The globals `save_object` writes: those without `static`/`nosave`, in slot
 /// order (parents first). A name declared twice keeps its last declaration.
 pub(crate) fn saved_globals(program: &Program) -> Vec<(&str, RegisterSize)> {
     let mut slots: Vec<(&str, RegisterSize)> = program
@@ -25,7 +25,7 @@ pub(crate) fn saved_globals(program: &Program) -> Vec<(&str, RegisterSize)> {
     slots
 }
 
-/// `save_object(file)`: the calling object's non-static globals as
+/// `save_object(file)`: the calling object's globals without `static`/`nosave` as
 /// `name value` lines in `<file>.o`, root-relative, once the master's
 /// `valid_write` allows the unsuffixed path. Built now, written at commit.
 /// Returns the in-game path written.
@@ -38,7 +38,12 @@ pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         let value = context
             .txn()
             .with(|t| t.read(image.var_id(reg)))
-            .unwrap_or_else(|| LpcRef::from(0));
+            .unwrap_or_else(|| {
+                LpcRef::default_for(
+                    image.program.global_variables[name].type_,
+                    context.txn().null_mode(),
+                )
+            });
         write_line(&mut contents, name, &value, context.txn())
             .map_err(|e| e.with_span(context.call_site_span()))?;
     }
@@ -68,6 +73,97 @@ mod tests {
             .await
             .unwrap();
         vm
+    }
+
+    #[tokio::test]
+    async fn class_globals_round_trip_pending_saves_with_nested_values_and_nosave_exclusions() {
+        let root = TempLib::new("save-class-globals");
+        let vm = allowing_vm(&root).await;
+        let result = vm.initialize_process_from_code("/w.c", r#"
+            class record {
+                int n;
+                string label;
+                class record child;
+                int *numbers;
+                mapping metadata;
+                function callback;
+                object owner;
+                bytes raw;
+            }
+            class record value, alias;
+            nosave class record cache;
+            int create() {
+                value = new(class record, n: 7, label: "hello\nworld",
+                    child: new(class record, n: 12), numbers: ({ 3, 4 }),
+                    metadata: ([ "answer": 42 ]), callback: (: 1 :),
+                    owner: this_object(), raw: to_bytes("hé", "utf8"));
+                alias = value;
+                cache = new(class record, n: 8);
+                cache.child = cache;
+                save_object("/w");
+                value.n = 99;
+                int restored = restore_object("/w");
+                if (!restored || !classp(value) || value == alias || value.child == alias.child) return 0;
+                if (value.n != 7 || alias.n != 7 || cache.n != 8 || cache.child != cache) return 0;
+                if (value.callback != 0 || value.owner != this_object() || value.raw != to_bytes("hé", "utf8")) return 0;
+                if (value.numbers[1] != 4 || value.metadata["answer"] != 42 || value.label != "hello\nworld") return 0;
+                value.child.n = 50;
+                return alias.child.n == 12;
+            }
+        "#).await.unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
+        let text = std::fs::read_to_string(root.join("w.o")).unwrap();
+        assert!(text.contains("value c(1,\"/w.c\",\"record\","));
+        assert!(!text.contains("cache "));
+    }
+
+    #[tokio::test]
+    async fn an_aborted_class_save_preserves_the_existing_file() {
+        let root = TempLib::new("save-class-abort");
+        std::fs::write(root.join("w.o"), "previous 42\n").unwrap();
+        let vm = allowing_vm(&root).await;
+        let error = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"
+            class record { int n; }
+            class record value = new(class record, n: 7);
+            void create() { save_object("/w"); throw("abort class save"); }
+        "#,
+            )
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("abort class save"));
+        assert_eq!(
+            std::fs::read_to_string(root.join("w.o")).unwrap(),
+            "previous 42\n"
+        );
+        assert!(!root.join("w.o.tmp").exists());
+    }
+
+    #[tokio::test]
+    async fn caught_class_cycles_do_not_replace_an_earlier_pending_save() {
+        let root = TempLib::new("save-class-cycle");
+        let vm = allowing_vm(&root).await;
+        let result = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"
+            class record { mixed next; }
+            class record value = new(class record);
+            int create() {
+                save_object("/w");
+                value.next = ([ "cycle": ({ value }) ]);
+                mixed error = catch(save_object("/w"));
+                if (!stringp(error)) return 0;
+                restore_object("/w");
+                return classp(value) && value.next == 0;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.result(), Some(LpcRef::from(1)));
     }
 
     /// The file lands at commit; a restore in the same task already reads it.
@@ -121,6 +217,148 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(root.join("data/w.o")).unwrap(),
             "i 42\np \"priv\"\nf #0x1.ap+1#\na ({1,\"two\",})\nm ([\"k\":4,])\nz 0\ngot 0\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn nosave_excludes_globals_independently_of_visibility() {
+        let root = TempLib::new("save-nosave-flags");
+        let vm = allowing_vm(&root).await;
+        vm.initialize_process_from_code(
+            "/w.c",
+            r#"
+            nosave int temporary = 1;
+            public nosave int public_cache = 2;
+            private nosave int private_cache = 3;
+            nosave protected nomask int protected_cache = 4;
+            nosave static int both = 5;
+            static int legacy = 6;
+            nosave mixed *cycle;
+            private int saved_private = 7;
+            int saved_public = 8;
+            void create() {
+                cycle = ({ 0 });
+                cycle[0] = cycle;
+                save_object("/w");
+            }
+        "#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("w.o")).unwrap(),
+            "saved_private 7\nsaved_public 8\n",
+        );
+    }
+
+    #[tokio::test]
+    async fn inherited_nosave_globals_stay_excluded() {
+        let root = lib_holding(
+            "save-nosave-inheritance",
+            &[
+                (
+                    "base.c",
+                    r#"
+                public nosave int public_cache = 1;
+                private nosave int private_cache = 2;
+                protected nosave int protected_cache = 3;
+                int base_saved = 4;
+                int private_value() { return private_cache; }
+            "#,
+                ),
+                (
+                    "middle.c",
+                    r#"
+                private inherit "/base";
+                int total_cache() { return public_cache + protected_cache + private_value(); }
+            "#,
+                ),
+            ],
+        );
+        let vm = allowing_vm(&root).await;
+        vm.initialize_process_from_code(
+            "/child.c",
+            r#"
+            inherit "/middle";
+            nosave int own_cache = 5;
+            int kept = 6;
+            int total;
+            void create() { total = total_cache() + own_cache; save_object("/child"); }
+        "#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("child.o")).unwrap(),
+            "base_saved 4\nkept 6\ntotal 11\n",
+        );
+    }
+
+    #[tokio::test]
+    async fn nosave_redeclarations_use_the_effective_variables_storage_flag() {
+        let root = lib_holding(
+            "save-nosave-redeclaration",
+            &[("base.c", "int omitted = 1; nosave int kept = 2;")],
+        );
+        let vm = allowing_vm(&root).await;
+        vm.initialize_process_from_code(
+            "/child.c",
+            r#"
+            inherit "/base";
+            nosave int omitted = 3;
+            int kept = 4;
+            void create() { save_object("/child"); }
+        "#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("child.o")).unwrap(),
+            "kept 4\n",
+        );
+    }
+
+    #[tokio::test]
+    async fn nosave_values_survive_a_same_task_save_and_restore() {
+        let root = TempLib::new("save-nosave-round-trip");
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"
+            int saved = 1;
+            nosave int cache = 10;
+            int create() {
+                save_object("/w");
+                saved = 2;
+                cache = 20;
+                restore_object("/w");
+                return saved * 100 + cache;
+            }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(120)));
+    }
+
+    #[tokio::test]
+    async fn nosave_excludes_the_declaration_without_hiding_shared_values() {
+        let root = TempLib::new("save-nosave-alias");
+        let vm = allowing_vm(&root).await;
+        vm.initialize_process_from_code(
+            "/w.c",
+            r#"
+            nosave int *cache = ({ 7 });
+            int *saved = cache;
+            void create() { cache[0] = 9; save_object("/w"); }
+        "#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("w.o")).unwrap(),
+            "saved ({9,})\n",
         );
     }
 

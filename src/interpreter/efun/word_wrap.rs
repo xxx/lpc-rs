@@ -2,10 +2,7 @@
 
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// The most spaces an int indent may ask for.
 const MAX_INDENT: i64 = 1000;
@@ -15,14 +12,14 @@ const MAX_INDENT: i64 = 1000;
 /// in front of every line. A non-string `str` is 0.
 pub fn break_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(text) = context.arg(0).as_str() else {
-        context.return_efun_result(NULL);
+        context.return_efun_result(context.txn().nil());
         return Ok(());
     };
     let LpcRef::Int(width) = context.arg(1) else {
         return Err(context.runtime_error("break_string: the width must be an int"));
     };
     let width = usize::try_from(width.0).unwrap_or(0).max(1);
-    let indent = match context.try_arg(2).filter(|r| !r.is_null()) {
+    let indent = match context.try_arg(2).filter(|r| !r.is_null_in(context.txn())) {
         None => String::new(),
         Some(LpcRef::Int(n)) if (0..=MAX_INDENT).contains(&n.0) => {
             " ".repeat(usize::try_from(n.0).unwrap_or(0))

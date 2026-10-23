@@ -466,3 +466,659 @@ async fn a_grandparents_call_reaches_the_grandchilds_redefinition() {
     .await;
     assert_eq!(x, 2);
 }
+
+mod inheritance_visibility {
+    use std::sync::Arc;
+
+    use lpc_rs_core::visibility::Visibility;
+
+    use super::*;
+    use crate::{
+        compiler::{Compiled, Compiler},
+        interpreter::program::Function,
+        test_support::{permissive_master, temp_lib_config},
+    };
+
+    async fn compile(files: &[(&str, &str)], code: &str) -> lpc_rs_errors::Result<Compiled> {
+        let root = lib_holding("inheritance-visibility-compile", files);
+        Compiler::new(temp_lib_config(&root))
+            .compile_string("/child.c", code)
+            .await
+    }
+
+    async fn result(files: &[(&str, &str)], code: &str) -> LpcRef {
+        let root = lib_holding("inheritance-visibility-run", files);
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code("/child.c", code)
+            .await
+            .unwrap()
+            .result()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn private_inheritance_keeps_local_globals_calls_and_pointers_accessible() {
+        let value = result(
+            &[("base.c", "int value = 7; int get() { return value; }")],
+            r#"
+                private inherit "/base" base;
+                int create() {
+                    value++;
+                    function pointer = &get();
+                    return get() + ::get() + base::get() + pointer() + call_inherited("base::get");
+                }
+            "#,
+        )
+        .await;
+        assert_eq!(value, LpcRef::from(40));
+    }
+
+    #[tokio::test]
+    async fn private_inheritance_hides_functions_and_globals_from_descendants() {
+        let files = [
+            ("base.c", "int value; int get() { return value; }"),
+            ("parent.c", "private inherit \"/base\";"),
+        ];
+        for expression in ["get()", "::get()", "parent::get()", "&get()", "value"] {
+            let error = compile(
+                &files,
+                &format!("inherit \"/parent\" parent; mixed create() {{ return {expression}; }}"),
+            )
+            .await
+            .unwrap_err();
+            assert!(
+                error.diagnostic_string().contains("private"),
+                "{expression}: {error:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn public_inheritance_cannot_expose_a_private_declaration() {
+        for modifier in ["public", "protected", "private"] {
+            for expression in ["secret()", "value"] {
+                let error = compile(
+                    &[(
+                        "base.c",
+                        "private int value; private int secret() { return value; }",
+                    )],
+                    &format!(
+                        "{modifier} inherit \"/base\"; int create() {{ return {expression}; }}"
+                    ),
+                )
+                .await
+                .unwrap_err();
+                assert!(error.diagnostic_string().contains("private"), "{error:?}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_inheritance_keeps_descendant_access_without_public_exports() {
+        let compiled = compile(
+            &[
+                ("base.c", "int value = 9; int get() { return value; }"),
+                ("parent.c", "protected inherit \"/base\";"),
+            ],
+            "public inherit \"/parent\"; int create() { return ++value + get(); }",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            compiled
+                .program
+                .lookup_function("get")
+                .unwrap()
+                .visibility(),
+            Visibility::Protected
+        );
+        assert_eq!(
+            compiled.program.global_variables["value"]
+                .flags
+                .visibility(),
+            Visibility::Protected
+        );
+        assert_eq!(
+            result(
+                &[
+                    ("base.c", "int value = 9; int get() { return value; }"),
+                    ("parent.c", "protected inherit \"/base\";"),
+                ],
+                "inherit \"/parent\"; int create() { return ++value + get(); }",
+            )
+            .await,
+            LpcRef::from(20)
+        );
+    }
+
+    #[tokio::test]
+    async fn external_calls_and_introspection_respect_inheritance_visibility() {
+        for modifier in ["private", "protected"] {
+            let root = lib_holding(
+                "inheritance-external-visibility",
+                &[("base.c", "int secret() { return 7; }")],
+            );
+            let vm = Vm::new(temp_lib_config(&root));
+            permissive_master(&vm.global_state.object_space).await;
+            vm.initialize_process_from_code(
+                "/target.c",
+                format!("{modifier} inherit \"/base\"; int wrapper() {{ return secret(); }}"),
+            )
+            .await
+            .unwrap();
+            let task = vm
+                .initialize_process_from_code(
+                    "/caller.c",
+                    r#"
+                int create() {
+                    object target = find_object("/target");
+                    return target->wrapper() == 7 && target->secret() == 0
+                        && !function_exists("secret", target)
+                        && sizeof(functions(target)) == 1;
+                }
+            "#,
+                )
+                .await
+                .unwrap();
+            assert_eq!(task.result(), Some(LpcRef::from(1)));
+            let error = vm
+                .initialize_process_from_code(
+                    "/pointer.c",
+                    r#"
+                mixed create() { return &("/target")->secret(); }
+            "#,
+                )
+                .await
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("pointer to {modifier} function")),
+                "{error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn inheritance_visibility_does_not_copy_executable_code() {
+        let root = lib_holding(
+            "inheritance-shared-visibility",
+            &[("base.c", "int value; int get() { return value; }")],
+        );
+        let compiler = Compiler::new(temp_lib_config(&root));
+        let public = compiler
+            .compile_string("/public.c", "inherit \"/base\";")
+            .await
+            .unwrap()
+            .program;
+        let private = compiler
+            .compile_string("/private.c", "private inherit \"/base\";")
+            .await
+            .unwrap()
+            .program;
+        let a = public.lookup_function("get").unwrap();
+        let b = private.lookup_function("get").unwrap();
+        assert!(Arc::ptr_eq(&a.code, &b.code));
+        assert!(a.public());
+        assert!(!b.public());
+        assert!(b.prototype.flags.public());
+        assert_eq!(
+            private.global_variable_info[0].flags.visibility(),
+            Visibility::Public
+        );
+        assert_eq!(
+            private.global_variables["value"].flags.visibility(),
+            Visibility::Private
+        );
+        assert_eq!(
+            std::mem::size_of::<Function>(),
+            2 * std::mem::size_of::<u64>()
+        );
+    }
+
+    #[tokio::test]
+    async fn private_inheritance_allows_overrides_in_the_inheriting_source() {
+        assert_eq!(result(
+            &[("base.c", "int get() { return 1; } int through() { return get(); }")],
+            "private inherit \"/base\"; int get() { return 2; } int create() { return through(); }",
+        ).await, LpcRef::from(2));
+    }
+
+    #[tokio::test]
+    async fn descendants_cannot_redirect_hidden_calls_or_erase_existing_overrides() {
+        assert_eq!(
+            result(
+                &[
+                    (
+                        "base.c",
+                        "int get() { return 1; } int through() { return get(); }"
+                    ),
+                    (
+                        "parent.c",
+                        r#"
+                    private inherit "/base";
+                    int get() { return 2; }
+                    int wrapper() { return through(); }
+                "#
+                    ),
+                ],
+                "inherit \"/parent\"; int get() { return 3; } int create() { return wrapper(); }",
+            )
+            .await,
+            LpcRef::from(2)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_hidden_sibling_cannot_redirect_a_visible_parents_calls() {
+        assert_eq!(result(
+            &[
+                ("visible.c", "int get() { return 1; } int visible() { return get(); }"),
+                ("base.c", "int get() { return 2; }"),
+                ("hidden.c", "private inherit \"/base\"; int wrapper() { return get(); }"),
+            ],
+            "inherit \"/visible\"; inherit \"/hidden\"; int create() { return 10 * visible() + wrapper(); }",
+        ).await, LpcRef::from(12));
+    }
+
+    #[tokio::test]
+    async fn inherited_dynamic_lookup_keeps_the_defining_sources_access() {
+        assert_eq!(
+            result(
+                &[
+                    ("base.c", "int get() { return 7; }"),
+                    (
+                        "parent.c",
+                        r#"
+                    private inherit "/base" base;
+                    int wrapper() {
+                        return call_inherited("base::get") + (function_exists("base::get") != 0);
+                    }
+                "#
+                    ),
+                ],
+                r#"
+                inherit "/parent" parent;
+                int create() {
+                    return wrapper() + (call_inherited("parent::get") == 0)
+                        + (function_exists("parent::get") == 0);
+                }
+            "#,
+            )
+            .await,
+            LpcRef::from(10)
+        );
+    }
+
+    #[tokio::test]
+    async fn private_inheritance_preserves_nomask_enforcement() {
+        for (declaration, replacement) in [
+            ("nomask int get() { return 1; }", "int get() { return 2; }"),
+            ("nomask int value;", "int value;"),
+        ] {
+            let error = compile(
+                &[("base.c", declaration)],
+                &format!("private inherit \"/base\"; {replacement}"),
+            )
+            .await
+            .unwrap_err();
+            assert!(error.to_string().contains("nomask"), "{error}");
+        }
+    }
+}
+
+mod inheritance_names {
+    use crate::{
+        compiler::{Compiled, Compiler},
+        test_support::temp_lib_config,
+    };
+
+    use super::*;
+
+    async fn compile(files: &[(&str, &str)], code: &str) -> lpc_rs_errors::Result<Compiled> {
+        let root = lib_holding("inheritance-names-compile", files);
+        Compiler::new(temp_lib_config(&root))
+            .compile_string("/child.c", code)
+            .await
+    }
+
+    async fn result(files: &[(&str, &str)], code: &str) -> LpcRef {
+        let root = lib_holding("inheritance-names-run", files);
+        Vm::new(temp_lib_config(&root))
+            .initialize_process_from_code("/child.c", code)
+            .await
+            .unwrap()
+            .result()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn basename_calls_select_each_parent_before_local_overrides() {
+        assert_eq!(
+            result(
+                &[
+                    ("std/indoor_room.c", "int rooms; void reset() { rooms++; }"),
+                    (
+                        "std/m_searchable.c",
+                        "int searches; void reset() { searches += 10; }"
+                    ),
+                ],
+                r#"
+            #define INDOOR_ROOM "/std/./indoor_room.c"
+            #define M_SEARCHABLE "/std/m_searchable"
+            inherit INDOOR_ROOM;
+            inherit M_SEARCHABLE;
+            void reset() {
+                m_searchable::reset();
+                indoor_room::reset();
+            }
+            int create() { reset(); return rooms + searches; }
+        "#
+            )
+            .await,
+            LpcRef::from(11)
+        );
+    }
+
+    #[tokio::test]
+    async fn relative_inherits_have_source_basenames_in_direct_and_dynamic_calls() {
+        assert_eq!(
+            result(
+                &[("std/base.c", "int get() { return 7; }")],
+                r#"
+            inherit __DIR__ "std/../std/base";
+            int get() { return 99; }
+            int create() {
+                return base::get() + call_inherited("base::get")
+                    + (function_exists("base::get") == "/std/base");
+            }
+        "#
+            )
+            .await,
+            LpcRef::from(15)
+        );
+    }
+
+    #[tokio::test]
+    async fn an_explicit_alias_keeps_the_original_basename_available() {
+        assert_eq!(
+            result(
+                &[("base.c", "int get() { return 3; }")],
+                r#"
+            inherit "/base" chosen;
+            int create() {
+                return base::get() + chosen::get() + call_inherited("base::get")
+                    + call_inherited("chosen::get");
+            }
+        "#
+            )
+            .await,
+            LpcRef::from(12)
+        );
+    }
+
+    #[tokio::test]
+    async fn explicit_aliases_take_precedence_over_basenames_in_either_order() {
+        let files = [
+            ("base.c", "int get() { return 1; }"),
+            ("other.c", "int get() { return 2; }"),
+        ];
+        for inherits in [
+            "inherit \"/base\"; inherit \"/other\" base;",
+            "inherit \"/other\" base; inherit \"/base\";",
+        ] {
+            assert_eq!(
+                result(
+                    &files,
+                    &format!(
+                        r#"
+                {inherits}
+                int create() {{
+                    return base::get() + call_inherited("base::get")
+                        + (function_exists("base::get") == "/other");
+                }}
+            "#
+                    )
+                )
+                .await,
+                LpcRef::from(5)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_explicit_alias_never_falls_back_to_an_automatic_name() {
+        let files = [("base.c", "int get() { return 1; }"), ("other.c", "")];
+        let inherits = "inherit \"/base\"; inherit \"/other\" base;";
+        let error = compile(
+            &files,
+            &format!("{inherits} int create() {{ return base::get(); }}"),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("unknown function `base::get`"),
+            "{error}"
+        );
+        assert_eq!(
+            result(
+                &files,
+                &format!(
+                    r#"
+            {inherits}
+            int create() {{ return call_inherited("base::get") + function_exists("base::get"); }}
+        "#
+                )
+            )
+            .await,
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn duplicate_basenames_search_in_reverse_declaration_order_for_each_function() {
+        assert_eq!(
+            result(
+                &[
+                    (
+                        "left/base.c",
+                        "int common() { return 1; } int only_left() { return 10; }"
+                    ),
+                    ("right/base.c", "int common() { return 2; }"),
+                ],
+                r#"
+            inherit "/left/base";
+            inherit "/right/base" right;
+            int create() {
+                return base::common() == 2 && call_inherited("base::common") == 2
+                    && base::only_left() == 10 && call_inherited("base::only_left") == 10
+                    && right::common() == 2 && ::common() == 2
+                    && call_inherited("::common") == 2
+                    && function_exists("base::common") == "/right/base"
+                    && function_exists("::common") == "/right/base"
+                    && function_exists("base::only_left") == "/left/base";
+            }
+        "#
+            )
+            .await,
+            LpcRef::from(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_private_last_parent_stops_basename_lookup() {
+        let files = [
+            ("left/base.c", "int get() { return 1; }"),
+            ("right/base.c", "private int get() { return 2; }"),
+        ];
+        let inherits = "inherit \"/left/base\"; inherit \"/right/base\";";
+        let error = compile(
+            &files,
+            &format!("{inherits} int create() {{ return base::get(); }}"),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("private function `get`"),
+            "{error}"
+        );
+        assert_eq!(
+            result(
+                &files,
+                &format!(
+                    r#"
+            {inherits}
+            int create() {{ return call_inherited("base::get") + function_exists("base::get"); }}
+        "#
+                )
+            )
+            .await,
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn inherited_calls_and_closures_keep_their_sources_basename_scope() {
+        assert_eq!(
+            result(
+                &[
+                    ("left/base.c", "int get() { return 3; }"),
+                    ("right/base.c", "int get() { return 9; }"),
+                    (
+                        "parent.c",
+                        r#"
+                private inherit "/left/base";
+                int direct() { return base::get(); }
+                function later() { return (: call_inherited("base::get") :); }
+                string definition() { return function_exists("base::get"); }
+            "#
+                    ),
+                ],
+                r#"
+            inherit "/parent";
+            inherit "/right/base";
+            int create() {
+                function saved = later();
+                return direct() + saved() + base::get() + call_inherited("base::get")
+                    + (definition() == "/left/base")
+                    + (call_inherited("parent::get") == 0);
+            }
+        "#
+            )
+            .await,
+            LpcRef::from(26)
+        );
+    }
+
+    #[tokio::test]
+    async fn only_direct_parents_supply_automatic_names() {
+        let files = [
+            ("base.c", "int get() { return 7; }"),
+            ("middle.c", "inherit \"/base\";"),
+        ];
+        let error = compile(
+            &files,
+            "inherit \"/middle\"; int create() { return base::get(); }",
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("unknown namespace `base`"),
+            "{error}"
+        );
+        assert_eq!(
+            result(
+                &files,
+                r#"
+            inherit "/middle";
+            int create() {
+                return middle::get() + (call_inherited("base::get") == 0)
+                    + (function_exists("base::get") == 0);
+            }
+        "#
+            )
+            .await,
+            LpcRef::from(9)
+        );
+    }
+
+    #[tokio::test]
+    async fn an_efun_basename_cannot_capture_the_reserved_namespace() {
+        assert_eq!(
+            result(
+                &[(
+                    "efun.c",
+                    r#"
+            private int sizeof(mixed value) { return 99; }
+            int identify() { return 7; }
+        "#
+                )],
+                r#"
+            inherit "/efun" helpers;
+            int create() {
+                return efun::sizeof(({ 1, 2 })) + helpers::identify()
+                    + (call_inherited("efun::identify") == 0)
+                    + (function_exists("efun::identify") == 0);
+            }
+        "#
+            )
+            .await,
+            LpcRef::from(11)
+        );
+    }
+
+    #[tokio::test]
+    async fn dynamic_names_strip_only_the_actual_source_extension() {
+        assert_eq!(
+            result(
+                &[("config/base.h.c", "int get() { return 7; }")],
+                r#"
+            inherit "/config/base.h" config;
+            int create() {
+                return config::get() + call_inherited("base.h::get")
+                    + (function_exists("base.h::get") == "/config/base.h")
+                    + (call_inherited("base::get") == 0);
+            }
+        "#
+            )
+            .await,
+            LpcRef::from(16)
+        );
+    }
+
+    #[tokio::test]
+    async fn basename_calls_keep_argument_type_and_count_checks() {
+        for (args, message) in [("", "argument count"), ("\"bad\"", "argument type")] {
+            let error = compile(
+                &[("base.c", "int get(int value) { return value; }")],
+                &format!("inherit \"/base\"; int create() {{ return base::get({args}); }}"),
+            )
+            .await
+            .unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_auto_inherits_have_basenames() {
+        let root = lib_holding(
+            "inheritance-auto-name",
+            &[("auto.c", "int get() { return 4; }")],
+        );
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .auto_inherit_file("/auto")
+            .build()
+            .unwrap();
+        let task = Vm::new(config)
+            .initialize_process_from_code(
+                "/child.c",
+                r#"
+            int create() { return auto::get() + call_inherited("auto::get"); }
+        "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(8)));
+    }
+}

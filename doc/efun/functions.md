@@ -31,4 +31,4 @@ string *public_names = functions(ob);
 
 ## See also
 
-`function_exists`, `function_info`, `inherit_list`, `deep_inherit_list`
+[`function_signature`](function_signature.md), `function_exists`, `function_info`, `inherit_list`, `deep_inherit_list`

@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// Find or load an object by path, returning zero if loading fails.
 pub async fn load_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -13,9 +10,9 @@ pub async fn load_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     let result = match lpc_ref.as_str() {
         Some(path) => match context.load_object(path).await {
             Ok(proc) => LpcRef::from(Arc::downgrade(&proc)),
-            Err(_) => NULL,
+            Err(_) => context.txn().nil(),
         },
-        None => NULL,
+        None => context.txn().nil(),
     };
 
     context.return_efun_result(result);

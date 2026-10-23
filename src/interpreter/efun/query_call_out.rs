@@ -1,12 +1,12 @@
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::NULL};
+use crate::interpreter::efun::efun_context::EfunContext;
 
 pub fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let id = context.call_out_id(0, "query_call_out")?;
     let result = match context.query_call_out(id) {
         Some(fields) => context.mint_array(fields),
-        None => NULL,
+        None => context.txn().nil(),
     };
 
     context.return_efun_result(result);
@@ -16,11 +16,9 @@ pub fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::lpc_ref::LpcRef;
 
-    use crate::{
-        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef},
-        test_support::run_prog,
-    };
+    use crate::{interpreter::lpc_int::LpcInt, test_support::run_prog};
 
     /// The query sees this attempt's own pending call out: the schedule is
     /// recorded but not yet in the physical queue.

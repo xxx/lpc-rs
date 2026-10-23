@@ -139,6 +139,25 @@ fn assembly_and_check_are_mutually_exclusive() {
 }
 
 #[test]
+fn execution_flushes_all_debug_output_before_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("object.c"),
+        r#"void create() {
+            for (int i = 0; i < 100; i++) {
+                dump("line " + i + "\n");
+            }
+        }"#,
+    )
+    .unwrap();
+
+    let output = lpcc(dir.path()).arg("object.c").output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let expected: String = (0..100).map(|i| format!("line {i}\n")).collect();
+    assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+}
+
+#[test]
 fn execution_runs_create_while_check_skips_it() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(
@@ -157,4 +176,44 @@ fn execution_runs_create_while_check_skips_it() {
         .unwrap();
     assert!(output.status.success(), "{output:?}");
     assert!(output.stdout.is_empty(), "{output:?}");
+}
+
+#[test]
+fn relative_inherits_resolve_in_check_execution_and_assembly_modes() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join("zone")).unwrap();
+    fs::create_dir(dir.path().join("base")).unwrap();
+    fs::write(
+        dir.path().join("base/grand.c"),
+        "int inherited() { return 42; }",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("zone/parent.c"),
+        "inherit \"../base/grand\";",
+    )
+    .unwrap();
+    for inherit in ["parent", "./parent.c"] {
+        fs::write(
+            dir.path().join("zone/child.c"),
+            format!(
+                "inherit \"{inherit}\"; void create() {{ if (inherited() != 42) throw(\"wrong parent\"); dump(__FILE__); }}"
+            ),
+        )
+        .unwrap();
+        for filename in ["zone/child", "zone/child.c"] {
+            for flags in [&[][..], &["--check"][..], &["-S"][..]] {
+                let output = lpcc(dir.path()).args(flags).arg(filename).output().unwrap();
+                assert!(output.status.success(), "{output:?}");
+                assert!(output.stderr.is_empty(), "{output:?}");
+                let text = String::from_utf8_lossy(&output.stdout);
+                match flags.first() {
+                    None => assert_eq!(text, "/zone/child.c"),
+                    Some(&"--check") => assert!(text.is_empty(), "{text}"),
+                    Some(&"-S") => assert!(text.contains("fn inherited ("), "{text}"),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
 }

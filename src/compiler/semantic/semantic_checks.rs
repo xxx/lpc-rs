@@ -1,5 +1,6 @@
 //! Utility functions for doing various semantic checks.
 
+use lpc_rs_core::null_mode::NullMode;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use phf::phf_set;
@@ -28,6 +29,7 @@ use crate::compiler::{
 
 static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "break",
+    "class",
     "bytes",
     "case",
     "catch",
@@ -45,7 +47,9 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "int",
     "mapping",
     "mixed",
+    "nil",
     "nomask",
+    "nosave",
     "object",
     "private",
     "protected",
@@ -201,6 +205,28 @@ pub fn check_binary_operation_types(
             (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
         },
         BinaryOperation::Index => {
+            let from_end = |expr: &ExpressionNode| {
+                matches!(
+                    expr,
+                    ExpressionNode::UnaryOp(UnaryOpNode {
+                        op: UnaryOperation::FromEnd,
+                        ..
+                    })
+                )
+            };
+            let has_reverse_bound = match &*node.r {
+                ExpressionNode::Range(range) => {
+                    range.l.as_ref().as_ref().is_some_and(from_end)
+                        || range.r.as_ref().as_ref().is_some_and(from_end)
+                }
+                expr => from_end(expr),
+            };
+            if left_type == LpcType::Mapping(false) && has_reverse_bound {
+                return Err(lpc_error!(
+                    node.span,
+                    "Reverse indexing requires an array, string or bytes"
+                ));
+            }
             if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
                 || ((left_type.is_array()
                     || matches!(left_type, LpcType::String(false) | LpcType::Bytes(false)))
@@ -233,6 +259,8 @@ pub fn check_binary_operation_types(
             match tuple {
                 (LpcType::Int(false), LpcType::Int(false))
                 | (LpcType::Float(false), LpcType::Float(false))
+                | (LpcType::Int(false), LpcType::Float(false))
+                | (LpcType::Float(false), LpcType::Int(false))
                 | (LpcType::String(false), LpcType::String(false))
                 | (LpcType::Bytes(false), LpcType::Bytes(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
@@ -285,7 +313,7 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
             LpcType::Int(false) | LpcType::Mixed(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
-        UnaryOperation::BitwiseNot => match expr_type {
+        UnaryOperation::BitwiseNot | UnaryOperation::FromEnd => match expr_type {
             LpcType::Int(false) | LpcType::Mixed(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
@@ -294,17 +322,17 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
 
 /// An assignment's value is its right side, though `node_type` gives it the
 /// left side's type.
-fn is_literal_zero(expression: &ExpressionNode) -> bool {
+fn is_null_literal(expression: &ExpressionNode, context: &CompilationContext) -> bool {
     match expression {
-        ExpressionNode::Int(IntNode { value: 0, .. }) => true,
-        ExpressionNode::Assignment(AssignmentNode { rhs, .. }) => is_literal_zero(rhs),
+        ExpressionNode::Nil(_) => true,
+        ExpressionNode::Int(IntNode { value: 0, .. }) => context.config.null_mode == NullMode::Zero,
+        ExpressionNode::Assignment(AssignmentNode { rhs, .. }) => is_null_literal(rhs, context),
         _ => false,
     }
 }
 
-/// The expression's type when `expected` does not take it: a literal `0` is
-/// taken by any type, `void` takes nothing, and `mixed` on either side takes
-/// the other.
+/// The expression's type when `expected` does not take it under the configured
+/// null rules; `void` takes nothing, and `mixed` on either side takes the other.
 ///
 /// # Arguments
 /// * `expected` - The declared type at the site.
@@ -315,7 +343,9 @@ pub fn mismatch(
     expression: &ExpressionNode,
     context: &CompilationContext,
 ) -> Result<Option<LpcType>> {
-    if is_literal_zero(expression) {
+    if is_null_literal(expression, context)
+        && (context.config.null_mode == NullMode::Zero || expected.accepts_nil())
+    {
         return Ok(None);
     }
 
@@ -341,16 +371,17 @@ pub fn cast_possible(source: LpcType, target: LpcType) -> bool {
     }
 }
 
-/// The source type of a cast that can never hold, if this is one. A literal
-/// 0 is every type.
+/// The source type of a cast that can never hold under the configured null rules.
 pub fn impossible_cast(node: &CastNode, context: &CompilationContext) -> Result<Option<LpcType>> {
-    if is_literal_zero(&node.expr) {
+    if is_null_literal(&node.expr, context)
+        && (context.config.null_mode == NullMode::Zero || node.type_.resolved()?.accepts_nil())
+    {
         return Ok(None);
     }
 
     let source = node_type(&node.expr, context)?;
 
-    Ok((!cast_possible(source, node.type_)).then_some(source))
+    Ok((!cast_possible(source, node.type_.resolved()?)).then_some(source))
 }
 
 /// The efun that converts to `target`, for the note on an impossible cast.
@@ -423,6 +454,9 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 /// The `LpcType` of the passed node.
 pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<LpcType> {
     match node {
+        ExpressionNode::ClassInit(node) => node.type_.resolved(),
+        ExpressionNode::Member(node) => member_type(node, context),
+        ExpressionNode::CompoundAssignment(node) => node_type(&node.lhs, context),
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context),
         ExpressionNode::Call(call_node) => {
             match &call_node.chain {
@@ -433,11 +467,8 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 CallChain::Root {
                     name, namespace, ..
                 } => {
-                    // A function-typed variable is the call target; any other
-                    // same-named variable is ignored.
-                    let calls_pointer = context
-                        .lookup_var(name.as_str())
-                        .is_some_and(|var| var.type_.matches_type(LpcType::Function(false)));
+                    let calls_pointer = namespace == &CallNamespace::Local
+                        && context.lookup_callable_var(name).is_some();
                     if calls_pointer {
                         return Ok(LpcType::Mixed(false));
                     }
@@ -450,7 +481,9 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             }
         }
         ExpressionNode::Closure(_) => Ok(LpcType::Function(false)),
-        ExpressionNode::Cast(CastNode { type_, .. }) => Ok(*type_),
+        ExpressionNode::Catch(_) => Ok(LpcType::Mixed(false)),
+        ExpressionNode::Capture(node) => node_type(&node.expr, context),
+        ExpressionNode::Cast(CastNode { type_, .. }) => type_.resolved(),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();
@@ -463,6 +496,11 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             }
         }
         ExpressionNode::Float(_) => Ok(LpcType::Float(false)),
+        ExpressionNode::Nil(_) => Ok(if context.config.null_mode == NullMode::Distinct {
+            LpcType::Nil
+        } else {
+            LpcType::Int(false)
+        }),
         ExpressionNode::Int(_) => Ok(LpcType::Int(false)),
         ExpressionNode::Range(_) => Ok(LpcType::Int(false)),
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
@@ -522,9 +560,19 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             _ => node_type(expr, context),
         },
         ExpressionNode::Array(node) => {
-            // A literal 0 is taken by any type.
-            let typed = node.value.iter().filter(|i| !is_literal_zero(i));
-            let res: Result<Vec<_>> = typed.map(|i| node_type(i, context)).collect();
+            // Only legacy zero can be ignored for every element type.
+            let typed = node.value.iter().filter(|i| {
+                context.config.null_mode != NullMode::Zero || !is_null_literal(i, context)
+            });
+            let res: Result<Vec<_>> = typed
+                .map(|item| match item {
+                    ExpressionNode::Spread(spread) => {
+                        Ok(element_type(node_type(&spread.expr, context)?)
+                            .unwrap_or(LpcType::Mixed(false)))
+                    }
+                    item => node_type(item, context),
+                })
+                .collect();
 
             let value_types = res?;
 
@@ -534,8 +582,12 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
 
             if value_types.iter().any(|ty| ty.is_array()) {
                 Ok(LpcType::Mixed(true))
-            } else if value_types.windows(2).all(|w| w[0] == w[1]) {
-                Ok(value_types[0].as_array(true))
+            } else if let Some(type_) = value_types.iter().copied().find(|ty| *ty != LpcType::Nil)
+                && value_types
+                    .iter()
+                    .all(|ty| *ty == type_ || (*ty == LpcType::Nil && type_.accepts_nil()))
+            {
+                Ok(type_.as_array(true))
             } else {
                 Ok(LpcType::Mixed(true))
             }
@@ -543,11 +595,17 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Ternary(TernaryNode {
             body, else_clause, ..
         }) => {
-            if is_literal_zero(body) {
+            if is_null_literal(body, context)
+                && (context.config.null_mode == NullMode::Zero
+                    || node_type(else_clause, context)?.accepts_nil())
+            {
                 return node_type(else_clause, context);
             }
 
-            if is_literal_zero(else_clause) {
+            if is_null_literal(else_clause, context)
+                && (context.config.null_mode == NullMode::Zero
+                    || node_type(body, context)?.accepts_nil())
+            {
                 return node_type(body, context);
             }
 
@@ -559,12 +617,39 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             } else if body_type == LpcType::Mixed(false) || else_type == LpcType::Mixed(false) {
                 LpcType::Mixed(false)
             } else {
-                body_type | else_type
+                body_type.try_union(else_type).map_err(|_| {
+                    lpc_error!(
+                        node.span(),
+                        "cannot combine `{body_type}` and `{else_type}` in a type union"
+                    )
+                })?
             })
         }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
         ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
         ExpressionNode::Operator(_) => Ok(LpcType::Function(false)),
+    }
+}
+
+pub(crate) fn member_type(
+    node: &crate::compiler::ast::class_expression::MemberNode,
+    context: &CompilationContext,
+) -> Result<LpcType> {
+    match node_type(&node.receiver, context)? {
+        LpcType::Mixed(false) => Ok(LpcType::Mixed(false)),
+        LpcType::Class(id, false) => context
+            .class_scope
+            .get(id)
+            .ok_or_else(|| lpc_error!(node.span, "no visible definition for {id}"))?
+            .fields
+            .iter()
+            .find(|field| field.name == node.name)
+            .map(|field| field.type_)
+            .ok_or_else(|| lpc_error!(node.span, "unknown field `{}` in {id}", node.name)),
+        actual => Err(lpc_error!(
+            node.span,
+            "member access requires a class or mixed, found {actual}"
+        )),
     }
 }
 
@@ -612,7 +697,6 @@ where
 #[cfg(test)]
 mod tests {
     use crate::compiler::ast::closure_node::ClosureNode;
-    use factori_imp::create;
     use lpc_rs_core::call_namespace::CallNamespace;
     use lpc_rs_function_support::symbol::Symbol;
     use ustr::ustr;
@@ -1488,6 +1572,24 @@ mod tests {
                 )
                 .is_err()
             );
+        }
+
+        #[test]
+        fn mixed_numeric_comparisons_accept_literals_and_variables() {
+            let context = setup();
+            for op in [
+                BinaryOperation::Lt,
+                BinaryOperation::Lte,
+                BinaryOperation::Gt,
+                BinaryOperation::Gte,
+                BinaryOperation::EqEq,
+                BinaryOperation::NotEq,
+            ] {
+                assert!(float_int_literals(op, &context).is_ok());
+                assert!(int_float_literals(op, &context).is_ok());
+                assert!(float_int_vars(op, &context).is_ok());
+                assert!(int_float_vars(op, &context).is_ok());
+            }
         }
 
         #[test]
@@ -2445,13 +2547,16 @@ mod tests {
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::Closure(ClosureNode {
+                    variadic: None,
                     name: "closure-123".into(),
-                    return_type: LpcType::Mapping(true),
+                    return_type: LpcType::Mapping(true).into(),
                     parameters: None,
                     flags: Default::default(),
                     body: vec![],
                     span: None,
                     scope_id: None,
+                    captures: Vec::new(),
+                    capture_scope_id: None,
                 });
 
                 assert_eq!(

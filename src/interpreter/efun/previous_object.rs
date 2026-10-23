@@ -2,11 +2,7 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
-    process::Process,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
 
 /// `previous_object`, an efun for the object that called the current
 /// function through a door — `->`, a pointer, a simul efun, or a task
@@ -22,7 +18,7 @@ pub fn previous_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         if process.is_live(txn) {
             LpcRef::from(Arc::downgrade(process))
         } else {
-            NULL
+            context.txn().nil()
         }
     };
     let result = match step {
@@ -30,7 +26,7 @@ pub fn previous_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         n if n >= 0 => usize::try_from(n)
             .ok()
             .and_then(|n| context.previous_objects().nth(n))
-            .map_or(NULL, live),
+            .map_or(context.txn().nil(), live),
         n => {
             return Err(context.runtime_error(format!(
                 "previous_object: expected a step back or -1, got {n}"

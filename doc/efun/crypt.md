@@ -29,24 +29,6 @@ of it.
 The hash is computed in the driver, not by the host's C library, so a
 password and salt give the same hash on every platform.
 
-### Porting a password file
-
-An old lib's `crypt(p, stored) == stored` check works unchanged on its DES
-hashes. To move players to SHA-512 as they log in:
-
-```c
-if (crypt(p, password) != password)
-    return 0;
-if (sizeof(password) == 13)      /* classic DES: re-hash on the way in */
-{
-    password = crypt(p, 0);
-    save_me();
-}
-```
-
-Hashes from FluffOS's `oldcrypt` (MudOS's own algorithm, not DES) are not
-recognized.
-
 ### Examples
 
 ```c

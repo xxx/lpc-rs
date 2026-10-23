@@ -1,11 +1,12 @@
 //! `typeof`: the tag of a value's type; `doc/efun/typeof.md` lists the
 //! tags a mudlib header defines.
 
+use lpc_rs_core::null_mode::NullMode;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-/// The tag of an int; a destructed object is one.
+/// The tag of an int; also used for destructed objects in zero mode.
 pub const T_INT: i64 = 1;
 /// The tag of a float.
 pub const T_FLOAT: i64 = 2;
@@ -21,21 +22,33 @@ pub const T_MAPPING: i64 = 6;
 pub const T_FUNCTION: i64 = 7;
 /// The tag of a `bytes`.
 pub const T_BYTES: i64 = 8;
+/// The tag of a class instance.
+pub const T_CLASS: i64 = 9;
+/// The tag of a distinct nil value.
+pub const T_NIL: i64 = 10;
 
 /// `typeof(x)`: the tag of `x`'s type.
 pub fn r#typeof<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let tag = match context.arg(0) {
+        LpcRef::Nil => T_NIL,
         LpcRef::Int(_) => T_INT,
         LpcRef::Float(_) => T_FLOAT,
         LpcRef::String(_) => T_STRING,
         object @ LpcRef::Object(_) => match object.live_object(context.txn()) {
             Some(_) => T_OBJECT,
-            None => T_INT,
+            None => {
+                if context.txn().null_mode() == NullMode::Distinct {
+                    T_NIL
+                } else {
+                    T_INT
+                }
+            }
         },
         LpcRef::Array(_) => T_ARRAY,
         LpcRef::Mapping(_) => T_MAPPING,
         LpcRef::Function(_) => T_FUNCTION,
         LpcRef::Bytes(_) => T_BYTES,
+        LpcRef::Class(_) => T_CLASS,
     };
     context.return_efun_result(LpcRef::from(tag));
     Ok(())

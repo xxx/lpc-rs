@@ -3,15 +3,16 @@
 `mapping query_connection(object ob = this_player())`
 
 What the driver knows about `ob`'s connection, as a mapping with a fixed key
-set. Every key is always present; an unreported value is 0 except for `mtts`
-and `colour_depth`, which use -1 to distinguish unknown from explicit no-color.
+set. Every key is always present. Unreported dimensions and terminal names use
+integer `0`; an unreported charset uses `nil`. `mtts` and `colour_depth` use `-1`
+to distinguish unknown from explicit no-color.
 
 | key | value |
 |---|---|
 | `"ip"` | the client's address, as text |
 | `"port"` | the client's port |
 | `"cols"`, `"rows"` | the window size the client reported (NAWS); 0 until it does |
-| `"charset"` | the charset negotiated (CHARSET); 0 until one is |
+| `"charset"` | the last charset agreed through CHARSET; nil until one is |
 | `"gmcp"`, `"mxp"`, `"eor"` | 1 while that extension is on |
 | `"idle"` | seconds since the client's last line of input; from connecting, before one |
 | `"overflowed"` | 1 while the client is not taking its output and text to it is being dropped; only with a `MAX_PENDING_OUTPUT` bound |
@@ -20,8 +21,10 @@ and `colour_depth`, which use -1 to distinguish unknown from explicit no-color.
 | `"mtts"` | MTTS capability bitmask; -1 until a valid mask is reported |
 | `"colour_depth"` | detected depth: 0 plain, 3 eight colors, 4 sixteen colors, 8 indexed 256 colors, 24 truecolor; -1 when unknown |
 
-Returns 0 when `ob` has no connection. Output to the client is always UTF-8,
-whatever `"charset"` says.
+Returns `nil` when `ob` has no connection. With `NULL_MODE=zero`, `nil` is
+represented by integer `0`; see [null values](../lpc/null.md). Output to the
+client is always UTF-8, whatever `"charset"` says. Disabling CHARSET negotiation
+does not clear the last agreed charset.
 
 TTYPE negotiation starts on connection and does not delay login. An explicit
 MTTS report overrides terminal-name hints: bit 256 selects truecolor, bit 8

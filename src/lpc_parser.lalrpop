@@ -1,3 +1,4 @@
+use crate::compiler::ast::class_expression::{ClassInitNode, MemberNode, CompoundAssignmentNode};
 use itertools::Itertools;
 use std::convert::TryFrom;
 use lalrpop_util::ParseError;
@@ -8,7 +9,9 @@ use crate::compiler::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::compiler::ast::block_node::BlockNode;
 use crate::compiler::ast::break_node::BreakNode;
 use crate::compiler::ast::call_node::{CallChain, CallNode};
+use crate::compiler::ast::capture_node::CaptureNode;
 use crate::compiler::ast::cast_node::CastNode;
+use crate::compiler::ast::catch_node::CatchNode;
 use crate::compiler::ast::closure_node::ClosureNode;
 use crate::compiler::ast::comma_expression_node::CommaExpressionNode;
 use crate::compiler::ast::continue_node::ContinueNode;
@@ -23,6 +26,7 @@ use crate::compiler::ast::function_def_node::FunctionDefNode;
 use crate::compiler::ast::if_node::IfNode;
 use crate::compiler::ast::inherit_node::InheritNode;
 use crate::compiler::ast::int_node::IntNode;
+use crate::compiler::ast::nil_node::NilNode;
 use crate::compiler::ast::labeled_statement_node::LabeledStatementNode;
 use crate::compiler::ast::label_node::LabelNode;
 use crate::compiler::ast::mapping_node::MappingNode;
@@ -40,11 +44,14 @@ use crate::compiler::ast::var_node::VarNode;
 use crate::compiler::ast::var_init_node::VarInitNode;
 use crate::compiler::ast::while_node::WhileNode;
 use lpc_rs_core::lpc_type::LpcType;
+use crate::compiler::ast::parsed_type::ParsedType;
+use crate::compiler::ast::class_def_node::{ClassDefNode, ClassFieldNode};
 use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_core::EFUN;
 use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
 use crate::compiler::parser::collapse_unary_op::{collapse_unary_op, demote_statement_post_op};
-use crate::compiler::parser::nesting::guard;
+use crate::compiler::parser::nesting::{contains_capture, guard};
+use crate::compiler::parser::parameter::Parameter;
 use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::{LpcError, lpc_error, lpc_bug, lpc_warning};
@@ -54,7 +61,7 @@ use crate::compiler::compilation_context::CompilationContext;
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
-use ustr::ustr;
+use ustr::{ustr, Ustr};
 
 grammar<'context>(context: &'context mut CompilationContext);
 
@@ -63,6 +70,7 @@ extern {
     type Error = LpcError;
 
     enum Token {
+        "$" => Token::Dollar(<Span>),
         "+" => Token::Plus(<Span>),
         "-" => Token::Minus(<Span>),
         "*" => Token::Mul(<Span>),
@@ -126,6 +134,9 @@ extern {
         "private" => Token::Private(<Span>),
         "protected" => Token::Protected(<Span>),
         "static" => Token::Static(<Span>),
+        "nosave" => Token::Nosave(<Span>),
+        "class" => Token::Class(<Span>),
+        "." => Token::Dot(<Span>),
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
         "ref" => Token::Ref(<Span>),
@@ -149,6 +160,7 @@ extern {
         ".." => Token::Range(<Span>),
 
         "StringLiteral" => Token::StringLiteral(<StringToken>),
+        "nil" => Token::Nil(<Span>),
         "IntLiteral" => Token::IntLiteral(<IntToken>),
         "MinIntMagnitude" => Token::MinIntMagnitude(<Span>),
         "FloatLiteral" => Token::FloatLiteral(<FloatToken>),
@@ -166,8 +178,8 @@ pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> =>? {
 };
 
 Inherit: InheritNode = {
-    <l:"inherit"> <path_node:Expression> <namespace:"ID"?> <r:";"> =>? {
-        let span = Span::join(l, r);
+    <modifier:InheritVisibility?> <l:"inherit"> <path_node:Expression> <namespace:"ID"?> <r:";"> =>? {
+        let span = Span::join(modifier.map_or(l, |(span, _)| span), r);
 
         let ExpressionNode::String(StringNode { value: path, .. }) = path_node else {
             let error = lpc_error!(Some(span), "inherit path must be a constant string expression");
@@ -179,13 +191,54 @@ Inherit: InheritNode = {
             InheritNode {
                 path: ustr(&path),
                 namespace: namespace.map(|ns| ustr(&ns.1)),
+                visibility: modifier.map(|(_, visibility)| visibility).unwrap_or_default(),
                 span: Some(span),
             }
         )
     }
 };
 
+InheritVisibility: (Span, lpc_rs_core::visibility::Visibility) = {
+    "public" => (<>, lpc_rs_core::visibility::Visibility::Public),
+    "private" => (<>, lpc_rs_core::visibility::Visibility::Private),
+    "protected" => (<>, lpc_rs_core::visibility::Visibility::Protected),
+};
+
+ClassDef: ClassDefNode = {
+    <flags:GlobalFlag*> <l:"class"> <name:"ID"> "{" <fields:ClassFields*> <r:"}"> ";"? =>? {
+        use lpc_rs_core::visibility::Visibility;
+        let mut visibility = Visibility::Public;
+        for (span, flag) in &flags {
+            visibility = match *flag {
+                "public" => Visibility::Public,
+                "protected" => Visibility::Protected,
+                "private" => Visibility::Private,
+                _ => return Err(ParseError::User {
+                    error: lpc_error!(Some(*span), "`{}` is not a class visibility modifier", flag)
+                }),
+            };
+        }
+        if flags.len() > 1 {
+            return Err(ParseError::User {
+                error: lpc_error!(Some(Span::join(flags[0].0, flags.last().unwrap().0)), "multiple visibilities specified")
+            });
+        }
+        Ok(ClassDefNode { name: ustr(&name.1), visibility, fields: fields.into_iter().flatten().collect(), span: Span::join(l, r) })
+    }
+};
+
+ClassFields: Vec<ClassFieldNode> = {
+    <type_:Type> <first:ClassFieldName> <rest:("," <ClassFieldName>)*> ";" => {
+        std::iter::once(first).chain(rest).map(|(name, array)| ClassFieldNode {
+            name: ustr(&name.1), type_: type_.1.as_array(array), span: Span::join(type_.0, name.0)
+        }).collect()
+    }
+};
+
+ClassFieldName: (StringToken, bool) = <star:"*"?> <name:"ID"> => (name, star.is_some());
+
 Def: AstNode = {
+    <ClassDef> => AstNode::ClassDef(<>),
     <FunctionDef> => AstNode::from(<>),
     <proto:FunctionPrototype> <r:";"> => {
         let (flags, r_type, _, name, _) = proto;
@@ -225,13 +278,18 @@ Def: AstNode = {
 
 FunctionPrototype: (
     Vec<(Span, &'static str)>,
-    Option<(Span, &'static str)>,
+    Option<(Span, ParsedType)>,
     Option<Span>,
     StringToken,
-    (Vec<VarInitNode>, bool)
+    (Vec<Parameter>, bool, Option<Box<Parameter>>)
 ) = {
-    <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> => {
-        (flags, r_type, star, name, parameter_tuple)
+    <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> =>? {
+        if let Some((span, _)) = flags.iter().find(|(_, flag)| *flag == "nosave") {
+            return Err(ParseError::User {
+                error: lpc_error!(Some(*span), "`nosave` is intended for global variables only")
+            });
+        }
+        Ok((flags, r_type, star, name, parameter_tuple))
     }
 }
 
@@ -239,7 +297,9 @@ FunctionDef: FunctionDefNode = {
     <proto:FunctionPrototype> "{" <body:Statements> "}" =>? {
         let (flags, r_type, star, name, parameter_tuple) = proto;
         let array = star.is_some();
-        let (parameters, ellipsis) = parameter_tuple;
+        let (parameters, ellipsis, variadic) = parameter_tuple;
+        let parameters = parameters.into_iter().map(Parameter::into_named).collect::<lpc_rs_errors::Result<Vec<_>>>()?;
+        let variadic = variadic.map(|param| param.into_named().map(Box::new)).transpose()?;
 
         let lead = flags
             .first()
@@ -250,14 +310,14 @@ FunctionDef: FunctionDefNode = {
         let span = Span::join(lead, name.0);
 
         let return_type = if let Some(this_type) = r_type {
-            LpcType::from(this_type.1).as_array(array)
+            this_type.1.as_array(array)
         } else if context.strict_types_at(span) {
             let err = LpcError::new("Missing return type")
                                       .with_span(Some(span))
                                       .with_note("`#pragma strict_types` governs this file, so every function it declares needs an explicit return type.");
             return Err(ParseError::User { error: err });
         } else {
-            LpcType::Mixed(array)
+            LpcType::Mixed(array).into()
         };
 
         let flag_strs = flags.into_iter().map(|f| f.1).collect::<Vec<_>>();
@@ -273,6 +333,7 @@ FunctionDef: FunctionDefNode = {
         Ok(guard(FunctionDefNode {
             name: ustr(&name.1),
             parameters,
+            variadic,
             flags,
             body,
             return_type,
@@ -302,9 +363,13 @@ Closure: ExpressionNode = {
      <l:"("> ":" <params:ClosureParameters?> <body:ClosureBody?> ":" <r:")"> =>? {
         let span = Span::join(l, r);
 
-        let (parameters, ellipsis) = params.map(|tuple| {
-            (Some(tuple.0), tuple.1)
-        }).unwrap_or((None, false));
+        let (parameters, ellipsis, variadic) = if let Some((parameters, ellipsis, variadic)) = params {
+            let parameters = parameters.into_iter().map(Parameter::into_named).collect::<lpc_rs_errors::Result<Vec<_>>>()?;
+            let variadic = variadic.map(|param| param.into_named().map(Box::new)).transpose()?;
+            (Some(parameters), ellipsis, variadic)
+        } else {
+            (None, false, None)
+        };
 
         // closures are private to ensure they can't be called directly via the actual `call_other` efun
         let flags = FunctionFlags::from(&["private"][..]).with_ellipsis(ellipsis);
@@ -313,41 +378,62 @@ Closure: ExpressionNode = {
 
         Ok(guard(ExpressionNode::Closure(ClosureNode {
             name,
-            return_type: LpcType::Mixed(false),
+            return_type: LpcType::Mixed(false).into(),
             parameters,
+            variadic,
             flags,
             body: body.unwrap_or_default(),
             span: Some(span),
             scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
         }), Some(span))?)
     },
 }
 
-DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool) = {
+DelimitedParameters<L_DELIM, R_DELIM>: (Vec<Parameter>, bool, Option<Box<Parameter>>) = {
     L_DELIM "void" R_DELIM => {
-        (vec![], false)
+        (vec![], false, None)
     },
     L_DELIM <ellipsis:"..."?> R_DELIM => {
-        (vec![], ellipsis.is_some())
+        (vec![], ellipsis.is_some(), None)
     },
     L_DELIM <params:ParameterList> <ellipsis:("," "...")?> R_DELIM => {
-        (params, ellipsis.is_some())
+        (params, ellipsis.is_some(), None)
+    },
+    L_DELIM <mut params:ParameterList> "..." R_DELIM =>? {
+        let collector = params.pop().ok_or_else(|| ParseError::User {
+            error: lpc_error!(None, "a named variadic parameter is required")
+        })?;
+        collector.validate_variadic()?;
+        Ok((params, true, Some(Box::new(collector))))
     }
 }
 Parameters = DelimitedParameters<"(", ")">;
 ClosureParameters = DelimitedParameters<"[", "]">;
 
-ParameterList: Vec<VarInitNode> = {
-    <list:(<ParameterList> ",")?> <name:ArgName> => {
+ParameterList: Vec<Parameter> = {
+    <list:(<ParameterList> ",")?> <name:Parameter> => {
         let mut v = list.unwrap_or(vec![]);
         v.push(name);
         v
     }
 }
 
+Parameter: Parameter = {
+    <ArgName> => Parameter::Named(Box::new(<>)),
+    <var_type:ValueType> <by_ref:"ref"?> <array:"*"?> => {
+        Parameter::Unnamed {
+            type_: var_type.1.as_array(array.is_some()),
+            by_ref: by_ref.is_some(),
+            span: Span::join(var_type.0, array.or(by_ref).unwrap_or(var_type.0)),
+        }
+    },
+};
+
 ArgName: VarInitNode = {
     <var_type:Type> <by_ref:"ref"?> <mut init:VarInit> => {
-        let new_type = LpcType::from(var_type.1);
+        let new_type = var_type.1;
 
         init.type_ = new_type.as_array(init.array);
         init.by_ref = by_ref.is_some();
@@ -361,23 +447,29 @@ ArgName: VarInitNode = {
                                       .with_note("`#pragma strict_types` governs this file, so every parameter it declares needs an explicit type.");
             return Err(ParseError::User { error: err });
         }
-        init.type_ = LpcType::Mixed(init.array);
+        init.type_ = LpcType::Mixed(init.array).into();
         init.by_ref = by_ref.is_some();
 
         Ok(init)
     },
 };
 
-Type: (Span, &'static str) = {
-    "int" => (<>, "int"),
-    "float" => (<>, "float"),
-    "string" => (<>, "string"),
-    "bytes" => (<>, "bytes"),
-    "mixed" => (<>, "mixed"),
-    "mapping" => (<>, "mapping"),
-    "object" => (<>, "object"),
-    "function" => (<>, "function"),
-    "void" => (<>, "void"),
+#[inline]
+Type: (Span, ParsedType) = {
+    <ValueType>,
+    "void" => (<>, LpcType::from("void").into()),
+};
+
+ValueType: (Span, ParsedType) = {
+    <l:"class"> <name:"ID"> => (Span::join(l, name.0), ParsedType::Class { name: ustr(&name.1), array: false, span: name.0 }),
+    "int" => (<>, LpcType::from("int").into()),
+    "float" => (<>, LpcType::from("float").into()),
+    "string" => (<>, LpcType::from("string").into()),
+    "bytes" => (<>, LpcType::from("bytes").into()),
+    "mixed" => (<>, LpcType::from("mixed").into()),
+    "mapping" => (<>, LpcType::from("mapping").into()),
+    "object" => (<>, LpcType::from("object").into()),
+    "function" => (<>, LpcType::from("function").into()),
 };
 
 GlobalFlag: (Span, &'static str) = {
@@ -385,6 +477,7 @@ GlobalFlag: (Span, &'static str) = {
     "public" => (<>, "public"),
     "private" => (<>, "private"),
     "static" => (<>, "static"),
+    "nosave" => (<>, "nosave"),
     "protected" => (<>, "protected"),
     "nomask" => (<>, "nomask"),
 };
@@ -451,7 +544,7 @@ OpenStatement: AstNode = {
         let node = ForNode::new(init, cond, inc.map(demote_statement_post_op), body, Some(for_t));
         Ok(guard(AstNode::from(node), Some(for_t))?)
     },
-    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:OpenStatement> =>? {
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ForEachSeparator <collection:Expression> ")" <body:OpenStatement> =>? {
         let node = ForEachNode::new(init, collection, body, Some(foreach_t));
         Ok(guard(AstNode::from(node), Some(foreach_t))?)
     },
@@ -485,7 +578,7 @@ ClosedStatement: AstNode = {
         let node = ForNode::new(init, cond, inc.map(demote_statement_post_op), body, Some(for_t));
         Ok(guard(AstNode::from(node), Some(for_t))?)
     },
-    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:ClosedStatement> =>? {
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ForEachSeparator <collection:Expression> ")" <body:ClosedStatement> =>? {
         let node = ForEachNode::new(init, collection, body, Some(foreach_t));
         Ok(guard(AstNode::from(node), Some(foreach_t))?)
     },
@@ -512,7 +605,20 @@ ForInit: AstNode = {
 
 ForEachInit: ForEachInit = {
     <var:ForEachVar> => ForEachInit::Array(var),
-    <key:ForEachVar> "," <value:ForEachVar> => ForEachInit::Mapping { key, value },
+    <key:ForEachVar> "," <value:ForEachVar> => ForEachInit::Mapping { key, value: Box::new(value) },
+};
+
+ForEachSeparator: () = {
+    ":" => (),
+    <word:"ID"> =>? {
+        if word.1 == "in" {
+            Ok(())
+        } else {
+            Err(ParseError::User {
+                error: lpc_error!(Some(word.0), "expected `:` or `in` after `foreach` variables")
+            })
+        }
+    },
 };
 
 // A loop variable; untyped is `mixed`.
@@ -524,12 +630,12 @@ ForEachVar: VarInitNode = {
     },
     <var_type:Type> <star:"*"?> <name:"ID"> =>? {
         let span = Span::join(var_type.0, name.0);
-        if var_type.1 == "void" {
+        if var_type.1 == LpcType::Void {
             let error = lpc_error!(Some(span), "a `foreach` variable cannot be `void`");
             return Err(ParseError::User { error });
         }
         let array = star.is_some();
-        let mut node = VarInitNode::new(&name.1, LpcType::from(var_type.1).as_array(array));
+        let mut node = VarInitNode::new(&name.1, var_type.1.as_array(array));
         node.array = array;
         node.span = Some(span);
         Ok(node)
@@ -578,7 +684,7 @@ VarInit: VarInitNode = {
         let span = Span::combine(Some(array.unwrap_or(name_span)), value_span.or(Some(name_span)));
 
         Ok(guard(VarInitNode {
-            type_: LpcType::Int(false), // placeholder. Corrected in Decl.
+            type_: LpcType::Int(false).into(), // placeholder. Corrected in Decl.
             name: ustr(&name.1),
             value,
             array: array.is_some(),
@@ -592,7 +698,7 @@ VarInit: VarInitNode = {
 
 Decl: DeclNode = {
     <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> =>? {
-        let new_type = LpcType::from(var_type.1).as_array(init.array);
+        let new_type = var_type.1.as_array(init.array);
         let mut initializations = vec![init];
 
         initializations.append(optional.to_vec().as_mut());
@@ -612,7 +718,48 @@ Block: BlockNode = {
     }
 };
 
+ClassConstruction: ExpressionNode = {
+    <constructor:"ID"> "(" "class" <name:"ID"> <initializers:("," <ClassInitializer>)*> <r:")"> =>? {
+        let span = Some(Span::join(constructor.0, r));
+        if constructor.1 != "new" {
+            return Err(ParseError::User { error: lpc_error!(span, "class construction requires `new`") });
+        }
+        Ok(guard(ExpressionNode::ClassInit(ClassInitNode {
+            type_: ParsedType::Class { name: ustr(&name.1), array: false, span: name.0 },
+            initializers,
+            span,
+        }), span)?)
+    }
+};
+
+ClassInitializer: (Ustr, ExpressionNode) = <name:"ID"> ":" <value:AssignmentExpression> => (ustr(&name.1), value);
+
+MemberExpression: ExpressionNode = {
+    <receiver:PostfixExpression> "." <name:"ID"> =>? {
+        let span = Span::combine(receiver.span(), Some(name.0));
+        Ok(guard(ExpressionNode::Member(MemberNode { receiver: Box::new(receiver), name: ustr(&name.1), span }), span)?)
+    }
+};
+
+CaptureExpression: ExpressionNode = {
+    <l:"$"> "(" <expr:Expression> <r:")"> =>? {
+        let span = Some(Span::join(l, r));
+        Ok(guard(ExpressionNode::Capture(CaptureNode {
+            name: context.next_capture_name(), expr: Box::new(expr), span,
+        }), span)?)
+    },
+};
+
 PrimaryExpression: ExpressionNode = {
+    <name:"ID"> "{" <body:Statements> <r:"}"> =>? {
+        if name.1 != "catch" {
+            return Err(ParseError::User { error: lpc_error!(Some(name.0), "expected `catch` before a block expression") });
+        }
+        let span = Some(Span::join(name.0, r));
+        Ok(guard(ExpressionNode::Catch(CatchNode { body: BlockNode::new(body), span }), span)?)
+    },
+    <CaptureExpression>,
+    <ClassConstruction>,
     <Int>,
     <Float>,
     <String>,
@@ -621,19 +768,26 @@ PrimaryExpression: ExpressionNode = {
     <OperatorFunction>,
     <Closure>,
     "(" <Expression> ")",
-    <l:"("> "{" <list:(ExpressionList ","?)?>  "}" <r:")"> =>? {
+    <l:"("> "{" <list:(ArrayExpressionList ","?)?>  "}" <r:")"> =>? {
         let vec = list.map(|list| list.0).unwrap_or_else(|| vec![]);
         Ok(guard(ExpressionNode::Array(ArrayNode::new(vec)), Some(Span::join(l, r)))?)
     },
     <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> =>? {
         let vec = if let Some(v) = list {
-            // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
-            let reversed = v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec();
+            if v.0.iter().any(|(key, value)| contains_capture(key) || contains_capture(value)) {
+                // Retain captures until lowering, including entries a later key replaces.
+                v.0
+            } else {
+                // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
+                let reversed = v.0.into_iter().rev()
+                    .unique_by(|(k, _)| (std::mem::discriminant(k), k.to_string()))
+                    .collect_vec();
 
-            // We have to `collect` twice because `unique_by` keeps the first duplicate, but we want
-            // to keep the last, and doing a second `rev()` in a single iterator chain applies it
-            // before the `unique_by` runs
-            reversed.into_iter().rev().collect_vec()
+                // We have to `collect` twice because `unique_by` keeps the first duplicate, but we want
+                // to keep the last, and doing a second `rev()` in a single iterator chain applies it
+                // before the `unique_by` runs
+                reversed.into_iter().rev().collect_vec()
+            }
         } else {
             vec![]
         };
@@ -645,6 +799,7 @@ PrimaryExpression: ExpressionNode = {
 };
 
 PostfixExpression: ExpressionNode = {
+    <MemberExpression>,
     <PrimaryExpression>,
     <IndexExpression>,
     <Call> => ExpressionNode::from(<>),
@@ -682,13 +837,26 @@ PostfixExpression: ExpressionNode = {
     },
 };
 
+IndexBound: ExpressionNode = {
+    <Expression>,
+    <left:"<"> <expr:Expression> =>? {
+        let span = Span::combine(Some(left), expr.span());
+        Ok(collapse_unary_op(UnaryOpNode {
+            expr: Box::new(expr),
+            op: UnaryOperation::FromEnd,
+            is_post: false,
+            span,
+        })?)
+    },
+};
+
 IndexExpression: ExpressionNode = {
-    <l:PostfixExpression> "[" <r:Expression> <right:"]"> =>? {
+    <l:PostfixExpression> "[" <r:IndexBound> <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
     },
-    <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> =>? {
+    <l:PostfixExpression> "[" <e1:IndexBound> ".." <e2:IndexBound> <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         let r = ExpressionNode::Range(RangeNode {
@@ -699,7 +867,7 @@ IndexExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
     },
-    <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> =>? {
+    <l:PostfixExpression> "[" ".." <e:IndexBound> <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         let r = ExpressionNode::Range(RangeNode {
@@ -710,7 +878,7 @@ IndexExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
     },
-    <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> =>? {
+    <l:PostfixExpression> "[" <e:IndexBound> ".." <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
         let r = ExpressionNode::Range(RangeNode {
@@ -752,15 +920,15 @@ CastExpression: ExpressionNode = {
     <UnaryExpression>,
     <l:"("> <cast_type:Type> <star:"*"?> ")" <expr:CastExpression> =>? {
         let span = Span::combine(Some(l), expr.span());
-        if cast_type.1 == "void" {
+        if cast_type.1 == LpcType::Void {
             let error = lpc_error!(span, "cannot cast to `void`");
             return Err(ParseError::User { error });
         }
-        if cast_type.1 == "bytes" {
+        if cast_type.1 == LpcType::Bytes(false) {
             let error = lpc_error!(span, "cannot cast to `bytes`; convert with to_bytes()");
             return Err(ParseError::User { error });
         }
-        let type_ = LpcType::from(cast_type.1).as_array(star.is_some());
+        let type_ = cast_type.1.as_array(star.is_some());
 
         Ok(guard(ExpressionNode::Cast(CastNode { expr: Box::new(expr), type_, span }), span)?)
     },
@@ -879,6 +1047,22 @@ AssignmentExpression: ExpressionNode = {
     <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> =>? {
         let span = Span::combine(lhs.span(), rhs.span());
 
+        if op != AssignmentOperation::Simple
+            && let ExpressionNode::BinaryOp(BinaryOpNode { op: BinaryOperation::Index, r, .. }) = &lhs
+            && matches!(**r, ExpressionNode::Range(_))
+        {
+            return Err(ParseError::User {
+                error: lpc_error!(span, "Compound slice assignment is not supported"),
+            });
+        }
+
+        if matches!(lhs, ExpressionNode::Member(_)) && op != AssignmentOperation::Simple {
+            let binary = BinaryOperation::try_from(op).expect("compound assignment operation");
+            return Ok(guard(ExpressionNode::CompoundAssignment(CompoundAssignmentNode {
+                lhs: Box::new(lhs), rhs: Box::new(rhs), op: binary, span,
+            }), span)?);
+        }
+
         // Desugar `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
         let rhs = match op {
             AssignmentOperation::Simple => {
@@ -913,6 +1097,7 @@ AssignmentExpression: ExpressionNode = {
         };
 
         Ok(guard(ExpressionNode::Assignment(AssignmentNode {
+            is_compound: op != AssignmentOperation::Simple,
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
             span,
@@ -948,9 +1133,9 @@ Return: ReturnNode = {
     }
 }
 
-ExpressionList: Vec<ExpressionNode> = {
-    <AssignmentExpression> => vec![<>],
-    <list:ExpressionList> "," <arg:AssignmentExpression> => {
+ArrayExpressionList: Vec<ExpressionNode> = {
+    <SpreadExpression> => vec![<>],
+    <list:ArrayExpressionList> "," <arg:SpreadExpression> => {
         let mut v = list;
         v.push(arg);
         v
@@ -973,6 +1158,10 @@ ArgumentExpression: ExpressionNode = {
             global: false,
         }))
     },
+    <SpreadExpression>,
+};
+
+SpreadExpression: ExpressionNode = {
     <e:AssignmentExpression> <r:"..."> => {
         let span = Span::combine(e.span(), Some(r));
         ExpressionNode::Spread(SpreadNode { expr: Box::new(e), span })
@@ -1007,7 +1196,7 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
 }
 
 Call: CallNode = {
-    <receiver:(<PostfixExpression> "->")?> <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> =>? {
+    <receiver:(<PostfixExpression> "->")?> <ns:CallNamespace?> <name:"ID"> "(" <list:(<ArgumentExpressionList> ","?)?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
 
         let (left, namespace) = ns.unwrap_or_else(|| (name.0, CallNamespace::default()));
@@ -1024,7 +1213,7 @@ Call: CallNode = {
             lvalue_temps: Vec::new(),
         }, span)?)
     },
-    <expr:ComputedCallee> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> =>? {
+    <expr:ComputedCallee> <lparen:"("> <list:(<ArgumentExpressionList> ","?)?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
         let span = Span::combine(expr.span().or(Some(lparen)), Some(right));
 
@@ -1038,6 +1227,8 @@ Call: CallNode = {
 };
 
 ComputedCallee: ExpressionNode = {
+    <CaptureExpression>,
+    <MemberExpression>,
     <Call> => ExpressionNode::from(<>),
     <IndexExpression>,
 };
@@ -1126,6 +1317,7 @@ Var: ExpressionNode = {
 };
 
 Int: ExpressionNode = {
+    <span:"nil"> => ExpressionNode::Nil(NilNode::new(Some(span))),
     <i:"IntLiteral"> =>? {
         Ok(ExpressionNode::Int(
             IntNode {

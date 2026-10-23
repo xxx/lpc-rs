@@ -1,5 +1,5 @@
 //! The float math efuns: trig, `exp` / `log` / `pow` / `sqrt`, `floor` /
-//! `ceil`. An int argument is promoted; every result is a float.
+//! `ceil` / `round`. An int argument is promoted; every result is a float.
 
 use lpc_rs_errors::Result;
 
@@ -138,6 +138,11 @@ pub fn ceil<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     unary(context, "ceil", |x| Ok(x.ceil()))
 }
 
+/// `round(x)`: the nearest whole number, with halfway values rounded away from zero.
+pub fn round<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    unary(context, "round", |x| Ok(x.round()))
+}
+
 #[cfg(test)]
 mod tests {
     use std::f64::consts::{E, FRAC_PI_2, FRAC_PI_4};
@@ -258,6 +263,113 @@ mod tests {
         assert_eq!(float_of("floor(-4.5)").await, -5.0);
         assert_eq!(float_of("ceil(4.5)").await, 5.0);
         assert_eq!(float_of("ceil(-4.5)").await, -4.0);
+    }
+
+    #[tokio::test]
+    async fn round_chooses_the_nearest_whole_number_and_breaks_ties_away_from_zero() {
+        for (input, expected) in [
+            (1.25, 1.0),
+            (1.75, 2.0),
+            (-1.25, -1.0),
+            (-1.75, -2.0),
+            (0.5, 1.0),
+            (-0.5, -1.0),
+            (2.5, 3.0),
+            (-2.5, -3.0),
+            (0.499_999_999_999_999_94, 0.0),
+            (-0.499_999_999_999_999_94, -0.0),
+        ] {
+            assert_eq!(float_of(&format!("round({input:?})")).await, expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn round_preserves_signed_zero_and_large_integral_floats() {
+        for (input, expected) in [(0.0, 0.0_f64), (-0.0, -0.0), (0.25, 0.0), (-0.25, -0.0)] {
+            assert_eq!(
+                float_of(&format!("round({input:?})")).await.to_bits(),
+                expected.to_bits()
+            );
+        }
+        for input in [4.0, -4.0, 9_007_199_254_740_992.0, f64::MAX, f64::MIN] {
+            assert_eq!(float_of(&format!("round({input:?})")).await, input);
+        }
+    }
+
+    #[tokio::test]
+    async fn round_promotes_integer_arguments_to_float() {
+        for (input, expected) in [
+            ("0", 0.0),
+            ("7", 7.0),
+            ("-7", -7.0),
+            ("9007199254740993", 9_007_199_254_740_992.0),
+            ("9223372036854775807", i64::MAX as f64),
+            ("(-9223372036854775807 - 1)", i64::MIN as f64),
+        ] {
+            assert_eq!(float_of(&format!("round({input})")).await, expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn round_supports_function_values_and_checks_dynamic_arguments_in_both_null_modes() {
+        use lpc_rs_core::null_mode::NullMode;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        use crate::{test_config_builder, test_support::run_prog_with_config};
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = test_config_builder!().null_mode(mode).build().unwrap();
+            let code = format!(
+                r#"
+                int create() {{
+                    function f = round;
+                    if (!floatp(f(2)) || f(-2.5) != -3.0) return 0;
+                    foreach (mixed value in ({{ "1", ({{}}), ([]), this_object(), f }})) {{
+                        mixed error = catch(f(value));
+                        if (!stringp(error) || strindex(error, "is not a number") < 0) return 0;
+                    }}
+                    mixed value = nil;
+                    mixed result;
+                    mixed error = catch(result = f(value));
+                    return {};
+                }}
+                "#,
+                if mode == NullMode::Zero {
+                    "!error && floatp(result) && result == 0.0"
+                } else {
+                    "stringp(error) && strindex(error, \"nil is not a number\") >= 0"
+                }
+            );
+            let task = run_prog_with_config(&code, config.into()).await;
+            assert_eq!(task.result(), Some(LpcRef::from(1)), "{mode}");
+        }
+    }
+
+    #[tokio::test]
+    async fn round_static_signature_requires_one_number_and_returns_float() {
+        use crate::{compiler::CompilerBuilder, test_support::test_config};
+
+        let compiler = CompilerBuilder::default()
+            .config(test_config())
+            .build()
+            .unwrap();
+        for expression in ["round()", "round(1.0, 2.0)", "round(\"1\")"] {
+            let error = compiler
+                .compile_string(
+                    "/round_signature.c",
+                    format!("float create() {{ return {expression}; }}"),
+                )
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("argument"), "{expression}: {error}");
+        }
+        let error = compiler
+            .compile_string("/round_return.c", "int create() { return round(1.5); }")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Expected int"), "{error}");
     }
 
     #[tokio::test]

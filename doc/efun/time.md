@@ -8,4 +8,4 @@ each attempt.
 
 ### See also
 
-`ctime`, `call_out`
+`ctime`, `call_out`, [uptime](uptime.md)

@@ -3,6 +3,7 @@ use std::{fmt, ops::Deref, sync::Arc};
 use lpc_rs_core::{
     RegisterSize,
     register::{Register, RegisterVariant},
+    visibility::Visibility,
 };
 use lpc_rs_function_support::program_function::ProgramFunction;
 
@@ -10,8 +11,8 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 #[derive(Debug, Clone)]
 pub struct Function {
     pub code: Arc<ProgramFunction>,
-    // Keep the binding scalar so calls pass a pointer/word pair.
-    globals: u64,
+    // Pack the view (32-bit start, 16-bit count) and access flags into one word.
+    binding: u64,
 }
 
 impl Function {
@@ -27,18 +28,54 @@ impl Function {
     }
 
     pub(crate) fn new(code: Arc<ProgramFunction>, start: u32, count: RegisterSize) -> Self {
+        let visibility = code.prototype.flags.visibility() as u64;
         Self {
             code,
-            globals: u64::from(start) | (u64::from(count) << 32),
+            binding: u64::from(start) | (u64::from(count) << 32) | (visibility << 48),
         }
     }
 
+    /// Visibility in this receiver, including inheritance restrictions.
+    #[inline]
+    pub fn visibility(&self) -> Visibility {
+        match (self.binding >> 48) & 3 {
+            1 => Visibility::Private,
+            2 => Visibility::Protected,
+            _ => Visibility::Public,
+        }
+    }
+
+    /// Whether another object may call this binding.
+    #[inline]
+    pub fn public(&self) -> bool {
+        self.visibility() == Visibility::Public
+    }
+
+    pub(crate) fn private(&self) -> bool {
+        self.visibility() == Visibility::Private
+    }
+
+    /// Hidden declarations retain their parent's dispatch when inherited again.
+    pub(crate) fn hidden(&self) -> bool {
+        self.binding & (1 << 50) != 0
+    }
+
+    pub(crate) fn inherited(&self, start: u32, visibility: Visibility) -> Self {
+        let mut function = Self::new(self.code.clone(), start, self.global_count());
+        let visibility = self.visibility().restricted_by(visibility) as u64;
+        function.binding = (function.binding & !(3 << 48)) | (visibility << 48);
+        if self.private() || self.hidden() {
+            function.binding |= 1 << 50;
+        }
+        function
+    }
+
     pub(crate) fn globals_start(&self) -> u32 {
-        self.globals as u32
+        self.binding as u32
     }
 
     pub(crate) fn global_count(&self) -> RegisterSize {
-        (self.globals >> 32) as RegisterSize
+        (self.binding >> 32) as RegisterSize
     }
 
     pub(crate) fn projected(
@@ -79,7 +116,7 @@ impl Deref for Function {
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.code == other.code && self.globals == other.globals
+        self.code == other.code && self.binding == other.binding
     }
 }
 

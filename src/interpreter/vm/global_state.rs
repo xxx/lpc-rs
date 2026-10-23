@@ -1,3 +1,4 @@
+use lpc_rs_core::null_mode::NullMode;
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use lpc_rs_errors::{Result, lpc_error};
@@ -10,6 +11,7 @@ use crate::interpreter::program::Function;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
+        call_origin::CallOrigin,
         call_outs::CallOuts,
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         lpc_ref::LpcRef,
@@ -35,6 +37,20 @@ pub struct PreparedCall {
 }
 
 impl PreparedCall {
+    /// Mark a scheduled callback before constructing its retryable entry.
+    pub(crate) fn for_call_out(mut self, player: Option<std::sync::Weak<Process>>) -> Self {
+        if let crate::interpreter::task::SeedEntry::Callback {
+            origin,
+            call_out_player,
+            ..
+        } = &mut self.entry
+        {
+            *origin = CallOrigin::CallOut;
+            *call_out_player = player;
+        }
+        self
+    }
+
     /// Run the callback, resolving named targets anew and retaining anonymous code.
     pub async fn execute(self, timeout_ms: u64) -> Result<()> {
         use crate::interpreter::task::{SeedArg, TaskSeed};
@@ -77,10 +93,19 @@ pub struct GlobalState {
     /// When this state was built; MSSP's `UPTIME`.
     pub booted_at: std::time::SystemTime,
 
+    /// Monotonic startup time for elapsed VM uptime.
+    pub(crate) started_at: std::time::Instant,
+
     /// Every live connection; the loop registers and removes itself.
     pub registry: crate::interpreter::vm::binding::Registry,
 
     pub(crate) updates: super::object_update::Updates,
+
+    /// Pure compiled patterns shared by regex efuns, outside transactional state.
+    pub(crate) regex_cache: super::regex_cache::RegexCache,
+
+    /// Transactional native TCP resources; physical transport is attached separately.
+    pub sockets: crate::interpreter::sockets::Sockets,
 }
 
 impl GlobalState {
@@ -89,14 +114,17 @@ impl GlobalState {
         C: Into<Arc<Config>>,
     {
         let conf = config.into();
-        let (committer_tx, commit_watch, committer_handle) = Self::spawn_committer();
+        let (committer_tx, commit_watch, committer_handle) = Self::spawn_committer(conf.null_mode);
+        let object_space = Arc::new(ObjectSpace::new(conf.clone()));
+        object_space.set_committer(committer_tx.clone());
 
         let attempt_runner = Arc::new(stm::AttemptRunner::new(
             committer_tx.clone(),
             Some(commit_watch),
         ));
+        let sockets = crate::interpreter::sockets::Sockets::new(&conf);
         Self {
-            object_space: Arc::new(ObjectSpace::new(conf.clone())),
+            object_space,
             config: conf,
             call_outs: RwLock::new(CallOuts::new(tx.clone())),
             tx,
@@ -104,21 +132,26 @@ impl GlobalState {
             committer_handle: Some(committer_handle),
             attempt_runner,
             booted_at: std::time::SystemTime::now(),
+            started_at: std::time::Instant::now(),
             registry: Default::default(),
             updates: Default::default(),
+            regex_cache: Default::default(),
+            sockets,
         }
     }
 
     /// Spawn a committer thread; return its sender, watermark subscription,
     /// and join handle.
-    fn spawn_committer() -> (
+    fn spawn_committer(
+        mode: NullMode,
+    ) -> (
         flume::Sender<CommitProtocol>,
         tokio::sync::watch::Receiver<stm::Version>,
         JoinHandle<Snapshot>,
     ) {
         let (tx, rx) = flume::unbounded();
         let committer_tx = tx.clone();
-        let committer = Committer::new();
+        let committer = Committer::with_null_mode(mode);
         let commit_watch = committer.commit_watch();
         let handle = std::thread::Builder::new()
             .name("stm-committer".into())
@@ -137,7 +170,7 @@ impl GlobalState {
         }
         let (committer_tx, rx) = flume::unbounded();
         let loop_tx = committer_tx.clone();
-        let committer = Committer::new();
+        let committer = Committer::with_null_mode(state.config.null_mode);
         state.attempt_runner = Arc::new(stm::AttemptRunner::new(
             committer_tx.clone(),
             Some(committer.commit_watch()),
@@ -145,8 +178,14 @@ impl GlobalState {
         let handle =
             std::thread::spawn(move || committer.run_with_rejections(loop_tx, rx, rejections));
         state.committer_tx = committer_tx;
+        state.object_space.set_committer(state.committer_tx.clone());
         state.committer_handle = Some(handle);
         state
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_attempt_runner(&mut self, runner: Arc<stm::AttemptRunner>) {
+        self.attempt_runner = runner;
     }
 
     /// Tell the committer to shut down. Idempotent: the committer exits on
@@ -225,6 +264,8 @@ impl GlobalState {
             context,
             entry: crate::interpreter::task::SeedEntry::Callback {
                 function: resolved.function.clone(),
+                origin: CallOrigin::Driver,
+                call_out_player: None,
                 owner,
                 simul: match &ptr.address {
                     FunctionAddress::SimulEfun(name) => Some(name.to_string()),
@@ -274,6 +315,10 @@ impl GlobalState {
                 roots.push(WorldRoot::Ref(call_out.func_ref.clone()));
             }
         });
+
+        if let Some(cell) = self.sockets.root() {
+            roots.push(WorldRoot::Var(cell));
+        }
 
         gc_pass(&self.committer_tx, roots).await
     }
@@ -356,6 +401,50 @@ mod tests {
     };
     use thin_vec::thin_vec;
     use ustr::ustr;
+
+    #[tokio::test]
+    async fn uptime_is_independent_of_the_wall_clock_startup_timestamp() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(8);
+        let mut state = GlobalState::new(test_config(), tx);
+        state.started_at = std::time::Instant::now() - Duration::from_millis(125_250);
+        state.booted_at = std::time::UNIX_EPOCH + Duration::from_secs(4_000_000_000);
+        let state = Arc::new(state);
+        let before = state.started_at.elapsed().as_secs() as i64;
+        let result = state
+            .initialize_process_from_code("/clock.c", "int create() { return uptime(); }")
+            .await
+            .unwrap()
+            .result();
+        let after = state.started_at.elapsed().as_secs() as i64;
+        let Some(LpcRef::Int(seconds)) = result else {
+            panic!("expected an integer, got {result:?}");
+        };
+        assert!((before..=after).contains(&seconds.0), "{seconds}");
+    }
+
+    #[tokio::test]
+    async fn uptime_belongs_to_the_vm_and_is_not_reset_by_loading_objects() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(8);
+        let mut older = GlobalState::new(test_config(), tx.clone());
+        older.started_at = std::time::Instant::now() - Duration::from_secs(3600);
+        let older = Arc::new(older);
+        let newer = Arc::new(GlobalState::new(test_config(), tx));
+        for state in [older, newer] {
+            for path in ["/first.c", "/second.c"] {
+                let before = state.started_at.elapsed().as_secs() as i64;
+                let result = state
+                    .initialize_process_from_code(path, "int create() { return uptime(); }")
+                    .await
+                    .unwrap()
+                    .result();
+                let after = state.started_at.elapsed().as_secs() as i64;
+                let Some(LpcRef::Int(seconds)) = result else {
+                    panic!("expected an integer, got {result:?}");
+                };
+                assert!((before..=after).contains(&seconds.0), "{path}: {seconds}");
+            }
+        }
+    }
 
     #[test]
     fn committer_thread_exits_when_global_state_drops() {
@@ -488,11 +577,10 @@ mod tests {
         commit_object_cell(&gs, process.clone()).await.unwrap();
         ObjectSpace::insert_process_physical(&gs.object_space, process.clone());
 
-        // Commit a destruct: drop the cell, but never flush the physical
-        // removal, leaving the destruct window open.
+        // Commit destruction without flushing the physical removal.
         let mut live = start_txn(&gs.committer_tx).await.unwrap();
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
-        txn.with(|t| t.drop_var(cell_id));
+        txn.with(|t| t.remove_object(cell_id, process.clone()));
         let changeset = txn.with(|t| t.take_changeset());
         live.disarm(); // the commit carries the release
         let commit = commit_changeset(&gs.committer_tx, changeset).await.unwrap();

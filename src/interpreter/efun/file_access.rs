@@ -9,7 +9,7 @@ use lpc_rs_errors::{LpcError, Result};
 use crate::interpreter::{
     apply::valid_apply,
     efun::efun_context::EfunContext,
-    file_view::{self, Seen},
+    file_view::{self, EntryKind, FileMetadata, Seen},
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -48,6 +48,26 @@ impl FileAccess {
             .map_err(|e| self.error(context, e))
     }
 
+    /// The followed target's kind and size after this task's pending effects.
+    pub(crate) async fn metadata<const N: usize>(
+        &self,
+        context: &EfunContext<'_, N>,
+    ) -> Result<FileMetadata> {
+        file_view::metadata_through(context.txn(), self.path.server())
+            .await
+            .map_err(|e| self.error(context, e))
+    }
+
+    /// The pending entry kind, without following a leaf symlink or reading its contents.
+    pub(crate) async fn entry_kind<const N: usize>(
+        &self,
+        context: &EfunContext<'_, N>,
+    ) -> Result<EntryKind> {
+        file_view::entry_kind(context.txn(), self.path.server())
+            .await
+            .map_err(|e| self.error(context, e))
+    }
+
     /// The pending file view as bytes; missing files and directories are errors.
     pub(crate) async fn read_bytes<const N: usize>(
         &self,
@@ -56,6 +76,18 @@ impl FileAccess {
         self.read(context)
             .await?
             .into_bytes()
+            .map_err(|e| self.error(context, e))
+    }
+
+    /// Read an unchanged regular file's range, or select the full content view.
+    pub(crate) async fn read_disk_range<const N: usize>(
+        &self,
+        context: &EfunContext<'_, N>,
+        start: i64,
+        length: Option<u64>,
+    ) -> Result<Option<Vec<u8>>> {
+        file_view::read_disk_range(context.txn(), self.path.server(), start, length)
+            .await
             .map_err(|e| self.error(context, e))
     }
 

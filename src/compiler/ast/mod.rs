@@ -5,7 +5,9 @@ pub mod binary_op_node;
 pub mod block_node;
 pub mod break_node;
 pub mod call_node;
+pub mod capture_node;
 pub mod cast_node;
+pub mod catch_node;
 pub mod closure_node;
 pub mod comma_expression_node;
 pub mod continue_node;
@@ -22,6 +24,7 @@ pub mod inherit_node;
 pub mod int_node;
 pub mod label_node;
 pub mod mapping_node;
+pub mod nil_node;
 pub mod operator_node;
 pub mod program_node;
 pub mod range_node;
@@ -36,4 +39,8 @@ pub mod var_init_node;
 pub mod var_node;
 pub mod while_node;
 
+pub mod class_def_node;
 pub mod labeled_statement_node;
+pub mod parsed_type;
+
+pub mod class_expression;

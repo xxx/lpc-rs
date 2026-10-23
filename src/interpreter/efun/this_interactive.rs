@@ -20,7 +20,7 @@ pub fn this_interactive<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
                     .with(|t| t.read_connection(player.connection.id))
                     .is_some()
         })
-        .map_or(LpcRef::from(0), |player| {
+        .map_or(context.txn().nil(), |player| {
             LpcRef::from(Arc::downgrade(player))
         });
     context.return_efun_result(result);

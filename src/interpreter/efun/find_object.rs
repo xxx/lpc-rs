@@ -3,9 +3,7 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_ref::{LpcRef, NULL},
-    task_context::ObjectLookup,
+    efun::efun_context::EfunContext, lpc_ref::LpcRef, task_context::ObjectLookup,
 };
 
 /// Find an existing object by path without loading or initializing it.
@@ -20,9 +18,9 @@ pub fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
     let result = match path {
         Some(path) => match context.find_object(&path) {
             ObjectLookup::Found(proc) => LpcRef::from(Arc::downgrade(&proc)),
-            ObjectLookup::Removed | ObjectLookup::NotCreated => NULL,
+            ObjectLookup::Removed | ObjectLookup::NotCreated => context.txn().nil(),
         },
-        None => NULL,
+        None => context.txn().nil(),
     };
 
     context.return_efun_result(result);
@@ -32,11 +30,12 @@ pub fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::lpc_ref::NULL;
     use std::{path::Path, sync::Arc};
 
     use indoc::indoc;
-    use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
-    use lpc_rs_utils::config::Config;
+    use lpc_rs_core::{lpc_path::LpcPath, null_mode::NullMode, register::RegisterVariant};
+    use lpc_rs_utils::config::{Config, ConfigBuilder};
 
     use super::*;
     use crate::{
@@ -45,10 +44,11 @@ mod tests {
             object_space::ObjectSpace,
             process::Process,
             program::{Program, ProgramBuilder},
-            task::Task,
+            task::{Task, apply_function::apply_function_by_name, task_template::TaskTemplate},
             task_context::TaskContext,
             vm::{Vm, global_state::GlobalState, vm_op::VmOp},
         },
+        test_config_builder,
         test_support::{TempLib, compile_prog, permissive_master, temp_lib_config, test_config},
     };
 
@@ -260,6 +260,132 @@ mod tests {
 
         assert_eq!(task.result(), Some(LpcRef::from(1)));
         assert!(vm.global_state.object_space.lookup("/empty").is_none());
+    }
+
+    #[tokio::test]
+    async fn bootstrap_lookup_survives_uncaught_destruction() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let vm = Vm::new(test_config_builder!().null_mode(mode).build().unwrap());
+            permissive_master(&vm.global_state.object_space).await;
+            vm.initialize_process_from_code("/room.c", "")
+                .await
+                .unwrap();
+            let victim = vm
+                .initialize_process_from_code(
+                    "/victim.c",
+                    r#"void create() { move_object("/room"); } int value() { return 42; }"#,
+                )
+                .await
+                .unwrap()
+                .context
+                .process;
+            let probe = vm
+                .initialize_process_from_code(
+                    "/probe.c",
+                    indoc! { r#"
+                        int changed;
+                        void fail() {
+                            destruct(find_object("/victim"));
+                            changed = 1;
+                            if (find_object("/victim") != nil)
+                                throw("still found during destruction");
+                            throw("after destruction");
+                        }
+                        string inspect() {
+                            object *items = all_inventory("/room");
+                            return json_encode(({changed, sizeof(items),
+                                objectp(find_object("/victim")),
+                                sizeof(items) ? items[0] == find_object("/victim") : 0}));
+                        }
+                        int reuse() {
+                            return load_object("/victim") == find_object("/victim")
+                                && "/victim"->value() == 42;
+                        }
+                    "# },
+                )
+                .await
+                .unwrap()
+                .context
+                .process;
+            let template = TaskTemplate::from(vm.global_state.clone());
+            assert!(victim.cell.get().is_none());
+            for _ in 0..2 {
+                let error = apply_function_by_name(
+                    "fail",
+                    &[],
+                    probe.clone(),
+                    template.clone(),
+                    Some(5000),
+                )
+                .await
+                .unwrap()
+                .unwrap_err();
+                assert!(error.to_string().contains("after destruction"), "{error}");
+                let result = apply_function_by_name(
+                    "inspect",
+                    &[],
+                    probe.clone(),
+                    template.clone(),
+                    Some(5000),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                assert_eq!(result.to_string(), "[0,1,1,1]", "{mode:?}");
+                let result = apply_function_by_name(
+                    "reuse",
+                    &[],
+                    probe.clone(),
+                    template.clone(),
+                    Some(5000),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                assert_eq!(result, LpcRef::from(1), "{mode:?}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn bootstrap_lookup_stays_absent_after_caught_destruction() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let vm = Vm::new(test_config_builder!().null_mode(mode).build().unwrap());
+            permissive_master(&vm.global_state.object_space).await;
+            let _victim = vm
+                .initialize_process_from_code("/victim.c", "")
+                .await
+                .unwrap();
+            let probe = vm
+                .initialize_process_from_code(
+                    "/probe.c",
+                    indoc! { r#"
+                        void fail() {
+                            destruct(find_object("/victim"));
+                            throw("after destruction");
+                        }
+                        int create() {
+                            mixed err = catch(fail());
+                            return stringp(err) && find_object("/victim") == nil;
+                        }
+                        int inspect() { return find_object("/victim") == nil; }
+                    "# },
+                )
+                .await
+                .unwrap();
+            assert_eq!(probe.result(), Some(LpcRef::from(1)), "{mode:?}");
+            let result = apply_function_by_name(
+                "inspect",
+                &[],
+                probe.context.process,
+                TaskTemplate::from(vm.global_state.clone()),
+                Some(5000),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(result, LpcRef::from(1), "{mode:?}");
+        }
     }
 
     // The clone's physical insert is deferred until commit.

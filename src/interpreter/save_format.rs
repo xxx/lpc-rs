@@ -1,6 +1,9 @@
-//! CD's save-file grammar: `name value` lines, values in the compact literal
+//! CD-derived save-file grammar: `name value` lines, values in the compact literal
 //! form `save_object` writes and `restore_object` reads.
 
+mod class;
+
+use lpc_rs_core::null_mode::NullMode;
 use std::{fmt::Write, sync::Arc};
 
 use indexmap::IndexMap;
@@ -50,7 +53,7 @@ fn too_deep(depth: usize) -> Result<()> {
 
 /// Append `value` in the compact form. Containers are read through `txn`;
 /// a live object is `$created@name$`, a dead one and a function pointer
-/// are `0`; a `bytes` value is `b"..."` from [`lpc_bytes::literal`].
+/// use the selected null; a `bytes` value is `b"..."` from [`lpc_bytes::literal`].
 pub(crate) fn write_value(
     out: &mut String,
     value: &LpcRef,
@@ -59,6 +62,7 @@ pub(crate) fn write_value(
 ) -> Result<()> {
     too_deep(depth)?;
     match value {
+        LpcRef::Nil => out.push_str("nil"),
         LpcRef::Int(x) => write!(out, "{}", x.0).expect("String never fails"),
         LpcRef::Float(x) => {
             let f = x.0.into_inner();
@@ -69,18 +73,7 @@ pub(crate) fn write_value(
             }
             write!(out, "#{}#", hex_float(f)).expect("String never fails")
         }
-        LpcRef::String(s) => {
-            out.push('"');
-            for c in s.to_str().chars() {
-                match c {
-                    '"' => out.push_str("\\\""),
-                    '\\' => out.push_str("\\\\"),
-                    '\n' => out.push_str("\\n"),
-                    c => out.push(c),
-                }
-            }
-            out.push('"');
-        }
+        LpcRef::String(s) => write_string(out, s.to_str()),
         LpcRef::Array(_) => {
             out.push_str("({");
             value.with_array(txn, |array| -> Result<()> {
@@ -105,15 +98,34 @@ pub(crate) fn write_value(
             })??;
             out.push_str("])");
         }
-        LpcRef::Object(object) => match object.upgrade() {
+        LpcRef::Object(_) => match value.live_object(txn) {
             Some(process) => write!(out, "${}@{}$", process.created, process.filename())
                 .expect("String never fails"),
-            None => out.push('0'),
+            None => write_value(out, &txn.nil(), txn, depth)?,
         },
         LpcRef::Bytes(b) => out.push_str(&lpc_bytes::literal(b)),
-        LpcRef::Function(_) => out.push('0'),
+        LpcRef::Function(_) => write_value(out, &txn.nil(), txn, depth)?,
+        LpcRef::Class(cell) => {
+            let instance = txn.with(|t| t.read_class(cell.id)).ok_or_else(|| {
+                LpcError::runtime("save file: class is not in this transaction's world")
+            })?;
+            class::write_class(out, &instance, txn, depth)?;
+        }
     }
     Ok(())
+}
+
+fn write_string(out: &mut String, value: &str) {
+    out.push('"');
+    for c in value.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
 }
 
 /// Append `name value\n`. A function pointer skips the line and answers
@@ -162,12 +174,23 @@ pub(crate) fn split_line(line: &str) -> Result<(&str, &str)> {
 
 /// Parse the whole of `text` as one value, minting containers into `txn`.
 /// Spaces after the value are tolerated, anything else is an error.
+#[cfg(test)]
 pub(crate) fn read_value(
     text: &str,
     txn: &TxnHandle,
     resolve: ObjectResolver<'_>,
 ) -> Result<LpcRef> {
+    read_value_counted(text, txn, resolve).map(|(value, _)| value)
+}
+
+/// Parse a saved value and count nil values collapsed by zero mode.
+pub(crate) fn read_value_counted(
+    text: &str,
+    txn: &TxnHandle,
+    resolve: ObjectResolver<'_>,
+) -> Result<(LpcRef, usize)> {
     let mut reader = Reader {
+        collapsed: 0,
         text: text.as_bytes(),
         at: 0,
         txn,
@@ -180,10 +203,11 @@ pub(crate) fn read_value(
     if reader.at != reader.text.len() {
         return Err(reader.error("text after the value"));
     }
-    Ok(value)
+    Ok((value, reader.collapsed))
 }
 
 struct Reader<'a> {
+    collapsed: usize,
     text: &'a [u8],
     at: usize,
     txn: &'a TxnHandle,
@@ -211,7 +235,13 @@ impl Reader<'_> {
     fn value(&mut self, depth: usize) -> Result<LpcRef> {
         too_deep(depth)?;
         match self.peek() {
-            Some(b'"') => self.string(),
+            Some(b'n') => {
+                self.expect("nil")?;
+                self.collapsed += usize::from(self.txn.null_mode() == NullMode::Zero);
+                Ok(self.txn.nil())
+            }
+            Some(b'"') => self.string().map(LpcRef::from),
+            Some(b'c') => self.class(depth),
             Some(b'b') if self.text[self.at..].starts_with(b"b\"") => self.bytes(),
             Some(b'#') => self.hex_float(),
             Some(b'$') => self.object(),
@@ -329,7 +359,7 @@ impl Reader<'_> {
 
     /// `"..."` with `\n`, `\"` and `\\`; any other escape is its bare
     /// character.
-    fn string(&mut self) -> Result<LpcRef> {
+    fn string(&mut self) -> Result<String> {
         self.expect("\"")?;
         let mut bytes = Vec::new();
         loop {
@@ -354,8 +384,7 @@ impl Reader<'_> {
                 }
             }
         }
-        let s = String::from_utf8(bytes).map_err(|_| self.error("not UTF-8"))?;
-        Ok(LpcRef::from(s))
+        String::from_utf8(bytes).map_err(|_| self.error("not UTF-8"))
     }
 
     /// `b"..."` with `\"` and `\\`; `\xNN` is a hex byte; any other byte is
@@ -432,7 +461,7 @@ impl Reader<'_> {
         self.expect("$")?;
         Ok(match (self.resolve)(&name) {
             Some(process) if process.created == created => LpcRef::from(Arc::downgrade(&process)),
-            _ => LpcRef::from(0),
+            _ => self.txn.nil(),
         })
     }
 

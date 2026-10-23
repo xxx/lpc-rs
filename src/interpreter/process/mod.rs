@@ -91,6 +91,12 @@ pub struct Process {
     /// module.
     pub connection: SVar<Connection>,
 
+    /// Allocated only when this object participates in snooping.
+    pub(crate) snoop: OnceLock<Box<crate::interpreter::snooping::Slots>>,
+
+    /// Allocated only when this object's native TCP inventory is accessed.
+    pub(crate) socket_index: OnceLock<VarId>,
+
     /// The cell marking that the initializer has run; a rejected
     /// initialization rolls it back with the globals.
     pub initialized: SVar<LpcRef>,
@@ -133,6 +139,8 @@ impl Default for Process {
             cleanup: None,
             name: ObjectName::File,
             connection: SVar::new(),
+            snoop: OnceLock::new(),
+            socket_index: OnceLock::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
@@ -158,6 +166,16 @@ pub(crate) enum Liveness {
 }
 
 impl Process {
+    pub(crate) fn storage_bytes(&self, image: &ProgramImage) -> lpc_rs_errors::Result<usize> {
+        let mut size = crate::interpreter::memory::Size::new(size_of::<Self>());
+        size.items::<usize>(2)?;
+        size.add(image.storage_bytes()?)?;
+        if let ObjectName::Virtual(name) = &self.name {
+            size.add(name.capacity())?;
+        }
+        Ok(size.bytes())
+    }
+
     /// Shared constructor body for `new`, `new_clone` and `new_virtual`.
     fn with_name(program: Arc<Program>, name: ObjectName) -> Self {
         Self {
@@ -171,6 +189,8 @@ impl Process {
             created: chrono::Utc::now().timestamp(),
             name,
             connection: SVar::new(),
+            snoop: OnceLock::new(),
+            socket_index: OnceLock::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
@@ -250,8 +270,7 @@ impl Process {
         })
     }
 
-    /// The committed inventory of `process` as seen through `txn`, dropped
-    /// members filtered out.
+    /// The live inventory of `process` as seen through `txn`, in arrival order.
     pub(crate) fn inventory_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
         Self::objects_in(txn, process.position.inventory.id)
     }
@@ -275,14 +294,12 @@ impl Process {
         out
     }
 
-    /// The committed living members of `process`'s contents as seen through
-    /// `txn`, dropped members filtered out.
+    /// The live command-enabled members of `process`'s contents as seen through `txn`.
     pub(crate) fn livings_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
         Self::objects_in(txn, process.position.livings.id)
     }
 
-    /// The objects an array cell names, as seen through `txn`; a member whose
-    /// `Process` is gone is dropped, a non-object member ignored.
+    /// The live objects an array cell names, as seen through `txn`.
     fn objects_in(txn: &TxnHandle, var_id: VarId) -> Vec<Arc<Process>> {
         txn.with(|t| {
             let Some(WorldValue::Array(members)) = t.read_value(var_id) else {
@@ -295,6 +312,7 @@ impl Process {
                     LpcRef::Object(weak) => weak.upgrade(),
                     _ => None,
                 })
+                .filter(|object| object.is_live_in(t))
                 .collect()
         })
     }
@@ -421,16 +439,17 @@ impl Process {
         txn.with(|t| self.is_live_in(t))
     }
 
-    fn is_live_in(&self, t: &mut Transaction) -> bool {
-        self.cell.get().is_none_or(|&cell| {
-            if t.is_removed(cell) {
-                return false;
-            }
-            match t.read_object(cell) {
-                Some(current) => std::ptr::eq(current.as_ref(), self),
-                None => self.physical.load(Ordering::Acquire),
-            }
-        })
+    pub(crate) fn is_live_in(&self, t: &mut Transaction) -> bool {
+        let Some(&cell) = self.cell.get() else {
+            return !self.physical.load(Ordering::Acquire) || t.bootstrap_object_is_live(self);
+        };
+        if t.is_removed(cell) {
+            return false;
+        }
+        match t.read_object(cell) {
+            Some(current) => std::ptr::eq(current.as_ref(), self),
+            None => self.physical.load(Ordering::Acquire) && t.bootstrap_object_is_live(self),
+        }
     }
 
     /// Whether the initializer has run, read through `txn` and tracked.
@@ -550,6 +569,13 @@ impl Process {
                 self.shadow.shadowing.id,
                 self.image_cell.id,
             ])
+            .chain(
+                self.snoop
+                    .get()
+                    .into_iter()
+                    .flat_map(|s| [s.incoming, s.outgoing]),
+            )
+            .chain(self.socket_index.get().copied())
             .collect()
     }
 
@@ -646,6 +672,11 @@ impl std::error::Error for WouldContainItself {}
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+
+    use crate::interpreter::{
+        object_space::ObjectSpace,
+        stm::{Committer, txn_insert_process, txn_undo_insert},
+    };
 
     use super::*;
 
@@ -773,5 +804,97 @@ mod tests {
         txn.with(|t| t.drop_var(cell));
 
         assert_eq!(proc.liveness(&txn), Liveness::Dead);
+    }
+
+    fn populated_inventory() -> (Committer, Arc<ObjectSpace>, Arc<Process>, Arc<Process>) {
+        let mut committer = Committer::new();
+        let space = Arc::new(ObjectSpace::default());
+        let room = Arc::new(Process::new(program_at("/room.c")));
+        let item = Arc::new(Process::new(program_at("/item.c")));
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        txn_insert_process(&writer, &space, &room);
+        txn_insert_process(&writer, &space, &item);
+        writer.with(|t| t.write(item.commands_enabled.id, 1.into()));
+        Process::move_to(&writer, &item, &room).unwrap();
+        committer
+            .commit(writer.with(|t| t.take_changeset()))
+            .unwrap();
+        (committer, space, room, item)
+    }
+
+    #[test]
+    fn inventory_removal_respects_snapshots_and_invalidates_concurrent_readers() {
+        let (mut committer, space, room, item) = populated_inventory();
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(
+            Process::inventory_of(&reader, &room).as_slice(),
+            std::slice::from_ref(&item)
+        );
+
+        let remover = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        txn_undo_insert(&remover, &space, &item);
+        assert!(Process::inventory_of(&remover, &room).is_empty());
+        assert!(Process::livings_of(&remover, &room).is_empty());
+        committer
+            .commit(remover.with(|t| t.take_changeset()))
+            .unwrap();
+
+        assert_eq!(Process::inventory_of(&reader, &room), [item]);
+        assert!(
+            committer
+                .commit(reader.with(|t| t.take_changeset()))
+                .is_err()
+        );
+        let fresh = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert!(Process::inventory_of(&fresh, &room).is_empty());
+        assert!(Process::livings_of(&fresh, &room).is_empty());
+    }
+
+    #[test]
+    fn inventory_replacement_at_the_same_path_does_not_revive_old_membership() {
+        let (mut committer, space, room, old) = populated_inventory();
+        let new = Arc::new(Process::new(program_at("/item.c")));
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        txn_undo_insert(&writer, &space, &old);
+        txn_insert_process(&writer, &space, &new);
+        assert!(Process::inventory_of(&writer, &room).is_empty());
+        Process::move_to(&writer, &new, &room).unwrap();
+        let inventory = Process::inventory_of(&writer, &room);
+        assert_eq!(inventory.len(), 1);
+        assert!(Arc::ptr_eq(&inventory[0], &new));
+        committer
+            .commit(writer.with(|t| t.take_changeset()))
+            .unwrap();
+
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let inventory = Process::inventory_of(&reader, &room);
+        assert_eq!(inventory.len(), 1);
+        assert!(Arc::ptr_eq(&inventory[0], &new));
+        assert!(!old.is_live(&reader));
+    }
+
+    #[test]
+    fn inventory_includes_pending_insertions_and_ignores_unrelated_writes() {
+        let (mut committer, space, room, first) = populated_inventory();
+        let second = Arc::new(Process::new(program_at("/second.c")));
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        txn_insert_process(&writer, &space, &second);
+        Process::move_to(&writer, &second, &room).unwrap();
+        assert_eq!(
+            Process::inventory_of(&writer, &room),
+            [first.clone(), second.clone()]
+        );
+        committer
+            .commit(writer.with(|t| t.take_changeset()))
+            .unwrap();
+
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(Process::inventory_of(&reader, &room), [first, second]);
+        let mut unrelated = Transaction::new(committer.snapshot_clone());
+        unrelated.write(VarId::new(), 42.into());
+        committer.commit(unrelated.take_changeset()).unwrap();
+        committer
+            .commit(reader.with(|t| t.take_changeset()))
+            .unwrap();
     }
 }

@@ -125,12 +125,14 @@ where
 /// A type to make it easier to set up test expectations for register contents
 #[derive(Debug, Eq, Clone)]
 enum BareVal {
+    Nil,
     String(String),
     Bytes(Vec<u8>),
     Int(LpcIntInner),
     Float(LpcFloatInner),
     Array(Vec<BareVal>),
     Mapping(HashMap<BareVal, BareVal>),
+    Class(crate::interpreter::stm::VarId),
     Object(String),                         // Just the filename
     Function(String, Vec<Option<BareVal>>), // name and args
 }
@@ -138,6 +140,7 @@ enum BareVal {
 impl BareVal {
     pub fn from_lpc_ref(gs: &Arc<GlobalState>, lpc_ref: &LpcRef) -> Self {
         match lpc_ref {
+            LpcRef::Nil => BareVal::Nil,
             LpcRef::Float(x) => BareVal::Float(x.0),
             LpcRef::Int(x) => BareVal::Int(x.0),
             LpcRef::String(x) => BareVal::String(x.to_string()),
@@ -162,6 +165,7 @@ impl BareVal {
                     .collect::<HashMap<_, _>>();
                 BareVal::Mapping(mapping)
             }
+            LpcRef::Class(cell) => BareVal::Class(cell.id),
             LpcRef::Object(o) => {
                 if let Some(o) = o.upgrade() {
                     let filename = o.filename().into_owned();
@@ -207,6 +211,7 @@ impl BareVal {
 impl Hash for BareVal {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
+            BareVal::Nil => std::mem::discriminant(self).hash(state),
             BareVal::Float(x) => x.hash(state),
             BareVal::Int(x) => x.hash(state),
             BareVal::String(x) => x.hash(state),
@@ -215,6 +220,7 @@ impl Hash for BareVal {
             // `HashMap` has no `Hash`; the length keeps equal mappings hashing equal.
             BareVal::Mapping(x) => x.len().hash(state),
             BareVal::Object(x) => x.hash(state),
+            BareVal::Class(x) => x.hash(state),
             BareVal::Function(x, y) => {
                 x.hash(state);
                 y.hash(state);
@@ -226,6 +232,7 @@ impl Hash for BareVal {
 impl PartialEq for BareVal {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (BareVal::Nil, BareVal::Nil) => true,
             (BareVal::Float(x), BareVal::Float(y)) => x == y,
             (BareVal::Int(x), BareVal::Int(y)) => x == y,
             (BareVal::String(x), BareVal::String(y)) => x == y,
@@ -233,6 +240,7 @@ impl PartialEq for BareVal {
             (BareVal::Array(x), BareVal::Array(y)) => x == y,
             (BareVal::Mapping(x), BareVal::Mapping(y)) => x == y,
             (BareVal::Object(x), BareVal::Object(y)) => x == y,
+            (BareVal::Class(x), BareVal::Class(y)) => x == y,
             (BareVal::Function(x, y), BareVal::Function(a, b)) => x == a && y == b,
             _ => false,
         }
@@ -242,6 +250,7 @@ impl PartialEq for BareVal {
 impl Display for BareVal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            BareVal::Nil => write!(f, "nil"),
             BareVal::Float(x) => write!(f, "{x}"),
             BareVal::Int(x) => write!(f, "{x}"),
             BareVal::String(x) => write!(f, "\"{x}\""),
@@ -249,6 +258,7 @@ impl Display for BareVal {
             BareVal::Array(x) => write!(f, "{}", format_slice(x)),
             BareVal::Mapping(x) => write!(f, "{}", format_map(x)),
             BareVal::Object(x) => write!(f, "object({x})"),
+            BareVal::Class(x) => write!(f, "class({x:?})"),
             BareVal::Function(x, y) => {
                 write!(f, "function({x}")?;
                 for arg in y {
@@ -4161,6 +4171,168 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn string_read_preserves_start_before_end_increment() {
+            let code = r#"
+                string selected;
+                int after;
+                void create() {
+                    int i = 5;
+                    string text = "alpha\\/beta";
+                    selected = text[i..++i];
+                    after = i;
+                }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    ("selected", BareVal::String("\\/".into())),
+                    ("after", BareVal::Int(6)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn array_read_preserves_start_before_end_assignment() {
+            let code = r#"
+                int *selected;
+                void create() {
+                    int start = 1;
+                    int *values = ({10, 20, 30, 40});
+                    selected = values[start..(start = 2) + 0];
+                }
+            "#;
+            check_committed_globals(
+                code,
+                &[(
+                    "selected",
+                    BareVal::Array(vec![BareVal::Int(20), BareVal::Int(30)]),
+                )],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn bytes_read_preserves_start_before_end_increment() {
+            let code = r#"
+                bytes selected;
+                void create() {
+                    int start = 1;
+                    bytes values = to_bytes("abcd", "utf8");
+                    selected = values[start..++start];
+                }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::Bytes(b"bc".to_vec()))]).await;
+        }
+
+        #[tokio::test]
+        async fn end_call_cannot_rebind_the_evaluated_collection_or_start() {
+            let code = r#"
+                string text = "abcd";
+                int start = 1;
+                int calls;
+                string selected;
+                int end() { calls++; text = "XYZ"; start = 2; return 2; }
+                void create() { selected = text[start..end()]; }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    ("selected", BareVal::String("bc".into())),
+                    ("text", BareVal::String("XYZ".into())),
+                    ("start", BareVal::Int(2)),
+                    ("calls", BareVal::Int(1)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn start_call_cannot_rebind_the_collection_with_an_omitted_end() {
+            let code = r#"
+                string text = "abcd";
+                string selected;
+                int start() { text = "XYZ"; return 1; }
+                void create() { selected = text[start()..]; }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::String("bcd".into()))]).await;
+        }
+
+        #[tokio::test]
+        async fn closure_end_preserves_a_captured_start_and_unicode_positions() {
+            let code = r#"
+                string selected;
+                int after;
+                void create() {
+                    int start = 1;
+                    string text = "aé😀z";
+                    function end = (: ++start :);
+                    selected = text[start..end()];
+                    after = start;
+                }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    ("selected", BareVal::String("é😀".into())),
+                    ("after", BareVal::Int(2)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn reverse_read_preserves_start_distance_before_end_decrement() {
+            let code = r#"
+                string selected;
+                void create() {
+                    int distance = 3;
+                    string text = "aé😀z";
+                    selected = text[<distance..<--distance];
+                }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::String("é😀".into()))]).await;
+        }
+
+        #[tokio::test]
+        async fn collection_snapshot_retains_shared_array_content_changes() {
+            let code = r#"
+                int *values = ({10, 20, 30});
+                int *alias = values;
+                int *selected;
+                int start() { alias[1] = 99; values = ({7, 8, 9}); return 1; }
+                void create() { selected = values[start()..2]; }
+            "#;
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "selected",
+                        BareVal::Array(vec![BareVal::Int(99), BareVal::Int(30)]),
+                    ),
+                    (
+                        "values",
+                        BareVal::Array(vec![BareVal::Int(7), BareVal::Int(8), BareVal::Int(9)]),
+                    ),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn side_effects_inside_a_casted_bound_preserve_start() {
+            let code = r#"
+                string selected;
+                void create() {
+                    int start = 1;
+                    string text = "abcd";
+                    selected = text[start..(int)(start = 2)];
+                }
+            "#;
+            check_committed_globals(code, &[("selected", BareVal::String("bc".into()))]).await;
+        }
+
+        #[tokio::test]
         async fn stores_the_value() {
             let code = indoc! { r##"
                     mixed a = ({ 1, 2, 3 })[1..];
@@ -4539,7 +4711,10 @@ mod test_instructions {
                 .build()
                 .unwrap();
             let initializer = ProgramFunction {
+                null_mode: Default::default(),
                 prototype,
+                class_scope: Arc::default(),
+                types: vec![],
                 num_locals: 1,
                 num_upvalues: 0,
                 instructions: vec![
@@ -4656,7 +4831,10 @@ mod test_instructions {
             functions.insert(ustr("second"), Arc::new(second(&path)).into());
             let program = Program {
                 filename: path,
-                dispatch: Box::new(crate::interpreter::program::dispatch_table(&functions)),
+                dispatch: Box::new(crate::interpreter::program::dispatch_table(
+                    &functions,
+                    &Default::default(),
+                )),
                 functions: Box::new(functions),
                 initializer: Some(initializer.into()),
                 ..Default::default()
@@ -5064,8 +5242,365 @@ mod test_instructions {
     }
 }
 
+mod foreach_collection_binding {
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    use super::*;
+    use crate::test_support::run_prog_with_config;
+
+    async fn succeeds_in_both_modes(code: &str) {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(code, Arc::new(config)).await;
+            assert_eq!(task.result(), Some(1.into()), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn subtracting_from_the_local_binding_keeps_the_original_array() {
+        succeeds_in_both_modes(
+            r##"
+            int create() {
+                string *items = ({ "#silent", "visible" });
+                string visited = "";
+                foreach (string item : items) {
+                    visited += item;
+                    if (item == "#silent") items -= ({ item });
+                }
+                return visited == "#silentvisible" && sizeof(items) == 1;
+            }
+            "##,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_callback_can_rebind_the_global_collection() {
+        succeeds_in_both_modes(
+            r#"
+            int *items = ({ 1, 2, 3 });
+            void replace() { items = ({ 9 }); }
+            int create() {
+                int visited;
+                foreach (int item : items) {
+                    visited = visited * 10 + item;
+                    replace();
+                }
+                return visited == 123 && items[0] == 9;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn rebinding_an_upvalue_keeps_the_original_collection() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                int *items = ({ 1, 2, 3 });
+                function visit = (: {
+                    int visited;
+                    foreach (int item : items) {
+                        visited = visited * 10 + item;
+                        items = ({ 9 });
+                    }
+                    return visited;
+                } :);
+                return visit() == 123 && items[0] == 9;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn mapping_keys_and_values_use_the_original_collection() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                mapping items = ([ "a": 1, "b": 2 ]);
+                int visited;
+                foreach (string key, int value : items) {
+                    if (key == "a" && value == 1) visited += 1;
+                    if (key == "b" && value == 2) visited += 2;
+                    items = ([]);
+                }
+                return visited == 3 && sizeof(items) == 0;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn strings_and_bytes_keep_their_entry_values() {
+        for (ty, original, replacement) in [
+            ("string", "\"ab\"", "\"b\""),
+            (
+                "bytes",
+                "to_bytes(\"ab\", \"utf-8\")",
+                "to_bytes(\"b\", \"utf-8\")",
+            ),
+        ] {
+            succeeds_in_both_modes(&format!(
+                r#"
+                int create() {{
+                    {ty} items = {original};
+                    int visited;
+                    foreach (int item : items) {{
+                        visited = visited * 1000 + item;
+                        items = {replacement};
+                    }}
+                    return visited == 97098 && sizeof(items) == 1;
+                }}
+                "#,
+            ))
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn retained_arrays_and_mappings_still_share_element_mutations() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                int *items = ({ 1, 2 });
+                int *alias = items;
+                int visited;
+                foreach (int item : items) {
+                    visited = visited * 10 + item;
+                    alias[1] = 9;
+                    items = ({});
+                }
+                if (visited != 19) return 0;
+                mapping pairs = ([ "a": 1, "b": 2 ]);
+                mapping same = pairs;
+                int count;
+                int total;
+                foreach (string key, int value : pairs) {
+                    total += value;
+                    if (++count == 1) {
+                        same["a"] = 9;
+                        same["b"] = 9;
+                        total -= value;
+                    }
+                    pairs = ([]);
+                }
+                return count == 2 && total == 9;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn collection_expressions_run_once_per_loop_entry() {
+        succeeds_in_both_modes(
+            r#"
+            int calls;
+            int *items = ({ 1, 2 });
+            int *collection() { calls++; return items; }
+            int create() {
+                int total;
+                for (int i = 0; i < 3; i++) {
+                    foreach (int item : collection()) {
+                        items = ({ 3, 4 });
+                        total += item;
+                    }
+                }
+                return calls == 3 && total == 17;
+            }
+            "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn nested_loops_capture_independently_and_keep_control_flow() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                int *items = ({ 1, 2, 3 });
+                int total;
+                foreach (int outer : items) {
+                    if (outer == 2) continue;
+                    foreach (int inner : items) {
+                        total += outer * 10 + inner;
+                        items = ({ 9 });
+                        break;
+                    }
+                }
+                items = ({});
+                foreach (int item : items) return 0;
+                return total == 50;
+            }
+            "#,
+        )
+        .await;
+    }
+}
+
 /// The `bytes` value in LPC, built through `to_bytes` since there is no
 /// source literal.
+mod mixed_numeric_comparisons {
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    use super::*;
+    use crate::{
+        compiler::CompilerBuilder,
+        test_support::{run_prog_with_config, test_config},
+    };
+
+    async fn succeeds_in_both_modes(code: &str) {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(code, Arc::new(config)).await;
+            assert_eq!(task.result(), Some(1.into()), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn typed_and_mixed_operands_agree_in_values_and_both_branch_polarities() {
+        let mut checks = String::new();
+        for (index, op) in ["<", "<=", ">", ">=", "==", "!="].iter().enumerate() {
+            checks.push_str(&format!(
+                "int r{index} = x {op} y;
+                 if (r{index} != expected[{index}]) return 0;
+                 if (x {op} y) {{ if (!expected[{index}]) return 0; }}
+                 if (!(x {op} y)) {{ if (expected[{index}]) return 0; }}"
+            ));
+        }
+        let code = format!(
+            r#"
+                int forward(int x, float y, int *expected) {{ {checks} return 1; }}
+                int reverse(float x, int y, int *expected) {{ {checks} return 1; }}
+                int dynamic(mixed x, mixed y, int *expected) {{ {checks} return 1; }}
+                int create() {{
+                    int *less = ({{ 1, 1, 0, 0, 0, 1 }});
+                    int *equal = ({{ 0, 1, 0, 1, 1, 0 }});
+                    int *greater = ({{ 0, 0, 1, 1, 0, 1 }});
+                    return forward(1, 1.0, equal) && reverse(1.0, 1, equal)
+                        && forward(1, 1.5, less) && reverse(1.5, 1, greater)
+                        && forward(-1, -1.5, greater) && reverse(-1.5, -1, less)
+                        && dynamic(0, -0.0, equal) && dynamic(-0.0, 0, equal)
+                        && forward(9007199254740993, 9007199254740992.0, greater)
+                        && reverse(9007199254740992.0, 9007199254740993, less)
+                        && dynamic(9007199254740993, 9007199254740992.0, greater)
+                        && dynamic(9007199254740992.0, 9007199254740993, less)
+                        && forward(9223372036854775807, 9223372036854775808.0, less)
+                        && reverse(9223372036854775808.0, 9223372036854775807, greater)
+                        && 1 == 1.0 && 9007199254740993 > 9007199254740992.0
+                        && 9007199254740993 > 9007199254740992;
+                }}
+            "#
+        );
+        succeeds_in_both_modes(&code).await;
+    }
+
+    #[tokio::test]
+    async fn search_sort_and_extrema_use_exact_numeric_comparison() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                mixed *values = ({ 9007199254740993, 9007199254740992.0,
+                                   9007199254740992 });
+                mixed *sorted = sort_array(values);
+                mixed *descending = sort_array(values, -1);
+                return member_array(1, ({ 1.0 })) == 0
+                    && member_array(1.0, ({ 1 })) == 0
+                    && member_array(9007199254740993, ({ 9007199254740992.0 })) == -1
+                    && member_array(9007199254740992.0, values) == 1
+                    && floatp(sorted[0]) && intp(sorted[1])
+                    && sorted[2] == 9007199254740993
+                    && descending[0] == 9007199254740993
+                    && max(values) == 9007199254740993 && floatp(min(values))
+                    && intp(min(1, 1.0)) && floatp(max(1.0, 1));
+            }
+        "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn collection_keys_and_set_operations_keep_numeric_types_distinct() {
+        succeeds_in_both_modes(
+            r#"
+            int create() {
+                mapping m = ([ 1: "integer", 1.0: "float" ]);
+                mixed *a = ({ 1 });
+                mixed *b = ({ 1.0 });
+                mixed *groups = unique_array(({ 0, 0.0, 1, 1.0 }), (: $1 :));
+                if (sizeof(m) != 2) throw("mapping size");
+                if (m[1] != "integer" || m[1.0] != "float") throw("mapping keys");
+                if (sizeof(a & b) != 0 || sizeof(a - b) != 1 || sizeof(a | b) != 2)
+                    throw("set matching");
+                if (sizeof(groups) != 3 || !floatp(groups[0][0]))
+                    throw(sprintf("groups: %O", groups));
+                return 1 == 1.0;
+            }
+        "#,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn float_zero_equality_does_not_make_it_a_null_or_a_valid_string_argument() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let code = format!(
+                r#"
+                int needs_string(string value) {{ return sizeof(value); }}
+                int create() {{
+                    function f = needs_string;
+                    mixed error = catch(f(0.0));
+                    object o = clone_object("/clone_target");
+                    destruct(o);
+                    return stringp(error) && strindex(error, "expected string") >= 0
+                        && !nilp(0.0) && 0 == 0.0
+                        && (nil == 0.0) == {zero_mode}
+                        && (o == 0.0) == {zero_mode}
+                        && (0.0 == o) == {zero_mode};
+                }}
+            "#,
+                zero_mode = i32::from(mode == NullMode::Zero)
+            );
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(&code, Arc::new(config)).await;
+            assert_eq!(task.result(), Some(1.into()), "{mode:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn mixed_numeric_comparison_does_not_relax_assignments_returns_or_arguments() {
+        for source in [
+            "int create() { int x = 1.5; return x; }",
+            "int create() { float x = 1; return 1; }",
+            "int create() { return 1.5; }",
+            "int f(int x) { return x; } int create() { return f(1.5); }",
+            "int create() { return 1 < \"1\"; }",
+        ] {
+            let result = CompilerBuilder::default()
+                .config(test_config())
+                .build()
+                .unwrap()
+                .compile_string("/numeric_types.c", source)
+                .await;
+            assert!(result.is_err(), "{source}");
+        }
+    }
+}
+
 mod bytes_values {
     use super::*;
     use crate::compile_time_config::MAX_CALL_STACK_SIZE;

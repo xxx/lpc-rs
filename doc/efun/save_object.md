@@ -4,7 +4,8 @@
 
 Write the calling object's global variables to the save file `file`, one
 `name value` line each, in declaration order with inherited variables
-first. `static` variables are not written; `private` ones are. A variable
+first. [`nosave` or `static`](../lpc/nosave.md) variables are not written;
+`private` ones are saved unless also marked `nosave` or `static`. A variable
 holding a function pointer is left out. `file` is an in-game path resolved
 against the lib root (not the caller's directory), and `.o` is always
 appended: `save_object("/players/a/ann")` writes `/players/a/ann.o`,

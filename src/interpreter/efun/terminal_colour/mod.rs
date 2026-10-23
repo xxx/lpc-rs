@@ -46,7 +46,7 @@ pub fn terminal_colour<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
                 state.default = mapping
                     .get(&LpcRef::from(0))
                     .cloned()
-                    .filter(|v| !v.is_null());
+                    .filter(|v| !v.is_null_in(context.txn()));
                 if state
                     .default
                     .as_ref()

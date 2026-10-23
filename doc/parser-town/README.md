@@ -25,7 +25,7 @@ The initial sentence is `give red sword to bob`. Switch entrances to see how the
 | Entrance | Rule | Input seen by the engine | Result in this example |
 |---|---|---|---|
 | Native | `add_rule("'give' %o 'to' %L", "do_give")` | `give red sword to bob` | `do_give` receives the sword and bob objects. |
-| Parser package | `parse_add_rule("give", "OBJ to LIV")` | `red sword to bob` | `can_`, object selection, all-filled rechecks, then `do_`; `parse_sentence` returns `1`. |
+| Parser package | `parse_add_rule("give", "OBJ to LIV")` | `red sword to bob` | `can_`, pair permissions, selection, pair recheck, then `do_`; `parse_sentence` returns `1`. |
 | DGD | `Command: 'give' Phrase 'to' Phrase ? accept` plus the displayed token and phrase rules | `give red sword to bob` | `parse_string` returns an array of strings from the tree. |
 
 The compiler lowers syntax to Grammar; frontend metadata remains outside it. Labels identify native/package captures, parser slugs identify handler families, and DGD production IDs identify semantic actions. The shared engine does not know what an LPC object is.
@@ -50,7 +50,7 @@ Ordinary command dispatch tries the actor’s `add_action` and `add_rule` regist
 
 Changing a frontend, lesson, or checkbox starts a fresh run. Sentence edits apply with **Try** or Enter. Previous reading history survives those changes. Tour speed controls animation and dwell time only; it does not change parsing or its work counts.
 
-The package example supplies accepting `direct_` and `indirect_` handlers, including their final rechecks. The checkbox controls `can_`, because a package `do_` return value is ignored. There is only one matching example object per slot, so this tour does not demonstrate ambiguity resolution among objects.
+The package example supplies specific handlers on the verb owner and noun objects, with no actor `can_`. Its `direct_` and `indirect_` handlers accept, including their final rechecks. Every capture contributes source text after the semantic arguments; `STR` therefore appears twice in a specific handler call. The checkbox controls `can_`, because a package `do_` return value is ignored. There is only one matching example object per slot, so this tour does not demonstrate ambiguity resolution among objects.
 
 ## Controls and pacing
 
@@ -84,7 +84,7 @@ First visits stop for `clamp(words / 3.8 + 3.5, 9, 26)` seconds, divided only by
 | Earley Yard | Predict, scan, complete, nullable advancement, deduplication. | [grammar/earley.rs](../../src/command/grammar/earley.rs) |
 | Derivation Grove | Complete spans become trees and labeled captures. | [grammar/earley.rs](../../src/command/grammar/earley.rs), [grammar/tree.rs](../../src/command/grammar/tree.rs) |
 | Argument House | Resolve noun captures and construct native arguments. | [native/matcher.rs](../../src/command/frontend/native/matcher.rs), [resolve](../../src/command/resolve) |
-| Permission Court | Package `can_`, selection, all-filled checks, `do_`. | [parser/attempt.rs](../../src/command/parser/attempt.rs), [handler contract](../apply/object/parser_handlers.md) |
+| Permission Court | Package `can_`, pair permissions, selection, pair recheck, `do_`. | [parser/attempt.rs](../../src/command/parser/attempt.rs), [pair selection](../../src/command/parser/attempt/relations.rs), [handler contract](../apply/object/parser_handlers.md) |
 | Action Workshop | Fold tree values through DGD semantic actions. | [parse_string.rs](../../src/interpreter/efun/parse_string.rs) |
 | Result Square | Frontends expose their own success contracts. | [add_rule](../efun/add_rule.md), [parse_sentence](../efun/parse_sentence.md), [parse_string](../efun/parse_string.md) |
 | Return Office | Lexical, syntax, resolution, and handler failures. | [trial.rs](../../src/command/trial.rs), [parser/lpc.rs](../../src/command/parser/lpc.rs) |
@@ -95,11 +95,11 @@ This ledger also appears in the page’s About dialog.
 
 **Computed:** pattern-to-group lowering; group-to-grammar expansion; the printed DGD grammar subset; maximal-munch tokenization with rule-order ties and source spans; Earley prediction, scanning, completion, nullable advancement and item deduplication; derivation reconstruction in production order with longest spans first; capture extraction; noun matching against the example scope; and the demonstrated frontend call order. Every live count comes from [js/model.js](js/model.js).
 
-**Scaled down:** two fixed lessons, one selected rule, two example objects, at most 120 input characters and 24 tokens. The browser caps work at 20,000 operations per chart or derivation pass, trees at 32 per span, and depth at 64. These are teaching limits, not driver defaults. Only the native and package capture forms printed in the lessons are exercised. DGD compilation accepts the displayed line-oriented subset and three simple regex forms.
+**Scaled down:** two fixed lessons, one selected rule, two example objects, at most 120 input characters and 24 tokens. The browser caps work at 20,000 operations per chart or derivation pass, trees at 32 per span, and depth at 64. These are teaching limits, not driver defaults. The fixed lessons exercise the printed capture forms. The package compiler and model tests also support multiple nonempty `STR` captures, including adjacent ones; the fixed lessons do not demonstrate their split retries. DGD compilation accepts the displayed line-oriented subset and three simple regex forms.
 
 **Assumed:** the sword has id sword and adjective red; bob is a living with id bob. Direct and indirect checks always accept. Handler accepts controls the native handler’s result, the package’s can_ result, or the DGD accept action, which returns its input array or 0. All examples use case-sensitive matching. Changing an experiment begins a fresh run.
 
-**Illustrated / omitted:** this is JavaScript, not the Rust VM. Tokenization tests regexes separately instead of using a joint DFA; spans use JavaScript character offsets instead of UTF-8 byte offsets. The model eagerly materializes bounded derivations and skips same-span cycles; Rust enumerates lazily with different limits. It does not implement general LPC actions, action memoization, the full DGD dialect, many-object selection, complete noun vocabulary or scope traversal, multiple-rule dispatch, caches, STM or I/O. Buildings, travel time, and reading stops have no performance meaning. Trust the demonstrated mechanism and values within this subset, not the animation as a benchmark.
+**Illustrated / omitted:** this is JavaScript, not the Rust VM. Tokenization tests regexes separately instead of using a joint DFA; spans use JavaScript character offsets instead of UTF-8 byte offsets. The model eagerly materializes bounded derivations and skips same-span cycles; Rust enumerates lazily with different limits and uses the completed chart to skip child spans whose remaining rule cannot match; the teaching model does not perform that pruning. It does not implement general LPC actions, action memoization, the full DGD dialect, many-object selection, complete noun vocabulary or scope traversal (including `:v` modifiers and structured explicit scopes), multiword verb selection, multiple-rule dispatch, handler name/target fallback, caches, STM or I/O. Buildings, travel time, and reading stops have no performance meaning. Trust the demonstrated mechanism and values within this subset, not the animation as a benchmark.
 
 Grammar slabs count productions, token boxes count retained tokens, and Earley rack heights use 0.16 grid units per unique chart item. The inspector’s bars scale to the largest current column. The counts are real; those geometric scales are illustrative. Seed items are included in total item counts but separate from the predict/scan/complete/nullable counters. Only successfully scanned tokens turn blue.
 

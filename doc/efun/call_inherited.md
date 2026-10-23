@@ -10,10 +10,15 @@ A `void` function returns `0`.
 
 - `"foo"` and `"::foo"` select the same definition as `::foo()`.
 - `"parent::foo"` selects the same definition as `parent::foo()`, where
-  `parent` is an inherit alias declared in the calling source program.
-- Later inherits take precedence, including definitions they inherited.
+  `parent` is an explicit alias or a direct parent's source basename in the
+  calling program. Explicit aliases take precedence.
+- Later inherits take precedence for `"foo"`, `"::foo"`, and matching basenames
+  in `"parent::foo"`. Parents without `foo` are skipped. These searches include
+  each parent's inherited definitions.
 - Public and protected (`static`) functions are callable. Private inherited
-  functions return `0`, without falling back to an earlier inherit.
+  functions return `0`, without trying another inherit. Functions
+  imported by `private inherit` are accessible from the source containing that
+  statement, but hidden from its descendants. [Inheritance](../lpc/inheritance.md).
 - Unknown aliases, malformed names, and missing functions return `0`.
   Local functions, efuns, and simul-efuns are not fallback targets.
 

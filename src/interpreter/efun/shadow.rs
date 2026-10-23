@@ -3,15 +3,8 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    QUERY_ALLOW_SHADOW,
-    apply::master_apply,
-    efun::efun_context::EfunContext,
-    lpc_int::LpcInt,
-    lpc_ref::{LpcRef, NULL},
-    process::Process,
-    program::Program,
-    stm::TxnHandle,
-    task_context::TaskContext,
+    QUERY_ALLOW_SHADOW, apply::master_apply, efun::efun_context::EfunContext, lpc_int::LpcInt,
+    lpc_ref::LpcRef, process::Process, program::Program, stm::TxnHandle, task_context::TaskContext,
 };
 
 /// `shadow(ob, flag)`: with a true `flag` (the default) the calling object
@@ -31,7 +24,7 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let query = context.arg_count() > 1 && matches!(context.arg(1), LpcRef::Int(LpcInt(0)));
     if query {
         let answer = Process::shadow_after(&txn, &target)
-            .map_or(NULL, |ob| LpcRef::from(Arc::downgrade(&ob)));
+            .map_or(context.txn().nil(), |ob| LpcRef::from(Arc::downgrade(&ob)));
         context.return_efun_result(answer);
         return Ok(());
     }

@@ -3,11 +3,27 @@
  * Copy these hooks into a new game object when adding noun-based commands.
  * This disabled example supplies vocabulary and parser access, not a complete
  * container: it has no open/close state or item-transfer commands.
+ * Parser efun vocabulary and inventory callbacks retain invoking LPC frames behind the actor.
+ * Parser callbacks use the selected command giver as this_player(), defaulting to the actor.
+ * Command vocabulary uses the actor as player/caller; parse_command keeps its entering player.
  * See ../doc/applies.md, "Object applies", for the complete hook index.
  */
 #pragma strict_types
 
 #if 0
+private string material;
+
+/**
+ * clone_object("/obj/box", "oak") passes "oak" to this constructor.
+ * Loading the prototype or cloning without arguments uses "wooden"; an
+ * explicit nil is preserved, so the constructor also handles it below.
+ * Globals are initialised first; the return value is ignored, and this hook
+ * shares the caller's transaction and this_player(); previous_object() is the cloner.
+ */
+void create(string wood = "wooden") {
+    material = wood ? wood : "wooden";
+}
+
 /**
  * Supply this object's singular names for grammar noun matching.
  * Return a string array of alternatives; "box" combines with the adjectives
@@ -37,7 +53,7 @@ string *parse_command_plural_id_list() {
  * are separate, and "adjectiv" is the required spelling of this apply.
  */
 string *parse_command_adjectiv_id_list() {
-    return ({ "wooden", "small" });
+    return ({ material, "small" });
 }
 
 /**
@@ -46,6 +62,10 @@ string *parse_command_adjectiv_id_list() {
  * Omission defaults to visible; a real closed opaque box would return 0
  * according to its open/closed state rather than use this fixed answer.
  * This controls finding contents, not whether an action may reach them.
+ * The parser also uses this answer for a supplied child array after this object;
+ * a flat explicit list bypasses inventory hooks. A :v token cannot reveal hidden contents.
+ * Calls use the selected giver as this_player() and actor as previous_object(), with driver origin,
+ * in the current transaction; each explicit rule walk reuses the hook result.
  */
 int inventory_visible() {
     return 1;
@@ -56,10 +76,24 @@ int inventory_visible() {
  * Return 1 to allow access or 0 to make matches inaccessible; omission
  * defaults to accessible, as does this open-box example.
  * A closed glass case could be visible but inaccessible, producing a
- * "cannot reach" failure instead of pretending its contents do not exist.
+ * "cannot reach" failure for ordinary object tokens. A :v token can select
+ * visible contents without reaching them, but must still pass permissions.
+ * This answer governs the contents, not this object's own noun eligibility.
+ * An inaccessible ancestor keeps descendants unreachable through an open box.
+ * The call context and per-rule reuse are the same as inventory_visible().
  * This is a parser rule, not permission to bypass the master's security hooks.
  */
 int inventory_accessible() {
     return 1;
+}
+
+/**
+ * Optional observer callback: a fresh driver task with no player or previous object.
+ * This interactive-observer example forwards accepted text explicitly to its own socket.
+ * Hidden input is excluded; callback failure or queue overflow ends observation.
+ * The live master denies attachments, so this example requires a trusted service policy.
+ */
+void receive_snoop(string text, object target, string direction) {
+    write_socket("[" + direction + "] " + text);
 }
 #endif

@@ -115,6 +115,36 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("grammar/parse_all/dgd_expr", |b| {
         b.iter(|| parse(&e, black_box("2 + 3 * (4 - 1)"), Limits::default()).count())
     });
+
+    let repeated = lpc_rs::command::frontend::parser::compile("cast", "STR at OBJ").unwrap();
+    let input = (0..41)
+        .map(|i| format!("w{i}"))
+        .collect::<Vec<_>>()
+        .join(" at ");
+    c.bench_function("grammar/repeated_separator/first", |b| {
+        b.iter(|| {
+            parse(
+                &repeated.compiled.grammar,
+                black_box(&input),
+                Limits::default(),
+            )
+            .next()
+            .unwrap()
+        })
+    });
+    c.bench_function("grammar/repeated_separator/all", |b| {
+        b.iter(|| {
+            parse(
+                &repeated.compiled.grammar,
+                black_box(&input),
+                Limits {
+                    max_parses: 100,
+                    ..Limits::default()
+                },
+            )
+            .count()
+        })
+    });
 }
 
 criterion_group! {

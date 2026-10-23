@@ -2,13 +2,14 @@
 
 `mixed regmatch(string text, string pattern, int flags = 0, int start = 0)`
 
-Return the first substring matching `pattern` at or after `start`, or integer
-`0` when there is no match. A successful empty match returns `""`.
+Return the first substring matching `pattern` at or after `start`, or the
+[configured null value](../lpc/null.md) when there is no match. A successful
+empty match returns `""`.
 
 With `RE_MATCH_SUBS`, return an array containing the full match, each capture
 group in opening-parenthesis order, and an integer continuation index:
 `({ match, group1, group2, ..., next_start })`. A group that did not participate
-is `0`; a group that matched an empty string is `""`.
+is the configured null value; a group that matched an empty string is `""`.
 
 `start` and `next_start` are zero-based Unicode character offsets in the original
 text. `start` must be between `0` and `sizeof(text)`, inclusive. Searching from an
@@ -36,9 +37,18 @@ These flags apply to `regmatch`; `regexp` has its own flag meanings.
 Patterns use the same Rust `regex` dialect as [regexp](regexp.md), including inline flags.
 Back-references, look-around, and selection of other regex engines are unsupported.
 Invalid patterns, unsupported flag bits, wrong argument types, and out-of-range
-start indices raise runtime errors. The pattern is compiled once per call.
+start indices raise runtime errors.
+
+Patterns compile on first use at runtime. The VM shares a cache with
+[regexp](regexp.md), retaining up to 64 pattern/compilation-option pairs and
+evicting the least recently used entry when full. `RE_ANCHORED`, `RE_MATCH_SUBS`
+and `start` do not require separate compiled entries. Invalid patterns are not
+cached, and evicted patterns compile again on their next use.
 
 ### Examples
+
+These results use the default zero mode. In distinct mode, missing matches and
+unmatched groups are `nil`.
 
 ```c
 #define RE_MATCH_SUBS 0x1000

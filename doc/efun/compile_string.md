@@ -50,3 +50,6 @@ write(sprintf("Result: %O\n", result));
 ### See also
 
 `load_object`, `destruct`, `valid_write`, `valid_load`, `valid_inherit`, `valid_read`
+
+[`syntax_tree`](syntax_tree.md) inspects the checked frontend without initializing
+an object or executing the supplied code.

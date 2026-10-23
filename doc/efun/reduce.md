@@ -30,21 +30,15 @@ function, is an error even when no callback would be needed.
 ### Examples
 
 ```c
-reduce(({ 2, 3, 4 }), &operator(*)());       // 24
-reduce(({ 20, 3, 2 }), &operator(-)());      // 15: (20 - 3) - 2
-reduce(({ 2, 3, 4 }), &operator(*)(), 0);    // 0
-reduce(({}), &operator(*)(), 1);            // 1
-reduce(({}), &operator(+)());               // 0
-reduce(({ "a", "b" }), (: $1 + $2 :), ">"); // ">ab"
+reduce(({ 2, 3, 4 }), operator(*));                         // 24
+reduce(({ 20, 3, 2 }), operator(-));                        // 15: (20 - 3) - 2
+reduce(({ 2, 3, 4 }), operator(*), 0);                      // 0
+reduce(({}), operator(*), 1);                               // 1
+reduce(({}), operator(+));                                  // 0
+reduce(({ "a", "b" }), (: $1 + $2 :), ">");                 // ">ab"
 
-map(({ ({ 1, 2 }), ({ 3, 4 }) }), &reduce(, &operator(+)())); // ({ 3, 7 })
+map(({ ({ 1, 2 }), ({ 3, 4 }) }), &reduce(, operator(+)));  // ({ 3, 7 })
 ```
-
-### Compatibility
-
-The collection comes first, as in `map`, `filter`, and `sort_array`.
-CD's `reduce` takes the callback first; swap its first two arguments when
-porting a call, including the bound arguments in `&reduce(...)` pointers.
 
 ### See also
 

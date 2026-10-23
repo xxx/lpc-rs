@@ -56,6 +56,27 @@ impl CodePool {
         };
         for instruction in &code.instructions {
             instruction.map_registers(check);
+            if let lpc_rs_asm::instruction::Instruction::Cast(_, index, _)
+            | lpc_rs_asm::instruction::Instruction::Guard(_, index)
+            | lpc_rs_asm::instruction::Instruction::ClassConst(index, _) = instruction
+                && usize::from(index.0) >= code.types.len()
+            {
+                return Err(LpcError::bug(
+                    "instruction type is outside its defining type table",
+                ));
+            }
+        }
+        for instruction in &code.instructions {
+            if let lpc_rs_asm::instruction::Instruction::ClassConst(index, _) = instruction {
+                let lpc_rs_core::lpc_type::LpcType::Class(id, false) =
+                    code.types[usize::from(index.0)]
+                else {
+                    return Err(LpcError::bug("constructor requires a scalar class type"));
+                };
+                if code.class_scope.get(id).is_none() {
+                    return Err(LpcError::bug("constructor class has no defining view"));
+                }
+            }
         }
         for register in code
             .arg_lists
@@ -140,6 +161,65 @@ mod tests {
     }
 
     #[test]
+    fn different_class_views_do_not_share_otherwise_identical_code() {
+        use lpc_rs_core::class::{ClassDefinition, ClassField, ClassId, ClassScope};
+
+        let pool = CodePool::default();
+        let mut code = function(1.0);
+        let scope = |field: &str| {
+            Arc::new(ClassScope {
+                definitions: vec![Arc::new(ClassDefinition {
+                    id: ClassId {
+                        source: "/record.h".into(),
+                        name: "record".into(),
+                    },
+                    fields: vec![ClassField {
+                        name: field.into(),
+                        type_: LpcType::Int(false),
+                    }]
+                    .into_boxed_slice(),
+                })]
+                .into_boxed_slice(),
+                ..ClassScope::default()
+            })
+        };
+        code.class_scope = scope("x");
+        let old = pool.publish(code.clone(), Arc::default()).unwrap();
+        code.class_scope = scope("y");
+        let new = pool.publish(code, Arc::default()).unwrap();
+        assert!(!Arc::ptr_eq(&old, &new));
+    }
+
+    #[test]
+    fn different_cast_type_tables_do_not_share_code() {
+        let pool = CodePool::default();
+        let mut a = function(1.0);
+        a.types.push(LpcType::Int(false));
+        let mut b = a.clone();
+        b.types[0] = LpcType::String(false);
+        let first = pool.publish(a, Arc::default()).unwrap();
+        let second = pool.publish(b, Arc::default()).unwrap();
+        assert!(!Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn a_cast_cannot_refer_outside_its_defining_type_table() {
+        let pool = CodePool::default();
+        let mut code = function(1.0);
+        code.instructions = vec![Instruction::Cast(
+            lpc_rs_core::register::Register(0).as_local(),
+            lpc_rs_asm::instruction::TypeIndex(0),
+            lpc_rs_core::register::Register(0).as_local(),
+        )];
+        assert!(
+            pool.publish(code, Arc::default())
+                .unwrap_err()
+                .to_string()
+                .contains("instruction type is outside")
+        );
+    }
+
+    #[test]
     fn equal_publications_share_code_without_pinning_it() {
         let pool = CodePool::default();
         let a = pool.publish(function(1.0), Arc::default()).unwrap();
@@ -205,5 +285,27 @@ mod tests {
                 .collect();
             assert!(functions.iter().all(|f| Arc::ptr_eq(f, &functions[0])));
         });
+    }
+    #[test]
+    fn constructors_require_a_scalar_class_and_a_visible_definition() {
+        use lpc_rs_asm::instruction::TypeIndex;
+        use lpc_rs_core::{class::ClassId, lpc_type::LpcType, register::Register};
+        let id = ClassId {
+            source: ustr::ustr("/record.h"),
+            name: ustr::ustr("record"),
+        };
+        for target in [
+            LpcType::Int(false),
+            LpcType::Class(id, true),
+            LpcType::Class(id, false),
+        ] {
+            let mut code = function(1.0);
+            code.types = vec![target];
+            code.instructions = vec![Instruction::ClassConst(
+                TypeIndex(0),
+                Register(0).as_local(),
+            )];
+            assert!(CodePool::default().publish(code, Arc::default()).is_err());
+        }
     }
 }

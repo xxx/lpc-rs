@@ -48,6 +48,9 @@ impl Outbox {
         if self.overflowed {
             self.dropped += 1;
         } else {
+            if let Op::Text(text) | Op::Prompt(text) = &op {
+                self.connection.observe(text, "output", false);
+            }
             session.send(op);
         }
     }
@@ -57,6 +60,7 @@ impl Outbox {
     pub(crate) fn fill_from(&mut self, session: &mut Session) {
         session.drain_output(&mut self.out);
         if !self.overflowed && self.high != 0 && self.out.len() >= self.high {
+            self.connection.observe(TRUNCATED, "output", false);
             session.send(Op::Text(TRUNCATED));
             session.drain_output(&mut self.out);
             self.overflowed = true;

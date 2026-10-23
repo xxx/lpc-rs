@@ -2,11 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::compiler::{
     ProgramWarnings, callee::Callee, compile_gate::CompileGate, diagnostics::Diagnostics,
-    source::CompilerSource, source_reader::SourceReader,
+    program_interface::ProgramInterface, source::CompilerSource, source_reader::SourceReader,
 };
 use derive_builder::Builder;
 use lpc_rs_core::{
-    EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
+    EFUN, RegisterSize, call_namespace::CallNamespace, class::ClassScope, lpc_path::LpcPath,
+    lpc_type::LpcType, pragma_flags::PragmaFlags,
 };
 use lpc_rs_errors::{
     source_map::{DiagnosticSources, FileId},
@@ -38,6 +39,11 @@ use crate::{
 pub struct CompilationContext {
     /// Completed code shared by this compilation and its recursive parent compilers.
     pub code_pool: Arc<CodePool>,
+    /// Pure macro preparation shared across preprocessing walks.
+    pub definition_cache: Arc<super::preprocessor::definition_cache::DefinitionCache>,
+    /// Pristine parsed syntax shared across compiler visits.
+    pub parser_cache: Arc<super::parser_cache::ParserCache>,
+    pub class_scope: Arc<ClassScope>,
     /// The identity of the main file being compiled.
     #[builder(setter(into))]
     pub source: Arc<CompilerSource>,
@@ -52,6 +58,12 @@ pub struct CompilationContext {
     /// The map of function names, to their respective prototypes.
     /// Used for checking forward references, and other things.
     pub function_prototypes: HashMap<String, FunctionPrototype>,
+
+    /// Parent declarations available before executable programs have been assembled.
+    pub(crate) inherited_interfaces: Vec<Arc<ProgramInterface>>,
+
+    /// Receiving-composition definitions used only after lexical lookup fails.
+    pub(crate) receiver_functions: HashMap<String, FunctionPrototype>,
 
     /// Everything this compilation has reported so far.
     pub diagnostics: Diagnostics,
@@ -68,7 +80,7 @@ pub struct CompilationContext {
     /// declaration
     pub inherits: Vec<InheritedProgram>,
 
-    /// The index of name -> inherited objects, for inherits with names
+    /// Explicit aliases to direct parents, taking precedence over source basenames.
     pub inherit_names: HashMap<String, usize>,
 
     /// How deep into an inheritance chain is this context?
@@ -86,7 +98,7 @@ pub struct CompilationContext {
     /// Simul-efun program selected for this compilation.
     pub simul_efuns: Option<Arc<Program>>,
 
-    /// The master's say over inherits and includes; `None` reads freely.
+    /// Compilation permissions; `None` compiles without authorization.
     pub gate: Option<Arc<dyn CompileGate>>,
 
     /// Source reads and probes shared with inherited compilers.
@@ -98,6 +110,9 @@ pub struct CompilationContext {
     /// The count of closures that have been defined, so we can give them unique
     /// names.
     pub closure_count: u16,
+
+    /// Unique names for explicit capture expressions before desugaring.
+    pub capture_count: usize,
     /// How many hidden lvalue cells have been named so far.
     pub lvalue_temp_count: u16,
 }
@@ -106,6 +121,14 @@ impl CompilationContextBuilder {
     /// Build the context, resolving an omitted source against the selected configuration.
     pub fn build(&self) -> lpc_rs_errors::Result<CompilationContext> {
         let mut context = self.build_context()?;
+        if self.definition_cache.is_none() {
+            context.definition_cache = Arc::new(
+                super::preprocessor::definition_cache::DefinitionCache::new(&context.config),
+            );
+        }
+        if self.parser_cache.is_none() {
+            context.parser_cache = Arc::new(super::parser_cache::ParserCache::new(&context.config));
+        }
         if self.source.is_none() {
             context.source = Arc::new(CompilerSource::new(LpcPath::default(), &context.config));
         }
@@ -114,7 +137,6 @@ impl CompilationContextBuilder {
 }
 
 impl CompilationContext {
-    /// config's lib_dir (a.k.a. LIB_DIR)
     /// Whether `#pragma strict_types` governs the source at `span`.
     pub fn strict_types_at(&self, span: Span) -> bool {
         self.strict_types_from
@@ -122,6 +144,7 @@ impl CompilationContext {
             .is_some_and(|&from| from <= span.l())
     }
 
+    /// config's lib_dir (a.k.a. LIB_DIR)
     pub fn lib_dir(&self) -> &str {
         &self.config.lib_dir
     }
@@ -129,6 +152,13 @@ impl CompilationContext {
     /// config's system include directories
     pub fn system_include_dirs(&self) -> &Vec<Ustr> {
         &self.config.system_include_dirs
+    }
+
+    /// An unspellable variable name for the next explicit capture.
+    pub fn next_capture_name(&mut self) -> Ustr {
+        let name = ustr(&format!("capture-{}", self.capture_count));
+        self.capture_count += 1;
+        name
     }
 
     /// The name of the next closure this compilation defines.
@@ -157,31 +187,82 @@ impl CompilationContext {
     {
         let r = name.as_ref();
 
-        let find_in_inherit = || {
-            // look up in reverse, so later declarations override earlier ones
-            self.inherits
+        match namespace {
+            CallNamespace::Local => self.function_prototypes.get(r).or_else(|| {
+                self.lookup_inherited_function(r, namespace)
+                    .map(|(prototype, _)| prototype)
+            }),
+            CallNamespace::Named(ns) if ns.as_str() == EFUN => EFUN_PROTOTYPES.get(r),
+            _ => self
+                .lookup_inherited_function(r, namespace)
+                .map(|(prototype, _)| prototype),
+        }
+    }
+
+    fn lookup_inherited_function(
+        &self,
+        name: &str,
+        namespace: &CallNamespace,
+    ) -> Option<(&FunctionPrototype, bool)> {
+        if self.inherits.is_empty() && !self.inherited_interfaces.is_empty() {
+            let parents = &self.inherited_interfaces;
+            let function = match namespace {
+                CallNamespace::Local | CallNamespace::Parent => {
+                    parents.iter().rev().find_map(|parent| parent.lookup(name))
+                }
+                CallNamespace::Named(ns) if ns.as_str() == EFUN => None,
+                CallNamespace::Named(ns) if self.inherit_names.contains_key(ns.as_str()) => self
+                    .inherit_names
+                    .get(ns.as_str())
+                    .and_then(|&index| parents.get(index))
+                    .and_then(|parent| parent.lookup(name)),
+                CallNamespace::Named(ns) => parents
+                    .iter()
+                    .rev()
+                    .filter(|parent| parent.has_basename(ns.as_str()))
+                    .find_map(|parent| parent.lookup(name)),
+            };
+            return function.map(|function| {
+                (
+                    &function.prototype,
+                    function.visibility == lpc_rs_core::visibility::Visibility::Private,
+                )
+            });
+        }
+        let function = match namespace {
+            CallNamespace::Local | CallNamespace::Parent => self
+                .inherits
                 .iter()
                 .rev()
-                .find_map(|inherit| inherit.lookup_function(r).map(|f| &f.prototype))
+                .find_map(|parent| parent.lookup_function(name)),
+            CallNamespace::Named(ns) if ns.as_str() == EFUN => None,
+            CallNamespace::Named(ns) if self.inherit_names.contains_key(ns.as_str()) => self
+                .inherit_names
+                .get(ns.as_str())
+                .and_then(|&index| self.inherits.get(index))
+                .and_then(|parent| parent.lookup_function(name)),
+            CallNamespace::Named(ns) => self
+                .inherits
+                .iter()
+                .rev()
+                .filter(|parent| parent.function_scope.has_basename(ns.as_str()))
+                .find_map(|parent| parent.lookup_function(name)),
         };
+        function.map(|function| (&function.prototype, function.private()))
+    }
 
-        match namespace {
-            CallNamespace::Local => self.function_prototypes.get(r).or_else(find_in_inherit),
-            CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => match ns.as_str() {
-                EFUN => EFUN_PROTOTYPES.get(r),
-                ns => self.inherit_names.get(ns).and_then(|i| {
-                    self.inherits
-                        .get(*i)
-                        .and_then(|p| p.lookup_function(name).map(|f| &f.prototype))
-                }),
-            },
+    /// Whether this source may use the resolved local or inherited declaration.
+    pub fn function_accessible(&self, name: &str, namespace: &CallNamespace) -> bool {
+        if namespace == &CallNamespace::Local && self.function_prototypes.contains_key(name) {
+            return true;
         }
+        self.lookup_inherited_function(name, namespace)
+            .is_none_or(|(_, private)| !private)
     }
 
     /// Resolve a call by name the way a call site does: own and inherited
     /// functions, then — for a bare name only — the simul efuns, then the
-    /// efuns.
+    /// efuns, followed by otherwise missing receiving-composition functions.
     pub fn lookup_function_complete<T>(
         &self,
         name: T,
@@ -210,18 +291,32 @@ impl CompilationContext {
             .simul_efuns
             .as_ref()
             .and_then(|simul_efuns| simul_efuns.lookup_function(name))
+            .filter(|function| function.public())
         {
             return Some(Callee::SimulEfun(&function.prototype));
         }
-        EFUN_PROTOTYPES.get(name).map(Callee::Efun)
+        EFUN_PROTOTYPES
+            .get(name)
+            .map(Callee::Efun)
+            .or_else(|| self.receiver_functions.get(name).map(Callee::Local))
     }
 
-    fn valid_namespace(&self, ns: &CallNamespace) -> bool {
+    pub(crate) fn valid_namespace(&self, ns: &CallNamespace) -> bool {
         match ns {
             CallNamespace::Local | CallNamespace::Parent => true,
             CallNamespace::Named(ns) => match ns.as_str() {
                 EFUN => true,
-                ns => self.inherit_names.contains_key(ns),
+                ns => {
+                    self.inherit_names.contains_key(ns)
+                        || self
+                            .inherits
+                            .iter()
+                            .any(|parent| parent.function_scope.has_basename(ns))
+                        || self
+                            .inherited_interfaces
+                            .iter()
+                            .any(|parent| parent.has_basename(ns))
+                }
             },
         }
     }
@@ -241,6 +336,14 @@ impl CompilationContext {
         self.scopes.lookup(r).or_else(|| {
             self.inherited_var_index(r)
                 .and_then(|i| self.inherits[i].global_variables.get(r))
+        })
+    }
+
+    /// The accessible function or mixed variable that takes precedence over a bare function name.
+    pub fn lookup_callable_var(&self, name: &str) -> Option<&Symbol> {
+        self.lookup_var(name).filter(|symbol| {
+            symbol.type_.matches_type(LpcType::Function(false))
+                && (symbol.visible_to_children() || self.scopes.lookup(name).is_some())
         })
     }
 
@@ -286,11 +389,16 @@ impl Default for CompilationContext {
         let config = Arc::new(Config::default());
         Self {
             code_pool: Arc::default(),
+            definition_cache: Arc::default(),
+            parser_cache: Arc::default(),
+            class_scope: Arc::default(),
             source: Arc::new(CompilerSource::new(LpcPath::default(), &config)),
             config,
             diagnostics: Diagnostics::default(),
             scopes: ScopeTree::default(),
             function_prototypes: HashMap::new(),
+            inherited_interfaces: Vec::new(),
+            receiver_functions: HashMap::new(),
             pragmas: PragmaFlags::new(),
             strict_types_from: HashMap::new(),
             inherits: vec![],
@@ -304,6 +412,7 @@ impl Default for CompilationContext {
             source_reader: None,
             diagnostic_sources: DiagnosticSources::default(),
             closure_count: 0,
+            capture_count: 0,
             lvalue_temp_count: 0,
         }
     }

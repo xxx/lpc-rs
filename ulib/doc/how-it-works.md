@@ -17,6 +17,14 @@ For each connection, the driver calls the master's `connect()`, which clones
 variables. The driver attaches the socket to this clone and calls its `logon()`.
 Returning `1` keeps the connection. `input_to(receive_name)` directs the next
 line to a name-selection function instead of the command system.
+The welcome text and input registration are delivered in call order after the
+login transaction commits; failed attempts publish neither.
+
+Objects can accept constructor arguments: `clone_object("/obj/box", "oak")`
+forwards `"oak"` to the new box's `create` after global initialisation. Its
+prototype receives no arguments when loaded. The disabled
+[box example](../examples/object.c) shows a constructor with a default for that
+case; the live player needs no constructor arguments.
 
 The player validates the name and checks `users()` for a duplicate. `users()`
 includes bodies still choosing names, so their `query_name()` returns `0`.
@@ -31,8 +39,8 @@ The player registers `help`, `who` and `quit` on itself, so they travel with it.
 `process_input()` expands the apostrophe shortcut. An `add_action()` handler
 receives the text after the command verb, or `0` when there is no argument.
 Returning `1` marks the command handled. After dispatch, `write_prompt()`
-provides the next prompt. While `input_to()` is waiting, the driver skips that
-hook; `logon()` and the name callback write their own `Name:` prompt.
+provides the next prompt. While `input_to()` or `get_char()` is waiting, the
+driver skips that hook; `logon()` and the name callback write their own `Name:` prompt.
 
 The room sends chat with `tell_object()` to named, interactive occupants.
 The player's `catch_tell()` forwards it through `write_socket()`. Using
@@ -62,18 +70,25 @@ inheritance from `/std/`, and compilation includes from `/include/`. Paths such
 as `/obj/player` are inside the mudlib; they are not host filesystem paths.
 `LPC_LIB_DIR` determines their filesystem root.
 
+The optional `valid_override()` policy refuses explicit `efun::` calls in
+LPC-triggered compilation; ordinary efun calls remain available. Removing this
+hook permits explicit calls. Boot compilation is exempt, and changing the
+policy does not revoke code already compiled into an object.
+
 The policy permits self-destruction for logout and empty-room cleanup. It
 denies LPC file writes, ordinary file reads, connection transfer, inspection
-of another object's globals, object recompilation, LPC-requested shutdown and
-shadows.
-The master and player also use pragmas to forbid inheritance and shadowing.
+or replacement of another object's globals, object recompilation, LPC-requested
+shutdown and shadows.
+The master and player also use pragmas to forbid inheritance and shadowing;
+the driver's `doc/lpc/pragmas.md` describes those restrictions.
 
 These checks are specific driver gates, not a general sandbox for arbitrary
 LPC. In particular, `valid_load()` controls loading missing programs, not calls
 to already resident objects; `valid_inherit()` controls which code may become
 part of another program. All source in the allowed directories is trusted code
-installed by the operator. Guests have no command for compiling or evaluating
-source. When adding a privileged operation, validate who may invoke that
+installed by the operator. Supplying source to `compile_string()` or
+`syntax_tree()` first requires `valid_write()`; this example denies both. Guests
+have no command for compiling, inspecting supplied source or evaluating code. When adding a privileged operation, validate who may invoke that
 operation instead of relying only on which directory holds its code.
 
 ## Why optional applies are disabled
@@ -91,3 +106,8 @@ parser examples are separate because this mudlib uses the smaller
 
 The driver repository's tests compile the live files and the enabled examples,
 then boot a copied mudlib and exercise it through real network connections.
+
+Raw TCP efuns are separate from player Telnet sessions. The live master denies
+all operations through `valid_socket`; adding an external protocol service requires
+a deliberate policy for its executing object, destinations and delegation. See
+the local [apply reference](applies.md) for the authorization hook.

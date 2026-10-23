@@ -1,11 +1,11 @@
-//! The protocol for one parse — `can_`, each object slot resolved and
-//! filtered, the final re-ask, `do_` — decided without the world: all it
-//! needs of the world it asks for through [`Ask`].
+//! The protocol for one parse, with world access supplied by [`Ask`].
+
+mod relations;
 
 use lpc_rs_errors::Result;
 
 use super::{
-    Verdict,
+    RejectionCode,
     handlers::{Arg, Failure, Family, Kind, Reply, best_reason},
 };
 use crate::command::{
@@ -16,7 +16,9 @@ use crate::command::{
 /// Whom a handler call goes to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Target {
-    /// The rule's owner: `can_` and `do_`.
+    /// The parsing actor, before owner fallback for `can_`.
+    Actor,
+    /// The rule's owner: actions and permission fallback.
     Owner,
     /// A candidate by index: `direct_`/`indirect_` and the re-ask.
     Candidate(usize),
@@ -25,7 +27,7 @@ pub(crate) enum Target {
 /// One handler argument as the core lays it out; the adapter makes the value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Slot {
-    /// A `WRD`/`STR` capture, or the typed words of an object slot.
+    /// A `WRD`/`STR` capture, or the typed words of any capture.
     Text(String),
     /// An object slot not yet chosen: `0`.
     Empty,
@@ -45,14 +47,14 @@ pub(crate) trait Ask {
     /// Called first in [`attempt`]: anything the adapter holds for one parse
     /// — `Lpc`'s minted many-slot arrays — is dropped here.
     fn begin_parse(&mut self) {}
-    /// `family`'s handler on `target` with `args`.
+    /// `family`'s handler on `target`, falling back to the owner if absent.
     async fn call(&mut self, family: Family, target: Target, args: &[Slot]) -> Result<Reply>;
     /// The candidates `phrase` names for a slot of `kind`.
     async fn resolve(&mut self, kind: ResolveKind, phrase: &str) -> Result<Option<Resolved>>;
     /// Whether `candidate` is not destructed.
     fn is_live(&self, candidate: usize) -> bool;
-    /// Whether the path to `candidate` is accessible.
-    fn reachable(&self, candidate: usize) -> bool;
+    /// Whether the path to `candidate` satisfies capture `slot`'s access requirement.
+    fn accessible(&self, slot: usize, candidate: usize) -> bool;
 }
 
 /// How a slot's qualifiers become its choice.
@@ -99,7 +101,7 @@ pub(crate) fn choose(
     }
 }
 
-/// The slot values plus the typed words of the object slots, in that order:
+/// The slot values plus the typed words of all captures, in that order:
 /// what every handler family receives.
 fn with_words(values: &[Slot], words: &[Slot]) -> Vec<Slot> {
     values.iter().chain(words).cloned().collect()
@@ -110,15 +112,16 @@ fn plain_reasons(reasons: &[(usize, Reply)]) -> Vec<String> {
     reasons
         .iter()
         .filter_map(|(_, reply)| match reply {
-            Reply::Reason { text, soft: false } => Some(text.clone()),
+            Reply::Reason {
+                text, soft: false, ..
+            } => Some(text.clone()),
             _ => None,
         })
         .collect()
 }
 
 /// A failure whose silent fallback (when the master gives no message) is
-/// `Refused`: from the actor's own handlers — `can_`, the all-filled
-/// re-ask, or a missing `do_`.
+/// `Refused`: from `can_`, pair checks, the final re-ask, or a missing `do_`.
 fn refused(kind: Kind, object: Option<Target>, arg: Arg, flag: bool, progress: usize) -> Failure {
     Failure {
         kind,
@@ -126,7 +129,7 @@ fn refused(kind: Kind, object: Option<Target>, arg: Arg, flag: bool, progress: u
         arg,
         flag,
         progress,
-        silent: Verdict::Refused,
+        silent: RejectionCode::Refused,
     }
 }
 
@@ -145,22 +148,18 @@ fn unresolved(
         arg,
         flag,
         progress,
-        silent: Verdict::Unresolved,
+        silent: RejectionCode::Unresolved,
     }
 }
 
-/// One parse: `can_`, each object slot resolved and filtered, the final
-/// re-ask, `do_`. `Err` is this parse's failure.
+/// One parse: `can_`, resolution and permission checks, selection, rechecks,
+/// and `do_`. `Err` is this parse's failure.
 pub(crate) async fn attempt<A: Ask>(
     ask: &mut A,
     caps: &[Capture],
 ) -> Result<std::result::Result<(), Failure>> {
     ask.begin_parse();
-    let words: Vec<Slot> = caps
-        .iter()
-        .filter(|c| c.kind.is_object())
-        .map(|c| Slot::Text(c.text.clone()))
-        .collect();
+    let words: Vec<Slot> = caps.iter().map(|c| Slot::Text(c.text.clone())).collect();
     let mut values: Vec<Slot> = caps
         .iter()
         .map(|c| {
@@ -173,20 +172,35 @@ pub(crate) async fn attempt<A: Ask>(
         .collect();
 
     match ask
-        .call(Family::Can, Target::Owner, &with_words(&values, &words))
+        .call(Family::Can, Target::Actor, &with_words(&values, &words))
         .await?
     {
         Reply::No => return Ok(Err(refused(Kind::Refused, None, Arg::None, false, 0))),
-        Reply::Reason { text, .. } => {
+        Reply::Reason { text, object, .. } => {
             return Ok(Err(refused(
                 Kind::Allocated,
-                Some(Target::Owner),
+                Some(object),
                 Arg::Text(text),
                 false,
                 0,
             )));
         }
         Reply::Yes | Reply::Absent => {}
+    }
+
+    let object_slots: Vec<usize> = caps
+        .iter()
+        .enumerate()
+        .filter_map(|(index, cap)| cap.kind.is_object().then_some(index))
+        .collect();
+    if let &[direct, indirect] = object_slots.as_slice()
+        && !(caps[direct].kind.is_many() && caps[indirect].kind.is_many())
+    {
+        let values = match relations::select(ask, caps, [direct, indirect], values, &words).await? {
+            Ok(values) => values,
+            Err(failure) => return Ok(Err(failure)),
+        };
+        return act(ask, &values, &words, 2).await;
     }
 
     let mut chosen: Vec<ChosenSlot> = Vec::new();
@@ -233,7 +247,7 @@ pub(crate) async fn attempt<A: Ask>(
             if !ask.is_live(candidate) {
                 continue;
             }
-            if !ask.reachable(candidate) {
+            if !ask.accessible(index, candidate) {
                 unreachable = true;
                 continue;
             }
@@ -255,9 +269,9 @@ pub(crate) async fn attempt<A: Ask>(
         }
         if qualified.is_empty() {
             return Ok(Err(match best_reason(&reasons) {
-                Some((candidate, text)) => unresolved(
+                Some((object, text)) => unresolved(
                     Kind::Allocated,
-                    Some(Target::Candidate(candidate)),
+                    Some(object),
                     Arg::Text(text),
                     false,
                     progress,
@@ -335,10 +349,10 @@ pub(crate) async fn attempt<A: Ask>(
                         chosen.len(),
                     )));
                 }
-                Reply::Reason { text, .. } => {
+                Reply::Reason { text, object, .. } => {
                     return Ok(Err(refused(
                         Kind::Allocated,
-                        Some(Target::Candidate(candidate)),
+                        Some(object),
                         Arg::Text(text),
                         false,
                         chosen.len(),
@@ -355,8 +369,17 @@ pub(crate) async fn attempt<A: Ask>(
             do_values[*index] = Slot::Mixed(picked.clone(), plain_reasons(reasons));
         }
     }
+    act(ask, &do_values, &words, chosen.len()).await
+}
+
+async fn act<A: Ask>(
+    ask: &mut A,
+    values: &[Slot],
+    words: &[Slot],
+    progress: usize,
+) -> Result<std::result::Result<(), Failure>> {
     match ask
-        .call(Family::Do, Target::Owner, &with_words(&do_values, &words))
+        .call(Family::Do, Target::Owner, &with_words(values, words))
         .await?
     {
         Reply::Absent => Ok(Err(refused(
@@ -364,7 +387,7 @@ pub(crate) async fn attempt<A: Ask>(
             None,
             Arg::None,
             false,
-            chosen.len(),
+            progress,
         ))),
         _ => Ok(Ok(())),
     }
@@ -407,7 +430,7 @@ mod tests {
         fn is_live(&self, c: usize) -> bool {
             self.live[c]
         }
-        fn reachable(&self, c: usize) -> bool {
+        fn accessible(&self, _: usize, c: usize) -> bool {
             self.reachable[c]
         }
     }
@@ -445,10 +468,12 @@ mod tests {
             Some(rest) => Reply::Reason {
                 text: rest.to_owned(),
                 soft: true,
+                object: target,
             },
             None => Reply::Reason {
                 text: text.to_owned(),
                 soft: false,
+                object: target,
             },
         };
         ((family, target), reply)
@@ -504,7 +529,7 @@ mod tests {
             ask.calls[0],
             (
                 Family::Can,
-                Target::Owner,
+                Target::Actor,
                 vec![Slot::Empty, Slot::Empty, text("swords"), text("bag")]
             )
         );
@@ -513,11 +538,11 @@ mod tests {
     #[tokio::test]
     async fn can_refusing_fails_at_progress_zero() {
         let caps = caps("OBJ", "sword");
-        let mut ask = recorded(vec![no(Family::Can, Target::Owner)], vec![]);
+        let mut ask = recorded(vec![no(Family::Can, Target::Actor)], vec![]);
         let failed = failure(&mut ask, &caps).await;
         assert_eq!(failed.kind, Kind::Refused);
         assert_eq!(failed.progress, 0);
-        assert_eq!(failed.silent, Verdict::Refused);
+        assert_eq!(failed.silent, RejectionCode::Refused);
         assert_eq!(ask.calls.len(), 1);
     }
 
@@ -648,7 +673,7 @@ mod tests {
         assert_eq!(failed.kind, Kind::Allocated);
         assert_eq!(failed.object, Some(Target::Candidate(1)));
         assert_eq!(failed.arg, Arg::Text("plain".to_owned()));
-        assert_eq!(failed.silent, Verdict::Unresolved);
+        assert_eq!(failed.silent, RejectionCode::Unresolved);
     }
 
     #[tokio::test]
@@ -715,7 +740,7 @@ mod tests {
         let failed = failure(&mut ask, &caps).await;
         assert_eq!(failed.kind, Kind::Refused);
         assert_eq!(failed.progress, 1);
-        assert_eq!(failed.silent, Verdict::Refused);
+        assert_eq!(failed.silent, RejectionCode::Refused);
         let done = ask
             .calls
             .iter()
@@ -756,7 +781,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_second_slot_is_indirect_and_counts_as_progress_one() {
+    async fn a_missing_second_noun_fails_before_permission_checks() {
         let caps = caps("OBS in OBJ", "swords in bag");
         let mut ask = recorded(
             vec![yes(Family::Direct, Target::Candidate(0))],
@@ -765,15 +790,7 @@ mod tests {
         let failed = failure(&mut ask, &caps).await;
         assert_eq!(failed.kind, Kind::ThereIsNo);
         assert_eq!(failed.progress, 1);
-        assert!(
-            ask.calls
-                .iter()
-                .any(|(family, _, _)| *family == Family::Direct)
-        );
-        assert!(
-            !ask.calls
-                .iter()
-                .any(|(family, _, _)| *family == Family::Indirect)
-        );
+        assert_eq!(ask.calls.len(), 1);
+        assert_eq!(ask.calls[0].0, Family::Can);
     }
 }

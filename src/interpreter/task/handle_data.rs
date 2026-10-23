@@ -205,7 +205,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if !func.public() && !Arc::ptr_eq(process, &self.stack.current_frame()?.process) {
             return Err(self.runtime_error(format!(
                 "cannot take a pointer to {} function `{}` of `{}`",
-                func.prototype.flags.visibility(),
+                func.visibility(),
                 name,
                 process
             )));
@@ -265,6 +265,43 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     //         })
     //         .collect::<Result<Vec<Register>>>()
     // }
+
+    #[instrument(level = "debug", skip_all)]
+    pub(crate) fn handle_index_from_end(
+        &mut self,
+        container_loc: RegisterVariant,
+        distance_loc: RegisterVariant,
+        destination: RegisterVariant,
+    ) -> lpc_rs_errors::Result<()> {
+        let container = get_location(&self.stack, &self.context.txn, container_loc)?.into_owned();
+        let distance = get_location(&self.stack, &self.context.txn, distance_loc)?.into_owned();
+        let LpcRef::Int(distance) = distance else {
+            return Err(self.runtime_error("Reverse index must be an integer"));
+        };
+        let len = match &container {
+            LpcRef::Array(_) => container
+                .with_array(&self.context.txn, |array| array.len())
+                .unwrap_or_default(),
+            LpcRef::String(_) => container
+                .with_string(|string| string.char_count())
+                .unwrap_or_default(),
+            LpcRef::Bytes(bytes) => bytes.len(),
+            _ => {
+                return Err(
+                    self.runtime_error("Reverse indexing requires an array, string or bytes")
+                );
+            }
+        } as LpcIntInner;
+        let absolute = len.saturating_sub(distance.0);
+        // Keep an out-of-bounds position from being interpreted as a native negative index.
+        let index = if absolute < 0 { len } else { absolute };
+        set_location(
+            &mut self.stack,
+            &self.context.txn,
+            destination,
+            LpcRef::from(index),
+        )
+    }
 
     #[instrument(level = "debug", skip_all)]
     #[inline]
@@ -361,9 +398,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let key = lpc_ref.mapping_key(&self.context.txn);
                 let var = container_ref
                     .with_mapping(&self.context.txn, |map| {
-                        map.get(&key).cloned().unwrap_or(NULL)
+                        map.get(&key)
+                            .cloned()
+                            .unwrap_or_else(|| self.context.txn.nil())
                     })
-                    .unwrap_or(NULL);
+                    .unwrap_or_else(|_| self.context.txn.nil());
 
                 set_location(&mut self.stack, &self.context.txn, destination, var)?;
 
@@ -401,10 +440,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             if let Some((key, _)) = map.get_index(index as usize) {
                                 key.clone()
                             } else {
-                                NULL
+                                self.context.txn.nil()
                             }
                         })
-                        .unwrap_or(NULL)
+                        .unwrap_or_else(|_| self.context.txn.nil())
                 }
                 x => {
                     return Err(
@@ -417,22 +456,36 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         set_location(&mut self.stack, &self.context.txn, destination, var)
     }
 
-    #[instrument(level = "debug", skip_all)]
+    /// Store an element, returning whether string replacement requires owner writeback.
     #[inline]
-    pub(crate) fn handle_store(
+    pub(crate) fn handle_store<const REBIND_STRING: bool>(
         &mut self,
         value_loc: RegisterVariant,
         container_loc: RegisterVariant,
         index_loc: RegisterVariant,
-    ) -> lpc_rs_errors::Result<()> {
-        let container = get_location(&self.stack, &self.context.txn, container_loc)?.into_owned();
-        let index = &*get_location(&self.stack, &self.context.txn, index_loc)?;
+    ) -> lpc_rs_errors::Result<bool> {
+        let container = get_location(&self.stack, &self.context.txn, container_loc)?;
+        if REBIND_STRING && let LpcRef::String(source) = &*container {
+            let replacement = self.replace_string_index(source, value_loc, index_loc)?;
+            drop(container);
+            set_location(
+                &mut self.stack,
+                &self.context.txn,
+                container_loc,
+                replacement,
+            )?;
+            return Ok(true);
+        }
 
-        match &container {
+        let _span = tracing::debug_span!("handle_store").entered();
+        let index = get_location(&self.stack, &self.context.txn, index_loc)?;
+
+        match &*container {
             LpcRef::Array(cell) => {
                 // Read before the COW closure acquires the transaction lock.
                 let value = &*get_location(&self.stack, &self.context.txn, value_loc)?;
-                self.store_array_value(cell.id, index, value)
+                self.store_array_value(cell.id, &index, value)?;
+                Ok(false)
             }
             LpcRef::Mapping(cell) => {
                 let value = get_location(&self.stack, &self.context.txn, value_loc)?.into_owned();
@@ -442,7 +495,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.context
                     .txn
                     .with(|t| t.merge(cell.id, MergeOp::MapInsert(key, value)));
-                Ok(())
+                Ok(false)
             }
             x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
         }

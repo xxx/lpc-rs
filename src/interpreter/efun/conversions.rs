@@ -2,6 +2,7 @@
 //! type without converting the value.
 
 use lpc_rs_core::BaseFloat;
+use lpc_rs_core::null_mode::NullMode;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -68,7 +69,7 @@ pub(super) fn cannot_convert<const N: usize>(
 }
 
 /// `to_int(x)`: an int as it is, a float truncated toward zero, a string's
-/// leading integer, a destructed object as 0.
+/// leading integer, a destructed object as 0 in zero mode.
 pub fn to_int<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let result = match context.arg(0) {
         int @ LpcRef::Int(_) => int.clone(),
@@ -79,7 +80,10 @@ pub fn to_int<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
                 return Err(context.runtime_error(format!("to_int: {digits} is out of range")));
             }
         },
-        object @ LpcRef::Object(_) if object.live_object(context.txn()).is_none() => {
+        object @ LpcRef::Object(_)
+            if context.txn().null_mode() == NullMode::Zero
+                && object.live_object(context.txn()).is_none() =>
+        {
             LpcRef::from(0)
         }
         other => return Err(cannot_convert(context, "to_int", other)),
@@ -89,7 +93,7 @@ pub fn to_int<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 }
 
 /// `to_float(x)`: an int widened, a float as it is, a string's leading
-/// number, a destructed object as 0.0.
+/// number, a destructed object as 0.0 in zero mode.
 pub fn to_float<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let value = match context.arg(0) {
         LpcRef::Int(i) => i.0 as BaseFloat,
@@ -99,7 +103,12 @@ pub fn to_float<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
             return Ok(());
         }
         LpcRef::String(s) => leading_float(s.to_str()),
-        object @ LpcRef::Object(_) if object.live_object(context.txn()).is_none() => 0.0,
+        object @ LpcRef::Object(_)
+            if context.txn().null_mode() == NullMode::Zero
+                && object.live_object(context.txn()).is_none() =>
+        {
+            0.0
+        }
         other => return Err(cannot_convert(context, "to_float", other)),
     };
     context.return_efun_result(LpcRef::Float(LpcFloat::from(value)));
@@ -107,14 +116,16 @@ pub fn to_float<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
 }
 
 /// `to_string(x)`: a number's text, a string as it is, an object's file
-/// name, a destructed object as `"0"`.
+/// name, a destructed object as the selected null's text.
 pub fn to_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let result = match context.arg(0) {
-        number @ (LpcRef::Int(_) | LpcRef::Float(_)) => LpcRef::from(number.to_string()),
+        number @ (LpcRef::Nil | LpcRef::Int(_) | LpcRef::Float(_)) => {
+            LpcRef::from(number.to_string())
+        }
         string @ LpcRef::String(_) => string.clone(),
         object @ LpcRef::Object(_) => match object.live_object(context.txn()) {
             Some(process) => LpcRef::from(in_game_name(context, &process)),
-            None => LpcRef::from("0"),
+            None => LpcRef::from(context.txn().nil().to_string()),
         },
         LpcRef::Bytes(_) => {
             return Err(context

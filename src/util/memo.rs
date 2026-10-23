@@ -7,11 +7,17 @@ use lru::LruCache;
 use parking_lot::Mutex;
 
 /// An exact LRU of built values; a hit is a clone.
-pub(crate) struct Memo<K, V> {
+#[derive(Debug)]
+pub(crate) struct Memo<K: Hash + Eq, V> {
     entries: Mutex<LruCache<K, V>>,
 }
 
 impl<K: Hash + Eq, V: Clone> Memo<K, V> {
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.entries.lock().len()
+    }
+
     /// Holding up to `capacity` entries, allocated as they come; a zero
     /// capacity holds one.
     pub(crate) fn new(capacity: usize) -> Self {

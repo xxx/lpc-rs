@@ -3,6 +3,7 @@
 
 mod conflict_probes;
 mod helpers;
+mod object_lookup;
 mod soak;
 
 // Re-export the shared drivers so sibling test modules can import them

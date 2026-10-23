@@ -58,7 +58,7 @@ impl CompilerSource {
         &self.include_cwd
     }
 
-    /// The inheritance base, preserving host-origin compilation's filename base.
+    /// The source directory used as the base for relative inherit paths.
     pub fn inheritance_cwd(&self) -> &Path {
         &self.inheritance_cwd
     }

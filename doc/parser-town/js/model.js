@@ -127,12 +127,6 @@
       : [];
     if (
       groups.filter(function (g) {
-        return g.kind === 'text';
-      }).length > 1
-    )
-      throw new Error('Only one STR is allowed');
-    if (
-      groups.filter(function (g) {
         return g.kind === 'object' || g.kind === 'living';
       }).length > 2
     )
@@ -666,9 +660,9 @@
       m.captures.forEach(function (c) {
         if (c.kind === 'object' || c.kind === 'living') {
           args.push(0);
-          raw.push(c.text);
           kinds.push(c.slot);
         } else args.push(c.kind === 'number' ? Number(c.text) : c.text);
+        if (family === 'parser') raw.push(c.text);
       });
       var slug = verb === 'give' ? 'obj_to_liv' : 'str';
       if (family === 'parser') {
@@ -693,16 +687,6 @@
           return;
         }
         args[c.slot] = { object: found[0].name };
-        if (family === 'parser')
-          m.calls.push(
-            (kinds.indexOf(c.slot) === 0 ? 'direct_' : 'indirect_') +
-              verb +
-              '_' +
-              slug +
-              '(' +
-              args.concat(raw).map(format).join(', ') +
-              ') → 1'
-          );
       });
       if (unresolved) {
         m.failureKind = 'noun';
@@ -717,7 +701,18 @@
               slug +
               '(' +
               args.concat(raw).map(format).join(', ') +
-              ') → 1 (all slots filled)'
+              ') → 1'
+          );
+        });
+        kinds.forEach(function (slot, i) {
+          m.calls.push(
+            (i === 0 ? 'direct_' : 'indirect_') +
+              verb +
+              '_' +
+              slug +
+              '(' +
+              args.concat(raw).map(format).join(', ') +
+              ') → 1 (selected pair recheck)'
           );
         });
         m.calls.push(

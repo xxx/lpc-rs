@@ -5,7 +5,7 @@
 The driver applies `process_input` to a living before dispatching a command
 line, from the connection and from `command()`, after the master's
 `modify_command` has seen it. A string result replaces the
-line; 0 (or no such function) dispatches the line as typed; any other result
+line; `0`, distinct `nil`, or no such function dispatches the line as typed; any other result
 consumes the line — nothing else runs. In `process_input`, `previous_object()`
 is the living itself.
 

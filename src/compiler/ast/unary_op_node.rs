@@ -22,6 +22,8 @@ pub enum UnaryOperation {
     Dec,
     Bang,
     BitwiseNot,
+    /// A distance from the end, only valid inside an index or slice.
+    FromEnd,
 }
 
 impl Display for UnaryOperation {
@@ -32,6 +34,7 @@ impl Display for UnaryOperation {
             UnaryOperation::Dec => "--",
             UnaryOperation::Bang => "!",
             UnaryOperation::BitwiseNot => "~",
+            UnaryOperation::FromEnd => "<",
         };
 
         write!(f, "{s}")

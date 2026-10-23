@@ -347,6 +347,8 @@ struct Derivations<'g> {
     scan: Arc<Scan>,
     budget: Arc<Budget>,
     max_depth: usize,
+    /// `(production, dot, end)`: token positions where the remaining RHS can start.
+    suffix_starts: AHashMap<(ProdId, usize, usize), Vec<usize>>,
     /// The derivation in hand, levels in pre-order.
     stack: Vec<Level>,
     /// The level whose right-hand side is being laid; `None` once the root
@@ -371,6 +373,7 @@ impl<'g> Derivations<'g> {
             scan,
             budget,
             max_depth,
+            suffix_starts: AHashMap::new(),
             stack: Vec::new(),
             active: None,
             yielded: false,
@@ -380,6 +383,83 @@ impl<'g> Derivations<'g> {
             derivations.active = Some(0);
         }
         derivations
+    }
+
+    /// Rule out a child span before expanding derivations that cannot fit its suffix.
+    fn suffix_matches(
+        &mut self,
+        prod: ProdId,
+        mut dot: usize,
+        mut start: usize,
+        end: usize,
+    ) -> bool {
+        let rhs = &self.grammar.production(prod).rhs;
+        // Check only one leading terminal so long literal suffixes still use the cache.
+        if let Some(element) = rhs.get(dot)
+            && !matches!(element.symbol, Symbol::NonTerminal(_))
+        {
+            if !self.budget.step()
+                || start == end
+                || !terminal_matches(&element.symbol, &self.scan, start)
+            {
+                return false;
+            }
+            dot += 1;
+            start += 1;
+        }
+        if dot == rhs.len() {
+            return start == end;
+        }
+        if dot + 1 == rhs.len() {
+            if !self.budget.step() {
+                return false;
+            }
+            return match &rhs[dot].symbol {
+                Symbol::NonTerminal(nt) => self.chart.completed(end, *nt, start).is_some(),
+                terminal => start + 1 == end && terminal_matches(terminal, &self.scan, start),
+            };
+        }
+        let mut known = dot;
+        while known < rhs.len() && !self.suffix_starts.contains_key(&(prod, known, end)) {
+            known += 1;
+        }
+        for index in (dot..known).rev() {
+            let ends = if index + 1 == rhs.len() {
+                std::slice::from_ref(&end)
+            } else {
+                self.suffix_starts[&(prod, index + 1, end)].as_slice()
+            };
+            let mut starts = Vec::new();
+            for &next in ends {
+                match &rhs[index].symbol {
+                    Symbol::NonTerminal(nt) => {
+                        for item in &self.chart.sets[next] {
+                            if !self.budget.step() {
+                                return false;
+                            }
+                            let production = self.grammar.production(item.prod);
+                            if production.lhs == *nt && item.dot == production.rhs.len() {
+                                starts.push(item.origin);
+                            }
+                        }
+                    }
+                    terminal => {
+                        if !self.budget.step() {
+                            return false;
+                        }
+                        if next > 0 && terminal_matches(terminal, &self.scan, next - 1) {
+                            starts.push(next - 1);
+                        }
+                    }
+                }
+            }
+            starts.sort_unstable();
+            starts.dedup();
+            self.suffix_starts.insert((prod, index, end), starts);
+        }
+        self.suffix_starts[&(prod, dot, end)]
+            .binary_search(&start)
+            .is_ok()
     }
 
     /// A level deriving `nt` over `start..end` under `parent`; `None` when
@@ -501,6 +581,9 @@ impl Iterator for Derivations<'_> {
         }
         let grammar = self.grammar;
         loop {
+            if self.budget.ending() != Ending::Done {
+                break;
+            }
             let Some(a) = self.active else {
                 self.yielded = true;
                 return Some(self.materialize());
@@ -538,6 +621,10 @@ impl Iterator for Derivations<'_> {
                         }
                         continue;
                     };
+                    if !self.suffix_matches(level.prods[level.prod_idx], k + 1, mid, end) {
+                        self.stack[a].cursor = Cursor::after(mid);
+                        continue;
+                    }
                     match self.level_for(*nt, pos, mid, Some(a)) {
                         Some(child) => {
                             self.stack.push(child);
@@ -1143,5 +1230,193 @@ mod tests {
         assert!(!budget.step());
         assert_eq!(budget.ending(), Ending::TooDeep);
         assert_eq!(budget.used(), 0);
+    }
+
+    #[test]
+    fn long_word_lists_skip_splits_that_cannot_finish_the_rule() {
+        let rule = crate::command::frontend::parser::compile("cast", "STR at OBJ").unwrap();
+        let words: Vec<_> = (0..41).map(|i| format!("w{i}")).collect();
+        let input = words.join(" at ");
+        let mut parses = parse(
+            &rule.compiled.grammar,
+            &input,
+            Limits {
+                max_parses: 100,
+                max_steps: 200_000,
+                ..Limits::default()
+            },
+        );
+        let actual: Vec<Vec<String>> = parses
+            .by_ref()
+            .map(|p| {
+                p.captures()
+                    .into_iter()
+                    .map(|(_, s)| s.to_owned())
+                    .collect()
+            })
+            .collect();
+        let expected: Vec<_> = (1..words.len())
+            .rev()
+            .map(|split| vec![words[..split].join(" at "), words[split..].join(" at ")])
+            .collect();
+        assert_eq!(parses.ending(), Ending::Done);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn ambiguous_children_are_lazy_even_before_a_nullable_suffix() {
+        let (mut b, _, word) = words();
+        let s = b.nonterminal("S");
+        let a = b.nonterminal("A");
+        let opt = b.nonterminal("Opt");
+        b.production(s, [nt(a).labeled(Label(0)), lit("at"), nt(opt), lit("end")]);
+        b.production(a, [nt(a), nt(a)]);
+        b.production(a, [tok(word)]);
+        b.production(opt, [lit("x")]);
+        b.production(opt, []);
+        let g = b.build(s).unwrap();
+        let prefix = ["a"; 20].join(" ");
+        for suffix in ["at end", "at x end"] {
+            let mut parses = parse(
+                &g,
+                &format!("{prefix} {suffix}"),
+                Limits {
+                    max_parses: 2,
+                    max_steps: 100_000,
+                    ..Limits::default()
+                },
+            );
+            let first = parses.next().unwrap();
+            let second = parses.next().unwrap();
+            assert_eq!(first.captures(), vec![(Label(0), prefix.as_str())]);
+            assert_eq!(second.captures(), first.captures());
+            assert_ne!(first.root(), second.root());
+            assert!(parses.next().is_none());
+            assert_eq!(parses.ending(), Ending::Done);
+        }
+    }
+
+    #[test]
+    fn reused_productions_keep_nullable_alternatives_at_each_span_end() {
+        let mut b = GrammarBuilder::new();
+        let w = b.words_tokens();
+        let s = b.nonterminal("S");
+        let block = b.nonterminal("Block");
+        let opt = b.nonterminal("Opt");
+        let text = b.words_plus(&w);
+        b.production(
+            s,
+            [nt(block).labeled(Label(0)), nt(block).labeled(Label(1))],
+        );
+        b.production(block, [nt(text), nt(opt), lit("end")]);
+        let empty_first = b.production(opt, []);
+        let empty_second = b.production(opt, []);
+        let g = b.build(s).unwrap();
+        let mut parses = parse(&g, "a end b end c end", Limits::default());
+        let actual: Vec<_> = parses
+            .by_ref()
+            .map(|p| {
+                let alternatives: Vec<_> = p
+                    .root()
+                    .children
+                    .iter()
+                    .map(|child| {
+                        let Child::Node(block) = child else {
+                            panic!("expected block")
+                        };
+                        let Child::Node(opt) = &block.children[1] else {
+                            panic!("expected optional")
+                        };
+                        opt.production
+                    })
+                    .collect();
+                (
+                    p.captures()
+                        .into_iter()
+                        .map(|(_, s)| s.to_owned())
+                        .collect::<Vec<_>>(),
+                    alternatives,
+                )
+            })
+            .collect();
+        let mut expected = Vec::new();
+        for (left, right) in [("a end b end", "c end"), ("a end", "b end c end")] {
+            for first in [empty_first, empty_second] {
+                for second in [empty_first, empty_second] {
+                    expected.push((vec![left.to_owned(), right.to_owned()], vec![first, second]));
+                }
+            }
+        }
+        assert_eq!(actual, expected);
+        assert_eq!(parses.ending(), Ending::Done);
+    }
+
+    #[test]
+    fn a_nullable_cyclic_suffix_keeps_its_cycle_free_escape() {
+        let (mut b, _, _) = words();
+        let s = b.nonterminal("S");
+        let a = b.nonterminal("A");
+        let cycle = b.nonterminal("Cycle");
+        b.production(s, [nt(a), nt(cycle), nt(a)]);
+        b.production(a, []);
+        b.production(cycle, [nt(cycle)]);
+        b.production(cycle, []);
+        let g = b.build(s).unwrap();
+        let mut parses = parse(&g, "", Limits::default());
+        assert_eq!(parses.by_ref().count(), 1);
+        assert_eq!(parses.ending(), Ending::Done);
+    }
+
+    #[test]
+    fn suffix_search_spends_the_parse_budget() {
+        let mut b = GrammarBuilder::new();
+        let w = b.words_tokens();
+        let s = b.nonterminal("S");
+        let text = b.words_plus(&w);
+        let opt = b.optional(lit("x"));
+        b.production(s, [nt(text), nt(opt), lit("end")]);
+        let g = b.build(s).unwrap();
+        let input = "spark dusk end";
+        let scan = g.tokenize(input).unwrap();
+        let budget = Budget::new(usize::MAX);
+        Chart::build(&g, &scan, &budget);
+        let mut parses = parse(
+            &g,
+            input,
+            Limits {
+                max_steps: budget.used() + 2,
+                ..Limits::default()
+            },
+        );
+        assert_eq!(parses.ending(), Ending::Done);
+        assert!(parses.next().is_none());
+        assert_eq!(parses.ending(), Ending::Exhausted);
+        assert!(parses.next().is_none());
+    }
+
+    #[test]
+    fn a_long_suffix_does_not_use_the_native_call_stack() {
+        on_a_1_mib_stack(|| {
+            let (mut b, _, _) = words();
+            let s = b.nonterminal("S");
+            let empty = b.nonterminal("Empty");
+            b.production(empty, []);
+            b.production(
+                s,
+                iter::once(nt(empty)).chain(iter::repeat_with(|| lit("a")).take(8192)),
+            );
+            let g = b.build(s).unwrap();
+            let mut parses = parse(
+                &g,
+                &["a"; 8192].join(" "),
+                Limits {
+                    max_depth: 2,
+                    max_steps: 100_000,
+                    ..Limits::default()
+                },
+            );
+            assert_eq!(parses.by_ref().count(), 1);
+            assert_eq!(parses.ending(), Ending::Done);
+        });
     }
 }

@@ -19,6 +19,7 @@ use crate::command::{
 };
 use crate::interpreter::{
     call_frame::{CallFrame, FrameReceiver},
+    call_origin::CallOrigin,
     call_stack::CallStack,
     continuation::{Continuation, EfunContinuation, Pending},
     efun::Efun,
@@ -52,7 +53,7 @@ pub struct EfunContext<'task, const N: usize> {
     /// The efun being called.
     efun: Efun,
 
-    /// The argument values in call order, padded with `NULL` to the
+    /// The argument values in call order, padded with type-aware defaults to the
     /// prototype's arity; a by-reference argument is its cell's value at
     /// the call.
     args: SmallVec<[LpcRef; 4]>,
@@ -118,7 +119,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                         )));
                     }
                     let cell = caller.ref_cell(location)?;
-                    txn.with(|t| t.read(cell).unwrap_or(NULL))
+                    txn.with(|t| t.read(cell).unwrap_or_else(|| txn.nil()))
                 }
                 Arg::Spread(location) => {
                     for (offset, value) in caller
@@ -184,11 +185,21 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let mut args = args;
         let declared = usize::from(efun.prototype().arity.num_args);
         if args.len() < declared {
-            args.resize(declared, NULL);
+            args.extend((args.len()..declared).map(|i| {
+                LpcRef::default_for(
+                    efun.prototype()
+                        .arg_types
+                        .get(i)
+                        .copied()
+                        .unwrap_or(lpc_rs_core::lpc_type::LpcType::Mixed(false)),
+                    task_context.txn().null_mode(),
+                )
+            }));
         }
-        // An efun that answers 0 by leaving the result slot alone relies on this.
+        // Omitted results use the efun's declared return type.
         if let Some(frame) = stack.last_mut() {
-            frame.registers[0] = NULL;
+            frame.registers[0] =
+                LpcRef::default_for(efun.prototype().return_type, task_context.txn().null_mode());
         }
         Self {
             stack,
@@ -207,6 +218,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// The efun's outcome with the call site on an error.
     pub(crate) fn finish(self, result: Result<()>) -> Result<()> {
         result.map_err(|e| e.or_span(self.call_site_span()))
+    }
+
+    /// The current LPC function's origin, or the fired efun's entry origin.
+    pub(crate) fn call_origin(&self) -> CallOrigin {
+        self.calling_frame().origin
     }
 
     /// The frame whose instruction called this efun.
@@ -247,8 +263,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Query a call out transactionally.
             pub fn query_call_out(&self, id: u64) -> Option<Vec<LpcRef>>;
 
-            /// Query all call outs of `owner` transactionally.
-            pub fn query_call_outs(&self, owner: &Arc<Process>) -> Vec<Vec<LpcRef>>;
+            /// Query call outs transactionally, optionally restricting their owner.
+            pub fn query_call_outs(&self, owner: Option<&Arc<Process>>) -> Vec<Vec<LpcRef>>;
 
             /// Cancel a call out transactionally.
             pub fn cancel_call_out(&self, id: u64) -> i64;
@@ -385,7 +401,18 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             state,
             span,
             suspended: None,
+            origin: (self.efun != Efun::evaluate).then_some(CallOrigin::Efun),
         })));
+    }
+
+    pub(crate) fn socket_offer(&self) -> Option<Arc<crate::interpreter::efun::sockets::Offer>> {
+        self.stack
+            .iter()
+            .rev()
+            .find_map(|frame| match frame.pending.as_deref() {
+                Some(Pending::Efun(continuation)) => continuation.state.socket_offer().cloned(),
+                _ => None,
+            })
     }
 
     /// Resolve `path` against the current process's in-game directory.
@@ -481,6 +508,14 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let is_living = process.commands_enabled(self.txn());
         let environment = Process::environment_of(self.txn(), &process);
         forget_destruct(self.txn(), &process);
+        self.txn()
+            .with(|t| crate::interpreter::snooping::retire_object(t, &process));
+        self.txn().with(|t| {
+            self.task_context
+                .global_state
+                .sockets
+                .retire_object(t, &process)
+        });
         let connection = self
             .txn()
             .with(|t| t.read_connection(process.connection.id));
@@ -499,7 +534,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
         ActorRules::new(self.txn(), &process).clear();
         self.txn().with(|t| {
-            t.drop_var(var_id);
+            t.remove_object(var_id, process.clone());
             t.mark_presence_changed();
             if process.is_clone() {
                 let clones = process.image_in(t).program.clones.id;
@@ -509,8 +544,14 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                 );
             }
             t.drop_var(process.position.livings.id);
-            if is_living && let Some(env) = &environment {
-                Process::unmark_living(t, &process, env);
+            if let Some(env) = &environment {
+                t.merge(
+                    env.position.inventory.id,
+                    MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(&process))),
+                );
+                if is_living {
+                    Process::unmark_living(t, &process, env);
+                }
             }
             // A dying shadow leaves its chain.
             if process.shadow.ever_shadowing.load(Ordering::Acquire)
@@ -616,9 +657,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// caller's file, not this one.
     pub(crate) fn calling_program(&self) -> LpcRef {
         let root = self.config().paths();
-        self.calling_program_path().map_or(NULL, |path| {
-            LpcRef::from(root.source_name(path).to_string())
-        })
+        self.calling_program_path().map_or_else(
+            || self.txn().nil(),
+            |path| LpcRef::from(root.source_name(path).to_string()),
+        )
     }
 
     /// The source identity behind [`Self::calling_program`], before display formatting.
@@ -649,8 +691,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let scope = self.calling_program_path().unwrap_or(&program.filename);
         let scope = self.config().paths().program_path(scope);
         let function = program
-            .lookup_inherited_function(&scope, namespace, name)
-            .filter(|function| !function.prototype.flags.private())?
+            .lookup_inherited_function(&scope, namespace, name)?
             .clone();
         Some((receiver, function))
     }

@@ -26,6 +26,7 @@ mod initiate_login;
 mod object_initializers;
 mod preload;
 mod prioritize_call_out;
+pub(crate) mod regex_cache;
 
 pub mod binding;
 pub mod global_state;
@@ -42,6 +43,8 @@ pub struct Vm {
     /// The listener; one loop per accepted connection.
     telnet: Telnet,
 
+    sockets: Option<crate::interpreter::sockets::SocketRuntime>,
+
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
 }
@@ -57,6 +60,7 @@ impl Vm {
         Self {
             global_state: Arc::new(GlobalState::new(config, tx)),
             telnet: Telnet::new(),
+            sockets: None,
             rx,
         }
     }
@@ -75,6 +79,7 @@ impl Vm {
     /// then start the main loop.
     pub async fn boot(&mut self) -> lpc_rs_errors::Result<i32> {
         self.bootstrap().await?;
+        self.start_sockets()?;
         self.preload().await;
 
         let config = &self.global_state.config;
@@ -111,6 +116,7 @@ impl Vm {
     /// Returns the process exit code: `shutdown(code)`'s, 0 on a signal.
     #[instrument(skip_all)]
     pub async fn run(&mut self) -> lpc_rs_errors::Result<i32> {
+        self.start_sockets()?;
         let mut exit_code = 0;
         let gc_interval = self.global_state.config.gc_interval;
         // `interval` panics on a zero period; a disabled collector is gated off at the arm.
@@ -122,6 +128,11 @@ impl Vm {
         cleanup_ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         cleanup_ticks.tick().await;
         let mut cleanup_tasks = tokio::task::JoinSet::new();
+        let cache_idle = self.global_state.config.compiler_cache_idle_time;
+        let mut cache_ticks = tokio::time::interval(Duration::from_secs(cache_idle.clamp(1, 30)));
+        cache_ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        cache_ticks.tick().await;
+        let mut cache_tasks = tokio::task::JoinSet::new();
 
         // Process managers stop a server with TERM first; it must reach the
         // same clean shutdown as Ctrl-C.
@@ -144,7 +155,7 @@ impl Vm {
                     let global_state = self.global_state.clone();
                     tokio::spawn(async move {
                         match global_state.gc_when_quiet(20, Duration::from_millis(100)).await {
-                            Ok(Ok(report)) => info!("gc pass reclaimed {} vars", report.reclaimed),
+                            Ok(Ok(_)) => {},
                             Ok(Err(refused)) => debug!("gc pass skipped this period: {refused}"),
                             Err(e) => error!("gc pass failed: {e}"),
                         }
@@ -153,6 +164,19 @@ impl Vm {
                 Some(result) = cleanup_tasks.join_next(), if !cleanup_tasks.is_empty() => {
                     if let Err(error) = result {
                         error!("cleanup sweep failed: {error}");
+                    }
+                }
+                Some(result) = cache_tasks.join_next(), if !cache_tasks.is_empty() => {
+                    match result {
+                        Ok(released) if released > 0 => debug!(released, "expired compiler-cache entries"),
+                        Err(error) => error!("compiler-cache expiration failed: {error}"),
+                        _ => {}
+                    }
+                }
+                _ = cache_ticks.tick(), if cache_idle > 0 => {
+                    if cache_tasks.is_empty() {
+                        let space = self.global_state.object_space.clone();
+                        cache_tasks.spawn_blocking(move || space.expire_compiler_caches());
                     }
                 }
                 _ = cleanup_ticks.tick(), if clean_up_interval > 0 => {
@@ -185,12 +209,13 @@ impl Vm {
 
         // Only the VM shuts down on its own. Everything else shuts down only at the behest of the VM.
         cleanup_tasks.shutdown().await;
+        while cache_tasks.join_next().await.is_some() {}
         self.shutdown().await?;
         Ok(exit_code)
     }
 
     /// Shut down the [`Vm`], and all subsystems: stop accepting, tell every
-    /// connection, run the master's `shutdown()`, unbind and close every
+    /// connection, stop raw TCP, run the master's `shutdown()`, unbind and close every
     /// connection while the committer is still open, then wait for the
     /// loops to finish flushing.
     pub async fn shutdown(&mut self) -> Result<()> {
@@ -200,6 +225,10 @@ impl Vm {
             let _ = connection.send(ConnectionOp::Shutdown);
         }
         global_state.with_call_outs_mut(|c| c.clear());
+
+        if let Some(sockets) = self.sockets.take() {
+            sockets.shutdown().await?;
+        }
 
         match apply_function_in_master(
             SHUTDOWN,
@@ -245,10 +274,64 @@ impl Vm {
 
         Ok(())
     }
+
+    /// Start TCP callbacks and IO once; boot and run call this automatically.
+    /// Embedded users may call this after installing their master policy.
+    pub fn start_sockets(&mut self) -> Result<()> {
+        if self.sockets.is_none() {
+            self.sockets = Some(crate::interpreter::sockets::SocketRuntime::start(
+                &self.global_state,
+            )?);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn idle_compiler_caches_expire_without_gc_cleanup_or_further_compilation() {
+        let config = lpc_rs_utils::config::ConfigBuilder::default()
+            .compiler_cache_idle_time(1)
+            .gc_interval(0u64)
+            .clean_up_interval(0u64)
+            .build()
+            .unwrap();
+        let mut vm = super::Vm::new(config);
+        let context = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                "#define VALUE 123\nint value() { return VALUE; }",
+            )
+            .await
+            .unwrap();
+        let process = context.context.process;
+        let state = vm.global_state.clone();
+        let before = state.object_space.compiler_cache_stats();
+        assert!(before.parser.entries > 0 && before.definitions.entries > 0);
+        let program = process.initial_program().clone();
+        let objects = state.object_space.len();
+        let (result, ()) = tokio::join!(vm.run(), async {
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                loop {
+                    let stats = state.object_space.compiler_cache_stats();
+                    if stats.parser.entries == 0 && stats.definitions.entries == 0 {
+                        assert_eq!(stats.parser.estimated_bytes, 0);
+                        assert_eq!(stats.definitions.estimated_bytes, 0);
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+            assert_eq!(state.object_space.len(), objects);
+            assert!(std::sync::Arc::ptr_eq(process.initial_program(), &program));
+            state.tx.send(super::VmOp::Shutdown(0)).await.unwrap();
+        });
+        assert_eq!(result.unwrap(), 0);
+    }
+
     use indoc::indoc;
 
     use super::*;

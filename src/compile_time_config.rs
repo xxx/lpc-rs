@@ -2,6 +2,9 @@
 
 use lpc_rs_core::RegisterSize;
 
+/// Native driver identity used by LPC's `__VERSION__` and protocol negotiation.
+pub const DRIVER_VERSION: &str = concat!("lpc-rs ", env!("CARGO_PKG_VERSION"));
+
 /// Frames one task may hold — every LPC call, `->` included; past it a call
 /// is a "stack overflow" runtime error. CD's `MAX_TRACE`.
 pub const MAX_CALL_STACK_SIZE: usize = 1024;
@@ -39,3 +42,6 @@ pub const MAX_NESTING_DEPTH: usize = 256;
 /// costliest AST walk — together still three times over.
 /// Tests take the same through `RUST_MIN_STACK` in `.cargo/config.toml`.
 pub const THREAD_STACK: usize = 16 * 1024 * 1024;
+
+/// Compiled pattern and option pairs retained per VM, evicting least recent uses.
+pub(crate) const REGEX_CACHE_CAPACITY: usize = 64;

@@ -6,12 +6,13 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use super::{
+    Completion, Verdict,
     attempt::{Ask, Slot, Target},
-    handlers::{self, Family, Reply},
+    handlers::{self, Family, Reply, Tier},
 };
 use crate::{
     command::{
-        frontend::parser::ParserRule,
+        frontend::parser::{Access, ParserRule},
         resolve::{Kind as ResolveKind, LpcVocabulary, Resolved, Resolver},
         scope::Candidate,
     },
@@ -29,6 +30,8 @@ pub(crate) struct Lpc<'a> {
     candidates: &'a [Candidate],
     resolver: Resolver<LpcVocabulary<'a>>,
     arrays: Vec<(usize, LpcRef)>,
+    completion: Completion,
+    arguments: Option<Vec<LpcRef>>,
 }
 
 impl<'a> Lpc<'a> {
@@ -40,6 +43,7 @@ impl<'a> Lpc<'a> {
         rule: &'a ParserRule,
         candidates: &'a [Candidate],
         resolver: Resolver<LpcVocabulary<'a>>,
+        completion: Completion,
     ) -> Self {
         Lpc {
             ctx,
@@ -49,7 +53,14 @@ impl<'a> Lpc<'a> {
             candidates,
             resolver,
             arrays: Vec::new(),
+            completion,
+            arguments: None,
         }
+    }
+
+    /// The successful final action call either executed or retained its arguments.
+    pub(crate) fn into_verdict(self) -> Verdict {
+        self.arguments.map_or(Verdict::Handled, Verdict::Arguments)
     }
 
     /// `candidate` as an LPC object reference.
@@ -79,7 +90,7 @@ impl<'a> Lpc<'a> {
     fn value(&mut self, slot: &Slot) -> LpcRef {
         match slot {
             Slot::Text(text) => LpcRef::from(text.as_str()),
-            Slot::Empty => LpcRef::from(0),
+            Slot::Empty => self.ctx.txn().nil(),
             Slot::Object(c) => self.object(*c),
             Slot::Objects(index, cs) => self.slot_array(*index, cs),
             Slot::Mixed(cs, reasons) => {
@@ -96,6 +107,7 @@ impl<'a> Lpc<'a> {
     /// The process a target names.
     pub(crate) fn process(&self, target: Target) -> &Arc<Process> {
         match target {
+            Target::Actor => self.actor,
             Target::Owner => self.owner,
             Target::Candidate(c) => &self.candidates[c].object,
         }
@@ -105,6 +117,7 @@ impl<'a> Lpc<'a> {
 impl Ask for Lpc<'_> {
     fn begin_parse(&mut self) {
         self.arrays.clear();
+        self.arguments = None;
     }
 
     async fn call(&mut self, family: Family, target: Target, args: &[Slot]) -> Result<Reply> {
@@ -112,15 +125,33 @@ impl Ask for Lpc<'_> {
         for slot in args {
             values.push(self.value(slot));
         }
-        handlers::call(
-            self.ctx,
-            self.actor,
-            self.process(target),
-            family,
-            self.rule,
-            &values,
-        )
-        .await
+        if !self.process(target).is_live(self.ctx.txn()) {
+            return Ok(Reply::Absent);
+        }
+        if family == Family::Do && self.completion == Completion::Arguments {
+            self.arguments = Some(Tier::Rule.arguments(self.ctx, self.rule, &values));
+            return Ok(Reply::Yes);
+        }
+        for source in [target, Target::Owner] {
+            if source == Target::Owner
+                && target != Target::Owner
+                && Arc::ptr_eq(self.process(target), self.owner)
+            {
+                break;
+            }
+            let process = self.process(source);
+            if process.is_live(self.ctx.txn())
+                && let Some(value) =
+                    handlers::call(self.ctx, self.actor, process, family, self.rule, &values)
+                        .await?
+            {
+                return Ok(Reply::from_value(&value, source));
+            }
+            if target == Target::Owner {
+                break;
+            }
+        }
+        Ok(Reply::Absent)
     }
 
     async fn resolve(&mut self, kind: ResolveKind, phrase: &str) -> Result<Option<Resolved>> {
@@ -131,7 +162,7 @@ impl Ask for Lpc<'_> {
         self.candidates[candidate].object.is_live(self.ctx.txn())
     }
 
-    fn reachable(&self, candidate: usize) -> bool {
-        self.candidates[candidate].reachable
+    fn accessible(&self, slot: usize, candidate: usize) -> bool {
+        self.rule.access[slot] == Access::Visible || self.candidates[candidate].reachable
     }
 }

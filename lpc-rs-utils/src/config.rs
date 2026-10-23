@@ -27,6 +27,14 @@ const DEFAULT_MAX_IDLE_TIME: u64 = 0;
 )]
 #[readonly::make]
 pub struct Config {
+    /// Representation of absent LPC values, fixed for this VM's lifetime.
+    #[builder(default)]
+    pub null_mode: lpc_rs_core::null_mode::NullMode,
+
+    /// Preserve the scheduling command giver in call-outs, fixed for this VM's lifetime.
+    #[builder(default)]
+    pub call_out_preserve_player: bool,
+
     #[builder(setter(into, strip_option), default = "None")]
     pub auto_include_file: Option<Ustr>,
 
@@ -72,6 +80,38 @@ pub struct Config {
     #[builder(setter(into), default = "DEFAULT_MAX_PENDING_OUTPUT")]
     pub max_pending_output: usize,
 
+    /// Bytes queued or in flight to one snoop observer; must be positive.
+    #[builder(setter(into), default = "65536")]
+    pub max_pending_snoop: usize,
+
+    /// Native TCP resources per VM, including pending transport disposal; must be positive.
+    #[builder(default = "256")]
+    pub max_sockets: usize,
+
+    /// Admitted output bytes per native TCP stream; must be positive.
+    #[builder(default = "65536")]
+    pub max_pending_socket_output: usize,
+
+    /// Admitted nonempty writes per native TCP stream; must be positive.
+    #[builder(default = "128")]
+    pub max_pending_socket_writes: usize,
+
+    /// Undelivered input bytes per native TCP stream; must be positive.
+    #[builder(default = "65536")]
+    pub max_pending_socket_input: usize,
+
+    /// Pending accepted children and an unpublished accept slot per listener; must be positive.
+    #[builder(default = "16")]
+    pub max_pending_socket_accepts: usize,
+
+    /// Milliseconds allowed for native TCP DNS resolution and connection; must be positive.
+    #[builder(default = "10000")]
+    pub socket_connect_timeout: usize,
+
+    /// Milliseconds allowed to drain an explicitly closed TCP stream; must be positive.
+    #[builder(default = "10000")]
+    pub socket_close_timeout: usize,
+
     /// Seconds between garbage-collection passes; `0` disables them.
     #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
     pub gc_interval: u64,
@@ -79,6 +119,26 @@ pub struct Config {
     /// Minimum idle seconds before an object is queried for cleanup; zero disables queries.
     #[builder(setter(into), default = "DEFAULT_CLEAN_UP_INTERVAL")]
     pub clean_up_interval: u64,
+
+    /// Idle seconds before compiler-cache entries expire; zero disables both caches.
+    #[builder(default = "300")]
+    pub compiler_cache_idle_time: u64,
+
+    /// Maximum retained parsed programs; zero disables the parser cache.
+    #[builder(default = "256")]
+    pub parser_cache_max_entries: usize,
+
+    /// Conservative byte budget for parsed syntax; zero disables the parser cache.
+    #[builder(default = "67108864")]
+    pub parser_cache_max_bytes: usize,
+
+    /// Maximum retained prepared macro definitions; zero disables the definition cache.
+    #[builder(default = "4096")]
+    pub definition_cache_max_entries: usize,
+
+    /// Conservative byte budget for macro preparation; zero disables the definition cache.
+    #[builder(default = "8388608")]
+    pub definition_cache_max_bytes: usize,
 
     /// The simul-efun file, as an in-game path with or without its `.c`.
     #[builder(setter(into, strip_option), default = "None")]
@@ -88,6 +148,7 @@ pub struct Config {
     #[builder(setter(custom), default = "vec![]")]
     pub system_include_dirs: Vec<Ustr>,
 
+    /// Plaintext listener port and the numeric `__PORT__` value used during compilation.
     #[builder(default = "24960")]
     pub port: u16,
 
@@ -142,10 +203,53 @@ fn in_game_include_dirs(dirs: &[Ustr], lib_dir: &str) -> Result<Vec<Ustr>> {
         .collect()
 }
 
+fn numeric_setting<T: std::str::FromStr>(
+    env: &HashMap<String, String>,
+    key: &str,
+    current: Option<T>,
+) -> Result<Option<T>>
+where
+    T::Err: std::fmt::Display,
+{
+    crate::tls::setting(env, key)
+        .map(|value| {
+            value
+                .parse::<T>()
+                .map_err(|e| lpc_error!("invalid {key}: {e}"))
+        })
+        .transpose()
+        .map(|value| value.or(current))
+}
+
 impl ConfigBuilder {
     /// Validate include paths, listener settings, and TLS private-material placement.
     pub fn build(self) -> Result<Config> {
         let mut config = self.build_config()?;
+        if config.max_pending_snoop == 0 {
+            return Err(lpc_error!("MAX_PENDING_SNOOP must be positive"));
+        }
+        for (name, value) in [
+            ("MAX_SOCKETS", config.max_sockets),
+            ("MAX_PENDING_SOCKET_INPUT", config.max_pending_socket_input),
+            (
+                "MAX_PENDING_SOCKET_ACCEPTS",
+                config.max_pending_socket_accepts,
+            ),
+            ("SOCKET_CONNECT_TIMEOUT", config.socket_connect_timeout),
+            ("SOCKET_CLOSE_TIMEOUT", config.socket_close_timeout),
+            (
+                "MAX_PENDING_SOCKET_OUTPUT",
+                config.max_pending_socket_output,
+            ),
+            (
+                "MAX_PENDING_SOCKET_WRITES",
+                config.max_pending_socket_writes,
+            ),
+        ] {
+            if value == 0 {
+                return Err(lpc_error!("{name} must be positive"));
+            }
+        }
         config.system_include_dirs =
             in_game_include_dirs(&config.system_include_dirs, config.lib_dir.as_str())?;
         if !config.telnet_enabled && config.tls.is_none() {
@@ -188,6 +292,71 @@ impl ConfigBuilder {
         let lib_dir_str = lib_dir.map(|d| d.to_string()).unwrap_or_default();
 
         Ok(Self {
+            compiler_cache_idle_time: numeric_setting(
+                &env,
+                "COMPILER_CACHE_IDLE_TIME",
+                self.compiler_cache_idle_time,
+            )?,
+            parser_cache_max_entries: numeric_setting(
+                &env,
+                "PARSER_CACHE_MAX_ENTRIES",
+                self.parser_cache_max_entries,
+            )?,
+            parser_cache_max_bytes: numeric_setting(
+                &env,
+                "PARSER_CACHE_MAX_BYTES",
+                self.parser_cache_max_bytes,
+            )?,
+            definition_cache_max_entries: numeric_setting(
+                &env,
+                "DEFINITION_CACHE_MAX_ENTRIES",
+                self.definition_cache_max_entries,
+            )?,
+            definition_cache_max_bytes: numeric_setting(
+                &env,
+                "DEFINITION_CACHE_MAX_BYTES",
+                self.definition_cache_max_bytes,
+            )?,
+            max_sockets: numeric_setting(&env, "MAX_SOCKETS", self.max_sockets)?,
+            max_pending_socket_input: numeric_setting(
+                &env,
+                "MAX_PENDING_SOCKET_INPUT",
+                self.max_pending_socket_input,
+            )?,
+            max_pending_socket_accepts: numeric_setting(
+                &env,
+                "MAX_PENDING_SOCKET_ACCEPTS",
+                self.max_pending_socket_accepts,
+            )?,
+            socket_connect_timeout: numeric_setting(
+                &env,
+                "SOCKET_CONNECT_TIMEOUT",
+                self.socket_connect_timeout,
+            )?,
+            socket_close_timeout: numeric_setting(
+                &env,
+                "SOCKET_CLOSE_TIMEOUT",
+                self.socket_close_timeout,
+            )?,
+            max_pending_socket_output: numeric_setting(
+                &env,
+                "MAX_PENDING_SOCKET_OUTPUT",
+                self.max_pending_socket_output,
+            )?,
+            max_pending_socket_writes: numeric_setting(
+                &env,
+                "MAX_PENDING_SOCKET_WRITES",
+                self.max_pending_socket_writes,
+            )?,
+            call_out_preserve_player: Some(boolean_setting(
+                &env,
+                "CALL_OUT_PRESERVE_PLAYER",
+                self.call_out_preserve_player.unwrap_or(false),
+            )?),
+            null_mode: crate::tls::setting(&env, "NULL_MODE")
+                .map(|value| value.parse().map_err(|error| lpc_error!("{}", error)))
+                .transpose()?
+                .or(self.null_mode),
             log_filter: crate::tls::setting(&env, "RUST_LOG")
                 .map(|value| Some(value.to_owned()))
                 .or(self.log_filter),
@@ -253,6 +422,15 @@ impl ConfigBuilder {
                 .or_else(|| env.get("MAX_PENDING_OUTPUT"))
                 .map(|x| x.parse::<usize>().unwrap())
                 .or(self.max_pending_output),
+            max_pending_snoop: env
+                .get("LPC_MAX_PENDING_SNOOP")
+                .or_else(|| env.get("MAX_PENDING_SNOOP"))
+                .map(|x| {
+                    x.parse::<usize>()
+                        .map_err(|e| lpc_error!("invalid MAX_PENDING_SNOOP: {e}"))
+                })
+                .transpose()?
+                .or(self.max_pending_snoop),
             gc_interval: env
                 .get("LPC_GC_INTERVAL")
                 .or_else(|| env.get("GC_INTERVAL"))
@@ -400,6 +578,298 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn compiler_cache_settings_load_with_prefix_precedence_and_report_invalid_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("compiler-caches.env");
+        fs::write(&path, "COMPILER_CACHE_IDLE_TIME=10\nLPC_COMPILER_CACHE_IDLE_TIME=20\nPARSER_CACHE_MAX_ENTRIES=3\nPARSER_CACHE_MAX_BYTES=100\nDEFINITION_CACHE_MAX_ENTRIES=5\nDEFINITION_CACHE_MAX_BYTES=200\n").unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (
+                config.compiler_cache_idle_time,
+                config.parser_cache_max_entries,
+                config.parser_cache_max_bytes,
+                config.definition_cache_max_entries,
+                config.definition_cache_max_bytes
+            ),
+            (20, 3, 100, 5, 200)
+        );
+        for name in [
+            "COMPILER_CACHE_IDLE_TIME",
+            "PARSER_CACHE_MAX_ENTRIES",
+            "PARSER_CACHE_MAX_BYTES",
+            "DEFINITION_CACHE_MAX_ENTRIES",
+            "DEFINITION_CACHE_MAX_BYTES",
+        ] {
+            for value in ["-1", "typo", "18446744073709551616"] {
+                fs::write(&path, format!("LPC_{name}={value}\n")).unwrap();
+                let error = ConfigBuilder::default()
+                    .load_env(Some(&path))
+                    .await
+                    .err()
+                    .unwrap();
+                assert!(error.message().contains(name));
+            }
+            fs::write(&path, format!("LPC_{name}=0\n")).unwrap();
+            ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .unwrap()
+                .build()
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn native_socket_limits_reject_zero() {
+        for builder in [
+            ConfigBuilder::default().max_sockets(0),
+            ConfigBuilder::default().max_pending_socket_output(0),
+            ConfigBuilder::default().max_pending_socket_writes(0),
+            ConfigBuilder::default().max_pending_socket_input(0),
+            ConfigBuilder::default().max_pending_socket_accepts(0),
+        ] {
+            assert!(builder.build().is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn native_socket_limits_load_from_explicit_environment() {
+        let defaults = Config::default();
+        assert_eq!(
+            (
+                defaults.max_sockets,
+                defaults.max_pending_socket_output,
+                defaults.max_pending_socket_writes
+            ),
+            (256, 65536, 128)
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sockets.env");
+        fs::write(&path, "LPC_MAX_SOCKETS=3\nLPC_MAX_PENDING_SOCKET_OUTPUT=16\nLPC_MAX_PENDING_SOCKET_WRITES=2\n").unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (
+                config.max_sockets,
+                config.max_pending_socket_output,
+                config.max_pending_socket_writes
+            ),
+            (3, 16, 2)
+        );
+    }
+
+    #[tokio::test]
+    async fn native_socket_input_and_accept_limits_load_both_names() {
+        let defaults = Config::default();
+        assert_eq!(
+            (
+                defaults.max_pending_socket_input,
+                defaults.max_pending_socket_accepts
+            ),
+            (65536, 16)
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("socket-input.env");
+        fs::write(&path, "MAX_PENDING_SOCKET_INPUT=7\nMAX_PENDING_SOCKET_ACCEPTS=2\nLPC_MAX_PENDING_SOCKET_INPUT=11\n").unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (
+                config.max_pending_socket_input,
+                config.max_pending_socket_accepts
+            ),
+            (11, 2)
+        );
+        for key in ["MAX_PENDING_SOCKET_INPUT", "MAX_PENDING_SOCKET_ACCEPTS"] {
+            fs::write(&path, format!("LPC_{key}=0\n")).unwrap();
+            assert!(
+                ConfigBuilder::default()
+                    .load_env(Some(&path))
+                    .await
+                    .unwrap()
+                    .build()
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn native_socket_settings_parse_both_names_and_prefer_prefix() {
+        for key in [
+            "MAX_SOCKETS",
+            "MAX_PENDING_SOCKET_OUTPUT",
+            "MAX_PENDING_SOCKET_WRITES",
+            "MAX_PENDING_SOCKET_INPUT",
+            "MAX_PENDING_SOCKET_ACCEPTS",
+        ] {
+            let mut env = HashMap::from([(key.to_string(), "10".to_string())]);
+            assert_eq!(numeric_setting(&env, key, Some(3)).unwrap(), Some(10));
+            env.insert(format!("LPC_{key}"), "20".to_string());
+            assert_eq!(numeric_setting(&env, key, Some(3)).unwrap(), Some(20));
+            for value in ["bad", "-1", "99999999999999999999999999999999"] {
+                env.insert(format!("LPC_{key}"), value.to_string());
+                assert!(numeric_setting::<usize>(&env, key, None).is_err());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn native_socket_timeouts_are_positive_milliseconds_and_load_both_names() {
+        let defaults = Config::default();
+        assert_eq!(
+            (
+                defaults.socket_connect_timeout,
+                defaults.socket_close_timeout
+            ),
+            (10000, 10000)
+        );
+        for builder in [
+            ConfigBuilder::default().socket_connect_timeout(0),
+            ConfigBuilder::default().socket_close_timeout(0),
+        ] {
+            assert!(builder.build().is_err());
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("socket-timeouts.env");
+        fs::write(
+            &path,
+            "SOCKET_CONNECT_TIMEOUT=321\nSOCKET_CLOSE_TIMEOUT=654\nLPC_SOCKET_CLOSE_TIMEOUT=987\n",
+        )
+        .unwrap();
+        let config = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            (config.socket_connect_timeout, config.socket_close_timeout),
+            (321, 987)
+        );
+        for key in ["SOCKET_CONNECT_TIMEOUT", "SOCKET_CLOSE_TIMEOUT"] {
+            for invalid in ["0", "bad", "-1", "999999999999999999999999999999999"] {
+                fs::write(&path, format!("LPC_{key}={invalid}\n")).unwrap();
+                assert!(match ConfigBuilder::default().load_env(Some(&path)).await {
+                    Ok(builder) => builder.build().is_err(),
+                    Err(_) => true,
+                });
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn snoop_budget_is_positive_and_configurable() {
+        assert_eq!(Config::default().max_pending_snoop, 65536);
+        assert!(
+            ConfigBuilder::default()
+                .max_pending_snoop(0usize)
+                .build()
+                .is_err()
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("snoop.env");
+        for key in ["LPC_MAX_PENDING_SNOOP", "MAX_PENDING_SNOOP"] {
+            fs::write(&path, format!("{key}=1234\n")).unwrap();
+            assert_eq!(
+                ConfigBuilder::default()
+                    .load_env(Some(&path))
+                    .await
+                    .unwrap()
+                    .build()
+                    .unwrap()
+                    .max_pending_snoop,
+                1234
+            );
+        }
+        fs::write(&path, "MAX_PENDING_SNOOP=bad\n").unwrap();
+        assert!(
+            ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn call_out_player_preservation_configuration() {
+        assert!(
+            !ConfigBuilder::default()
+                .build()
+                .unwrap()
+                .call_out_preserve_player
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mud.env");
+        for (text, builder_value, expected) in [
+            ("", true, true),
+            ("CALL_OUT_PRESERVE_PLAYER=true\n", false, true),
+            ("LPC_CALL_OUT_PRESERVE_PLAYER=false\n", true, false),
+            (
+                "CALL_OUT_PRESERVE_PLAYER=false\nLPC_CALL_OUT_PRESERVE_PLAYER=true\n",
+                false,
+                true,
+            ),
+        ] {
+            fs::write(&path, text).unwrap();
+            let config = ConfigBuilder::default()
+                .call_out_preserve_player(builder_value)
+                .load_env(Some(&path))
+                .await
+                .unwrap()
+                .build()
+                .unwrap();
+            assert_eq!(config.call_out_preserve_player, expected, "{text}");
+        }
+        fs::write(&path, "LPC_CALL_OUT_PRESERVE_PLAYER=perhaps\n").unwrap();
+        let error = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("CALL_OUT_PRESERVE_PLAYER"));
+    }
+
+    #[tokio::test]
+    async fn null_mode_is_loaded_from_the_config_file() {
+        use lpc_rs_core::null_mode::NullMode;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mud.env");
+        for (text, expected) in [
+            ("NULL_MODE=distinct\n", NullMode::Distinct),
+            ("LPC_NULL_MODE=zero\n", NullMode::Zero),
+        ] {
+            fs::write(&path, text).unwrap();
+            let config = ConfigBuilder::default()
+                .load_env(Some(&path))
+                .await
+                .unwrap()
+                .build()
+                .unwrap();
+            assert_eq!(config.null_mode, expected);
+        }
+        fs::write(&path, "NULL_MODE=other\n").unwrap();
+        let error = ConfigBuilder::default()
+            .load_env(Some(&path))
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("NULL_MODE"));
+    }
 
     #[tokio::test]
     async fn explicit_config_files_fail_closed() {

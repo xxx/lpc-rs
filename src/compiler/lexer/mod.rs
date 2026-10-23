@@ -45,12 +45,19 @@ impl<'input> LexWrapper<'input> {
         let lexer = Token::lexer_with_extras(
             prog,
             LexState {
-                last_slice: String::new(),
                 current_file_id: file_id,
                 base_offset: base,
+                macro_body: false,
             },
         );
         Self { lexer }
+    }
+
+    /// Lex a function macro's replacement list, emitting each `#` separately.
+    pub(in crate::compiler) fn macro_body(prog: &'input str, span: Span) -> Self {
+        let mut lexer = Self::new_at(prog, span.file_id(), span.l());
+        lexer.lexer.extras.macro_body = true;
+        lexer
     }
 
     /// The lalrpop doorstep for direct lexing (tests and doctests):
@@ -248,12 +255,21 @@ pub enum Token {
     Mapping(Span),
     #[token("mixed", track_slice)]
     Mixed(Span),
+    #[token("nil", track_slice)]
+    Nil(Span),
     #[token("void", track_slice)]
     Void(Span),
     #[token("return", track_slice)]
     Return(Span),
     #[token("static", track_slice)]
     Static(Span),
+    #[token("class", track_slice)]
+    Class(Span),
+    #[token(".", track_slice)]
+    Dot(Span),
+
+    #[token("nosave", track_slice)]
+    Nosave(Span),
     #[token("varargs", track_slice)]
     Varargs(Span),
     #[token("nomask", track_slice)]
@@ -356,12 +372,18 @@ pub enum Token {
     #[regex(r"\$[1-9]\d*", string_token, priority = 2)]
     ClosureArgVar(StringToken),
 
+    #[token("$", track_slice)]
+    Dollar(Span),
+
     // The preprocessor judges placement and parses the complete logical line.
     #[token("#", directive_token)]
     DirectiveLine(StringToken),
 }
 
 fn directive_token(lex: &mut Lexer<Token>) -> StringToken {
+    if lex.extras.macro_body {
+        return string_token(lex);
+    }
     let source = lex.remainder();
     let bytes = source.as_bytes();
     let mut end = 0;
@@ -419,7 +441,6 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
     // last newline is always left as gap for the placement check.
     let end = span.end - usize::from(slice.ends_with('\n'));
 
-    lex.extras.last_slice = slice.to_string();
     Span::new(lex.extras.current_file_id, base + span.start..base + end)
 }
 
@@ -444,14 +465,14 @@ fn int_literal(lex: &mut Lexer<Token>, radix: u32) -> std::result::Result<IntTok
 fn string_token(lex: &mut Lexer<Token>) -> StringToken {
     let span = track_slice(lex);
 
-    StringToken(span, lex.extras.last_slice.clone())
+    StringToken(span, lex.slice().to_owned())
 }
 
 /// Strip off the start and end characters of a string, then store the result in
 /// a [`StringToken`]. Used for processing string literals and include paths.
 fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
     let span = track_slice(lex);
-    let slice: &str = &lex.extras.last_slice;
+    let slice = lex.slice();
 
     let s = if slice.len() < 3 {
         String::from("")
@@ -525,9 +546,13 @@ impl HasSpan for Token {
             | Token::Object(x)
             | Token::Mapping(x)
             | Token::Mixed(x)
+            | Token::Nil(x)
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Dot(x)
+            | Token::Class(x)
+            | Token::Nosave(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
             | Token::Ref(x)
@@ -541,6 +566,7 @@ impl HasSpan for Token {
             | Token::Comma(x)
             | Token::CallOther(x)
             | Token::Question(x)
+            | Token::Dollar(x)
             | Token::Colon(x)
             | Token::ColonColon(x)
             | Token::Semi(x)
@@ -623,9 +649,13 @@ impl Token {
             | Token::Object(x)
             | Token::Mapping(x)
             | Token::Mixed(x)
+            | Token::Nil(x)
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Dot(x)
+            | Token::Class(x)
+            | Token::Nosave(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
             | Token::Ref(x)
@@ -639,6 +669,7 @@ impl Token {
             | Token::Comma(x)
             | Token::CallOther(x)
             | Token::Question(x)
+            | Token::Dollar(x)
             | Token::Colon(x)
             | Token::ColonColon(x)
             | Token::Semi(x)
@@ -687,9 +718,12 @@ impl Token {
             Token::Object(_) => "object",
             Token::Mapping(_) => "mapping",
             Token::Mixed(_) => "mixed",
+            Token::Nil(_) => "nil",
             Token::Void(_) => "void",
             Token::Return(_) => "return",
             Token::Static(_) => "static",
+            Token::Class(_) => "class",
+            Token::Nosave(_) => "nosave",
             Token::Varargs(_) => "varargs",
             Token::Nomask(_) => "nomask",
             Token::Ref(_) => "ref",
@@ -763,11 +797,13 @@ impl Display for Token {
             Token::Comma(_) => ",",
             Token::CallOther(_) => "->",
             Token::Question(_) => "?",
+            Token::Dollar(_) => "$",
             Token::Colon(_) => ":",
             Token::ColonColon(_) => "::",
             Token::Semi(_) => ";",
             Token::Ellipsis(_) => "...",
             Token::Range(_) => "..",
+            Token::Dot(_) => ".",
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
             Token::MinIntMagnitude(_) => return write!(f, "{}", LpcIntInner::MIN.unsigned_abs()),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
@@ -794,9 +830,12 @@ impl Display for Token {
             | Token::Object(_)
             | Token::Mapping(_)
             | Token::Mixed(_)
+            | Token::Nil(_)
             | Token::Void(_)
             | Token::Return(_)
             | Token::Static(_)
+            | Token::Class(_)
+            | Token::Nosave(_)
             | Token::Varargs(_)
             | Token::Nomask(_)
             | Token::Ref(_)
@@ -1088,6 +1127,16 @@ mod tests {
         let vec = lex_vec("bytes b;");
         assert!(matches!(vec[0], Ok(Token::Bytes(_))));
         assert_eq!(vec[0].as_ref().unwrap().to_string(), "bytes");
+    }
+
+    #[test]
+    fn nosave_is_a_keyword_without_reserving_longer_identifiers() {
+        let tokens = LexWrapper::new("nosave nosave_cache", 7)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(tokens[0], Token::Nosave(Span::new(7, 0..6)));
+        assert_eq!(tokens[0].to_string(), "nosave");
+        assert!(matches!(&tokens[1], Token::Id(name) if name.1 == "nosave_cache"));
     }
 
     fn lex_vec(prog: &str) -> Vec<Result<Token>> {

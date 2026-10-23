@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::{callback::function_arg, efun_context::EfunContext, function_info::receiver},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     task_context::ObjectLookup,
 };
 
@@ -19,9 +19,9 @@ pub fn function_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         {
             Ok(path) => match context.find_object(&path) {
                 ObjectLookup::Found(target) => Arc::downgrade(&target).into(),
-                ObjectLookup::Removed | ObjectLookup::NotCreated => NULL,
+                ObjectLookup::Removed | ObjectLookup::NotCreated => context.txn().nil(),
             },
-            Err(_) => NULL,
+            Err(_) => context.txn().nil(),
         }
     } else {
         value

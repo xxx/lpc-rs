@@ -18,6 +18,14 @@ pub(crate) struct ProgramImage {
 }
 
 impl ProgramImage {
+    pub(super) fn storage_bytes(&self) -> lpc_rs_errors::Result<usize> {
+        let mut size = crate::interpreter::memory::Size::new(size_of::<Self>());
+        size.items::<usize>(2)?;
+        size.add(size_of_val(&*self.globals))?;
+        size.items::<LpcRef>(usize::from(self.program.num_globals))?;
+        Ok(size.bytes())
+    }
+
     pub(crate) fn new(program: Arc<Program>) -> Self {
         let mut globals: Vec<_> = (0..program.num_globals).map(|_| SVar::new()).collect();
         for &slot in program.global_views.iter() {

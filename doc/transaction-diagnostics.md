@@ -21,6 +21,50 @@ For timeouts with few conflicts, inspect evaluation and compilation work;
 for repeated conflicts, inspect shared writes and retry admission waits.
 Raising the limit also lets runaway tasks consume resources for longer.
 
+Snapshot acquisition waits for the committer, including any atomic GC pass already
+running there. This can exhaust an allowance before callback evaluation starts,
+with zero compilation time and no conflicts. A snapshot reply arriving after the
+timeout can report a closed reply channel; the abandoned snapshot releases its pin.
+Compare these failures with GC activity as well as evaluation and compilation.
+
+## Collector diagnostics
+
+Accepted quiescent collections emit a `lpc_rs::gc` info event, `gc pass completed`,
+with these fields:
+
+| Field | Meaning |
+|---|---|
+| `cells_before`, `cells_after`, `reclaimed` | World cell counts before and after collection, and their difference; these are neither byte nor object counts. |
+| `roots`, `marked_cells` | Supplied root records and unique traced cell IDs; traced IDs can include cells absent from the world. |
+| `mark_ms`, `scan_ms`, `sweep_ms` | Wall time tracing reachable values, selecting the sweep, and removing or rebuilding cells. |
+| `sweep_mode` | `key_removal` for individual deletions or `rebuild` for reconstructing a world with few retained cells. |
+| `pause_ms` | Collector service time, including retired-map cleanup, its diagnostic event and disposal of temporary mark sets. |
+
+The pause excludes root gathering, committer queue waits, refusal retries and
+formatting of the final completion event. Collection remains one atomic committer
+operation and refuses while snapshots are held. Both sweep modes preserve the same reachable cells and protected
+identity cells; rebuilding preserves the snapshot version and object lookup index.
+
+Rebuilds with at least **262,144 old cells** can dispose of owned map branches on
+a lazy pool of **two workers**. Smaller maps, roots that cannot split into two
+chunks, and worker-creation failures use synchronous serial cleanup. The workers
+use the driver's standard thread stack size and finish before collection replies;
+cleanup does not continue in the background. The single snapshot map, version and
+committer remain unchanged, and snapshot waits still consume execution allowance.
+
+Each rebuild also emits `owned branch disposal` on `lpc_rs::gc`:
+
+| Field | Meaning |
+|---|---|
+| `mode` | `serial` below the size threshold, `direct` for fewer than two chunks, `parallel` for worker cleanup, or `fallback` after worker creation failed. |
+| `retired_cells` | Entries in the old map, including copies of retained cells; this is not the reclaimed-cell count. |
+| `chunks`, `workers` | Owned chunks submitted for cleanup and worker count; the small-map serial path reports zero chunks. |
+| `disposal_ms` | Time preparing chunks, starting workers if needed, and finishing disposal; excludes survivor construction and formatting this event. |
+
+Disposal time is already included in `sweep_ms` and `pause_ms`; do not add it to
+those totals. The dependency ownership contract and update procedure are described
+in [Maintaining imbl](maintaining-imbl.md).
+
 ## Diagnostic output
 
 Transaction failures emit one `lpc_rs::transactions` warning for the owning task and attach the same diagnostic to its error notes. Nested applies contribute to the owner's transaction; they do not emit separate transaction summaries. Successful transactions that needed retries emit a debug summary. Set `RUST_LOG` in the driver's environment or a `.env` file explicitly loaded with `-e <path>`:

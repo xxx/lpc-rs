@@ -7,12 +7,15 @@ use crate::compiler::ast::closure_node::ClosureNode;
 
 factori!(ClosureNode, {
     default {
+        variadic = None,
         name = ustr(&format!("closure-{}", (0..100000).fake::<usize>())),
-        return_type = LpcType::Mixed(false),
+        return_type = LpcType::Mixed(false).into(),
         parameters = None,
         flags = FunctionFlags::default(),
         body = vec![],
         span = None,
+        captures = vec![],
+        capture_scope_id = None,
         scope_id = None
     }
 });
