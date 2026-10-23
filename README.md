@@ -274,6 +274,8 @@ The reviewed scope includes:
   validation, listener combinations and log destinations.
 - [TLS helpers](lpc-rs-utils/src/tls.rs): certificate identity/lifetime checks,
   settings and private-material path validation.
+- [Assembly addresses](lpc-rs-asm/src/address.rs): program-counter conversions,
+  equality, offsets and hexadecimal display.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

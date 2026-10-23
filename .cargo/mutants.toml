@@ -25,6 +25,7 @@ examine_globs = [
     "lpc-rs-utils/src/debug_log.rs",
     "lpc-rs-utils/src/config.rs",
     "lpc-rs-utils/src/tls.rs",
+    "lpc-rs-asm/src/address.rs",
 ]
 additional_cargo_args = ["--locked"]
 minimum_test_timeout = 20
