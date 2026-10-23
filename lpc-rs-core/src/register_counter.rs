@@ -110,4 +110,83 @@ mod tests {
         assert_eq!(counter.next().unwrap(), Register(1));
         assert_eq!(counter.number_emitted(), 2);
     }
+
+    #[test]
+    fn number_emitted_excludes_reserved_registers() {
+        let mut counter = RegisterCounter::new(5);
+        assert_eq!(counter.number_emitted(), 0);
+
+        counter.next();
+        counter.next();
+
+        assert_eq!(counter.number_emitted(), 2);
+    }
+
+    #[test]
+    fn set_clamps_values_below_the_base() {
+        let mut counter = RegisterCounter::new(5);
+        counter.set(2);
+
+        assert_eq!(counter.next(), Some(Register(5)));
+    }
+
+    #[test]
+    fn set_accepts_the_base_after_emitting_registers() {
+        let mut counter = RegisterCounter::new(5);
+        counter.next();
+        counter.set(5);
+
+        assert_eq!(counter.next(), Some(Register(5)));
+    }
+
+    #[test]
+    fn set_accepts_values_above_the_base() {
+        let mut counter = RegisterCounter::new(5);
+        counter.set(8);
+
+        assert_eq!(counter.next(), Some(Register(8)));
+    }
+
+    #[test]
+    fn push_returns_the_previous_count() {
+        let mut counter = RegisterCounter::new(5);
+        counter.set(8);
+
+        assert_eq!(counter.push(), 8);
+    }
+
+    #[test]
+    fn push_starts_a_new_scope_at_the_base() {
+        let mut counter = RegisterCounter::new(5);
+        counter.set(8);
+        counter.push();
+
+        assert_eq!(counter.number_emitted(), 0);
+        assert_eq!(counter.next(), Some(Register(5)));
+    }
+
+    #[test]
+    fn pop_restores_nested_scopes_in_reverse_order() {
+        let mut counter = RegisterCounter::new(5);
+        counter.set(8);
+        counter.push();
+        counter.set(11);
+        counter.push();
+        counter.set(14);
+
+        assert_eq!(counter.pop(), 11);
+        assert_eq!(counter.next(), Some(Register(11)));
+        assert_eq!(counter.pop(), 8);
+        assert_eq!(counter.next(), Some(Register(8)));
+        assert_eq!(counter.pop(), 9);
+    }
+
+    #[test]
+    fn pop_without_a_saved_scope_keeps_the_current_count() {
+        let mut counter = RegisterCounter::new(5);
+        counter.set(8);
+
+        assert_eq!(counter.pop(), 8);
+        assert_eq!(counter.next(), Some(Register(8)));
+    }
 }

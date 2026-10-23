@@ -252,6 +252,58 @@ Tests live alongside the Rust code and in [tests](tests); performance workloads
 live in [benches](benches) and [examples](examples). See [AGENTS.md](AGENTS.md)
 for repository conventions and profiling commands.
 
+### Mutation testing
+
+The mutation-testing pilot covers
+[`RegisterCounter`](lpc-rs-core/src/register_counter.rs), the compiler's register
+allocator counter. [cargo-mutants](https://mutants.rs/) changes the code and checks
+whether the tests detect each change. The file allowlist in
+[`.cargo/mutants.toml`](.cargo/mutants.toml) keeps the workload small.
+
+Install the version used by CI, then run from the repository root:
+
+```sh
+cargo install --locked cargo-mutants --version 27.1.0
+cargo mutants --workspace --list
+CARGO_TARGET_DIR="$PWD/target" cargo mutants --workspace --jobs 1 --output /tmp/lpc-rs-mutants
+```
+
+The run first checks the unmodified tests, then tests each mutation in a temporary
+source copy. `CARGO_TARGET_DIR` keeps build output in the workspace's shared
+`target/`. The allowlist limits which files are mutated, even with `--workspace`;
+only the mutated crate's tests run. Continue using the workspace checks above for
+normal validation. Reports and per-mutation logs are written under
+`/tmp/lpc-rs-mutants/mutants.out/`.
+
+Review `missed.txt` for changes the tests did not detect, and add tests for the
+missing observable behaviour. Check `timeout.txt` and `unviable.txt` separately:
+a timeout or compilation failure does not establish that an assertion caught the
+change. One equivalent mutation is excluded with a specific regex and explanation:
+changing `<` to `<=` in `RegisterCounter::set` leaves the result unchanged when
+the requested count equals the base.
+
+The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
+on pull requests and pushes to `master`. Pull requests compare the checked-out
+merge commit with the PR's base commit; pushes compare with the commit before the
+push. Manual runs compare with `base_ref`, which defaults to `HEAD^`.
+
+CI counts mutations on changed production lines and splits them across at most
+four matrix jobs, skipping the test jobs when the diff selects no mutations.
+Every shard uses the same diff and runs only its share of mutations, with one
+mutation at a time. Each shard has a 10-minute job limit, a 120-second build
+timeout and a 30-second test timeout; preparation has a five-minute limit. Hitting
+a limit fails the run. Reports are uploaded separately for each shard even when
+mutations survive. The workflow is independent of the required `ci` check.
+
+Diff mode selects mutations in production code, so changes confined to tests or
+configuration can select none. Use the local command above to review the whole
+allowlist after changing tests or expanding coverage.
+
+Expand the allowlist one module at a time, reviewing survivors and measuring run
+time before adding more. Use `--test-workspace=true` when downstream tests are
+needed, or select all relevant crates explicitly with repeated `--test-package`
+options. Keep exclusions specific to reviewed equivalent mutations.
+
 ## Licence
 
 [MIT](LICENSE).

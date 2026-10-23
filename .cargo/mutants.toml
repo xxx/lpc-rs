@@ -1,0 +1,9 @@
+# Expand this allowlist one module at a time after reviewing its survivors and runtime.
+examine_globs = ["lpc-rs-core/src/register_counter.rs"]
+additional_cargo_args = ["--locked"]
+minimum_test_timeout = 20
+gitignore = true
+copy_target = false
+
+# At equality both branches assign base_count, so < and <= are equivalent.
+exclude_re = ['^lpc-rs-core/src/register_counter\.rs:\d+:\d+: replace < with <= in RegisterCounter::set$']

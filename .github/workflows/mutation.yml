@@ -1,0 +1,151 @@
+name: Mutation testing
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "**/*.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - ".github/workflows/mutation.yml"
+  push:
+    branches: [master]
+    paths:
+      - "**/*.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - ".github/workflows/mutation.yml"
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Git revision to compare with the selected commit
+        required: true
+        default: HEAD^
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  prepare:
+    name: Select changed-line mutations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      base_sha: ${{ steps.diff.outputs.base_sha }}
+      count: ${{ steps.matrix.outputs.count }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare source diff
+        id: diff
+        env:
+          MUTATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base_ref }}
+        run: |
+          base_sha=$(git rev-parse --verify --end-of-options "${MUTATION_BASE}^{commit}")
+          git diff --no-ext-diff --no-textconv --unified=0 "$base_sha" HEAD -- '*.rs' > /tmp/lpc-rs-mutants.diff
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: stable
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@9114bf4d891761788c546334fd37538eae1bf8b3 # v2.87.16
+        with:
+          tool: cargo-mutants@27.1.0
+
+      - name: List changed-line mutations
+        run: cargo mutants --workspace --in-diff /tmp/lpc-rs-mutants.diff --list --json > /tmp/lpc-rs-mutants.json
+
+      - name: Size shard matrix
+        id: matrix
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          listing = Path('/tmp/lpc-rs-mutants.json').read_text().strip()
+          count = len(json.loads(listing)) if listing else 0
+          shards = min(4, count)
+          denominator = max(1, shards)
+          matrix = {'shard': [f'{i}/{denominator}' for i in range(denominator)]}
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              print(f'count={count}', file=output)
+              print(f'matrix={json.dumps(matrix)}', file=output)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              print(f'{count} changed-line mutations across {shards} shards (maximum 4).', file=summary)
+          PY
+
+  mutation:
+    name: Mutation shard ${{ matrix.shard }}
+    needs: prepare
+    if: needs.prepare.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare source diff
+        env:
+          MUTATION_BASE: ${{ needs.prepare.outputs.base_sha }}
+        run: git diff --no-ext-diff --no-textconv --unified=0 "$MUTATION_BASE" HEAD -- '*.rs' > /tmp/lpc-rs-mutants.diff
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@9114bf4d891761788c546334fd37538eae1bf8b3 # v2.87.16
+        with:
+          tool: cargo-mutants@27.1.0
+
+      - name: Run mutation tests
+        env:
+          MUTATION_SHARD: ${{ matrix.shard }}
+        run: >-
+          cargo mutants --workspace --jobs 1 --in-place --no-shuffle
+          --in-diff /tmp/lpc-rs-mutants.diff --shard "$MUTATION_SHARD" --sharding round-robin
+          --build-timeout 120 --timeout 30 --output /tmp/lpc-rs-mutants
+
+      - name: Upload mutation results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: mutation-results-${{ strategy.job-index }}
+          path: /tmp/lpc-rs-mutants/mutants.out
+          if-no-files-found: warn
+          retention-days: 14
