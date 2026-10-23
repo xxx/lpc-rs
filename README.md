@@ -266,6 +266,8 @@ Mutation testing covers these modules in `lpc-rs-core`:
   declaration modifier names.
 - [`GlobalVarFlags`](lpc-rs-core/src/global_var_flags.rs): modifier validation,
   visibility precedence, storage aliases and canonical display.
+- [`Register`](lpc-rs-core/src/register.rs): operand banks, index conversions and
+  display across the full register width.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
