@@ -53,3 +53,18 @@ impl From<bool> for LpcInt {
         Self::from(if b { 1 } else { 0 })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_core::LpcIntInner;
+
+    use super::LpcInt;
+
+    #[test]
+    fn integer_conversions_preserve_the_full_range() {
+        for value in [LpcIntInner::MIN, -37, 0, 37, LpcIntInner::MAX] {
+            assert_eq!(LpcInt::from(value).0, value);
+            assert_eq!(LpcIntInner::from(LpcInt(value)), value);
+        }
+    }
+}

@@ -290,6 +290,8 @@ The reviewed scope includes:
   catch rendering and terminal output.
 - [`abs()`](src/interpreter/efun/abs.rs): numeric results, integer overflow,
   float zero and invalid input.
+- [Integer values](src/interpreter/lpc_int.rs): full-width conversions, truth
+  values, comparison with integers and decimal display.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -309,8 +311,8 @@ source copy. Mutation tests use nextest for process isolation, as normal CI does
 doctests remain part of normal workspace validation. `CARGO_TARGET_DIR` keeps build
 output in the workspace's shared `target/`. The allowlist limits which files are
 mutated, even with `--workspace`; only the mutated crate's tests run. Continue
-using the workspace checks above for
-normal validation. Reports and per-mutation logs are written under
+using the workspace checks above for normal validation. Reports and per-mutation
+logs are written under
 `/tmp/lpc-rs-mutants/mutants.out/`.
 
 Review `missed.txt` for changes the tests did not detect, and add tests for the
@@ -331,8 +333,8 @@ Every shard uses the same diff and runs only its share of mutations, with one
 mutation at a time, with incremental compilation enabled to reuse build artifacts.
 Each shard has a 10-minute job limit and a 30-second test timeout; preparation has
 a five-minute limit. Hitting a limit fails the run. Reports are uploaded
-separately for each shard even when
-mutations survive. The workflow is independent of the required `ci` check.
+separately for each shard even when mutations survive. The workflow is independent
+of the required `ci` check.
 
 Diff mode selects mutations in production code, so changes confined to tests or
 configuration can select none. Use the local command above to review the whole

@@ -33,6 +33,7 @@ examine_globs = [
     "lpc-rs-errors/src/source_map/source_file.rs",
     "lpc-rs-errors/src/lib.rs",
     "src/interpreter/efun/abs.rs",
+    "src/interpreter/lpc_int.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
