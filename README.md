@@ -254,12 +254,14 @@ for repository conventions and profiling commands.
 
 ### Mutation testing
 
-Mutation testing covers two small modules in `lpc-rs-core`:
+Mutation testing covers these modules in `lpc-rs-core`:
 
 - [`RegisterCounter`](lpc-rs-core/src/register_counter.rs): register allocation
   counts and nested scopes.
 - [`FunctionFlags`](lpc-rs-core/src/function_flags.rs): visibility queries,
   declaration modifiers and signature mangling.
+- [`LpcTypeUnion`](lpc-rs-core/src/lpc_type_union.rs): primitive membership,
+  array detection, type compatibility and signature mangling.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

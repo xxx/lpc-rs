@@ -2,6 +2,7 @@
 examine_globs = [
     "lpc-rs-core/src/register_counter.rs",
     "lpc-rs-core/src/function_flags.rs",
+    "lpc-rs-core/src/lpc_type_union.rs",
 ]
 additional_cargo_args = ["--locked"]
 minimum_test_timeout = 20
