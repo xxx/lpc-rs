@@ -9,6 +9,10 @@ a safe probe like `file_size`. A directory answers its own modification
 time. `path` is resolved against the calling object's directory. A
 non-string `path`, or one that leaves the lib, is an error.
 
+Modification times round down to whole Unix seconds: half a second before
+the epoch is `-1`. Filesystem errors other than a missing path are reported
+as errors.
+
 ### Examples
 
 ```c
