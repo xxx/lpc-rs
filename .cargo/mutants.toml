@@ -92,6 +92,7 @@ examine_globs = [
     "src/interpreter/efun/living.rs",
     "src/interpreter/efun/load_object.rs",
     "src/interpreter/efun/m_delete.rs",
+    "src/interpreter/efun/mkdir.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
