@@ -338,11 +338,12 @@ The reviewed scope includes:
   `regexp`, `regmatch`, `remove_action`, `remove_call_out`, `remove_rule`,
   `rename`, `replace_string`, `restore_map`, `restore_object`, `restore_value`,
   `rm`, `rmdir`, `rusage`, `save_map`, `save_object`, `save_value`, `send_gmcp`,
-  `send_mxp`, `shutdown`, `sizeof`, `sort_array`, `source_cache_stats`,
-  `store_variable`, `strindex`, `syntax_tree`, `tell_object`, `text_encoding`,
-  `this_interactive`, `throw`, `time`, `transaction_stats`, `trim`, `type_of`,
-  `type_predicates`, `unique_array`, `uptime`, `users`, `variable_info`,
-  `wildmatch`, `word_wrap`, `write`, `write_file`.
+  `send_mxp`, `shutdown`, `sizeof`, `sockets`, `sort_array`,
+  `source_cache_stats`, `store_variable`, `strindex`, `syntax_tree`,
+  `tell_object`, `text_encoding`, `this_interactive`, `throw`, `time`,
+  `transaction_stats`, `trim`, `type_of`, `type_predicates`, `unique_array`,
+  `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`, `write`,
+  `write_file`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

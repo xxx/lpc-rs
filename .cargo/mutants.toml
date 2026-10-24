@@ -175,6 +175,7 @@ examine_globs = [
     "src/interpreter/efun/sort_array.rs",
     "src/interpreter/efun/bits.rs",
     "src/interpreter/efun/regmatch.rs",
+    "src/interpreter/efun/sockets.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
