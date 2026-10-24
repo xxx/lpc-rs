@@ -318,7 +318,7 @@ The reviewed scope includes:
   `all_environment`, `all_inventory`, `call_inherited`, `case`, `clone_object`,
   `commands`, `compile_string`, `copy_class`, `ctime`, `deep_inventory`,
   `destruct`, `disable_commands`, `disassemble`, `enable_commands`,
-  `environment`, `evaluate`, `exec`, `explode`.
+  `environment`, `evaluate`, `exec`, `explode`, `file_size`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
