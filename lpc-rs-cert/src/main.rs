@@ -287,6 +287,13 @@ mod tests {
     use super::*;
     use rcgen::generate_simple_self_signed;
 
+    fn environment(directory: &Path) -> HashMap<String, String> {
+        HashMap::from([
+            ("TLS_DOMAIN".into(), "mud.example.org".into()),
+            ("TLS_CERT_DIR".into(), directory.to_str().unwrap().into()),
+        ])
+    }
+
     fn settings(directory: &Path) -> Settings {
         Settings {
             domain: "mud.example.org".into(),
@@ -349,16 +356,14 @@ mod tests {
     #[test]
     fn helper_rejects_domain_paths_and_conflicting_certificate_settings() {
         let dir = tempfile::tempdir().unwrap();
-        let mut env = HashMap::from([
-            ("TLS_DOMAIN".into(), "mud.example.org".into()),
-            ("TLS_CERT_DIR".into(), dir.path().to_str().unwrap().into()),
-        ]);
+        let mut env = environment(dir.path());
         Settings::from_env(&env).unwrap();
         for domain in [
             "../escape",
             "*.example.org",
             "127.0.0.1",
             "--flag",
+            "mud",
             "a..org",
             "-a.example.org",
         ] {
@@ -367,6 +372,64 @@ mod tests {
         }
         env.insert("TLS_DOMAIN".into(), "mud.example.org".into());
         env.insert("TLS_KEY_FILE".into(), "/some/key".into());
+        assert!(Settings::from_env(&env).is_err());
+    }
+
+    #[test]
+    fn hostname_and_label_lengths_include_their_limits() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut env = environment(dir.path());
+        let label_limit = format!("{}.example.org", "a".repeat(63));
+        let long_label = format!("{}.example.org", "a".repeat(64));
+        let hostname_limit = [
+            "a".repeat(63),
+            "b".repeat(63),
+            "c".repeat(63),
+            "d".repeat(61),
+        ]
+        .join(".");
+        let long_hostname = format!("{hostname_limit}d");
+        assert_eq!(hostname_limit.len(), 253);
+        for (domain, accepted) in [
+            (label_limit, true),
+            (long_label, false),
+            (hostname_limit, true),
+            (long_hostname, false),
+        ] {
+            env.insert("TLS_DOMAIN".into(), domain.clone());
+            assert_eq!(Settings::from_env(&env).is_ok(), accepted, "{domain}");
+        }
+    }
+
+    #[test]
+    fn optional_settings_preserve_values_and_ignore_empty_paths_and_email() {
+        let dir = tempfile::tempdir().unwrap();
+        let webroot = dir.path().join("web root");
+        let mut env = environment(dir.path());
+        env.extend([
+            ("TLS_DOMAIN".into(), "MUD.Example.ORG".into()),
+            ("ACME_CHALLENGE".into(), "http-01".into()),
+            ("ACME_EMAIL".into(), "operator@example.org".into()),
+            ("ACME_WEBROOT".into(), webroot.to_str().unwrap().into()),
+            ("ACME_AGREE_TOS".into(), "true".into()),
+        ]);
+        let settings = Settings::from_env(&env).unwrap();
+        assert_eq!(settings.domain, "mud.example.org");
+        assert_eq!(settings.email.as_deref(), Some("operator@example.org"));
+        assert_eq!(settings.webroot.as_deref(), Some(webroot.as_path()));
+        assert!(settings.agree_tos);
+        env.insert("ACME_EMAIL".into(), String::new());
+        env.insert("ACME_WEBROOT".into(), String::new());
+        let settings = Settings::from_env(&env).unwrap();
+        assert_eq!(settings.email, None);
+        assert_eq!(settings.webroot, None);
+    }
+
+    #[test]
+    fn unsupported_acme_challenges_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut env = environment(dir.path());
+        env.insert("ACME_CHALLENGE".into(), "dns-01".into());
         assert!(Settings::from_env(&env).is_err());
     }
 
@@ -409,6 +472,7 @@ cp "$base/key.pem" "$config/live/$name/privkey.pem"
         let arguments = fs::read_to_string(dir.path().join("arguments")).unwrap();
         assert!(arguments.starts_with("certonly\n"));
         assert!(arguments.contains("--standalone\n"));
+        assert!(arguments.contains("--domain\nmud.example.org\n"));
         let bundle = settings.installed().certificate;
         assert_eq!(
             fs::metadata(&bundle).unwrap().permissions().mode() & 0o777,
@@ -428,6 +492,11 @@ cp "$base/key.pem" "$config/live/$name/privkey.pem"
             fs::read_to_string(dir.path().join("arguments"))
                 .unwrap()
                 .starts_with("renew\n")
+        );
+        assert!(
+            !fs::read_to_string(dir.path().join("arguments"))
+                .unwrap()
+                .contains("--domain\n")
         );
         assert!(
             fs::read_to_string(dir.path().join("arguments"))

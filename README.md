@@ -302,6 +302,8 @@ The reviewed scope includes:
   framing, split feeds, malformed subnegotiations, outbound escaping and newline
   handling, reservation growth, option negotiation states, terminal reports,
   input batching, mode changes and session events.
+- [Certificate helper](lpc-rs-cert/src/main.rs): hostname/configuration validation,
+  issuance and renewal arguments, atomic publication, locking and offline status.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
