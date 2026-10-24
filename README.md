@@ -321,7 +321,7 @@ The reviewed scope includes:
   `environment`, `evaluate`, `exec`, `explode`, `file_size`, `filter`,
   `filter_map`, `find_object`, `function_name`, `function_object`,
   `function_signature`, `get_char`, `get_dir`, `has_key`, `hash_string`,
-  `implode`, `inherit_list`.
+  `implode`, `inherit_list`, `input_to`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

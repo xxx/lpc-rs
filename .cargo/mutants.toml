@@ -84,6 +84,7 @@ examine_globs = [
     "src/interpreter/efun/hash_string.rs",
     "src/interpreter/efun/implode.rs",
     "src/interpreter/efun/inherit_list.rs",
+    "src/interpreter/efun/input_to.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
