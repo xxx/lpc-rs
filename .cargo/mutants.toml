@@ -161,6 +161,7 @@ examine_globs = [
     "src/interpreter/efun/write_file.rs",
     "src/interpreter/efun/bytes.rs",
     "src/interpreter/efun/chars.rs",
+    "src/interpreter/efun/function_info.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

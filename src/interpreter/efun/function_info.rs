@@ -122,10 +122,12 @@ pub fn function_info<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use crate::{
         interpreter::{lpc_ref::LpcRef, tests::run},
-        test_support::{run_prog, strings_of, try_run_prog},
+        test_support::{run_prog_with_config, strings_of, try_run_prog},
     };
 
     #[tokio::test]
@@ -396,17 +398,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn destroyed_owners_are_zero_but_metadata_remains_available() {
+    async fn destroyed_owners_and_receivers_are_nil_with_metadata_retained() {
         let code = indoc! { r#"
             void foo() {}
-            int create() {
+            mapping create() {
                 function f = &foo(10);
                 destruct(this_object());
                 mapping info = function_info(f);
-                return info["owner"] == 0 && info["receiver"] == 0
-                    && function_object(f) == 0 && info["arguments"][0] == 10;
+                info["valid"] = nilp(function_object(f)) && info["arguments"][0] == 10;
+                return info;
             }
         "# };
-        assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(1)));
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(code, config.into()).await;
+            let nil = task.context.txn().nil();
+            task.result()
+                .unwrap()
+                .with_mapping(task.context.txn(), |info| {
+                    assert_eq!(info.get(&"owner".into()), Some(&nil), "{mode}");
+                    assert_eq!(info.get(&"receiver".into()), Some(&nil), "{mode}");
+                    assert_eq!(info.get(&"valid".into()), Some(&LpcRef::from(1)), "{mode}");
+                })
+                .unwrap();
+        }
     }
 }
