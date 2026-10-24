@@ -204,6 +204,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn diagnostic_metadata_preserves_severity_source_and_notes() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(dir.path().to_string_lossy())
+            .build()
+            .unwrap();
+        let root = file_uri(&dir.path().join("root.c")).unwrap();
+        let sources = DiagnosticSources::scoped();
+        for (severity, expected) in [
+            (Severity::Bug, DiagnosticSeverity::ERROR),
+            (Severity::Error, DiagnosticSeverity::ERROR),
+            (Severity::Warning, DiagnosticSeverity::WARNING),
+            (Severity::Note, DiagnosticSeverity::INFORMATION),
+            (Severity::Help, DiagnosticSeverity::INFORMATION),
+        ] {
+            let error = CompilerDiagnostic::new(severity)
+                .with_message("message")
+                .with_notes(vec!["note".into()]);
+            let (uri, diagnostic) = convert(error, &root, &sources.read(), &config);
+            assert_eq!(uri, root);
+            assert_eq!(diagnostic.range, Range::default());
+            assert_eq!(diagnostic.severity, Some(expected));
+            assert_eq!(diagnostic.source.as_deref(), Some("lpc-rs"));
+            assert_eq!(diagnostic.message, "message\n\nnote");
+            assert_eq!(diagnostic.related_information, None);
+        }
+    }
+
+    #[tokio::test]
     async fn checks_unsaved_includes_and_inherits_and_maps_related_locations() {
         let dir = tempfile::tempdir().unwrap();
         let config = Arc::new(
