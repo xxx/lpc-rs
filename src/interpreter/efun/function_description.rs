@@ -83,6 +83,7 @@ fn target_name<const N: usize>(context: &EfunContext<'_, N>, ptr: &FunctionPtr) 
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_utils::string::MAX_STRING_LENGTH;
 
     use crate::{
         interpreter::{lpc_ref::LpcRef, vm::Vm},
@@ -262,6 +263,36 @@ mod tests {
         assert!(
             err.contains("function_description: result exceeds maximum string length"),
             "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn descriptions_accept_the_string_limit_and_reject_one_byte_more() {
+        let code = |length| {
+            format!(
+                r#"
+                string create() {{
+                    function pointer = papplyv(&->missing(1, 2, 3), ({{ "x" * {length} }}));
+                    return function_description(pointer);
+                }}
+            "#
+            )
+        };
+        let probe = run_prog(&code(1)).await.result().unwrap();
+        let overhead = probe.as_str().unwrap().len() - 1;
+        let path_length = MAX_STRING_LENGTH - overhead;
+
+        let description = run_prog(&code(path_length)).await.result().unwrap();
+        assert_eq!(description.as_str().unwrap().len(), MAX_STRING_LENGTH);
+
+        let Err(error) = try_run_prog(&code(path_length + 1)).await else {
+            panic!("function_description accepted a result beyond the string limit");
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("function_description: result exceeds maximum string length"),
+            "{error}"
         );
     }
 }
