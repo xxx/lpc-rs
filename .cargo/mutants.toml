@@ -57,6 +57,7 @@ examine_globs = [
     "src/interpreter/efun/all_inventory.rs",
     "src/interpreter/efun/call_inherited.rs",
     "src/interpreter/efun/case.rs",
+    "src/interpreter/efun/clone_object.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
