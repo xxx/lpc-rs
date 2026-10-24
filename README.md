@@ -322,7 +322,7 @@ The reviewed scope includes:
   `filter_map`, `find_object`, `function_name`, `function_object`,
   `function_signature`, `get_char`, `get_dir`, `has_key`, `hash_string`,
   `implode`, `inherit_list`, `input_to`, `interactive`, `json_decode`,
-  `json_encode`.
+  `json_encode`, `keys_values`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
