@@ -147,6 +147,7 @@ examine_globs = [
     "src/interpreter/call_outs.rs",
     "src/interpreter/vm/prioritize_call_out.rs",
     "src/interpreter/efun/crypt.rs",
+    "src/interpreter/efun/deep_copy.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
