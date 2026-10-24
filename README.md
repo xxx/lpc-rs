@@ -306,6 +306,8 @@ The reviewed scope includes:
   issuance and renewal arguments, atomic publication, locking and offline status.
 - [Driver entry point](lpc-rs-driver/src/main.rs): installed-command startup,
   shutdown and process exit status.
+- [Compiler CLI](lpc-rs-lpcc/src/main.rs): execution/check/assembly modes,
+  simulated-efun targets, diagnostics and output flushing.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
