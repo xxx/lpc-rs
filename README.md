@@ -314,12 +314,12 @@ The reviewed scope includes:
   capabilities, shutdown, overlays, file URIs, UTF-16 positions and diagnostic
   metadata, completion/hover metadata, full-sync edit validation, cancellation
   generations and lifecycle behavior.
-- [Additional efun modules](src/interpreter/efun/mod.rs): `add_rule`,
-  `all_environment`, `all_inventory`, `call_inherited`, `case`, `clone_object`,
-  `commands`, `compile_string`, `copy_class`, `ctime`, `deep_inventory`,
-  `destruct`, `disable_commands`, `disassemble`, `enable_commands`,
-  `environment`, `evaluate`, `exec`, `explode`, `file_size`, `filter`,
-  `filter_map`, `find_object`, `function_name`, `function_object`,
+- [Additional efun modules](src/interpreter/efun/mod.rs): `add_action`,
+  `add_rule`, `all_environment`, `all_inventory`, `call_inherited`, `case`,
+  `clone_object`, `commands`, `compile_string`, `copy_class`, `ctime`,
+  `deep_inventory`, `destruct`, `disable_commands`, `disassemble`,
+  `enable_commands`, `environment`, `evaluate`, `exec`, `explode`, `file_size`,
+  `filter`, `filter_map`, `find_object`, `function_name`, `function_object`,
   `function_signature`, `get_char`, `get_dir`, `has_key`, `hash_string`,
   `implode`, `inherit_list`, `input_to`, `interactive`, `json_decode`,
   `json_encode`, `keys_values`, `living`, `load_object`, `m_delete`, `mkdir`,
