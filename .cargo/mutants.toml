@@ -151,6 +151,7 @@ examine_globs = [
     "src/interpreter/efun/function_description.rs",
     "src/interpreter/efun/localtime.rs",
     "src/interpreter/efun/map.rs",
+    "src/interpreter/efun/member_array.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
