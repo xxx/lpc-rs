@@ -69,6 +69,7 @@ examine_globs = [
     "src/interpreter/efun/enable_commands.rs",
     "src/interpreter/efun/environment.rs",
     "src/interpreter/efun/evaluate.rs",
+    "src/interpreter/efun/exec.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
