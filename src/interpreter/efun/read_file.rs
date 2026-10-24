@@ -18,11 +18,7 @@ pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
     let bytes = access.read_bytes(context).await?;
     let contents = String::from_utf8(bytes)
         .map_err(|_| access.error(context, "stream did not contain valid UTF-8"))?;
-    let contents = if start > 1 || count > 0 {
-        lines_of(&contents, start, count)
-    } else {
-        contents
-    };
+    let contents = lines_of(contents, start, count);
     let result = if start > 1 && contents.is_empty() {
         context.txn().nil()
     } else {
@@ -42,7 +38,7 @@ fn line_number<const N: usize>(
         LpcRef::Int(n) if n.0 < 0 => {
             Err(context.runtime_error(format!("read_file: negative {name}")))
         }
-        LpcRef::Int(n) => Ok(n.0 as usize),
+        LpcRef::Int(n) => Ok(usize::try_from(n.0).unwrap_or(usize::MAX)),
         other => Err(context.runtime_error(format!(
             "read_file: {name} must be an int, not {}",
             other.type_name()
@@ -50,9 +46,11 @@ fn line_number<const N: usize>(
     }
 }
 
-/// Lines `start` (1-based; 0 is 1) onward, `count` of them (0: all), each
-/// with the newline it had.
-fn lines_of(text: &str, start: usize, count: usize) -> String {
+/// Unbounded reads from the beginning retain the input buffer.
+fn lines_of(text: String, start: usize, count: usize) -> String {
+    if start <= 1 && count == 0 {
+        return text;
+    }
     let lines = text.split_inclusive('\n').skip(start.saturating_sub(1));
     if count == 0 {
         lines.collect()
@@ -71,6 +69,18 @@ mod tests {
         interpreter::{CommittedReader, lpc_ref::LpcRef, process::Process, vm::Vm},
         test_support::{TempLib, committed_string, temp_lib_config},
     };
+
+    #[test]
+    fn full_file_reads_reuse_the_input_buffer() {
+        for start in [0, 1] {
+            let mut text = String::with_capacity(256);
+            text.push_str("one\ntwo\n");
+            let buffer = text.as_ptr();
+            let result = super::lines_of(text, start, 0);
+            assert_eq!(result, "one\ntwo\n");
+            assert_eq!(result.as_ptr(), buffer);
+        }
+    }
 
     /// A lib at `root` holding `/data.txt`.
     fn lib_with_data(name: &str) -> TempLib {
@@ -320,6 +330,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn large_line_arguments_do_not_wrap() {
+        assert_eq!(
+            lines_read_as("read-large-start", r#"read_file("/lines.txt", 4294967296)"#).await,
+            LpcRef::from(0)
+        );
+        assert_eq!(
+            lines_read_as(
+                "read-large-count",
+                r#"read_file("/lines.txt", 1, 4294967297)"#
+            )
+            .await,
+            LpcRef::from("one\ntwo\nthree\nfour\n")
+        );
+    }
+
+    #[tokio::test]
     async fn a_start_immediately_after_the_last_line_returns_zero() {
         assert_eq!(
             lines_read_as("read-after-last", r#"read_file("/lines.txt", 5, 100)"#).await,
@@ -346,8 +372,22 @@ mod tests {
         )
         .await
         .unwrap();
-        let reader = read_under(&vm).await;
-        assert_eq!(committed_string(&vm, &reader, 0), "");
+        for (name, call) in [
+            ("/implicit.c", r#"read_file("/data.txt")"#),
+            ("/zero.c", r#"read_file("/data.txt", 0)"#),
+            ("/first.c", r#"read_file("/data.txt", 1)"#),
+        ] {
+            let reader = vm
+                .initialize_process_from_code(
+                    name,
+                    &format!("string got; void create() {{ got = {call}; }}"),
+                )
+                .await
+                .unwrap()
+                .context
+                .process;
+            assert_eq!(committed_string(&vm, &reader, 0), "", "{call}");
+        }
     }
 
     #[tokio::test]
