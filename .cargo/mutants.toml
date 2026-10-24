@@ -106,6 +106,7 @@ examine_globs = [
     "src/interpreter/efun/remove_action.rs",
     "src/interpreter/efun/remove_call_out.rs",
     "src/interpreter/efun/remove_rule.rs",
+    "src/interpreter/efun/restore_value.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
