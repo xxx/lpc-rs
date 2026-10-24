@@ -320,7 +320,7 @@ The reviewed scope includes:
   `destruct`, `disable_commands`, `disassemble`, `enable_commands`,
   `environment`, `evaluate`, `exec`, `explode`, `file_size`, `filter`,
   `filter_map`, `find_object`, `function_name`, `function_object`,
-  `function_signature`, `get_char`, `get_dir`, `has_key`.
+  `function_signature`, `get_char`, `get_dir`, `has_key`, `hash_string`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
