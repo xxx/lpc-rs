@@ -318,6 +318,7 @@ The reviewed scope includes:
   cancellation, repeat retirement, clock limits and remaining time.
 - [Callback dispatch](src/interpreter/vm/prioritize_call_out.rs): receiver
   resolution, cancellation, runtime errors and repeat lifecycle.
+- [Efun registry](src/interpreter/efun/mod.rs): registration, signatures and dispatch.
 - [Additional efun modules](src/interpreter/efun/mod.rs): `add_action`,
   `add_rule`, `all_environment`, `all_inventory`, `bytes`, `call_inherited`,
   `call_out`, `case`, `chars`, `clone_object`, `commands`, `compile_string`,

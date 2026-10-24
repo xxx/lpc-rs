@@ -171,6 +171,7 @@ examine_globs = [
     "src/interpreter/efun/math.rs",
     "src/interpreter/efun/text_encoding.rs",
     "src/interpreter/efun/conversions.rs",
+    "src/interpreter/efun/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
