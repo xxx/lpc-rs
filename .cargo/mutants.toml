@@ -115,6 +115,7 @@ examine_globs = [
     "src/interpreter/efun/send_mxp.rs",
     "src/interpreter/efun/shutdown.rs",
     "src/interpreter/efun/sizeof.rs",
+    "src/interpreter/efun/source_cache_stats.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
