@@ -330,7 +330,7 @@ The reviewed scope includes:
   `input_to`, `interactive`, `json_decode`, `json_encode`, `keys_values`,
   `living`, `load_object`, `localtime`, `m_delete`, `map`, `member_array`,
   `min_max`, `mkdir`, `move_object`, `object_clones`, `object_memory_info`,
-  `object_time`, `objects`, `origin`, `papplyv`, `query_call_out`,
+  `object_time`, `objects`, `origin`, `papplyv`, `present`, `query_call_out`,
   `query_call_outs`, `query_connection`, `query_ip_number`,
   `query_parser_registry`, `random`, `reduce`, `remove_action`,
   `remove_call_out`, `remove_rule`, `rename`, `restore_map`, `restore_object`,

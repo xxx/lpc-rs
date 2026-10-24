@@ -325,8 +325,25 @@ mod tests {
     #[tokio::test]
     async fn a_number_of_zero_needs_no_callback() {
         let w = world().await;
+        let probe =
+            w.vm.initialize_process_from_code(
+                "/probe.c",
+                r#"
+                    int calls;
+                    int id(string name) { calls++; return 1; }
+                    void create() { move_object("/finder"); }
+                "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
         let r = found(&w, r#""/finder"->find("sword 0")"#).await;
         assert_eq!(r, LpcRef::from(0));
+        assert_eq!(
+            w.vm.global_state.committed_global(&probe, 0u16),
+            LpcRef::from(0)
+        );
     }
 
     #[tokio::test]
