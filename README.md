@@ -323,7 +323,7 @@ The reviewed scope includes:
   `function_signature`, `get_char`, `get_dir`, `has_key`, `hash_string`,
   `implode`, `inherit_list`, `input_to`, `interactive`, `json_decode`,
   `json_encode`, `keys_values`, `living`, `load_object`, `m_delete`, `mkdir`,
-  `move_object`, `object_clones`, `object_memory_info`.
+  `move_object`, `object_clones`, `object_memory_info`, `object_time`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
