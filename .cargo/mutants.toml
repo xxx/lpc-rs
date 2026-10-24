@@ -98,6 +98,7 @@ examine_globs = [
     "src/interpreter/efun/object_memory_info.rs",
     "src/interpreter/efun/object_time.rs",
     "src/interpreter/efun/objects.rs",
+    "src/interpreter/efun/origin.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
