@@ -50,6 +50,7 @@ examine_globs = [
     "lpc-rs-lsp/src/documents.rs",
     "lpc-rs-lsp/src/check.rs",
     "lpc-rs-lsp/src/efuns.rs",
+    "lpc-rs-lsp/src/server.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
