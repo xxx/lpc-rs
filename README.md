@@ -315,8 +315,8 @@ The reviewed scope includes:
   metadata, completion/hover metadata, full-sync edit validation, cancellation
   generations and lifecycle behavior.
 - [Additional efun modules](src/interpreter/efun/mod.rs): `add_action`,
-  `add_rule`, `all_environment`, `all_inventory`, `call_inherited`, `case`,
-  `clone_object`, `commands`, `compile_string`, `compose`, `copy_class`,
+  `add_rule`, `all_environment`, `all_inventory`, `call_inherited`, `call_out`,
+  `case`, `clone_object`, `commands`, `compile_string`, `compose`, `copy_class`,
   `ctime`, `deep_inventory`, `destruct`, `disable_commands`, `disassemble`,
   `enable_commands`, `environment`, `evaluate`, `exec`, `explode`, `file_size`,
   `file_time`, `filter`, `filter_map`, `find_object`, `function_exists`,

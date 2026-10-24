@@ -62,7 +62,12 @@ impl CallOut {
     /// Update the next run time, if relevant
     pub fn refresh(&mut self) {
         if let Some(repeat) = self.repeat_duration {
-            self.next_run = Utc::now() + repeat;
+            if let Some(next_run) = Utc::now().checked_add_signed(repeat) {
+                self.next_run = next_run;
+            } else {
+                self.repeat_duration = None;
+                tracing::warn!("call_out: repeat exceeds the supported calendar range");
+            }
         }
     }
 
@@ -178,6 +183,21 @@ impl CallOuts {
         self.queue.remove(idx)
     }
 
+    /// Check the first firing and repeat against both timer clocks.
+    pub(crate) fn checked_deadlines(
+        delay: Duration,
+        repeat: Option<Duration>,
+    ) -> Option<(DateTime<Utc>, Instant)> {
+        let delay = delay.max(Duration::zero());
+        let next_run = Utc::now().checked_add_signed(delay)?;
+        let start = Instant::now().checked_add(delay.to_std().ok()?)?;
+        if let Some(repeat) = repeat {
+            next_run.checked_add_signed(repeat)?;
+            start.checked_add(repeat.to_std().ok()?)?;
+        }
+        Some((next_run, start))
+    }
+
     /// Physically materialize a recorded call out: spawn its timer task and
     /// push itself into the queue. The flush calls this after a successful
     /// commit, so an aborted attempt spawns no timer and enqueues nothing.
@@ -194,17 +214,15 @@ impl CallOuts {
             delay,
             repeat,
         } = schedule;
+        let delay = delay.max(Duration::zero());
+        let repeat = repeat.filter(|duration| duration.num_milliseconds() > 0);
+        let Some((next_run, start)) = Self::checked_deadlines(delay, repeat) else {
+            tracing::warn!("call_out: schedule exceeds the supported clock range");
+            return;
+        };
         let tx = self.tx.clone();
 
-        let handle = if let Some(repeat) = repeat
-            && repeat.num_milliseconds() > 0
-        {
-            let start = if delay.num_milliseconds() <= 0 {
-                Instant::now()
-            } else {
-                Instant::now() + delay.to_std().unwrap()
-            };
-
+        let handle = if let Some(repeat) = repeat {
             tokio::spawn(async move {
                 let mut i = tokio::time::interval_at(start, repeat.to_std().unwrap());
 
@@ -215,7 +233,7 @@ impl CallOuts {
             })
         } else {
             tokio::spawn(async move {
-                tokio::time::sleep(delay.to_std().unwrap_or_default()).await;
+                tokio::time::sleep_until(start).await;
                 let _ = tx.send(VmOp::PrioritizeCallOut(id)).await;
             })
         };
@@ -226,7 +244,7 @@ impl CallOuts {
             player,
             func_ref,
             repeat_duration: repeat,
-            next_run: Utc::now() + delay,
+            next_run,
             _handle: handle,
         });
     }
@@ -235,6 +253,66 @@ impl CallOuts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn unsupported_schedules_are_not_materialized() {
+        for (delay, repeat) in [
+            (Duration::MAX, None),
+            (Duration::zero(), Some(Duration::MAX)),
+        ] {
+            let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+            let mut calls = CallOuts::new(tx);
+            calls.materialize(CallOutSchedule {
+                id: 1,
+                process: Weak::new(),
+                player: None,
+                func_ref: 0.into(),
+                delay,
+                repeat,
+            });
+            assert!(calls.is_empty());
+            assert!(rx.try_recv().is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn nonpositive_repeat_intervals_schedule_one_firing() {
+        for repeat in [
+            Duration::zero(),
+            Duration::seconds(-1),
+            Duration::microseconds(1),
+        ] {
+            let (tx, _rx) = tokio::sync::mpsc::channel(4);
+            let mut calls = CallOuts::new(tx);
+            calls.materialize(CallOutSchedule {
+                id: 1,
+                process: Weak::new(),
+                player: None,
+                func_ref: 0.into(),
+                delay: Duration::zero(),
+                repeat: Some(repeat),
+            });
+            assert_eq!(calls.get_by_id(1).unwrap().repeat_duration(), None);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_repeat_is_disabled_when_its_calendar_deadline_overflows() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(4);
+        let mut calls = CallOuts::new(tx);
+        calls.materialize(CallOutSchedule {
+            id: 1,
+            process: Weak::new(),
+            player: None,
+            func_ref: 0.into(),
+            delay: Duration::seconds(3600),
+            repeat: Some(Duration::seconds(1)),
+        });
+        let call = calls.get_mut_by_id(1).unwrap();
+        call.repeat_duration = Some(Duration::MAX);
+        call.refresh();
+        assert!(!call.is_repeating());
+    }
 
     #[tokio::test(start_paused = true)]
     async fn nonpositive_delays_fire_immediately_and_preserve_repetition() {
