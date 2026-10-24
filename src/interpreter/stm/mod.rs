@@ -566,13 +566,6 @@ impl Transaction {
         PendingDirectoryView::new(&self.effects, server)
     }
 
-    /// Whether this attempt has recorded a `mkdir` of `server`.
-    pub(crate) fn has_pending_dir(&self, server: &std::path::Path) -> bool {
-        self.effects
-            .iter()
-            .any(|e| matches!(e, Effect::CreateDir { path, .. } if path.server() == server))
-    }
-
     /// Record a call out for materialization after this attempt commits. The
     /// physical timer task and queue entry are created only at flush, so an
     /// aborted attempt schedules nothing.

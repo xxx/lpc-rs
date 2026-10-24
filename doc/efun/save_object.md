@@ -18,6 +18,8 @@ or a master that does not define the apply, is the runtime error
 one is a runtime error naming the suffixed path. Both are caught by
 `catch()`.
 
+Parent existence checks include earlier directory changes in this task.
+
 The file's text is built when the efun runs, so it is one consistent view of
 the object, and written when the task commits, through a temporary file
 renamed over the target: a task that errors out writes nothing, a task the

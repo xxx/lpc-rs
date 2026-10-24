@@ -21,6 +21,9 @@ the runtime error `write_file: permission denied`. The parent directory must
 exist and `path` must not be a directory; either is a runtime error naming
 the in-game path. All are caught by `catch()`.
 
+Parent checks include directories created, removed, or moved earlier in the
+same task.
+
 The write itself happens when the task commits: a task that errors out
 writes nothing, a task the driver re-runs writes once, and two `write_file`s
 in one task land in order. A `read_file`, `file_size` or `read_chars` of
