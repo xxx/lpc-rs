@@ -113,6 +113,7 @@ examine_globs = [
     "src/interpreter/efun/save_value.rs",
     "src/interpreter/efun/send_gmcp.rs",
     "src/interpreter/efun/send_mxp.rs",
+    "src/interpreter/efun/shutdown.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
