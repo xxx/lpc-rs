@@ -126,6 +126,7 @@ examine_globs = [
     "src/interpreter/efun/type_of.rs",
     "src/interpreter/efun/uptime.rs",
     "src/interpreter/efun/users.rs",
+    "src/interpreter/efun/variable_info.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
