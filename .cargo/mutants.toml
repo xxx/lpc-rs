@@ -135,6 +135,7 @@ examine_globs = [
     "src/interpreter/efun/functions.rs",
     "src/interpreter/efun/min_max.rs",
     "src/interpreter/efun/query_call_outs.rs",
+    "src/interpreter/efun/query_parser_registry.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
