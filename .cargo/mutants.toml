@@ -119,6 +119,7 @@ examine_globs = [
     "src/interpreter/efun/strindex.rs",
     "src/interpreter/efun/syntax_tree.rs",
     "src/interpreter/efun/tell_object.rs",
+    "src/interpreter/efun/this_interactive.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
