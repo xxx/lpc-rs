@@ -328,7 +328,7 @@ The reviewed scope includes:
   `function_name`, `function_object`, `function_signature`, `functions`,
   `get_char`, `get_dir`, `has_key`, `hash_string`, `implode`, `inherit_list`,
   `input_to`, `interactive`, `json_decode`, `json_encode`, `keys_values`,
-  `living`, `load_object`, `localtime`, `m_delete`, `min_max`, `mkdir`,
+  `living`, `load_object`, `localtime`, `m_delete`, `map`, `min_max`, `mkdir`,
   `move_object`, `object_clones`, `object_memory_info`, `object_time`,
   `objects`, `origin`, `papplyv`, `query_call_out`, `query_call_outs`,
   `query_connection`, `query_ip_number`, `query_parser_registry`, `random`,
