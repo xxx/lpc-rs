@@ -322,7 +322,7 @@ The reviewed scope includes:
   `add_rule`, `all_environment`, `all_inventory`, `bytes`, `call_inherited`,
   `call_out`, `case`, `chars`, `clone_object`, `commands`, `compile_string`,
   `compose`, `copy_class`, `crypt`, `ctime`, `deep_copy`, `deep_inventory`,
-  `destruct`, `disable_commands`, `disassemble`, `enable_commands`,
+  `destruct`, `disable_commands`, `disassemble`, `dump`, `enable_commands`,
   `environment`, `evaluate`, `exec`, `explode`, `file_size`, `file_time`,
   `filter`, `filter_map`, `find_object`, `function_description`,
   `function_exists`, `function_info`, `function_name`, `function_object`,

@@ -166,6 +166,7 @@ examine_globs = [
     "src/interpreter/efun/replace_string.rs",
     "src/interpreter/efun/wildmatch.rs",
     "src/interpreter/efun/word_wrap.rs",
+    "src/interpreter/efun/dump.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
