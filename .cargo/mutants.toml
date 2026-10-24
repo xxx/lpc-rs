@@ -138,6 +138,7 @@ examine_globs = [
     "src/interpreter/efun/query_parser_registry.rs",
     "src/interpreter/efun/random.rs",
     "src/interpreter/efun/reduce.rs",
+    "src/interpreter/efun/rename.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

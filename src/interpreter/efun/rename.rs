@@ -92,6 +92,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_existing_file_target_is_replaced() {
+        let root = TempLib::new("rename-replace-file");
+        std::fs::write(root.join("a.txt"), "replacement").unwrap();
+        std::fs::write(root.join("b.txt"), "old contents").unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"int create() { return rename("/a.txt", "/b.txt"); }"#,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(task.result(), Some(LpcRef::from(0)));
+        assert!(!root.join("a.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(root.join("b.txt")).unwrap(),
+            "replacement"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn destination_metadata_errors_keep_their_cause() {
+        let root = TempLib::new("rename-metadata-error");
+        std::fs::write(root.join("a.txt"), "source").unwrap();
+        std::fs::write(root.join("file"), "not a directory").unwrap();
+        let expected = std::fs::metadata(root.join("file/child")).unwrap_err();
+        assert_ne!(expected.kind(), std::io::ErrorKind::NotFound);
+        let vm = allowing_vm(&root).await;
+        let error = error_of(&vm, r#"void create() { rename("/a.txt", "/file/child"); }"#).await;
+
+        assert!(error.contains("rename: /file/child:"), "{error}");
+        assert!(error.contains(&expected.to_string()), "{error}");
+        assert!(!error.contains(root.to_str().unwrap()), "{error}");
+        assert_eq!(
+            std::fs::read_to_string(root.join("a.txt")).unwrap(),
+            "source"
+        );
+    }
+
+    #[tokio::test]
     async fn a_directory_target_keeps_the_files_name() {
         let root = TempLib::new("rename-into-dir");
         std::fs::write(root.join("a.txt"), "x").unwrap();
