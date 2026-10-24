@@ -327,11 +327,11 @@ The reviewed scope includes:
   `object_clones`, `object_memory_info`, `object_time`, `objects`, `origin`,
   `papplyv`, `query_call_out`, `query_call_outs`, `query_connection`,
   `query_ip_number`, `query_parser_registry`, `random`, `reduce`,
-  `remove_action`, `remove_call_out`, `remove_rule`, `rename`, `restore_value`,
-  `rm`, `rmdir`, `save_map`, `save_value`, `send_gmcp`, `send_mxp`, `shutdown`,
-  `sizeof`, `source_cache_stats`, `strindex`, `syntax_tree`, `tell_object`,
-  `this_interactive`, `throw`, `time`, `transaction_stats`, `type_of`, `uptime`,
-  `users`, `variable_info`, `write`.
+  `remove_action`, `remove_call_out`, `remove_rule`, `rename`, `restore_map`,
+  `restore_value`, `rm`, `rmdir`, `save_map`, `save_value`, `send_gmcp`,
+  `send_mxp`, `shutdown`, `sizeof`, `source_cache_stats`, `strindex`,
+  `syntax_tree`, `tell_object`, `this_interactive`, `throw`, `time`,
+  `transaction_stats`, `type_of`, `uptime`, `users`, `variable_info`, `write`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
