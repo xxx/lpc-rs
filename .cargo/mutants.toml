@@ -149,6 +149,7 @@ examine_globs = [
     "src/interpreter/efun/crypt.rs",
     "src/interpreter/efun/deep_copy.rs",
     "src/interpreter/efun/function_description.rs",
+    "src/interpreter/efun/localtime.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -89,6 +89,8 @@ pub fn strftime<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use chrono::Utc;
     use chrono::{Datelike, Local, TimeZone, Timelike};
 
     use crate::test_support::{run_prog, strings_of, try_run_prog};
@@ -126,6 +128,48 @@ mod tests {
         .map(|n| n.to_string());
         assert_eq!(&fields[..8], &expected);
         assert!(fields[8] == "0" || fields[8] == "1", "{fields:?}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn daylight_saving_flags_follow_known_zone_rules() {
+        const CASE: &str = "LPC_RS_LOCALTIME_DST_CASE";
+        if let Ok(expected) = std::env::var(CASE) {
+            let winter = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
+            let summer = Utc.with_ymd_and_hms(2024, 7, 15, 12, 0, 0).unwrap();
+            let fields = strings_of(&format!(
+                "int *create() {{ return ({{ localtime({})[8], localtime({})[8] }}); }}",
+                winter.timestamp(),
+                summer.timestamp()
+            ))
+            .await;
+            assert_eq!(fields.join(","), expected);
+            return;
+        }
+
+        let name = concat!(
+            module_path!(),
+            "::daylight_saving_flags_follow_known_zone_rules"
+        );
+        let name = name.split_once("::").unwrap().1;
+        for (zone, expected) in [
+            ("UTC0", "0,0"),
+            ("EST5EDT,M3.2.0,M11.1.0", "0,1"),
+            ("AEST-10AEDT,M10.1.0,M4.1.0", "1,0"),
+        ] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", name, "--nocapture"])
+                .env("TZ", zone)
+                .env(CASE, expected)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{zone}: {}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
     }
 
     #[tokio::test]
