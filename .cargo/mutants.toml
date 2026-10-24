@@ -61,6 +61,7 @@ examine_globs = [
     "src/interpreter/efun/commands.rs",
     "src/interpreter/efun/compile_string.rs",
     "src/interpreter/efun/copy_class.rs",
+    "src/interpreter/efun/ctime.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
