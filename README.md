@@ -326,7 +326,7 @@ The reviewed scope includes:
   `living`, `load_object`, `m_delete`, `min_max`, `mkdir`, `move_object`,
   `object_clones`, `object_memory_info`, `object_time`, `objects`, `origin`,
   `papplyv`, `query_call_out`, `query_call_outs`, `query_connection`,
-  `query_ip_number`, `query_parser_registry`, `remove_action`,
+  `query_ip_number`, `query_parser_registry`, `random`, `remove_action`,
   `remove_call_out`, `remove_rule`, `restore_value`, `rm`, `rmdir`, `save_map`,
   `save_value`, `send_gmcp`, `send_mxp`, `shutdown`, `sizeof`,
   `source_cache_stats`, `strindex`, `syntax_tree`, `tell_object`,
