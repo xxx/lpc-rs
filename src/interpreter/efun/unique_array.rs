@@ -118,10 +118,12 @@ impl Continuation for UniqueArray {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use crate::{
         interpreter::{lpc_ref::LpcRef, vm::Vm},
-        test_support::{strings_of, test_config, try_run_prog},
+        test_support::{run_prog_with_config, strings_of, test_config, try_run_prog},
     };
 
     /// Each group joined with commas, so the groups compare as strings.
@@ -149,7 +151,21 @@ mod tests {
     #[tokio::test]
     async fn skip_defaults_to_zero() {
         let code = joined("unique_array(({ 1, 2, 3, 4, 5 }), (: $1 % 2 :))");
-        assert_eq!(strings_of(&code).await, ["1,3,5"]);
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(&code, config.into()).await;
+            let groups = task
+                .result()
+                .unwrap()
+                .with_array(task.context.txn(), |array| {
+                    array.iter().map(ToString::to_string).collect::<Vec<_>>()
+                })
+                .unwrap();
+            assert_eq!(groups, ["1,3,5"], "{mode}");
+        }
     }
 
     #[tokio::test]
