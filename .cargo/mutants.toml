@@ -158,6 +158,7 @@ examine_globs = [
     "src/interpreter/efun/trim.rs",
     "src/interpreter/efun/type_predicates.rs",
     "src/interpreter/efun/unique_array.rs",
+    "src/interpreter/efun/write_file.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

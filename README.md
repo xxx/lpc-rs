@@ -339,7 +339,7 @@ The reviewed scope includes:
   `source_cache_stats`, `store_variable`, `strindex`, `syntax_tree`,
   `tell_object`, `this_interactive`, `throw`, `time`, `transaction_stats`,
   `trim`, `type_of`, `type_predicates`, `unique_array`, `uptime`, `users`,
-  `variable_info`, `write`.
+  `variable_info`, `write`, `write_file`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
