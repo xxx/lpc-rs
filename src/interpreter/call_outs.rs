@@ -77,10 +77,12 @@ impl CallOut {
         self.repeat_duration
     }
 
-    /// How much time is left until this call out runs?
-    /// If the call out has already run and will not repeat, this will return `None`.
+    /// The time until the stored deadline, or `None` after it has passed.
     pub fn time_remaining(&self) -> Option<Duration> {
-        let now = Utc::now();
+        self.time_remaining_at(Utc::now())
+    }
+
+    fn time_remaining_at(&self, now: DateTime<Utc>) -> Option<Duration> {
         if now > self.next_run {
             None
         } else {
@@ -253,6 +255,33 @@ impl CallOuts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn remaining_time_includes_the_deadline_and_excludes_elapsed_timers() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(4);
+        let mut calls = CallOuts::new(tx);
+        calls.materialize(CallOutSchedule {
+            id: 1,
+            process: Weak::new(),
+            player: None,
+            func_ref: 0.into(),
+            delay: Duration::seconds(3600),
+            repeat: None,
+        });
+        let call = calls.get_by_id(1).unwrap();
+        let deadline = call.next_run;
+
+        assert!(call.time_remaining().unwrap() > Duration::zero());
+        assert_eq!(
+            call.time_remaining_at(deadline - Duration::seconds(10)),
+            Some(Duration::seconds(10))
+        );
+        assert_eq!(call.time_remaining_at(deadline), Some(Duration::zero()));
+        assert_eq!(
+            call.time_remaining_at(deadline + Duration::nanoseconds(1)),
+            None
+        );
+    }
 
     #[tokio::test]
     async fn unsupported_schedules_are_not_materialized() {

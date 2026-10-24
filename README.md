@@ -314,6 +314,8 @@ The reviewed scope includes:
   capabilities, shutdown, overlays, file URIs, UTF-16 positions and diagnostic
   metadata, completion/hover metadata, full-sync edit validation, cancellation
   generations and lifecycle behavior.
+- [Timer queues](src/interpreter/call_outs.rs): deferred scheduling,
+  cancellation, repeat retirement, clock limits and remaining time.
 - [Additional efun modules](src/interpreter/efun/mod.rs): `add_action`,
   `add_rule`, `all_environment`, `all_inventory`, `call_inherited`, `call_out`,
   `case`, `clone_object`, `commands`, `compile_string`, `compose`, `copy_class`,
