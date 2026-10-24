@@ -304,6 +304,8 @@ The reviewed scope includes:
   input batching, mode changes and session events.
 - [Certificate helper](lpc-rs-cert/src/main.rs): hostname/configuration validation,
   issuance and renewal arguments, atomic publication, locking and offline status.
+- [Driver entry point](lpc-rs-driver/src/main.rs): installed-command startup,
+  shutdown and process exit status.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
