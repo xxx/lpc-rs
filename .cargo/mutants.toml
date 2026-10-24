@@ -52,6 +52,7 @@ examine_globs = [
     "lpc-rs-lsp/src/efuns.rs",
     "lpc-rs-lsp/src/server.rs",
     "src/interpreter/efun/allocate.rs",
+    "src/interpreter/efun/add_rule.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

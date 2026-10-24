@@ -314,6 +314,7 @@ The reviewed scope includes:
   capabilities, shutdown, overlays, file URIs, UTF-16 positions and diagnostic
   metadata, completion/hover metadata, full-sync edit validation, cancellation
   generations and lifecycle behavior.
+- [Additional efun modules](src/interpreter/efun/mod.rs): `add_rule`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
