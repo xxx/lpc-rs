@@ -55,7 +55,10 @@ pub fn regexp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{strings_of, try_run_prog};
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    use crate::test_support::{run_prog_with_config, strings_of, try_run_prog};
 
     async fn error_of(expr: &str) -> String {
         let code = format!("mixed create() {{ return {expr}; }}");
@@ -93,6 +96,29 @@ mod tests {
         assert_eq!(strings_of(code).await, ["2", "ay", "3", "az"]);
         let code = r#"mixed *create() { return regexp(({ "x", "ay" }), "a", 3); }"#;
         assert_eq!(strings_of(code).await, ["1", "x"]);
+    }
+
+    #[tokio::test]
+    async fn bare_pointers_keep_flags_with_surplus_arguments() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            let task = run_prog_with_config(
+                r#"
+                    int create() {
+                        function search = regexp;
+                        int evaluated;
+                        string *matches = search(({ "a", "b" }), "a", 2, ++evaluated);
+                        return sizeof(matches) == 1 && matches[0] == "b" && evaluated == 1;
+                    }
+                "#,
+                config.into(),
+            )
+            .await;
+            assert_eq!(task.result(), Some(1.into()), "{mode}");
+        }
     }
 
     #[tokio::test]

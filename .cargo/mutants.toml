@@ -153,6 +153,7 @@ examine_globs = [
     "src/interpreter/efun/map.rs",
     "src/interpreter/efun/member_array.rs",
     "src/interpreter/efun/present.rs",
+    "src/interpreter/efun/regexp.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
