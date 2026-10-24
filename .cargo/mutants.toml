@@ -110,6 +110,7 @@ examine_globs = [
     "src/interpreter/efun/rm.rs",
     "src/interpreter/efun/rmdir.rs",
     "src/interpreter/efun/save_map.rs",
+    "src/interpreter/efun/save_value.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
