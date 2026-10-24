@@ -290,6 +290,8 @@ The reviewed scope includes:
   catch rendering and terminal output.
 - [`abs()`](src/interpreter/efun/abs.rs): numeric results, integer overflow,
   float zero and invalid input.
+- [`allocate()`](src/interpreter/efun/allocate.rs): count/layout validation,
+  platform-width conversion and shared initial values.
 - [Integer values](src/interpreter/lpc_int.rs): full-width conversions, truth
   values, comparison with integers and decimal display.
 - [Float values](src/interpreter/lpc_float.rs): comparison with primitive floats
