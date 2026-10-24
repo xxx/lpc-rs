@@ -163,6 +163,7 @@ examine_globs = [
     "src/interpreter/efun/chars.rs",
     "src/interpreter/efun/function_info.rs",
     "src/interpreter/efun/read_file.rs",
+    "src/interpreter/efun/replace_string.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
