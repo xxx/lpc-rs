@@ -316,7 +316,7 @@ The reviewed scope includes:
   generations and lifecycle behavior.
 - [Additional efun modules](src/interpreter/efun/mod.rs): `add_rule`,
   `all_environment`, `all_inventory`, `call_inherited`, `case`, `clone_object`,
-  `commands`, `compile_string`.
+  `commands`, `compile_string`, `copy_class`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
