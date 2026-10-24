@@ -73,6 +73,7 @@ examine_globs = [
     "src/interpreter/efun/explode.rs",
     "src/interpreter/efun/file_size.rs",
     "src/interpreter/efun/filter.rs",
+    "src/interpreter/efun/filter_map.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
