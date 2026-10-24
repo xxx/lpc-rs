@@ -310,7 +310,7 @@ The reviewed scope includes:
   simulated-efun targets, diagnostics and output flushing.
 - [Language server](lpc-rs-lsp/src/main.rs): stdio startup, initialization,
   capabilities, shutdown, overlays, file URIs, UTF-16 positions and diagnostic
-  severities, labels, notes and related locations.
+  metadata, plus completion/hover boundaries, signatures and bundled references.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

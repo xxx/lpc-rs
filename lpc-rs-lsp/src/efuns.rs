@@ -97,6 +97,26 @@ mod tests {
         };
         assert_eq!(edit.range, range(text, 11..14));
         assert_eq!(edit.new_text, "clone_object");
+        assert_eq!(item.kind, Some(CompletionItemKind::FUNCTION));
+        assert!(item.detail.as_ref().unwrap().contains("clone_object("));
+        let Some(Documentation::MarkupContent(docs)) = &item.documentation else {
+            panic!("missing documentation")
+        };
+        assert_eq!(docs.kind, MarkupKind::Markdown);
+        assert!(docs.value.contains("blueprint"));
+    }
+
+    #[test]
+    fn cursor_boundaries_do_not_select_a_later_identifier() {
+        let start = Position::new(0, 0);
+        assert!(hover("clone_object", start).is_some());
+        assert!(
+            complete("clone_object", start)
+                .iter()
+                .any(|item| item.label == "clone_object")
+        );
+        assert!(hover(" clone_object", start).is_none());
+        assert!(complete(" clone_object", start).is_empty());
     }
 
     #[test]
