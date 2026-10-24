@@ -325,7 +325,7 @@ The reviewed scope includes:
   `json_encode`, `keys_values`, `living`, `load_object`, `m_delete`, `mkdir`,
   `move_object`, `object_clones`, `object_memory_info`, `object_time`,
   `objects`, `origin`, `papplyv`, `query_call_out`, `query_connection`,
-  `query_ip_number`, `remove_action`, `remove_call_out`.
+  `query_ip_number`, `remove_action`, `remove_call_out`, `remove_rule`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
