@@ -329,7 +329,7 @@ The reviewed scope includes:
   `restore_value`, `rm`, `rmdir`, `save_map`, `save_value`, `send_gmcp`,
   `send_mxp`, `shutdown`, `sizeof`, `source_cache_stats`, `strindex`,
   `syntax_tree`, `tell_object`, `this_interactive`, `throw`, `time`,
-  `transaction_stats`, `type_of`, `uptime`, `users`, `variable_info`.
+  `transaction_stats`, `type_of`, `uptime`, `users`, `variable_info`, `write`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
