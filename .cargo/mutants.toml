@@ -123,6 +123,7 @@ examine_globs = [
     "src/interpreter/efun/throw.rs",
     "src/interpreter/efun/time.rs",
     "src/interpreter/efun/transaction_stats.rs",
+    "src/interpreter/efun/type_of.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
