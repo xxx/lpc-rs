@@ -335,9 +335,9 @@ The reviewed scope includes:
   `object_memory_info`, `object_time`, `objects`, `origin`, `papplyv`,
   `present`, `query_call_out`, `query_call_outs`, `query_connection`,
   `query_ip_number`, `query_parser_registry`, `random`, `read_file`, `reduce`,
-  `regexp`, `remove_action`, `remove_call_out`, `remove_rule`, `rename`,
-  `replace_string`, `restore_map`, `restore_object`, `restore_value`, `rm`,
-  `rmdir`, `rusage`, `save_map`, `save_object`, `save_value`, `send_gmcp`,
+  `regexp`, `regmatch`, `remove_action`, `remove_call_out`, `remove_rule`,
+  `rename`, `replace_string`, `restore_map`, `restore_object`, `restore_value`,
+  `rm`, `rmdir`, `rusage`, `save_map`, `save_object`, `save_value`, `send_gmcp`,
   `send_mxp`, `shutdown`, `sizeof`, `sort_array`, `source_cache_stats`,
   `store_variable`, `strindex`, `syntax_tree`, `tell_object`, `text_encoding`,
   `this_interactive`, `throw`, `time`, `transaction_stats`, `trim`, `type_of`,
@@ -376,6 +376,9 @@ Telnet framing permits different linear reservation hints while preserving wire
 bytes; a growth check catches the quadratic reservation mutation.
 Composition can reuse the inner function's register for its result after the call
 returns; that arithmetic exclusion is pinned to the expression's source position.
+Regex option bits are disjoint, so OR and XOR build the same supported flag
+mask; that exclusion is pinned to the mask's six operators and guarded by a
+test that the flags remain disjoint.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out

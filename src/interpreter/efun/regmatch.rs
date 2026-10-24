@@ -31,12 +31,10 @@ pub fn regmatch<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
     };
     let mut options = [0, 0];
     for (i, name) in ["flags", "start"].into_iter().enumerate() {
-        if context.arg_count() > i + 2 {
-            let LpcRef::Int(n) = context.arg(i + 2) else {
-                return Err(context.runtime_error(format!("regmatch: {name} must be an int")));
-            };
-            options[i] = n.0;
-        }
+        let LpcRef::Int(n) = context.arg(i + 2) else {
+            return Err(context.runtime_error(format!("regmatch: {name} must be an int")));
+        };
+        options[i] = n.0;
     }
     let [flags, start] = options;
     if flags & !SUPPORTED_FLAGS != 0 {
@@ -119,6 +117,25 @@ mod tests {
         #define RE_MATCH_SUBS 0x1000
     "#;
 
+    #[test]
+    fn supported_options_have_distinct_single_bits() {
+        let mut seen = 0;
+        for flag in [
+            super::RE_CASELESS,
+            super::RE_MULTILINE,
+            super::RE_DOTALL,
+            super::RE_EXTENDED,
+            super::RE_ANCHORED,
+            super::RE_UNGREEDY,
+            super::RE_MATCH_SUBS,
+        ] {
+            assert_eq!(flag.count_ones(), 1);
+            assert_eq!(seen & flag, 0);
+            seen |= flag;
+        }
+        assert_eq!(seen, super::SUPPORTED_FLAGS);
+    }
+
     async fn result_of(expr: &str) -> LpcRef {
         run_prog(&format!("{HEADER}\nmixed create() {{ return {expr}; }}"))
             .await
@@ -152,6 +169,9 @@ mod tests {
             r#"regmatch("abc", "z")"#,
             r#"regmatch("abc", "z", RE_MATCH_SUBS)"#,
             r#"regmatch("", ".")"#,
+            r#"regmatch("a\nb", "^b")"#,
+            r#"regmatch("a\nb", "a.b")"#,
+            r#"regmatch("ab", "a b")"#,
         ] {
             assert_eq!(result_of(expr).await, LpcRef::from(0), "{expr}");
         }
