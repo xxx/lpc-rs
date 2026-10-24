@@ -76,6 +76,7 @@ examine_globs = [
     "src/interpreter/efun/filter_map.rs",
     "src/interpreter/efun/find_object.rs",
     "src/interpreter/efun/function_name.rs",
+    "src/interpreter/efun/function_object.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
