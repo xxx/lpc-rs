@@ -317,7 +317,8 @@ The reviewed scope includes:
 - [Additional efun modules](src/interpreter/efun/mod.rs): `add_rule`,
   `all_environment`, `all_inventory`, `call_inherited`, `case`, `clone_object`,
   `commands`, `compile_string`, `copy_class`, `ctime`, `deep_inventory`,
-  `destruct`, `disable_commands`, `disassemble`, `enable_commands`.
+  `destruct`, `disable_commands`, `disassemble`, `enable_commands`,
+  `environment`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
