@@ -140,6 +140,7 @@ examine_globs = [
     "src/interpreter/efun/reduce.rs",
     "src/interpreter/efun/rename.rs",
     "src/interpreter/efun/restore_map.rs",
+    "src/interpreter/efun/restore_object.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
