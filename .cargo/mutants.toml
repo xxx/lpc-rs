@@ -100,6 +100,7 @@ examine_globs = [
     "src/interpreter/efun/objects.rs",
     "src/interpreter/efun/origin.rs",
     "src/interpreter/efun/papplyv.rs",
+    "src/interpreter/efun/query_call_out.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
