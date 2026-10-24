@@ -90,6 +90,7 @@ examine_globs = [
     "src/interpreter/efun/json_encode.rs",
     "src/interpreter/efun/keys_values.rs",
     "src/interpreter/efun/living.rs",
+    "src/interpreter/efun/load_object.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
