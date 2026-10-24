@@ -65,7 +65,7 @@ mod tests {
             .await
             .unwrap();
 
-        let _ = master_proc
+        master_proc
             .result()
             .unwrap()
             .with_array(master_proc.context.txn(), |result| {
@@ -77,6 +77,7 @@ mod tests {
                         &*outer_proc.context.process,
                     ]
                 );
-            });
+            })
+            .unwrap();
     }
 }
