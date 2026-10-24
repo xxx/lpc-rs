@@ -10,6 +10,7 @@ use crate::interpreter::{
         efun_context::EfunContext,
         file_access::{FileAccess, authorize},
     },
+    file_view::FileMetadata,
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -30,11 +31,7 @@ async fn text_of<const N: usize>(
 /// when absent) from character `start` of the file, the read cut at the
 /// end; 0 when `start` is at or past the end.
 pub async fn read_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let start = if context.arg_count() > 1 {
-        int_arg(context, "read_chars", 1)?
-    } else {
-        0
-    };
+    let start = int_arg(context, "read_chars", 1)?;
     let length = if context.arg_count() > 2 {
         let length = int_arg(context, "read_chars", 2)?;
         if length < 0 {
@@ -78,17 +75,14 @@ pub async fn write_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
     let contents = contents.to_owned();
     let access = authorize(context, "write_chars", VALID_WRITE, 0).await?;
-    match tokio::fs::metadata(access.path().server()).await {
-        Ok(m) if m.is_file() => {}
-        Ok(_) => {
+    match access.metadata(context).await? {
+        FileMetadata::File(_) => {}
+        FileMetadata::Directory | FileMetadata::Other(_) => {
             return Err(context.runtime_error(format!("write_chars: {} is not a file", access)));
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+        FileMetadata::Missing => {
             context.return_efun_result(LpcRef::from(0));
             return Ok(());
-        }
-        Err(e) => {
-            return Err(access.error(context, e));
         }
     }
     let count = text_of(context, "write_chars", &access)
@@ -386,5 +380,82 @@ mod tests {
         assert!(err.contains("write_chars: int is not a string"), "{err}");
         let err = committed_string(&vm, &p, 1);
         assert!(err.contains("write_chars: string is not an int"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn write_chars_sees_a_pending_creation() {
+        let (root, vm) = lib("wc-pending-create").await;
+        let process = vm
+            .initialize_process_from_code(
+                "/pending.c",
+                r#"
+                    int status;
+                    string text;
+                    void create() {
+                        write_file("/new.txt", "abc", 1);
+                        status = write_chars("/new.txt", 1, "猫");
+                        text = read_chars("/new.txt");
+                    }
+                "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(committed_string(&vm, &process, 1), "a猫c");
+        assert_eq!(
+            std::fs::read_to_string(root.join("new.txt")).unwrap(),
+            "a猫c"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_chars_sees_a_pending_removal() {
+        let (root, vm) = lib("wc-pending-remove").await;
+        std::fs::write(root.join("gone.txt"), "abc").unwrap();
+        let process = vm
+            .initialize_process_from_code(
+                "/pending.c",
+                r#"
+                    int status;
+                    void create() {
+                        rm("/gone.txt");
+                        status = write_chars("/gone.txt", 0, "x");
+                    }
+                "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(0)
+        );
+        assert!(!root.join("gone.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn write_chars_rejects_directories() {
+        let (root, vm) = lib("wc-directory").await;
+        std::fs::create_dir(root.join("dir")).unwrap();
+        let error = error_of(&vm, r#"write_chars("/dir", 0, "x")"#).await;
+        assert!(error.contains("write_chars: /dir is not a file"), "{error}");
+        assert!(!error.contains(root.to_str().unwrap()), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn write_chars_metadata_errors_keep_their_cause() {
+        let (root, vm) = lib("wc-metadata-error").await;
+        let cause = std::fs::metadata(root.join("d.txt/child")).unwrap_err();
+        let error = error_of(&vm, r#"write_chars("/d.txt/child", 0, "x")"#).await;
+        assert!(error.contains("write_chars: /d.txt/child:"), "{error}");
+        assert!(error.contains(&cause.to_string()), "{error}");
+        assert!(!error.contains(root.to_str().unwrap()), "{error}");
     }
 }

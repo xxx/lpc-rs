@@ -19,7 +19,9 @@ it.
 Like `write_file`, the write is checked now and lands when the task
 commits; a `read_chars` later in the same task already sees the new
 characters, and two writes in one task land in order, each seeing the
-other's characters.
+other's characters. File checks include earlier staged creations, removals,
+and renames: a file created earlier in the task can be changed, while a
+removed file returns 0.
 
 ### Examples
 
