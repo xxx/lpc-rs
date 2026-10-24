@@ -117,6 +117,29 @@ mod tests {
     }
 
     #[test]
+    fn mid_codepoint_offsets_snap_back_and_terminate() {
+        let (sender, receiver) = flume::bounded(1);
+        let worker = std::thread::spawn(move || {
+            let positions = [2, 3, 4, 6, usize::MAX].map(|byte| position("a💖é", byte));
+            sender.send(positions).unwrap();
+        });
+        let positions = receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .expect("UTF-8 boundary backtracking must terminate");
+        worker.join().unwrap();
+        assert_eq!(
+            positions,
+            [
+                Position::new(0, 1),
+                Position::new(0, 1),
+                Position::new(0, 1),
+                Position::new(0, 3),
+                Position::new(0, 4),
+            ]
+        );
+    }
+
+    #[test]
     fn file_uris_decode_escaped_paths() {
         let path = std::env::temp_dir().join("mud lib").join("café.c");
         let uri = file_uri(&path).unwrap();

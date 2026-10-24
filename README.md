@@ -309,7 +309,7 @@ The reviewed scope includes:
 - [Compiler CLI](lpc-rs-lpcc/src/main.rs): execution/check/assembly modes,
   simulated-efun targets, diagnostics and output flushing.
 - [Language server](lpc-rs-lsp/src/main.rs): stdio startup, initialization,
-  capability reporting and protocol shutdown.
+  capabilities, shutdown, source overlays, file URIs and UTF-16 position mapping.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

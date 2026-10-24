@@ -47,6 +47,7 @@ examine_globs = [
     "lpc-rs-driver/src/main.rs",
     "lpc-rs-lpcc/src/main.rs",
     "lpc-rs-lsp/src/main.rs",
+    "lpc-rs-lsp/src/documents.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
