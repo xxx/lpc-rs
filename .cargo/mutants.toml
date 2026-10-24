@@ -42,6 +42,7 @@ examine_globs = [
     "lpc-rs-telnet/src/wire.rs",
     "lpc-rs-telnet/src/table.rs",
     "lpc-rs-telnet/src/terminal.rs",
+    "lpc-rs-telnet/src/session.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

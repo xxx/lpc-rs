@@ -300,7 +300,8 @@ The reviewed scope includes:
   construction, capacity, formatting, mutable access, iteration and concatenation.
 - [Telnet protocol](lpc-rs-telnet/src/lib.rs): option-byte conversions, input
   framing, split feeds, malformed subnegotiations, outbound escaping and newline
-  handling, reservation growth, option negotiation states and terminal reports.
+  handling, reservation growth, option negotiation states, terminal reports,
+  input batching, mode changes and session events.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -22,7 +22,7 @@ pub enum Opt {
     Echo,
     /// RFC 858: suppress go-ahead.
     Sga,
-    /// RFC 1091: terminal type. Refused in v1.
+    /// RFC 1091: terminal type and MTTS capability reports.
     Ttype,
     /// RFC 885: end-of-record prompt marks.
     Eor,
@@ -30,9 +30,9 @@ pub enum Opt {
     Naws,
     /// RFC 2066: character set.
     Charset,
-    /// MUD Server Status Protocol. Offered in v1.
+    /// MUD Server Status Protocol. Offered by default.
     Mssp,
-    /// MUD Client Compression Protocol v2. Refused in v1.
+    /// MUD Client Compression Protocol v2. Refused by default.
     Mccp2,
     /// MUD eXtension Protocol.
     Mxp,
