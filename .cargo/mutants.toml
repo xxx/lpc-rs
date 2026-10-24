@@ -173,6 +173,7 @@ examine_globs = [
     "src/interpreter/efun/conversions.rs",
     "src/interpreter/efun/mod.rs",
     "src/interpreter/efun/sort_array.rs",
+    "src/interpreter/efun/bits.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
