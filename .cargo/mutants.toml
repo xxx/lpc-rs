@@ -54,6 +54,7 @@ examine_globs = [
     "src/interpreter/efun/allocate.rs",
     "src/interpreter/efun/add_rule.rs",
     "src/interpreter/efun/all_environment.rs",
+    "src/interpreter/efun/all_inventory.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
