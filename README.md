@@ -326,7 +326,8 @@ The reviewed scope includes:
   `move_object`, `object_clones`, `object_memory_info`, `object_time`,
   `objects`, `origin`, `papplyv`, `query_call_out`, `query_connection`,
   `query_ip_number`, `remove_action`, `remove_call_out`, `remove_rule`,
-  `restore_value`, `rm`, `rmdir`, `save_map`, `save_value`, `send_gmcp`.
+  `restore_value`, `rm`, `rmdir`, `save_map`, `save_value`, `send_gmcp`,
+  `send_mxp`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
