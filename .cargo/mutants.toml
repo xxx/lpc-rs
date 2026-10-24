@@ -79,6 +79,7 @@ examine_globs = [
     "src/interpreter/efun/function_object.rs",
     "src/interpreter/efun/function_signature.rs",
     "src/interpreter/efun/get_char.rs",
+    "src/interpreter/efun/get_dir.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
