@@ -94,6 +94,7 @@ examine_globs = [
     "src/interpreter/efun/m_delete.rs",
     "src/interpreter/efun/mkdir.rs",
     "src/interpreter/efun/move_object.rs",
+    "src/interpreter/efun/object_clones.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
