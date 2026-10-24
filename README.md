@@ -319,9 +319,9 @@ The reviewed scope includes:
 - [Callback dispatch](src/interpreter/vm/prioritize_call_out.rs): receiver
   resolution, cancellation, runtime errors and repeat lifecycle.
 - [Additional efun modules](src/interpreter/efun/mod.rs): `add_action`,
-  `add_rule`, `all_environment`, `all_inventory`, `call_inherited`, `call_out`,
-  `case`, `clone_object`, `commands`, `compile_string`, `compose`, `copy_class`,
-  `crypt`, `ctime`, `deep_copy`, `deep_inventory`, `destruct`,
+  `add_rule`, `all_environment`, `all_inventory`, `bytes`, `call_inherited`,
+  `call_out`, `case`, `clone_object`, `commands`, `compile_string`, `compose`,
+  `copy_class`, `crypt`, `ctime`, `deep_copy`, `deep_inventory`, `destruct`,
   `disable_commands`, `disassemble`, `enable_commands`, `environment`,
   `evaluate`, `exec`, `explode`, `file_size`, `file_time`, `filter`,
   `filter_map`, `find_object`, `function_description`, `function_exists`,

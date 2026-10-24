@@ -37,11 +37,7 @@ pub(super) fn offset(start: i64, size: u64) -> u64 {
 /// absent) from byte `start` of the file, the read cut at the end; 0 when
 /// `start` is at or past the end. The result is `bytes`, of any length.
 pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let start = if context.arg_count() > 1 {
-        int_arg(context, "read_bytes", 1)?
-    } else {
-        0
-    };
+    let start = int_arg(context, "read_bytes", 1)?;
     let length = if context.arg_count() > 2 {
         let length = int_arg(context, "read_bytes", 2)?;
         if length < 0 {
