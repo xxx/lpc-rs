@@ -316,8 +316,8 @@ The reviewed scope includes:
   generations and lifecycle behavior.
 - [Additional efun modules](src/interpreter/efun/mod.rs): `add_action`,
   `add_rule`, `all_environment`, `all_inventory`, `call_inherited`, `case`,
-  `clone_object`, `commands`, `compile_string`, `copy_class`, `ctime`,
-  `deep_inventory`, `destruct`, `disable_commands`, `disassemble`,
+  `clone_object`, `commands`, `compile_string`, `compose`, `copy_class`,
+  `ctime`, `deep_inventory`, `destruct`, `disable_commands`, `disassemble`,
   `enable_commands`, `environment`, `evaluate`, `exec`, `explode`, `file_size`,
   `filter`, `filter_map`, `find_object`, `function_name`, `function_object`,
   `function_signature`, `get_char`, `get_dir`, `has_key`, `hash_string`,
@@ -361,6 +361,8 @@ change. Reviewed exclusions have specific regexes and explanations:
 XOR set the same warning flag after `Span::file_id` clears that bit.
 Telnet framing permits different linear reservation hints while preserving wire
 bytes; a growth check catches the quadratic reservation mutation.
+Composition can reuse the inner function's register for its result after the call
+returns; that arithmetic exclusion is pinned to the expression's source position.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out

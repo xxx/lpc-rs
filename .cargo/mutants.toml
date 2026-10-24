@@ -129,6 +129,7 @@ examine_globs = [
     "src/interpreter/efun/variable_info.rs",
     "src/interpreter/efun/write.rs",
     "src/interpreter/efun/add_action.rs",
+    "src/interpreter/efun/compose.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -146,4 +147,7 @@ exclude_re = [
     '^lpc-rs-telnet/src/wire\.rs:\d+:\d+: replace \+ with \* in subnegotiation$',
     '^lpc-rs-telnet/src/wire\.rs:\d+:\d+: replace \+ with - in text$',
     '^lpc-rs-telnet/src/wire\.rs:\d+:\d+: replace / with (\*|%) in text$',
+    # The inner function's register can hold the result after that call returns.
+    # Revisit this pinned expression if instruction lifetimes change.
+    '^src/interpreter/efun/compose\.rs:33:32: replace \+ with \* in compose_executor$',
 ]
