@@ -107,6 +107,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn arrays_must_be_the_only_argument() {
+        for name in ["min", "max"] {
+            for arguments in ["values, 0", "0, values"] {
+                let code = format!(
+                    "mixed create() {{ mixed values = ({{ 1, 2 }}); return {name}({arguments}); }}"
+                );
+                let Err(error) = try_run_prog(&code).await else {
+                    panic!("{name}({arguments}) accepted an array with another argument");
+                };
+                let error = error.to_string();
+                assert!(
+                    error.contains(&format!("{name}: array is not a number")),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn max_of_a_string_is_an_error() {
         let code = r#"mixed create() { mixed s = "a"; return max(s, 1); }"#;
         let err = try_run_prog(code).await.unwrap_err().to_string();

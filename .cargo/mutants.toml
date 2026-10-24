@@ -133,6 +133,7 @@ examine_globs = [
     "src/interpreter/efun/file_time.rs",
     "src/interpreter/efun/function_exists.rs",
     "src/interpreter/efun/functions.rs",
+    "src/interpreter/efun/min_max.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
