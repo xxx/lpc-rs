@@ -104,6 +104,7 @@ examine_globs = [
     "src/interpreter/efun/query_connection.rs",
     "src/interpreter/efun/query_ip_number.rs",
     "src/interpreter/efun/remove_action.rs",
+    "src/interpreter/efun/remove_call_out.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
