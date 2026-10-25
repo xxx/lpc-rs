@@ -278,6 +278,10 @@ examine_globs = [
     "src/compiler/ast/cast_node.rs",
     "src/compiler/ast/comma_expression_node.rs",
     "src/compiler/ast/ternary_node.rs",
+    "src/compiler/ast/range_node.rs",
+    "src/compiler/ast/mapping_node.rs",
+    "src/compiler/ast/unary_op_node.rs",
+    "src/compiler/ast/ref_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

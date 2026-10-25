@@ -230,4 +230,90 @@ mod tests {
             assert_eq!(display, expected);
         }
     }
+    #[tokio::test]
+    async fn parsed_values_keep_their_source_text_and_display() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        for (index, (expression, expected_source, expected_display)) in [
+            ("input[0..1]", "input[0..1]", "0..1"),
+            ("input[..1]", "input[..1]", "..1"),
+            ("input[0..]", "input[0..]", "0.."),
+            (r#"([ "k": 7 ])"#, r#"([ "k": 7 ])"#, r#"([ "k": 7 ])"#),
+            ("-input", "-input", "-input"),
+            ("input++", "input++", "input++"),
+            ("input--", "input--", "input--"),
+            ("set(ref input)", "ref input", "ref input"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = format!(
+                "mixed set(mixed ref target) {{ return target; }} mixed value(mixed input) {{ return {expression}; }}"
+            );
+            let path = format!("/value-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let AstNode::FunctionDef(mut function) = program.body.pop().unwrap() else {
+                panic!("expected a function definition");
+            };
+            let AstNode::Return(result) = function.body.pop().unwrap() else {
+                panic!("expected a return expression");
+            };
+            let (source, display) = match result.value.unwrap() {
+                ExpressionNode::BinaryOp(binary) => match *binary.r {
+                    ExpressionNode::Range(node) => (node.to_code(), node.to_string()),
+                    _ => panic!("expected a range"),
+                },
+                ExpressionNode::Mapping(node) => (node.to_code(), node.to_string()),
+                ExpressionNode::UnaryOp(node) => (node.to_code(), node.to_string()),
+                ExpressionNode::Call(call) => match call.arguments.into_iter().next().unwrap() {
+                    ExpressionNode::Ref(node) => (node.to_code(), node.to_string()),
+                    _ => panic!("expected a reference argument"),
+                },
+                _ => panic!("expected a value expression"),
+            };
+            assert_eq!(source, expected_source);
+            assert_eq!(display, expected_display);
+        }
+    }
+
+    #[tokio::test]
+    async fn analyzed_reference_arguments_distinguish_globals_from_locals() {
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let source = r#"
+            int shared;
+            void increment(int ref target) { target++; }
+            void exercise() { int local; increment(ref shared); increment(ref local); }
+        "#;
+        let (mut program, _) = Compiler::new(test_config())
+            .analyze_string("/references.c", source)
+            .await
+            .unwrap();
+        let AstNode::FunctionDef(function) = program.body.pop().unwrap() else {
+            panic!("expected a function definition");
+        };
+        let references: Vec<_> = function
+            .body
+            .into_iter()
+            .filter_map(|statement| match statement {
+                AstNode::Call(call) | AstNode::Expression(ExpressionNode::Call(call)) => Some(call),
+                _ => None,
+            })
+            .flat_map(|call| call.arguments)
+            .filter_map(|argument| match argument {
+                ExpressionNode::Ref(reference) => Some(reference),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(references.len(), 2);
+        for (reference, (name, global)) in
+            references.iter().zip([("shared", true), ("local", false)])
+        {
+            assert_eq!(reference.name.as_str(), name);
+            assert_eq!(reference.global, global);
+        }
+    }
 }

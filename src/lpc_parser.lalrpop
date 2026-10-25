@@ -813,8 +813,8 @@ PostfixExpression: ExpressionNode = {
         };
         Ok(guard(ExpressionNode::from(node), span)?)
     },
-    <e:PostfixExpression> "++" =>? {
-        let span = e.span();
+    <e:PostfixExpression> <op:"++"> =>? {
+        let span = Span::combine(e.span(), Some(op));
         let n = UnaryOpNode {
             expr: Box::new(e),
             op: UnaryOperation::Inc,
@@ -824,8 +824,8 @@ PostfixExpression: ExpressionNode = {
 
         Ok(collapse_unary_op(n)?)
     },
-    <e:PostfixExpression> "--" =>? {
-        let span = e.span();
+    <e:PostfixExpression> <op:"--"> =>? {
+        let span = Span::combine(e.span(), Some(op));
         let n = UnaryOpNode {
             expr: Box::new(e),
             op: UnaryOperation::Dec,
