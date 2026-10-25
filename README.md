@@ -406,6 +406,7 @@ The reviewed scope includes:
 - [Jump AST nodes](src/compiler/ast/mod.rs): `break`, `continue` and `return` traversal, source ranges and formatting.
 - [Expression AST nodes](src/compiler/ast/mod.rs): capture, cast, comma and ternary traversal, source ranges and formatting.
 - [Additional expression AST nodes](src/compiler/ast/mod.rs): range, mapping, unary and reference traversal, source ranges and formatting.
+- [Declaration and label AST nodes](src/compiler/ast/mod.rs): function, inheritance and switch-label traversal, source ranges and formatting.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

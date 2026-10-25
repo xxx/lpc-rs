@@ -282,6 +282,9 @@ examine_globs = [
     "src/compiler/ast/mapping_node.rs",
     "src/compiler/ast/unary_op_node.rs",
     "src/compiler/ast/ref_node.rs",
+    "src/compiler/ast/function_def_node.rs",
+    "src/compiler/ast/inherit_node.rs",
+    "src/compiler/ast/label_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

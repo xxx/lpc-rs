@@ -316,4 +316,68 @@ mod tests {
             assert_eq!(reference.global, global);
         }
     }
+
+    #[tokio::test]
+    async fn parsed_definitions_and_labels_keep_their_source_text_and_display() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        let (mut program, _) = compiler
+            .parse_string(&"/function.c".into(), "void work() {}")
+            .await
+            .unwrap();
+        let AstNode::FunctionDef(function) = program.body.pop().unwrap() else {
+            panic!("expected a function definition");
+        };
+        assert_eq!(function.to_code(), "void work");
+        assert_eq!(function.to_string(), "void work() {  }");
+
+        for (index, (source, display)) in [
+            (r#"inherit "/base";"#, "inherit /base"),
+            (
+                r#"private inherit "/base" parent;"#,
+                "private inherit /base parent",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let path = format!("/inherit-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let inherit = program.inherits.pop().unwrap();
+            assert_eq!(inherit.to_code(), source);
+            assert_eq!(inherit.to_string(), display);
+        }
+
+        let (mut program, _) = compiler
+            .parse_string(
+                &"/labels.c".into(),
+                "void labels() { switch (1) { case 1:; default:; } }",
+            )
+            .await
+            .unwrap();
+        let AstNode::FunctionDef(function) = program.body.pop().unwrap() else {
+            panic!("expected a function definition");
+        };
+        let AstNode::Switch(switch) = function.body.into_iter().next().unwrap() else {
+            panic!("expected a switch");
+        };
+        let AstNode::Block(block) = *switch.body else {
+            panic!("expected a switch body");
+        };
+        assert_eq!(block.body.len(), 2);
+        for (statement, (source, display, default)) in block
+            .body
+            .into_iter()
+            .zip([("case 1:", "1", false), ("default", "default", true)])
+        {
+            let AstNode::LabeledStatement(statement) = statement else {
+                panic!("expected a labeled statement");
+            };
+            assert_eq!(statement.label.to_code(), source);
+            assert_eq!(statement.label.to_string(), display);
+            assert_eq!(statement.label.is_default(), default);
+        }
+    }
 }
