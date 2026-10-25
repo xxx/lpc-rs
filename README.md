@@ -346,6 +346,7 @@ The reviewed scope includes:
   `write_file`.
 - [Runtime entry](src/runtime.rs): worker execution and returned values.
 - [Memo cache](src/util/memo.rs): bounded reuse and concurrent construction.
+- [Simul-efun lookup](src/util/mod.rs): configured resident objects.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

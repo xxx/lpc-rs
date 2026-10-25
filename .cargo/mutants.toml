@@ -179,6 +179,7 @@ examine_globs = [
     "src/interpreter/efun/efun_context.rs",
     "src/runtime.rs",
     "src/util/memo.rs",
+    "src/util/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
