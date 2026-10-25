@@ -215,6 +215,7 @@ examine_globs = [
     "src/interpreter/efun/request_clean_up.rs",
     "src/interpreter/efun/set_this_player.rs",
     "src/interpreter/efun/this_object.rs",
+    "src/interpreter/efun/this_player.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
