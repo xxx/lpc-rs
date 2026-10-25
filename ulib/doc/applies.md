@@ -74,7 +74,7 @@ from the caller object's name through inheritance or virtual objects.
 | `valid_store_variable(object caller, object target, string name, string declaring_program, mixed value, string program)` | Replacing another object's named global. The requested source selector may be nil; declaration lookup and type checks follow authorization. Self-writes do not ask. | Deny. |
 | `valid_recompile(object prototype, object caller, string program)` | In-place upgrades of a prototype and its current clones, including system prototypes; checked when requested and before compilation, under old system policy. Also permits other objects to query a job's status using the querying caller, program and command giver; a missing target is 0. The original requester reads its own status directly. | Deny. |
 | `valid_shutdown(object caller, string program)` | The LPC shutdown efun, not the host's Ctrl-C or termination signal. | Deny. |
-| `query_allow_shadow(object target)` | Shadowing `target`; `previous_object()` is the would-be shadow. A target's `no_shadow` pragma can also forbid it. | Deny. |
+| `query_allow_shadow(object target)` | Shadowing `target`; `previous_object()` is the would-be shadow. The driver rechecks liveness and structural restrictions after an allow. A target's `no_shadow` pragma can also forbid it. | Deny. |
 
 ### Grammar vocabulary
 

@@ -203,6 +203,7 @@ int valid_shutdown(object caller, string program) {
  * previous_object() is the object asking to become that shadow.
  * Return 0 for all targets because ulib needs no function interception;
  * a target's no_shadow pragma independently forbids shadowing as well.
+ * After an allow, the driver rechecks liveness and structural restrictions.
  */
 int query_allow_shadow(object target) {
     return 0;

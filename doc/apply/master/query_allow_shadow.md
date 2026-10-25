@@ -16,8 +16,16 @@ shadow, the master, the simul-efun object, a `no_shadow` program or one
 whose `nomask` function the shadow defines — run before this apply and
 refuse on their own.
 
-The apply runs inside the caller's task: `this_object` is the master and an
-error thrown here is the caller's error.
+After an allow, the driver checks that both objects are still live and repeats
+the structural checks before attaching. Moving or destructing an object, or
+changing its shadow relationships during this apply, can therefore cause the
+attach to fail even after a non-zero return.
+
+The apply joins the caller's transaction: `this_object()` is the master,
+`previous_object()` is the prospective shadow, and `this_player()` retains the
+requesting context. An error thrown here is the caller's error. If the caller
+catches a refusal after the apply returns, changes made by the apply remain in
+that transaction.
 
 ### Examples
 
