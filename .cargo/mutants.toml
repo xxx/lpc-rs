@@ -226,6 +226,7 @@ examine_globs = [
     "src/interpreter/efun/callback.rs",
     "src/interpreter/efun/parse_command.rs",
     "src/interpreter/efun/sscanf.rs",
+    "src/interpreter/vm/initiate_login.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
