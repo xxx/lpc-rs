@@ -382,6 +382,7 @@ The reviewed scope includes:
 - [Call origins](src/interpreter/call_origin.rs): stable LPC spellings for local calls, callbacks and driver dispatch.
 - [Callback continuations](src/interpreter/continuation.rs): frame cloning and socket ownership offers.
 - [Environment iteration](src/interpreter/process/util.rs): transactional container traversal and iterator termination.
+- [Compiler source reads](src/compiler/source_reader.rs): file contents and filesystem kind probes.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -239,6 +239,7 @@ examine_globs = [
     "src/interpreter/call_origin.rs",
     "src/interpreter/continuation.rs",
     "src/interpreter/process/util.rs",
+    "src/compiler/source_reader.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
