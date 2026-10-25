@@ -388,6 +388,7 @@ The reviewed scope includes:
 - [Compiler callees](src/compiler/callee.rs): prototype access for local, simul-efun and efun resolution.
 - [Preprocessor expressions](src/compiler/preprocessor/preprocessor_node.rs): readable conditional expressions in compiler diagnostics.
 - [Apply diagnostics](src/interpreter/apply/diagnostics.rs): missing hooks, dispatch events and resolved outcomes.
+- [Driver callbacks](src/interpreter/task/driver_callback.rs): target liveness, initialization and execution outcomes.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

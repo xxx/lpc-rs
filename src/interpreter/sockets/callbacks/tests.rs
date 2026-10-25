@@ -483,6 +483,41 @@ async fn caught_callback_errors_commit_normally() {
 }
 
 #[tokio::test]
+async fn an_uninitialized_callback_receiver_initializes_once_before_its_events() {
+    let f = Fixture::new(RECORDER).await;
+    let receiver =
+        f.vm.create_process_from_code(
+            "/receiver.c",
+            r#"
+                int initializations = 0;
+                string state = "globals";
+                void create() { initializations++; state += ":create"; }
+                void event(int h, string e, mixed d) { state += ":" + e; }
+            "#,
+        )
+        .await
+        .unwrap();
+    let handle = f.connect(f.pointer(&receiver, "event").await).await;
+    f.ready(handle).await;
+    f.dispatch(handle).await;
+    assert_eq!(f.global(&receiver, "initializations"), LpcRef::from(1));
+    assert_eq!(
+        f.global(&receiver, "state"),
+        LpcRef::from("globals:create:ready")
+    );
+
+    f.read(handle, 1, b"x").await;
+    f.dispatch(handle).await;
+    assert_eq!(f.global(&receiver, "initializations"), LpcRef::from(1));
+    assert_eq!(
+        f.global(&receiver, "state"),
+        LpcRef::from("globals:create:ready:read")
+    );
+    assert!(f.info(handle).await.is_some());
+    assert_eq!(f.global(&f.master, "errors"), LpcRef::from(0));
+}
+
+#[tokio::test]
 async fn callbacks_use_driver_origin_and_the_scheduling_owner_without_player_context() {
     let f = Fixture::new(RECORDER).await;
     let receiver = f
