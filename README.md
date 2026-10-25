@@ -351,6 +351,7 @@ The reviewed scope includes:
 - [Local symbol scope](src/compiler/semantic/local_scope.rs): insertion, lookup and display.
 - [Array syntax nodes](src/compiler/ast/array_node.rs): source spans, rendering and traversal.
 - [Spread syntax nodes](src/compiler/ast/spread_node.rs): source spans, rendering and traversal.
+- [Assignment syntax nodes](src/compiler/ast/assignment_node.rs): operation spellings, source spans and traversal.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
