@@ -126,3 +126,26 @@ pub(crate) fn return_empty<const N: usize>(context: &mut EfunContext<'_, N>, ite
         Items::Mapping(_) => context.return_mapping(LpcMapping::new(IndexMap::new())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remaining_length_tracks_consumption_for_both_collection_kinds() {
+        for mut items in [
+            Items::Array(vec![1.into(), 2.into()].into_iter()),
+            Items::Mapping(vec![(1.into(), 10.into()), (2.into(), 20.into())].into_iter()),
+        ] {
+            for remaining in [2, 1, 0] {
+                assert_eq!(items.len(), remaining);
+                assert_eq!(items.is_empty(), remaining == 0);
+                let consumed = match &mut items {
+                    Items::Array(values) => values.next().is_some(),
+                    Items::Mapping(entries) => entries.next().is_some(),
+                };
+                assert_eq!(consumed, remaining != 0);
+            }
+        }
+    }
+}
