@@ -248,6 +248,7 @@ examine_globs = [
     "src/interpreter/task/driver_callback.rs",
     "src/compiler/prepared_program.rs",
     "src/interpreter/program/function_scope.rs",
+    "src/interpreter/vm/vm_op.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
