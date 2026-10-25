@@ -399,6 +399,7 @@ The reviewed scope includes:
 - [Task templates](src/interpreter/task/task_template.rs): player context, captured cells and transaction sharing.
 - [Switch collection](src/compiler/codegen/case_collector.rs): labels for the current switch without crossing nested functions.
 - [Closure captures](src/compiler/codegen/capture_walker.rs): creation-scope expressions and occurrence diagnostics.
+- [Control-flow AST nodes](src/compiler/ast/mod.rs): traversal and balanced diagnostic formatting for `do`, `if`, `switch` and `while`.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

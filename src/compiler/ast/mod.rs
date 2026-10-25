@@ -44,3 +44,35 @@ pub mod labeled_statement_node;
 pub mod parsed_type;
 
 pub mod class_expression;
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ast_node::AstNode, do_while_node::DoWhileNode, expression_node::ExpressionNode,
+        if_node::IfNode, int_node::IntNode, switch_node::SwitchNode, while_node::WhileNode,
+    };
+
+    #[test]
+    fn control_flow_formatting_balances_delimiters() {
+        let condition = || ExpressionNode::Int(IntNode::new(1));
+        let body = || AstNode::NoOp;
+        let nodes = [
+            DoWhileNode::new(body(), condition(), None).to_string(),
+            IfNode::new(condition(), body(), None, None).to_string(),
+            IfNode::new(condition(), body(), Some(body()), None).to_string(),
+            SwitchNode::new(condition(), body(), None).to_string(),
+            WhileNode::new(condition(), body(), None).to_string(),
+        ];
+
+        assert_eq!(
+            nodes,
+            [
+                "do { NoOp } while (1)",
+                "if(1) { NoOp }",
+                "if(1) { NoOp } else { NoOp }",
+                "switch(1) { NoOp }",
+                "while(1) { NoOp }",
+            ]
+        );
+    }
+}
