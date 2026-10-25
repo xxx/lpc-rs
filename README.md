@@ -390,6 +390,7 @@ The reviewed scope includes:
 - [Apply diagnostics](src/interpreter/apply/diagnostics.rs): missing hooks, dispatch events and resolved outcomes.
 - [Driver callbacks](src/interpreter/task/driver_callback.rs): target liveness, initialization and execution outcomes.
 - [Prepared programs](src/compiler/prepared_program.rs): authorized inheritance, depth limits and receiver analysis.
+- [Function scopes](src/interpreter/program/function_scope.rs): inherited lookup, namespaces, privacy and shared storage accounting.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

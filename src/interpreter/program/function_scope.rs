@@ -98,3 +98,38 @@ impl FunctionScope {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interpreter::memory::Size;
+    use std::collections::HashSet;
+
+    #[test]
+    fn repeated_parent_scopes_count_references_without_counting_the_parent_twice() {
+        let parent = Arc::new(FunctionScope {
+            functions: HashMap::from([("shared_function".repeat(32), Some(ustr("shared")))]),
+            ..Default::default()
+        });
+        let single = FunctionScope {
+            inherits: vec![parent.clone()].into_boxed_slice(),
+            ..Default::default()
+        };
+        let repeated = FunctionScope {
+            inherits: vec![parent.clone(), parent].into_boxed_slice(),
+            ..Default::default()
+        };
+        let measure = |scope: &FunctionScope| {
+            let mut size = Size::default();
+            scope.storage_bytes(&mut size, &mut HashSet::new()).unwrap();
+            size.bytes()
+        };
+
+        let single_bytes = measure(&single);
+        assert!(single_bytes > 2 * size_of::<FunctionScope>());
+        assert_eq!(
+            measure(&repeated),
+            single_bytes + size_of::<Arc<FunctionScope>>()
+        );
+    }
+}
