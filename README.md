@@ -401,6 +401,7 @@ The reviewed scope includes:
 - [Closure captures](src/compiler/codegen/capture_walker.rs): creation-scope expressions and occurrence diagnostics.
 - [Control-flow AST nodes](src/compiler/ast/mod.rs): traversal and balanced diagnostic formatting for `do`, `if`, `switch` and `while`.
 - [Parsed parameters](src/compiler/parser/parameter.rs): required names, variadic types and collector constraints.
+- [Statement AST nodes](src/compiler/ast/mod.rs): traversal and formatting for blocks, catches, declarations, `for`, labeled statements and programs.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

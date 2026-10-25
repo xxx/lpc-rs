@@ -27,3 +27,27 @@ impl Display for CatchNode {
         write!(f, "catch {}", self.body)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{interpreter::lpc_ref::LpcRef, test_support::run_prog};
+
+    #[tokio::test]
+    async fn catch_block_bodies_run_and_preserve_writes_before_errors() {
+        for source in [
+            r#"int create() {
+                int value = 0;
+                mixed caught = catch { value = 7; };
+                return value == 7 && !caught;
+            }"#,
+            r#"int create() {
+                int value = 0;
+                mixed caught = catch { value = 7; throw("stopped"); value = 99; };
+                return value == 7 && stringp(caught);
+            }"#,
+        ] {
+            let task = run_prog(source).await;
+            assert_eq!(task.context.result().unwrap(), LpcRef::from(1));
+        }
+    }
+}

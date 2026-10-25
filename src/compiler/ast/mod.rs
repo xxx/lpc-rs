@@ -75,4 +75,53 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn statement_formatters_preserve_labels_types_and_body_text() {
+        use super::{
+            block_node::BlockNode, catch_node::CatchNode, decl_node::DeclNode, for_node::ForNode,
+            label_node::LabelNode, labeled_statement_node::LabeledStatementNode,
+            program_node::ProgramNode, var_init_node::VarInitNode,
+        };
+        use lpc_rs_core::lpc_type::LpcType;
+
+        let block = || BlockNode::new(vec![AstNode::NoOp, AstNode::NoOp]);
+        let number = |value| ExpressionNode::Int(IntNode::new(value));
+        let mut variable = VarInitNode::new("count", LpcType::Int(false));
+        variable.value = Some(number(7));
+        let declaration = DeclNode {
+            type_: LpcType::Int(false).into(),
+            initializations: vec![variable],
+        };
+        let text = [
+            block().to_string(),
+            CatchNode {
+                body: block(),
+                span: None,
+            }
+            .to_string(),
+            declaration.to_string(),
+            ForNode::new(None, Some(number(1)), Some(number(2)), AstNode::NoOp, None).to_string(),
+            LabeledStatementNode::new(AstNode::NoOp, LabelNode::new(number(1), None)).to_string(),
+            LabeledStatementNode::new(AstNode::NoOp, LabelNode::new_default(None)).to_string(),
+            ProgramNode {
+                inherits: vec![],
+                body: vec![AstNode::NoOp, AstNode::NoOp],
+            }
+            .to_string(),
+        ];
+
+        assert_eq!(
+            text,
+            [
+                "{ NoOp, NoOp }",
+                "catch { NoOp, NoOp }",
+                "int count = 7",
+                "for (; 1; 2) { NoOp }",
+                "1: NoOp",
+                "default: NoOp",
+                "NoOp, NoOp",
+            ]
+        );
+    }
 }
