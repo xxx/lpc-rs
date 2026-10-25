@@ -345,10 +345,10 @@ The reviewed scope includes:
   `rmdir`, `rusage`, `save_map`, `save_object`, `save_value`, `send_gmcp`,
   `send_mxp`, `set_this_player`, `shutdown`, `sizeof`, `sockets`, `sort_array`,
   `source_cache_stats`, `store_variable`, `strindex`, `syntax_tree`,
-  `tell_object`, `text_encoding`, `this_interactive`, `throw`, `time`,
-  `transaction_stats`, `trim`, `type_of`, `type_predicates`, `unique_array`,
-  `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`, `write`,
-  `write_file`.
+  `tell_object`, `text_encoding`, `this_interactive`, `this_object`, `throw`,
+  `time`, `transaction_stats`, `trim`, `type_of`, `type_predicates`,
+  `unique_array`, `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`,
+  `write`, `write_file`.
 - [Runtime entry](src/runtime.rs): worker execution and returned values.
 - [Memo cache](src/util/memo.rs): bounded reuse and concurrent construction.
 - [Simul-efun lookup](src/util/mod.rs): configured resident objects.
