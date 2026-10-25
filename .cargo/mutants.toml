@@ -195,6 +195,7 @@ examine_globs = [
     "src/compiler/parser/collapse_unary_op.rs",
     "src/interpreter/stm/admission.rs",
     "src/interpreter/stm/snapshot.rs",
+    "src/interpreter/efun/command.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
