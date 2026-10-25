@@ -349,6 +349,7 @@ The reviewed scope includes:
 - [Simul-efun lookup](src/util/mod.rs): configured resident objects.
 - [VM regex cache](src/interpreter/vm/regex_cache.rs): option keys, reuse and eviction.
 - [Local symbol scope](src/compiler/semantic/local_scope.rs): insertion, lookup and display.
+- [Array syntax nodes](src/compiler/ast/array_node.rs): source spans, rendering and traversal.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
