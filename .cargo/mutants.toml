@@ -197,6 +197,7 @@ examine_globs = [
     "src/interpreter/stm/snapshot.rs",
     "src/interpreter/efun/command.rs",
     "src/interpreter/efun/debug.rs",
+    "src/interpreter/efun/file_name.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
