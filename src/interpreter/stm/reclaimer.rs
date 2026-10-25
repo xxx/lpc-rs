@@ -87,6 +87,48 @@ mod tests {
     }
 
     #[test]
+    fn the_cell_threshold_selects_worker_disposal_at_equality() {
+        for (minimum_cells, expected_workers) in [(511, Some(2)), (512, Some(2)), (513, None)] {
+            let value = Arc::new(17);
+            let weak = Arc::downgrade(&value);
+            let world = (0..512).map(|_| (VarId::new(), value.clone())).collect();
+            drop(value);
+            let mut reclaimer = Reclaimer {
+                minimum_cells,
+                pool: None,
+            };
+            reclaimer.reclaim(world);
+            assert!(weak.upgrade().is_none());
+            assert_eq!(reclaimer.initialized_workers(), expected_workers);
+        }
+    }
+
+    #[test]
+    fn two_owned_chunks_start_workers() {
+        let hasher = std::collections::hash_map::RandomState::new();
+        let first = VarId::new();
+        let second = (0..128)
+            .map(|_| VarId::new())
+            .find(|second| {
+                let mut probe = HashMap::with_hasher(hasher.clone());
+                probe.insert(first, ());
+                probe.insert(*second, ());
+                probe.into_drop_chunks().len() == 2
+            })
+            .expect("two independently owned map branches");
+        let value = Arc::new(17);
+        let weak = Arc::downgrade(&value);
+        let mut world = HashMap::with_hasher(hasher);
+        world.insert(first, value.clone());
+        world.insert(second, value.clone());
+        drop(value);
+        let mut reclaimer = Reclaimer::new();
+        reclaimer.reclaim(world);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(reclaimer.initialized_workers(), Some(2));
+    }
+
+    #[test]
     fn a_single_owned_chunk_stays_serial() {
         let value = Arc::new(17);
         let weak = Arc::downgrade(&value);
