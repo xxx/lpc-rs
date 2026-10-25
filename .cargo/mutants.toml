@@ -238,6 +238,7 @@ examine_globs = [
     "src/interpreter/vm/mod.rs",
     "src/interpreter/call_origin.rs",
     "src/interpreter/continuation.rs",
+    "src/interpreter/process/util.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
