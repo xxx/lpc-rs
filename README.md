@@ -411,6 +411,7 @@ The reviewed scope includes:
 - [Compiler AST support](src/compiler/ast/mod.rs): foreach initialization, class expressions, parsed types and binary operations.
 - [AST wrappers](src/compiler/ast/mod.rs): generic node conversion, source locations, diagnostics and assignment ownership.
 - [Compiler support](src/compiler/mod.rs): diagnostics, inheritance interfaces, conditional compilation and macro-cache reuse and retention limits.
+- [Runtime support](src/interpreter/mod.rs): STM merges, pending calls, cleanup scheduling and bounded file reads.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

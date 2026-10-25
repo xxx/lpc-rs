@@ -297,6 +297,10 @@ examine_globs = [
     "src/compiler/program_interface.rs",
     "src/compiler/preprocessor/conditional.rs",
     "src/compiler/preprocessor/definition_cache.rs",
+    "src/interpreter/stm/merge.rs",
+    "src/interpreter/task/advance.rs",
+    "src/interpreter/process/cleanup.rs",
+    "src/interpreter/file_view/range.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

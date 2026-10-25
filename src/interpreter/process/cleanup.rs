@@ -67,3 +67,37 @@ impl Drop for CleanupLease {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{interpreter::vm::Vm, test_support::test_config};
+
+    #[tokio::test(start_paused = true)]
+    async fn cleanup_claims_and_requeries_at_the_exact_interval() {
+        let vm = Vm::new(test_config());
+        let process = vm
+            .create_process_from_code(
+                "/cleanup-boundary.c",
+                "int clean_up(int refs) { return 1; }",
+            )
+            .await
+            .unwrap();
+        let cleanup = process.cleanup.as_ref().unwrap();
+        let interval = Duration::from_secs(10);
+        assert!(!cleanup.is_idle(interval));
+        assert!(Cleanup::claim(&process, interval).is_none());
+
+        tokio::time::advance(interval).await;
+        assert!(cleanup.is_idle(interval));
+        let lease = Cleanup::claim(&process, interval).expect("the idle object is due now");
+        assert!(Cleanup::claim(&process, interval).is_none());
+        drop(lease);
+        assert!(Cleanup::claim(&process, interval).is_none());
+
+        tokio::time::advance(interval - Duration::from_nanos(1)).await;
+        assert!(Cleanup::claim(&process, interval).is_none());
+        tokio::time::advance(Duration::from_nanos(1)).await;
+        assert!(Cleanup::claim(&process, interval).is_some());
+    }
+}
