@@ -379,6 +379,7 @@ The reviewed scope includes:
 - [Captured frame cells](src/interpreter/call_frame/cells.rs): conversion, compact storage, identities and debug output.
 - [World-state reclamation](src/interpreter/stm/reclaimer.rs): worker thresholds, owned chunks and disposal completion.
 - [VM lifecycle](src/interpreter/vm/mod.rs): boot, subsystem startup, committed exits and connection draining.
+- [Call origins](src/interpreter/call_origin.rs): stable LPC spellings for local calls, callbacks and driver dispatch.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

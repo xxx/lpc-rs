@@ -236,6 +236,7 @@ examine_globs = [
     "src/interpreter/call_frame/cells.rs",
     "src/interpreter/stm/reclaimer.rs",
     "src/interpreter/vm/mod.rs",
+    "src/interpreter/call_origin.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
