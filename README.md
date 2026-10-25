@@ -348,7 +348,7 @@ The reviewed scope includes:
   `tell_object`, `text_encoding`, `this_interactive`, `this_object`,
   `this_player`, `throw`, `time`, `transaction_stats`, `trim`, `type_of`,
   `type_predicates`, `unique_array`, `uptime`, `users`, `variable_info`,
-  `wildmatch`, `word_wrap`, `write`, `write_file`.
+  `wildmatch`, `word_wrap`, `write`, `write_file`, `write_socket`.
 - [Runtime entry](src/runtime.rs): worker execution and returned values.
 - [Memo cache](src/util/memo.rs): bounded reuse and concurrent construction.
 - [Simul-efun lookup](src/util/mod.rs): configured resident objects.
