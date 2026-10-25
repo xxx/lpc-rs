@@ -211,6 +211,7 @@ examine_globs = [
     "src/interpreter/efun/query_notify_fail.rs",
     "src/interpreter/efun/query_parser_rules.rs",
     "src/interpreter/efun/query_resident_memory.rs",
+    "src/interpreter/efun/query_verb.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
