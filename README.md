@@ -397,6 +397,7 @@ The reviewed scope includes:
 - [Compiler inputs](src/compiler/source.rs): source identities, relative-path bases and safe diagnostic names.
 - [Task locations](src/interpreter/task/location.rs): frame reads, writes and integer increments.
 - [Task templates](src/interpreter/task/task_template.rs): player context, captured cells and transaction sharing.
+- [Switch collection](src/compiler/codegen/case_collector.rs): labels for the current switch without crossing nested functions.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
