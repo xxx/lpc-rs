@@ -144,12 +144,16 @@ fn scan_float(input: &str) -> Option<Scanned> {
         i += 1;
     }
     while i < bytes.len() && bytes[i].is_ascii_digit() {
+        let previous = i;
         i += 1;
+        debug_assert!(i > previous, "sscanf: numeric scan must advance");
     }
     if i < bytes.len() && bytes[i] == b'.' {
         i += 1;
         while i < bytes.len() && bytes[i].is_ascii_digit() {
+            let previous = i;
             i += 1;
+            debug_assert!(i > previous, "sscanf: numeric scan must advance");
         }
     }
     if i < bytes.len() && matches!(bytes[i], b'e' | b'E') {
@@ -159,7 +163,9 @@ fn scan_float(input: &str) -> Option<Scanned> {
         }
         let exp_digits_start = j;
         while j < bytes.len() && bytes[j].is_ascii_digit() {
+            let previous = j;
             j += 1;
+            debug_assert!(j > previous, "sscanf: numeric scan must advance");
         }
         if j > exp_digits_start {
             i = j;
@@ -280,7 +286,9 @@ pub fn sscanf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
                 }
             }
         }
+        let previous = i;
         i += 1;
+        debug_assert!(i > previous, "sscanf: format scan must advance");
     }
     // Every piece matched, input remains, a variable is unused: it takes the rest.
     if i == pieces.len() && !rest.is_empty() && usize::from(next_var) - 2 < variables {
@@ -402,6 +410,50 @@ mod tests {
 
         let r = scan(r#"float f; int c = sscanf("1", "%f", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
+    }
+
+    #[tokio::test]
+    async fn floats_accept_signs_whitespace_and_numeric_token_boundaries() {
+        for (input, value, tail) in [
+            ("-1.5tail", -1.5, "tail"),
+            ("+2.25tail", 2.25, "tail"),
+            (" \t-0.5tail", -0.5, "tail"),
+            ("  +3.5tail", 3.5, "tail"),
+            (".5tail", 0.5, "tail"),
+            ("+1E+2tail", 100.0, "tail"),
+            (" -1.25e-1tail", -0.125, "tail"),
+            ("1e+", 1.0, "e+"),
+            ("1e-", 1.0, "e-"),
+        ] {
+            let body = format!(
+                r#"float number = 2.5; string tail = "old";
+                int matched = sscanf({input:?}, "%f%s", number, tail);
+                return ({{ matched, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![LpcRef::from(2), LpcRef::from(value), LpcRef::from(tail)],
+                "{input:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_float_digits_preserve_every_destination() {
+        for input in [
+            "", " ", "\t ", "+", "-", ".", "+.", "-.", "e2", "+e2", "-e2",
+        ] {
+            let body = format!(
+                r#"float number = 2.5; string tail = "old";
+                int matched = sscanf({input:?}, "%f%s", number, tail);
+                return ({{ matched, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![LpcRef::from(0), LpcRef::from(2.5), LpcRef::from("old")],
+                "{input:?}"
+            );
+        }
     }
 
     #[tokio::test]
