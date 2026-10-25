@@ -208,6 +208,7 @@ examine_globs = [
     "src/interpreter/efun/parser_context.rs",
     "src/interpreter/efun/previous_object.rs",
     "src/interpreter/efun/query_command.rs",
+    "src/interpreter/efun/query_notify_fail.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
