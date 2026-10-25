@@ -255,6 +255,7 @@ examine_globs = [
     "src/interpreter/task/location.rs",
     "src/interpreter/task/task_template.rs",
     "src/compiler/codegen/case_collector.rs",
+    "src/compiler/codegen/capture_walker.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
