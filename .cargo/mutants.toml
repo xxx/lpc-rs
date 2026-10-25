@@ -220,6 +220,7 @@ examine_globs = [
     "src/interpreter/efun/calling.rs",
     "src/interpreter/efun/notify_fail.rs",
     "src/interpreter/efun/parse_string.rs",
+    "src/interpreter/efun/parse_sentence.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
