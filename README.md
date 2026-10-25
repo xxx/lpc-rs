@@ -396,6 +396,7 @@ The reviewed scope includes:
 - [Program images](src/interpreter/process/image.rs): retained global identities, migration aliases and GC roots.
 - [Compiler inputs](src/compiler/source.rs): source identities, relative-path bases and safe diagnostic names.
 - [Task locations](src/interpreter/task/location.rs): frame reads, writes and integer increments.
+- [Task templates](src/interpreter/task/task_template.rs): player context, captured cells and transaction sharing.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

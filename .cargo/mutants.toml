@@ -253,6 +253,7 @@ examine_globs = [
     "src/interpreter/process/image.rs",
     "src/compiler/source.rs",
     "src/interpreter/task/location.rs",
+    "src/interpreter/task/task_template.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
