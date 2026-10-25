@@ -336,17 +336,17 @@ The reviewed scope includes:
   `object_time`, `object_update`, `objects`, `origin`, `papplyv`,
   `parse_add_rule`, `parse_add_synonym`, `parse_dump`, `parse_init`,
   `parse_my_rules`, `parse_remove`, `parser_context`, `present`,
-  `previous_object`, `query_call_out`, `query_call_outs`, `query_connection`,
-  `query_ip_number`, `query_parser_registry`, `random`, `read_file`, `reduce`,
-  `regexp`, `regmatch`, `remove_action`, `remove_call_out`, `remove_rule`,
-  `rename`, `replace_string`, `restore_map`, `restore_object`, `restore_value`,
-  `rm`, `rmdir`, `rusage`, `save_map`, `save_object`, `save_value`, `send_gmcp`,
-  `send_mxp`, `shutdown`, `sizeof`, `sockets`, `sort_array`,
-  `source_cache_stats`, `store_variable`, `strindex`, `syntax_tree`,
-  `tell_object`, `text_encoding`, `this_interactive`, `throw`, `time`,
-  `transaction_stats`, `trim`, `type_of`, `type_predicates`, `unique_array`,
-  `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`, `write`,
-  `write_file`.
+  `previous_object`, `query_call_out`, `query_call_outs`, `query_command`,
+  `query_connection`, `query_ip_number`, `query_parser_registry`, `random`,
+  `read_file`, `reduce`, `regexp`, `regmatch`, `remove_action`,
+  `remove_call_out`, `remove_rule`, `rename`, `replace_string`, `restore_map`,
+  `restore_object`, `restore_value`, `rm`, `rmdir`, `rusage`, `save_map`,
+  `save_object`, `save_value`, `send_gmcp`, `send_mxp`, `shutdown`, `sizeof`,
+  `sockets`, `sort_array`, `source_cache_stats`, `store_variable`, `strindex`,
+  `syntax_tree`, `tell_object`, `text_encoding`, `this_interactive`, `throw`,
+  `time`, `transaction_stats`, `trim`, `type_of`, `type_predicates`,
+  `unique_array`, `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`,
+  `write`, `write_file`.
 - [Runtime entry](src/runtime.rs): worker execution and returned values.
 - [Memo cache](src/util/memo.rs): bounded reuse and concurrent construction.
 - [Simul-efun lookup](src/util/mod.rs): configured resident objects.
