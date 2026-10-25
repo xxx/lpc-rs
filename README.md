@@ -376,6 +376,7 @@ The reviewed scope includes:
 - [Telnet listener](src/telnet/listener.rs): plaintext acceptance, retry backoff, shutdown and TLS reloads.
 - [Benchmark workload support](src/bench_support.rs): workload setup and concurrent apply execution.
 - [Compiler permission defaults](src/compiler/compile_gate.rs): dependency-only gates permit explicit efun calls.
+- [Captured frame cells](src/interpreter/call_frame/cells.rs): conversion, compact storage, identities and debug output.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

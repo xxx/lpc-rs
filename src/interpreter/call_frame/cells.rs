@@ -94,6 +94,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn owned_cell_vectors_keep_identities_and_use_compact_representations() {
+        for count in [0, 1, 3] {
+            let identities: ThinVec<_> = (0..count).map(|_| VarId::new()).collect();
+            let cells = FrameCells::from(identities.clone());
+            assert_eq!(&*cells, identities.as_slice());
+            match count {
+                0 => assert!(matches!(cells, FrameCells::Empty)),
+                1 => assert!(matches!(cells, FrameCells::One(_))),
+                _ => assert!(matches!(cells, FrameCells::Many(_))),
+            }
+        }
+    }
+
+    #[test]
+    fn debug_output_identifies_the_captured_cells() {
+        let identities = [VarId::new(), VarId::new()];
+        let cells = FrameCells::from(identities.as_slice());
+        let rendered = format!("{cells:?}");
+        for identity in identities {
+            assert!(rendered.contains(&format!("{identity:?}")), "{rendered}");
+        }
+        assert_eq!(format!("{:?}", FrameCells::Empty), "[]");
+    }
+
+    #[test]
     fn nested_calls_keep_inherited_cells_before_fresh_cells() {
         let parent = FrameCells::default().with_new(1);
         let child = FrameCells::from(&*parent).with_new(2);
