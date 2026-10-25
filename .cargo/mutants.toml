@@ -260,6 +260,7 @@ examine_globs = [
     "src/compiler/ast/if_node.rs",
     "src/compiler/ast/switch_node.rs",
     "src/compiler/ast/while_node.rs",
+    "src/compiler/parser/parameter.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
