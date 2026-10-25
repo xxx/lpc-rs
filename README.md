@@ -334,7 +334,7 @@ The reviewed scope includes:
   `load_object`, `localtime`, `m_delete`, `map`, `math`, `member_array`,
   `min_max`, `mkdir`, `move_object`, `object_clones`, `object_memory_info`,
   `object_time`, `object_update`, `objects`, `origin`, `papplyv`,
-  `parse_add_rule`, `parse_add_synonym`, `parse_dump`, `present`,
+  `parse_add_rule`, `parse_add_synonym`, `parse_dump`, `parse_init`, `present`,
   `query_call_out`, `query_call_outs`, `query_connection`, `query_ip_number`,
   `query_parser_registry`, `random`, `read_file`, `reduce`, `regexp`,
   `regmatch`, `remove_action`, `remove_call_out`, `remove_rule`, `rename`,
