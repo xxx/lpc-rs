@@ -289,6 +289,51 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_with_no_connections_does_not_wait_for_a_drain() {
+        let mut vm = super::Vm::new(crate::test_support::test_config());
+        let started = tokio::time::Instant::now();
+
+        vm.shutdown().await.unwrap();
+
+        assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+    }
+
+    #[tokio::test]
+    async fn boot_preloads_before_returning_a_listener_error() {
+        use crate::test_support::{PERMISSIVE_MASTER, lib_holding, string_global};
+        use lpc_rs_utils::config::ConfigBuilder;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let source = format!(
+            r#"{PERMISSIVE_MASTER}
+            string loaded = "";
+            string *epilog(int load_empty) {{ return ({{ "/preloaded" }}); }}
+            void preload(string file) {{ loaded += file; }}
+        "#
+        );
+        let root = lib_holding("boot-listener-error", &[("secure/master.c", &source)]);
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .bind_address("127.0.0.1")
+            .port(port)
+            .build()
+            .unwrap();
+        let mut vm = super::Vm::new(config);
+        let error = vm
+            .boot()
+            .await
+            .expect_err("the occupied listener must reject boot");
+        assert!(
+            error.to_string().contains("telnet failed to bind"),
+            "{error}"
+        );
+        let master = vm.global_state.object_space.master_object().unwrap();
+        assert_eq!(string_global(&vm, &master, "loaded"), "/preloaded");
+        vm.shutdown().await.unwrap();
+        drop(listener);
+    }
+
     #[tokio::test]
     async fn idle_compiler_caches_expire_without_gc_cleanup_or_further_compilation() {
         let config = lpc_rs_utils::config::ConfigBuilder::default()

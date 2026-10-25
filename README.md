@@ -378,6 +378,7 @@ The reviewed scope includes:
 - [Compiler permission defaults](src/compiler/compile_gate.rs): dependency-only gates permit explicit efun calls.
 - [Captured frame cells](src/interpreter/call_frame/cells.rs): conversion, compact storage, identities and debug output.
 - [World-state reclamation](src/interpreter/stm/reclaimer.rs): worker thresholds, owned chunks and disposal completion.
+- [VM lifecycle](src/interpreter/vm/mod.rs): boot, subsystem startup, committed exits and connection draining.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
