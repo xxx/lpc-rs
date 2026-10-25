@@ -189,6 +189,7 @@ examine_globs = [
     "src/compiler/ast/closure_node.rs",
     "src/compiler/ast/var_init_node.rs",
     "src/compiler/ast/operator_node.rs",
+    "src/compiler/ast/var_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

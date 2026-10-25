@@ -356,6 +356,7 @@ The reviewed scope includes:
 - [Closure syntax nodes](src/compiler/ast/closure_node.rs): capture scopes, source spans and rendering.
 - [Variable initializer nodes](src/compiler/ast/var_init_node.rs): types, source spans, rendering and symbol metadata.
 - [Operator syntax nodes](src/compiler/ast/operator_node.rs): arity, closure source ranges and rendering.
+- [Variable syntax nodes](src/compiler/ast/var_node.rs): reference identity, source ranges and rendering.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
