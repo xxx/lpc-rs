@@ -320,10 +320,10 @@ mod tests {
     async fn scan_fails(body: &str) -> String {
         let code = format!("mixed *create() {{ {body} }}");
         let vm = Vm::new(test_config());
-        vm.initialize_process_from_code("/master.c", &code)
-            .await
-            .unwrap_err()
-            .to_string()
+        match vm.initialize_process_from_code("/master.c", &code).await {
+            Err(error) => error.to_string(),
+            Ok(_) => panic!("sscanf unexpectedly accepted invalid input"),
+        }
     }
 
     #[tokio::test]
@@ -539,6 +539,12 @@ mod tests {
     async fn an_unknown_conversion_is_an_error() {
         let err = scan_fails(r#"int n; sscanf("x", "%q", n); return ({});"#).await;
         assert!(err.contains("sscanf: %q is not a conversion"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn a_literal_percent_cannot_be_suppressed() {
+        let error = scan_fails(r#"sscanf("%", "%*%"); return ({});"#).await;
+        assert!(error.contains("sscanf: %% is not a conversion"), "{error}");
     }
 
     #[tokio::test]
