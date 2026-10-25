@@ -347,6 +347,7 @@ The reviewed scope includes:
 - [Runtime entry](src/runtime.rs): worker execution and returned values.
 - [Memo cache](src/util/memo.rs): bounded reuse and concurrent construction.
 - [Simul-efun lookup](src/util/mod.rs): configured resident objects.
+- [VM regex cache](src/interpreter/vm/regex_cache.rs): option keys, reuse and eviction.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

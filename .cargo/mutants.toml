@@ -180,6 +180,7 @@ examine_globs = [
     "src/runtime.rs",
     "src/util/memo.rs",
     "src/util/mod.rs",
+    "src/interpreter/vm/regex_cache.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
