@@ -956,6 +956,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn fired_efun_paths_use_the_owners_directory_and_keep_clone_identity() {
+        let (task_context, mut stack) = efun_context();
+        let owner = Arc::new(Process::new(
+            ProgramBuilder::default()
+                .filename(LpcPath::in_game("/zone/caller.c".into()))
+                .build()
+                .unwrap(),
+        ));
+        let ctx = EfunContext::fired(
+            &mut stack,
+            &task_context,
+            Efun::clone_object,
+            vec![],
+            owner,
+            Some(Arc::new(LpcPath::in_game("/writer/source.c".into()))),
+        );
+        for (path, expected) in [
+            ("next#7", "/zone/next#7"),
+            ("../room", "/room"),
+            ("/other/file", "/other/file"),
+        ] {
+            assert_eq!(ctx.in_game_path(path).to_string(), expected);
+        }
+        assert!(ctx.in_game_path("next#7").is_clone());
+    }
+
     /// The calling frame's file is the program.
     #[test]
     fn calling_program_is_the_file_of_the_calling_frame() {

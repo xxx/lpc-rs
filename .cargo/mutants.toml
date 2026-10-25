@@ -176,6 +176,7 @@ examine_globs = [
     "src/interpreter/efun/bits.rs",
     "src/interpreter/efun/regmatch.rs",
     "src/interpreter/efun/sockets.rs",
+    "src/interpreter/efun/efun_context.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -184,6 +185,10 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # At equality the argument-padding range is empty.
+    "^src/interpreter/efun/efun_context\\.rs:187:23: replace < with <= in EfunContext<'task, N>::build$",
+    # The scalar integer store and fallback replacement produce the same LPC value.
+    "^src/interpreter/efun/efun_context\\.rs:341:17: delete match arm LpcRef::Int\\(x\\) in EfunContext<'task, N>::return_efun_result$",
     # Regex option bits are disjoint, so XOR constructs the same supported mask.
     '^src/interpreter/efun/regmatch\.rs:(16|17|18|19|20|21):5: replace \| with \^$',
     # At equality both branches assign base_count, so < and <= are equivalent.

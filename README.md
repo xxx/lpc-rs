@@ -324,8 +324,8 @@ The reviewed scope includes:
   `call_inherited`, `call_out`, `case`, `chars`, `clone_object`, `commands`,
   `compile_string`, `compose`, `conversions`, `copy_class`, `crypt`, `ctime`,
   `deep_copy`, `deep_inventory`, `destruct`, `disable_commands`, `disassemble`,
-  `dump`, `enable_commands`, `environment`, `evaluate`, `exec`, `explode`,
-  `file_access`, `file_size`, `file_time`, `filter`, `filter_map`,
+  `dump`, `efun_context`, `enable_commands`, `environment`, `evaluate`, `exec`,
+  `explode`, `file_access`, `file_size`, `file_time`, `filter`, `filter_map`,
   `find_object`, `function_description`, `function_exists`, `function_info`,
   `function_name`, `function_object`, `function_signature`, `functions`,
   `get_char`, `get_dir`, `has_key`, `hash_string`, `implode`, `inherit_list`,
@@ -380,6 +380,9 @@ returns; that arithmetic exclusion is pinned to the expression's source position
 Regex option bits are disjoint, so OR and XOR build the same supported flag
 mask; that exclusion is pinned to the mask's six operators and guarded by a
 test that the flags remain disjoint.
+In `EfunContext::build`, equality extends an empty argument-padding range.
+The scalar integer result store and its fallback assignment produce the same
+LPC value; these two exclusions are pinned to their expression positions.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out
