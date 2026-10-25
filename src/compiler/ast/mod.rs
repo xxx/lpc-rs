@@ -124,4 +124,31 @@ mod tests {
             ]
         );
     }
+
+    #[tokio::test]
+    async fn parsed_literals_keep_their_source_text_and_display() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        for (index, literal) in ["7", "1.25", "\"hello\"", "nil"].into_iter().enumerate() {
+            let source = format!("/* source prefix */ mixed value = {literal};");
+            let path = format!("/literal-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let AstNode::Decl(mut declaration) = program.body.pop().unwrap() else {
+                panic!("expected a global declaration");
+            };
+            let expression = declaration.initializations.pop().unwrap().value.unwrap();
+
+            let source = match &expression {
+                ExpressionNode::Int(node) => node.to_code(),
+                ExpressionNode::Float(node) => node.to_code(),
+                ExpressionNode::String(node) => node.to_code(),
+                ExpressionNode::Nil(node) => node.to_code(),
+                _ => panic!("expected a literal"),
+            };
+            assert_eq!(source, literal);
+            assert_eq!(expression.to_string(), literal);
+        }
+    }
 }

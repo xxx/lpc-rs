@@ -267,6 +267,10 @@ examine_globs = [
     "src/compiler/ast/for_node.rs",
     "src/compiler/ast/labeled_statement_node.rs",
     "src/compiler/ast/program_node.rs",
+    "src/compiler/ast/int_node.rs",
+    "src/compiler/ast/float_node.rs",
+    "src/compiler/ast/string_node.rs",
+    "src/compiler/ast/nil_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
