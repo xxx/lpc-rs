@@ -334,17 +334,18 @@ The reviewed scope includes:
   `load_object`, `localtime`, `m_delete`, `map`, `math`, `member_array`,
   `min_max`, `mkdir`, `move_object`, `object_clones`, `object_memory_info`,
   `object_time`, `object_update`, `objects`, `origin`, `papplyv`,
-  `parse_add_rule`, `present`, `query_call_out`, `query_call_outs`,
-  `query_connection`, `query_ip_number`, `query_parser_registry`, `random`,
-  `read_file`, `reduce`, `regexp`, `regmatch`, `remove_action`,
-  `remove_call_out`, `remove_rule`, `rename`, `replace_string`, `restore_map`,
-  `restore_object`, `restore_value`, `rm`, `rmdir`, `rusage`, `save_map`,
-  `save_object`, `save_value`, `send_gmcp`, `send_mxp`, `shutdown`, `sizeof`,
-  `sockets`, `sort_array`, `source_cache_stats`, `store_variable`, `strindex`,
-  `syntax_tree`, `tell_object`, `text_encoding`, `this_interactive`, `throw`,
-  `time`, `transaction_stats`, `trim`, `type_of`, `type_predicates`,
-  `unique_array`, `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`,
-  `write`, `write_file`.
+  `parse_add_rule`, `parse_add_synonym`, `present`, `query_call_out`,
+  `query_call_outs`, `query_connection`, `query_ip_number`,
+  `query_parser_registry`, `random`, `read_file`, `reduce`, `regexp`,
+  `regmatch`, `remove_action`, `remove_call_out`, `remove_rule`, `rename`,
+  `replace_string`, `restore_map`, `restore_object`, `restore_value`, `rm`,
+  `rmdir`, `rusage`, `save_map`, `save_object`, `save_value`, `send_gmcp`,
+  `send_mxp`, `shutdown`, `sizeof`, `sockets`, `sort_array`,
+  `source_cache_stats`, `store_variable`, `strindex`, `syntax_tree`,
+  `tell_object`, `text_encoding`, `this_interactive`, `throw`, `time`,
+  `transaction_stats`, `trim`, `type_of`, `type_predicates`, `unique_array`,
+  `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`, `write`,
+  `write_file`.
 - [Runtime entry](src/runtime.rs): worker execution and returned values.
 - [Memo cache](src/util/memo.rs): bounded reuse and concurrent construction.
 - [Simul-efun lookup](src/util/mod.rs): configured resident objects.

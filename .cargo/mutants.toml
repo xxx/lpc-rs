@@ -200,6 +200,7 @@ examine_globs = [
     "src/interpreter/efun/file_name.rs",
     "src/interpreter/efun/object_update.rs",
     "src/interpreter/efun/parse_add_rule.rs",
+    "src/interpreter/efun/parse_add_synonym.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
