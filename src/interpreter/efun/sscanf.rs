@@ -608,6 +608,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn formats_without_conversions_capture_only_remaining_input() {
+        for (input, format, matched, tail) in [
+            ("prefix rest", "prefix", 1, " rest"),
+            ("prefix", "prefix", 0, "old"),
+            ("mismatch", "prefix", 0, "old"),
+            ("all", "", 1, "all"),
+            ("", "", 0, "old"),
+        ] {
+            let body = format!(
+                r#"string tail = "old";
+                int matched = sscanf({input:?}, {format:?}, tail);
+                return ({{ matched, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![LpcRef::from(matched), LpcRef::from(tail)],
+                "{input:?} / {format:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn a_trailing_s_matches_the_empty_rest() {
         // MudOS: `%s` at the end of the format takes the rest, even "".
         let r = scan(r#"string s = "old"; int c = sscanf("", "%s", s); return ({ c, s });"#).await;
