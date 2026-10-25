@@ -205,6 +205,7 @@ examine_globs = [
     "src/interpreter/efun/parse_init.rs",
     "src/interpreter/efun/parse_my_rules.rs",
     "src/interpreter/efun/parse_remove.rs",
+    "src/interpreter/efun/parser_context.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
