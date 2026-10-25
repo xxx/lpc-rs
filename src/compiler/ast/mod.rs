@@ -151,4 +151,42 @@ mod tests {
             assert_eq!(expression.to_string(), literal);
         }
     }
+
+    #[tokio::test]
+    async fn parsed_jumps_keep_their_source_text_and_display() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let code = r#"
+            void exits() { while (1) break; }
+            void repeats() { while (1) continue; }
+            int answer() { return 7; }
+            void empty() { return; }
+        "#;
+        let compiler = Compiler::new(test_config());
+        let (program, _) = compiler
+            .parse_string(&"/jumps.c".into(), code)
+            .await
+            .unwrap();
+        let mut sources = Vec::new();
+        let mut displays = Vec::new();
+        for declaration in program.body {
+            let AstNode::FunctionDef(function) = declaration else {
+                panic!("expected a function definition");
+            };
+            let (source, display) = match function.body.into_iter().next().unwrap() {
+                AstNode::While(loop_) => match *loop_.body {
+                    AstNode::Break(node) => (node.to_code(), node.to_string()),
+                    AstNode::Continue(node) => (node.to_code(), node.to_string()),
+                    _ => panic!("expected a loop jump"),
+                },
+                AstNode::Return(node) => (node.to_code(), node.to_string()),
+                _ => panic!("expected a jump"),
+            };
+            sources.push(source);
+            displays.push(display.trim_end().to_owned());
+        }
+        assert_eq!(sources, ["break", "continue", "return 7", "return"]);
+        assert_eq!(displays, ["break", "continue", "return 7", "return"]);
+    }
 }

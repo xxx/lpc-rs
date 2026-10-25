@@ -271,6 +271,9 @@ examine_globs = [
     "src/compiler/ast/float_node.rs",
     "src/compiler/ast/string_node.rs",
     "src/compiler/ast/nil_node.rs",
+    "src/compiler/ast/break_node.rs",
+    "src/compiler/ast/continue_node.rs",
+    "src/compiler/ast/return_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
