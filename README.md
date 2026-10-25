@@ -385,6 +385,7 @@ The reviewed scope includes:
 - [Compiler source reads](src/compiler/source_reader.rs): file contents and filesystem kind probes.
 - [Command vocabulary](src/command/resolve/vocabulary.rs): default visibility for objects in the actor’s surroundings.
 - [Class declarations](src/compiler/ast/class_def_node.rs): AST dispatch through compiler tree walkers.
+- [Compiler callees](src/compiler/callee.rs): prototype access for local, simul-efun and efun resolution.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
