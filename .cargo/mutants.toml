@@ -291,6 +291,8 @@ examine_globs = [
     "src/compiler/ast/class_expression.rs",
     "src/compiler/ast/parsed_type.rs",
     "src/compiler/ast/binary_op_node.rs",
+    "src/compiler/ast/ast_node.rs",
+    "src/compiler/ast/expression_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
