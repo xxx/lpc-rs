@@ -301,6 +301,10 @@ examine_globs = [
     "src/interpreter/task/advance.rs",
     "src/interpreter/process/cleanup.rs",
     "src/interpreter/file_view/range.rs",
+    "src/command/parser/mod.rs",
+    "src/command/grammar/builtins.rs",
+    "src/command/registry/payload.rs",
+    "src/command/command_task.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
