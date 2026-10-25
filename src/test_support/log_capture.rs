@@ -1,8 +1,14 @@
 //! Capture server logging without installing a global test subscriber.
 
-use std::{io, sync::Arc};
+use std::{
+    io,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use parking_lot::Mutex;
+use tokio::io::AsyncWrite;
 use tracing::Subscriber;
 use tracing_subscriber::EnvFilter;
 
@@ -33,5 +39,23 @@ impl io::Write for LogCapture {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+impl AsyncWrite for LogCapture {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Poll::Ready(io::Write::write(self.get_mut(), bytes))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 }
