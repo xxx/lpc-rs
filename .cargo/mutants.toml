@@ -231,6 +231,7 @@ examine_globs = [
     "src/interpreter/vm/preload.rs",
     "src/interpreter/compile_gate.rs",
     "src/telnet/listener.rs",
+    "src/bench_support.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -374,6 +374,7 @@ The reviewed scope includes:
 - [VM boot preloads](src/interpreter/vm/preload.rs): ordered files, diagnostics and missing applies.
 - [Runtime compile gate](src/interpreter/compile_gate.rs): dependency policy arguments and optional efun override policy.
 - [Telnet listener](src/telnet/listener.rs): plaintext acceptance, retry backoff, shutdown and TLS reloads.
+- [Benchmark workload support](src/bench_support.rs): workload setup and concurrent apply execution.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
