@@ -241,6 +241,7 @@ examine_globs = [
     "src/interpreter/process/util.rs",
     "src/compiler/source_reader.rs",
     "src/command/resolve/vocabulary.rs",
+    "src/compiler/ast/class_def_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

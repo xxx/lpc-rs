@@ -384,6 +384,7 @@ The reviewed scope includes:
 - [Environment iteration](src/interpreter/process/util.rs): transactional container traversal and iterator termination.
 - [Compiler source reads](src/compiler/source_reader.rs): file contents and filesystem kind probes.
 - [Command vocabulary](src/command/resolve/vocabulary.rs): default visibility for objects in the actor’s surroundings.
+- [Class declarations](src/compiler/ast/class_def_node.rs): AST dispatch through compiler tree walkers.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
