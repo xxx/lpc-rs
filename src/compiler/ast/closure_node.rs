@@ -77,7 +77,10 @@ impl Display for ClosureNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::ast::expression_node::ExpressionNode;
+    use crate::compiler::{
+        ast::expression_node::ExpressionNode, compilation_context::CompilationContext,
+        lexer::LexWrapper,
+    };
     use lpc_rs_core::lpc_type::LpcType;
 
     fn closure(body: Vec<AstNode>) -> ClosureNode {
@@ -96,9 +99,29 @@ mod tests {
     }
 
     #[test]
-    fn a_lone_expression_body_displays_as_source() {
-        let node = closure(vec![AstNode::Expression(ExpressionNode::from(1))]);
-
+    fn a_parsed_expression_body_retains_its_span_and_source_form() {
+        let source = "function f = (: 1 :);";
+        let mut context = CompilationContext::default();
+        let mut program = crate::lpc_parser::ProgramParser::new()
+            .parse(&mut context, LexWrapper::new(source, 4).triples())
+            .unwrap();
+        let Some(AstNode::Decl(mut declaration)) = program.body.pop() else {
+            panic!("closure declaration");
+        };
+        let Some(ExpressionNode::Closure(node)) = declaration
+            .initializations
+            .pop()
+            .and_then(|init| init.value)
+        else {
+            panic!("closure initializer");
+        };
+        assert_eq!(
+            node.span(),
+            Some(Span::new(
+                4,
+                source.find("(:").unwrap()..source.find(":)").unwrap() + 2
+            ))
+        );
         assert_eq!(node.to_string(), "(: 1 :)");
     }
 
