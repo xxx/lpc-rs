@@ -1,5 +1,4 @@
 use crate::compiler::ast::class_expression::{ClassInitNode, MemberNode, CompoundAssignmentNode};
-use itertools::Itertools;
 use std::convert::TryFrom;
 use lalrpop_util::ParseError;
 use crate::compiler::ast::ast_node::{AstNode, SpannedNode};
@@ -50,7 +49,7 @@ use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_core::EFUN;
 use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
 use crate::compiler::parser::collapse_unary_op::{collapse_unary_op, demote_statement_post_op};
-use crate::compiler::parser::nesting::{contains_capture, guard};
+use crate::compiler::parser::nesting::guard;
 use crate::compiler::parser::parameter::Parameter;
 use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::Token;
@@ -773,24 +772,7 @@ PrimaryExpression: ExpressionNode = {
         Ok(guard(ExpressionNode::Array(ArrayNode::new(vec)), Some(Span::join(l, r)))?)
     },
     <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> =>? {
-        let vec = if let Some(v) = list {
-            if v.0.iter().any(|(key, value)| contains_capture(key) || contains_capture(value)) {
-                // Retain captures until lowering, including entries a later key replaces.
-                v.0
-            } else {
-                // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
-                let reversed = v.0.into_iter().rev()
-                    .unique_by(|(k, _)| (std::mem::discriminant(k), k.to_string()))
-                    .collect_vec();
-
-                // We have to `collect` twice because `unique_by` keeps the first duplicate, but we want
-                // to keep the last, and doing a second `rev()` in a single iterator chain applies it
-                // before the `unique_by` runs
-                reversed.into_iter().rev().collect_vec()
-            }
-        } else {
-            vec![]
-        };
+        let vec = list.map(|list| list.0).unwrap_or_default();
 
         let span = Span::join(l, r);
 

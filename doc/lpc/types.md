@@ -129,6 +129,9 @@ type-sensitive matching used by mapping keys and array set operations.
 
 * `mapping`
     - A `mapping` is a key-value store, where the keys and values can be any LPC type.
+    - Mapping literals evaluate each key and value in source order, including entries
+      whose keys appear more than once.
+    - Repeated keys keep the last value and retain their first insertion position.
     - `mapping`s can be concatenated with the `+` operator, which will create a new `mapping`
       with the keys and values from both mappings.
     - `mapping`s are reference types in LPC, meaning it is a pointer to the actual container, and
