@@ -189,4 +189,45 @@ mod tests {
         assert_eq!(sources, ["break", "continue", "return 7", "return"]);
         assert_eq!(displays, ["break", "continue", "return 7", "return"]);
     }
+
+    #[tokio::test]
+    async fn parsed_expressions_keep_their_source_text_and_display() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        for (index, (expression, expected)) in [
+            ("(: $(7) :)", "$(7)"),
+            ("(int) 7", "(int) 7"),
+            ("(1, 2)", "1, 2"),
+            ("1 ? 7 : 9", "1 ? 7 : 9"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = format!("/* source prefix */ mixed value = {expression};");
+            let path = format!("/expression-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let AstNode::Decl(mut declaration) = program.body.pop().unwrap() else {
+                panic!("expected a global declaration");
+            };
+            let expression = declaration.initializations.pop().unwrap().value.unwrap();
+            let (source, display) = match expression {
+                ExpressionNode::Closure(closure) => {
+                    match closure.body.into_iter().next().unwrap() {
+                        AstNode::Expression(ExpressionNode::Capture(node)) => {
+                            (node.to_code(), node.to_string())
+                        }
+                        _ => panic!("expected an explicit capture"),
+                    }
+                }
+                ExpressionNode::Cast(node) => (node.to_code(), node.to_string()),
+                ExpressionNode::CommaExpression(node) => (node.to_code(), node.to_string()),
+                ExpressionNode::Ternary(node) => (node.to_code(), node.to_string()),
+                _ => panic!("expected an expression"),
+            };
+            assert_eq!(source, expected);
+            assert_eq!(display, expected);
+        }
+    }
 }

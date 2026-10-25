@@ -404,6 +404,7 @@ The reviewed scope includes:
 - [Statement AST nodes](src/compiler/ast/mod.rs): traversal and formatting for blocks, catches, declarations, `for`, labeled statements and programs.
 - [Literal AST nodes](src/compiler/ast/mod.rs): integer, float, string and nil traversal, source ranges and formatting.
 - [Jump AST nodes](src/compiler/ast/mod.rs): `break`, `continue` and `return` traversal, source ranges and formatting.
+- [Expression AST nodes](src/compiler/ast/mod.rs): capture, cast, comma and ternary traversal, source ranges and formatting.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
