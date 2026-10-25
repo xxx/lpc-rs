@@ -370,6 +370,7 @@ The reviewed scope includes:
 - [Transaction retry admission](src/interpreter/stm/admission.rs): turn order, cancellation and queue cleanup.
 - [World snapshots](src/interpreter/stm/snapshot.rs): retained cells, object identity and snapshot metadata.
 - [VM login initiation](src/interpreter/vm/initiate_login.rs): connect decisions, logon results and prompt scheduling.
+- [VM idle cleanup](src/interpreter/vm/clean_up.rs): scheduling, stale objects and transactional callbacks.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
