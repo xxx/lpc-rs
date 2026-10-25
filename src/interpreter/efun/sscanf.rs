@@ -483,6 +483,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn string_before_float_stops_at_the_first_numeric_start() {
+        for (input, prefix, number) in [
+            ("value 42tail", "value ", 42.0),
+            ("file.ext .5tail", "file.ext ", 0.5),
+            (".5tail", "", 0.5),
+            ("é42tail", "é", 42.0),
+        ] {
+            let body = format!(
+                r#"string prefix = "old"; float number = 9.0; string tail = "old";
+                int matched = sscanf({input:?}, "%s%f%s", prefix, number, tail);
+                return ({{ matched, prefix, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![
+                    LpcRef::from(3),
+                    LpcRef::from(prefix),
+                    LpcRef::from(number),
+                    LpcRef::from("tail")
+                ],
+                "{input:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn string_before_hex_requires_a_complete_prefix() {
+        for (input, prefix) in [("0xftail", ""), ("zero0 then 0xftail", "zero0 then ")] {
+            let body = format!(
+                r#"string prefix = "old"; int number = 99; string tail = "old";
+                int matched = sscanf({input:?}, "%s%x%s", prefix, number, tail);
+                return ({{ matched, prefix, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![
+                    LpcRef::from(3),
+                    LpcRef::from(prefix),
+                    LpcRef::from(15),
+                    LpcRef::from("tail")
+                ],
+                "{input:?}"
+            );
+        }
+        for input in ["no prefix", "0x", "0xZ"] {
+            let body = format!(
+                r#"string prefix = "old"; int number = 99; string tail = "old";
+                int matched = sscanf({input:?}, "%s%x%s", prefix, number, tail);
+                return ({{ matched, prefix, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![
+                    LpcRef::from(1),
+                    LpcRef::from(input),
+                    LpcRef::from(99),
+                    LpcRef::from("old")
+                ],
+                "{input:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn f_does_not_read_the_words_inf_or_nan() {
         let r = scan(r#"float f = 2.5; int c = sscanf("inf", "%f", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(2.5)]);
