@@ -272,4 +272,97 @@ mod tests {
         assert!(error.message().contains("permission denied"));
         assert_eq!(gate.calls.load(Ordering::Relaxed), 3);
     }
+
+    #[tokio::test]
+    async fn repeated_header_preparation_reuses_cached_definitions() {
+        let root = TempLib::new("definition-reuse");
+        std::fs::write(
+            root.join("common.h"),
+            r#"#define VALUE 7
+"#,
+        )
+        .unwrap();
+        let cache = Arc::new(DefinitionCache::default());
+        let sources = DiagnosticSources::default();
+        let code = r#"#include "common.h"
+VALUE
+"#;
+        assert_eq!(
+            tokens(&root, cache.clone(), sources.clone(), code).await,
+            ["7"]
+        );
+        let before = cache.stats();
+        assert!(before.entries > 0);
+        assert_eq!(tokens(&root, cache.clone(), sources, code).await, ["7"]);
+        let after = cache.stats();
+        assert!(after.hits > before.hits);
+        assert_eq!(after.entries, before.entries);
+    }
+
+    #[test]
+    fn function_definition_charge_covers_owned_parameter_storage() {
+        use std::mem::size_of_val;
+
+        let args: Vec<_> = (0..256)
+            .map(|i| format!("p{i}").into_boxed_str().into_string())
+            .collect();
+        let text = format!("#define F({})", args.join(","));
+        let replacement = Define::new_function(Vec::new(), args);
+        let sources = DiagnosticSources::default();
+        let span = Span::new(0, 0..text.len());
+        let cache = DefinitionCache::default();
+        cache.insert(span, text.len(), "F", &replacement, &sources);
+        let stored = cache.get(span, &sources).unwrap();
+        let Define::Function(function) = &stored.replacement else {
+            panic!("expected a function macro");
+        };
+        let owned = size_of_val(function.args.as_slice())
+            + function.args.iter().map(String::capacity).sum::<usize>();
+        assert!(cache.stats().estimated_bytes >= owned);
+    }
+
+    #[test]
+    fn object_definition_charge_covers_owned_expression_storage() {
+        use crate::compiler::{lexer::LexWrapper, preprocessor::directive};
+        use std::mem::size_of_val;
+
+        fn expression_heap(expr: &PreprocessorNode) -> usize {
+            match expr {
+                PreprocessorNode::BinaryOp(_, left, right) => {
+                    size_of_val(&**left)
+                        + expression_heap(left)
+                        + size_of_val(&**right)
+                        + expression_heap(right)
+                }
+                PreprocessorNode::UnaryOp(_, inner) => {
+                    size_of_val(&**inner) + expression_heap(inner)
+                }
+                PreprocessorNode::Var(text)
+                | PreprocessorNode::String(text)
+                | PreprocessorNode::Defined(text, _) => text.capacity(),
+                PreprocessorNode::Int(_) => 0,
+            }
+        }
+        let body = vec!["1"; 128].join("+");
+        let text = format!("#define VALUE {body}");
+        let span = Span::new(0, 0..body.len());
+        let expression = directive::parse_if_expression(&body, span).unwrap();
+        let tokens = LexWrapper::new(&body, 0)
+            .collect::<Result<Vec<_>>>()
+            .unwrap()
+            .into_boxed_slice()
+            .into_vec();
+        let replacement = Define::new_object(tokens, Some(expression));
+        let sources = DiagnosticSources::default();
+        let cache = DefinitionCache::default();
+        cache.insert(span, text.len(), "VALUE", &replacement, &sources);
+        let stored = cache.get(span, &sources).unwrap();
+        let Define::Object(object) = &stored.replacement else {
+            panic!("expected an object macro");
+        };
+        let owned = size_of::<Definition>()
+            + size_of_val(object.tokens.as_slice())
+            + expression_heap(object.expr.as_ref().unwrap());
+        assert!(cache.stats().estimated_bytes >= owned);
+    }
 }

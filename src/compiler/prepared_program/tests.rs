@@ -483,3 +483,70 @@ async fn finite_inheritance_chains_respect_the_configured_depth_boundary() {
         }
     }
 }
+
+#[tokio::test]
+async fn private_import_suppliers_do_not_escape_into_descendant_siblings() {
+    rejects(
+        &[
+            ("provider.c", "int supply() { return 7; }"),
+            (
+                "middle.c",
+                r#"private inherit "/provider"; int exposed() { return supply(); }"#,
+            ),
+            ("consumer.c", "int result() { return supply(); }"),
+        ],
+        r#"inherit "/middle"; inherit "/consumer"; int create() { return result(); }"#,
+        "unknown function `supply`",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn prepared_interfaces_keep_local_basenames_and_private_import_boundaries() {
+    use crate::compiler::source::CompilerSource;
+
+    let root = lib_holding(
+        "interface-visibility",
+        &[
+            ("provider.c", "int supply() { return 7; }"),
+            (
+                "middle.c",
+                r#"private inherit "/provider"; int exposed() { return supply(); }"#,
+            ),
+        ],
+    );
+    let config = Arc::new(
+        ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .build()
+            .unwrap(),
+    );
+    let compiler = Compiler::new(config.clone());
+    let source = Arc::new(CompilerSource::new("/folder/child.c", &config));
+    let prepared = super::PreparedProgram::parse(
+        &compiler,
+        source,
+        r#"inherit "/middle"; int visible() { return 7; }"#,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(prepared.interface.has_basename("child"));
+    for other in ["middle", "/folder/child", "child.c"] {
+        assert!(!prepared.interface.has_basename(other));
+    }
+    assert!(
+        !prepared
+            .interface
+            .receiver_functions()
+            .contains_key("supply")
+    );
+    assert!(
+        prepared.parents[0]
+            .interface
+            .receiver_functions()
+            .contains_key("supply")
+    );
+    assert!(prepared.interface.lookup("visible").is_some());
+}

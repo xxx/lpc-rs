@@ -293,6 +293,10 @@ examine_globs = [
     "src/compiler/ast/binary_op_node.rs",
     "src/compiler/ast/ast_node.rs",
     "src/compiler/ast/expression_node.rs",
+    "src/compiler/diagnostics.rs",
+    "src/compiler/program_interface.rs",
+    "src/compiler/preprocessor/conditional.rs",
+    "src/compiler/preprocessor/definition_cache.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -301,6 +305,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Both margins cover one expression node per token, so this estimate stays conservative.
+    '^src/compiler/preprocessor/definition_cache\.rs:107:39: replace \* with \+ in DefinitionCache::insert$',
     # At equality the argument-padding range is empty.
     "^src/interpreter/efun/efun_context\\.rs:187:23: replace < with <= in EfunContext<'task, N>::build$",
     # The scalar integer store and fallback replacement produce the same LPC value.

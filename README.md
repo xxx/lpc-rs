@@ -410,6 +410,7 @@ The reviewed scope includes:
 - [Call AST nodes](src/compiler/ast/mod.rs): call and pointer traversal, source ranges, receiver formatting and namespaces.
 - [Compiler AST support](src/compiler/ast/mod.rs): foreach initialization, class expressions, parsed types and binary operations.
 - [AST wrappers](src/compiler/ast/mod.rs): generic node conversion, source locations, diagnostics and assignment ownership.
+- [Compiler support](src/compiler/mod.rs): diagnostics, inheritance interfaces, conditional compilation and macro-cache reuse and retention limits.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -449,6 +450,11 @@ test that the flags remain disjoint.
 In `EfunContext::build`, equality extends an empty argument-padding range.
 The scalar integer result store and its fallback assignment produce the same
 LPC value; these two exclusions are pinned to their expression positions.
+The macro-definition cache budgets at least one expression node per body token.
+Changing its extra `2 * size_of::<PreprocessorNode>()` allowance to
+`2 + size_of::<PreprocessorNode>()` still covers that bound; only this pinned
+margin mutation is excluded. Parameter strings and expression storage have
+independent lower-bound checks.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out
