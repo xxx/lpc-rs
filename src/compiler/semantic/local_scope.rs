@@ -87,9 +87,24 @@ impl Display for LocalScope {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::lpc_type::LpcType;
+    use lpc_rs_core::{lpc_type::LpcType, register::Register};
 
     use super::*;
+
+    #[test]
+    fn display_includes_symbol_type_and_register_location() {
+        let mut scope = LocalScope::new(None);
+        scope.insert(Symbol {
+            name: "count".into(),
+            type_: LpcType::Int(false),
+            location: Some(Register(3).as_local()),
+            ..Default::default()
+        });
+        assert_eq!(
+            scope.to_string(),
+            "LocalScope { id: 0, symbols: [{ name: count, type: int, location: r3 }] }"
+        );
+    }
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {

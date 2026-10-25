@@ -181,6 +181,7 @@ examine_globs = [
     "src/util/memo.rs",
     "src/util/mod.rs",
     "src/interpreter/vm/regex_cache.rs",
+    "src/compiler/semantic/local_scope.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
