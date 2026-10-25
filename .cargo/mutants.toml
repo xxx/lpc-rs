@@ -244,6 +244,7 @@ examine_globs = [
     "src/compiler/ast/class_def_node.rs",
     "src/compiler/callee.rs",
     "src/compiler/preprocessor/preprocessor_node.rs",
+    "src/interpreter/apply/diagnostics.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
