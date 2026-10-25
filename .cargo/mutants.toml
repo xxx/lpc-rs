@@ -229,6 +229,7 @@ examine_globs = [
     "src/interpreter/vm/initiate_login.rs",
     "src/interpreter/vm/clean_up.rs",
     "src/interpreter/vm/preload.rs",
+    "src/interpreter/compile_gate.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

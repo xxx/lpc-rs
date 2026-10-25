@@ -372,6 +372,7 @@ The reviewed scope includes:
 - [VM login initiation](src/interpreter/vm/initiate_login.rs): connect decisions, logon results and prompt scheduling.
 - [VM idle cleanup](src/interpreter/vm/clean_up.rs): scheduling, stale objects and transactional callbacks.
 - [VM boot preloads](src/interpreter/vm/preload.rs): ordered files, diagnostics and missing applies.
+- [Runtime compile gate](src/interpreter/compile_gate.rs): dependency policy arguments and optional efun override policy.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
