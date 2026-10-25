@@ -309,6 +309,10 @@ examine_globs = [
     "src/interpreter/file_view/metadata.rs",
     "src/util/process_builder.rs",
     "src/command/frontend/native/matcher.rs",
+    "src/interpreter/efun/sprintf/mod.rs",
+    "src/interpreter/efun/sprintf/spec.rs",
+    "src/interpreter/efun/sprintf/layout.rs",
+    "src/command/scope/supplied.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -317,6 +321,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Equal continuation offsets append zero spaces and keep the same column.
+    '^src/interpreter/efun/sprintf/layout\.rs:81:35: replace > with >= in Layout::finish_row$',
     # Both margins cover one expression node per token, so this estimate stays conservative.
     '^src/compiler/preprocessor/definition_cache\.rs:107:39: replace \* with \+ in DefinitionCache::insert$',
     # At equality the argument-padding range is empty.

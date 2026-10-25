@@ -414,6 +414,7 @@ The reviewed scope includes:
 - [Runtime support](src/interpreter/mod.rs): STM merges, pending calls, cleanup scheduling and bounded file reads.
 - [Command support](src/command/mod.rs): parser dispatch, shared grammar productions, ordered rule snapshots and transactional command execution.
 - [Compiler-runtime integration](src/interpreter/mod.rs): JSON values, staged-file metadata, process compilation and native command matching.
+- [Formatting and supplied scopes](src/interpreter/efun/sprintf/mod.rs): format parsing, multiline layout and caller-supplied parser scope traversal.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -458,6 +459,8 @@ Changing its extra `2 * size_of::<PreprocessorNode>()` allowance to
 `2 + size_of::<PreprocessorNode>()` still covers that bound; only this pinned
 margin mutation is excluded. Parameter strings and expression storage have
 independent lower-bound checks.
+Equal `sprintf` continuation offsets append zero spaces and assign the same
+column value; that single padding comparison is excluded at its source position.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out

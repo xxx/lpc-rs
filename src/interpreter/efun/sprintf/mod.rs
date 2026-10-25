@@ -759,4 +759,20 @@ mod tests {
         let err = try_run_prog(code).await.unwrap_err().to_string();
         assert!(err.contains("sprintf: int is not a string"), "{err}");
     }
+
+    #[tokio::test]
+    async fn zero_and_missing_widths_preserve_justification_rules() {
+        check(&[
+            (r#""%$*s", 0, "a  b""#, "a b"),
+            (r#""%$*s", -1, "a  b""#, "a  b"),
+            (r#""%$0s", "a  b""#, "a  b"),
+            (r#""%*0s", 5, "x""#, "x"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn an_empty_first_column_row_keeps_its_continuation() {
+        check(&[(r#""%-=3s", "\na""#, "\na")]).await;
+    }
 }
