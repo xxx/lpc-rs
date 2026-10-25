@@ -354,6 +354,7 @@ The reviewed scope includes:
 - [Assignment syntax nodes](src/compiler/ast/assignment_node.rs): operation spellings, source spans and traversal.
 - [Markdown rendering efun](src/interpreter/efun/render_markdown/mod.rs): argument defaults and recipient terminal capabilities.
 - [Closure syntax nodes](src/compiler/ast/closure_node.rs): capture scopes, source spans and rendering.
+- [Variable initializer nodes](src/compiler/ast/var_init_node.rs): types, source spans, rendering and symbol metadata.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
