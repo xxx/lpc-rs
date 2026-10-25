@@ -386,6 +386,7 @@ The reviewed scope includes:
 - [Command vocabulary](src/command/resolve/vocabulary.rs): default visibility for objects in the actor’s surroundings.
 - [Class declarations](src/compiler/ast/class_def_node.rs): AST dispatch through compiler tree walkers.
 - [Compiler callees](src/compiler/callee.rs): prototype access for local, simul-efun and efun resolution.
+- [Preprocessor expressions](src/compiler/preprocessor/preprocessor_node.rs): readable conditional expressions in compiler diagnostics.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

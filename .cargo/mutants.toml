@@ -243,6 +243,7 @@ examine_globs = [
     "src/command/resolve/vocabulary.rs",
     "src/compiler/ast/class_def_node.rs",
     "src/compiler/callee.rs",
+    "src/compiler/preprocessor/preprocessor_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
