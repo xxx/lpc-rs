@@ -344,6 +344,7 @@ The reviewed scope includes:
   `transaction_stats`, `trim`, `type_of`, `type_predicates`, `unique_array`,
   `uptime`, `users`, `variable_info`, `wildmatch`, `word_wrap`, `write`,
   `write_file`.
+- [Runtime entry](src/runtime.rs): worker execution and returned values.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
