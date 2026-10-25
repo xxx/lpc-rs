@@ -250,6 +250,7 @@ examine_globs = [
     "src/interpreter/program/function_scope.rs",
     "src/interpreter/vm/vm_op.rs",
     "src/command/resolve/numeral.rs",
+    "src/interpreter/process/image.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

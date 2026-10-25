@@ -69,3 +69,42 @@ impl ProgramImage {
             .chain(std::iter::once(self.program.clones.id))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migration_rebinds_each_alias_to_its_retained_global_cell() {
+        let old = ProgramImage::new(Arc::new(Program {
+            num_globals: 2,
+            ..Default::default()
+        }));
+        let image = ProgramImage::migrate(
+            Arc::new(Program {
+                num_globals: 3,
+                global_views: Arc::from([2, 0]),
+                ..Default::default()
+            }),
+            &old,
+            &[(0, 2), (1, 0)],
+        );
+
+        assert_ne!(image.generation, old.generation);
+        assert_eq!(image.global(0), old.global(1));
+        assert_eq!(image.global(2), old.global(0));
+        assert_ne!(image.global(1), old.global(0));
+        assert_ne!(image.global(1), old.global(1));
+        assert_eq!(image.global(3), image.global(2));
+        assert_eq!(image.global(4), image.global(0));
+        assert_eq!(
+            image.world_var_ids().collect::<Vec<_>>(),
+            [
+                image.global(0),
+                image.global(1),
+                image.global(2),
+                image.program.clones.id
+            ]
+        );
+    }
+}

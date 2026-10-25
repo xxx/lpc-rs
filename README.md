@@ -393,6 +393,7 @@ The reviewed scope includes:
 - [Function scopes](src/interpreter/program/function_scope.rs): inherited lookup, namespaces, privacy and shared storage accounting.
 - [VM operations](src/interpreter/vm/vm_op.rs): equality of login, call-out, shutdown and update messages.
 - [Command numerals](src/command/resolve/numeral.rs): digit counts, the all word and mudlib ordinal resolution.
+- [Program images](src/interpreter/process/image.rs): retained global identities, migration aliases and GC roots.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
