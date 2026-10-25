@@ -69,8 +69,10 @@ impl Display for FunctionPtrNode {
                 .join(" ,"),
         };
         write!(f, "&")?;
-        if let Some(e) = &self.receiver {
-            write!(f, "{e}->")?;
+        match &self.receiver {
+            Some(FunctionPtrReceiver::Dynamic) => write!(f, "->")?,
+            Some(receiver) => write!(f, "{receiver}->")?,
+            None => {}
         }
         write!(f, "{}", self.name)?;
         if !args.is_empty() {

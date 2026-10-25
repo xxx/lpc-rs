@@ -380,4 +380,73 @@ mod tests {
             assert_eq!(statement.label.is_default(), default);
         }
     }
+
+    #[tokio::test]
+    async fn parsed_call_diagnostics_preserve_namespaces_and_receivers() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        for (index, call) in [
+            "work(7)",
+            "::work(7)",
+            "base::work(7)",
+            "efun::strlen(\"x\")",
+            "obj->work(7)",
+            "obj->base::work(7)",
+            "get()(7)",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = format!("mixed caller(mixed obj) {{ return {call}; }}");
+            let path = format!("/call-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let AstNode::FunctionDef(mut function) = program.body.pop().unwrap() else {
+                panic!("expected a function definition");
+            };
+            let AstNode::Return(result) = function.body.pop().unwrap() else {
+                panic!("expected a return expression");
+            };
+            let ExpressionNode::Call(node) = result.value.unwrap() else {
+                panic!("expected a call");
+            };
+            assert_eq!(node.to_code(), call);
+            assert_eq!(node.to_string(), call);
+        }
+    }
+
+    #[tokio::test]
+    async fn parsed_pointer_diagnostics_preserve_receivers_and_bound_arguments() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        for (index, (pointer, display)) in [
+            ("&work()", "&work"),
+            ("&->work()", "&->work"),
+            ("&obj->work()", "&(obj)->work"),
+            ("&work(7)", "&work(7)"),
+            ("&->work(7)", "&->work(7)"),
+            ("&obj->work(7)", "&(obj)->work(7)"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = format!("mixed caller(mixed obj) {{ return {pointer}; }}");
+            let path = format!("/pointer-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let AstNode::FunctionDef(mut function) = program.body.pop().unwrap() else {
+                panic!("expected a function definition");
+            };
+            let AstNode::Return(result) = function.body.pop().unwrap() else {
+                panic!("expected a return expression");
+            };
+            let ExpressionNode::FunctionPtr(node) = result.value.unwrap() else {
+                panic!("expected a function pointer");
+            };
+            assert_eq!(node.to_code(), pointer);
+            assert_eq!(node.to_string(), display);
+        }
+    }
 }
