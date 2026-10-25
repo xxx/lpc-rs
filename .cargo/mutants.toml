@@ -287,6 +287,10 @@ examine_globs = [
     "src/compiler/ast/label_node.rs",
     "src/compiler/ast/call_node.rs",
     "src/compiler/ast/function_ptr_node.rs",
+    "src/compiler/ast/for_each_node.rs",
+    "src/compiler/ast/class_expression.rs",
+    "src/compiler/ast/parsed_type.rs",
+    "src/compiler/ast/binary_op_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -408,6 +408,7 @@ The reviewed scope includes:
 - [Additional expression AST nodes](src/compiler/ast/mod.rs): range, mapping, unary and reference traversal, source ranges and formatting.
 - [Declaration and label AST nodes](src/compiler/ast/mod.rs): function, inheritance and switch-label traversal, source ranges and formatting.
 - [Call AST nodes](src/compiler/ast/mod.rs): call and pointer traversal, source ranges, receiver formatting and namespaces.
+- [Compiler AST support](src/compiler/ast/mod.rs): foreach initialization, class expressions, parsed types and binary operations.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

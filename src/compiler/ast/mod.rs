@@ -449,4 +449,72 @@ mod tests {
             assert_eq!(node.to_string(), display);
         }
     }
+
+    #[tokio::test]
+    async fn parsed_foreach_diagnostics_keep_initializer_separators() {
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        for (index, (source, expected)) in [
+            (
+                "void each(int *items) { foreach (int value: items); }",
+                "foreach (int value: items) { NoOp }",
+            ),
+            (
+                "void each(mapping items) { foreach (int key, int value: items); }",
+                "foreach (int key, int value: items) { NoOp }",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let path = format!("/foreach-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let AstNode::FunctionDef(function) = program.body.pop().unwrap() else {
+                panic!("expected a function definition");
+            };
+            let AstNode::ForEach(node) = function.body.into_iter().next().unwrap() else {
+                panic!("expected a foreach loop");
+            };
+            assert_eq!(node.to_string(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn parsed_class_and_binary_diagnostics_preserve_their_operations() {
+        use super::ast_node::SpannedNode;
+        use crate::{compiler::Compiler, test_support::test_config};
+
+        let compiler = Compiler::new(test_config());
+        for (index, expression) in [
+            "new(class Point, x: 7)",
+            "point.x",
+            "point.x += 7",
+            "left + right",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = format!(
+                "class Point {{ int x; }} mixed value(class Point point, int left, int right) {{ return {expression}; }}"
+            );
+            let path = format!("/class-expression-{index}.c").into();
+            let (mut program, _) = compiler.parse_string(&path, source).await.unwrap();
+            let AstNode::FunctionDef(mut function) = program.body.pop().unwrap() else {
+                panic!("expected a function definition");
+            };
+            let AstNode::Return(result) = function.body.pop().unwrap() else {
+                panic!("expected a return expression");
+            };
+            let (source, display) = match result.value.unwrap() {
+                ExpressionNode::ClassInit(node) => (node.to_code(), node.to_string()),
+                ExpressionNode::Member(node) => (node.to_code(), node.to_string()),
+                ExpressionNode::CompoundAssignment(node) => (node.to_code(), node.to_string()),
+                ExpressionNode::BinaryOp(node) => (node.to_code(), node.to_string()),
+                _ => panic!("expected a class or binary expression"),
+            };
+            assert_eq!(source, expression);
+            assert_eq!(display, expression);
+        }
+    }
 }
