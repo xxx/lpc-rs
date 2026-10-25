@@ -359,6 +359,7 @@ The reviewed scope includes:
 - [Variable syntax nodes](src/compiler/ast/var_node.rs): reference identity, source ranges and rendering.
 - [Explicit efun call authorization](src/compiler/codegen/efun_override_walker.rs): source attribution, retained warnings and dependency traversal.
 - [Predefined preprocessor values](src/compiler/preprocessor/predefined.rs): source names and invocation positions.
+- [Unary constant folding](src/compiler/parser/collapse_unary_op.rs): numeric and bitwise operands.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
