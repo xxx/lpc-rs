@@ -191,6 +191,7 @@ examine_globs = [
     "src/compiler/ast/operator_node.rs",
     "src/compiler/ast/var_node.rs",
     "src/compiler/codegen/efun_override_walker.rs",
+    "src/compiler/preprocessor/predefined.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
