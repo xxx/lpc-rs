@@ -335,7 +335,7 @@ The reviewed scope includes:
   `math`, `member_array`, `min_max`, `mkdir`, `move_object`, `notify_fail`,
   `object_clones`, `object_memory_info`, `object_time`, `object_update`,
   `objects`, `origin`, `papplyv`, `parse_add_rule`, `parse_add_synonym`,
-  `parse_dump`, `parse_init`, `parse_my_rules`, `parse_remove`,
+  `parse_command`, `parse_dump`, `parse_init`, `parse_my_rules`, `parse_remove`,
   `parse_sentence`, `parse_string`, `parser_context`, `present`,
   `previous_object`, `query_call_out`, `query_call_outs`, `query_command`,
   `query_connection`, `query_ip_number`, `query_notify_fail`,

@@ -262,6 +262,34 @@ async fn a_preposition_array_destination_gets_the_match_swapped_to_the_front() {
 }
 
 #[tokio::test]
+async fn a_later_preposition_capture_uses_its_caller_supplied_list() {
+    let master = r#"string *parse_command_prepos_list() { return ({ "fallback" }); }"#;
+    let values = run(
+        master,
+        &[],
+        r#"
+        mixed *create() {
+            string word = "unchanged";
+            string *preps = ({ "inside", "beyond", "over" });
+            int matched = parse_command("walk beyond", ({}), "%w %p", word, preps);
+            return ({ matched, word, preps[0], preps[1], preps[2] });
+        }
+    "#,
+    )
+    .await;
+    assert_eq!(
+        values,
+        vec![
+            LpcRef::from(1),
+            s("walk"),
+            s("beyond"),
+            s("inside"),
+            s("over")
+        ]
+    );
+}
+
+#[tokio::test]
 async fn an_extra_destination_is_left_untouched() {
     let r = run("", &[], indoc! { r#"
         mixed *create() { string a; string keep = "kept"; int r = parse_command("give sword", ({}), "'give' %w", a, keep); return ({ r, a, keep }); }
@@ -400,14 +428,23 @@ async fn the_next_parse_is_tried_when_a_phrase_fails() {
 }
 
 #[tokio::test]
-async fn an_empty_command_or_a_non_string_returns_zero() {
-    let r = run("", &[], indoc! { r#"
+async fn empty_and_non_string_inputs_preserve_capture_destinations() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
         mixed *create() {
-            string a; mixed five = 5;
-            return ({ parse_command("", ({}), "%w", a), parse_command("x", ({}), "", a), parse_command(five, ({}), "%w", a), parse_command("x", ({}), five, a) });
+            string a = "unchanged"; mixed five = 5;
+            return ({ parse_command("", ({}), "%w", a), parse_command("x", ({}), "", a),
+                parse_command(five, ({}), "%w", a), parse_command("x", ({}), five, a),
+                parse_command("", ({}), "%s", a), a });
         }
-    "# }).await;
-    assert_eq!(r, vec![LpcRef::from(0); 4]);
+    "# },
+    )
+    .await;
+    let mut expected = vec![LpcRef::from(0); 5];
+    expected.push(s("unchanged"));
+    assert_eq!(r, expected);
 }
 
 #[tokio::test]
