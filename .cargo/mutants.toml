@@ -183,6 +183,7 @@ examine_globs = [
     "src/interpreter/vm/regex_cache.rs",
     "src/compiler/semantic/local_scope.rs",
     "src/compiler/ast/array_node.rs",
+    "src/compiler/ast/spread_node.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
