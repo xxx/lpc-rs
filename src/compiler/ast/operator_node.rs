@@ -180,12 +180,16 @@ mod tests {
 
     #[test]
     fn the_closure_is_the_operation_over_the_positionals() {
+        let span = Some(Span::new(5, 0.."operator(!)".len()));
         let node = OperatorNode::new(
             Operator::Unary(UnaryOperation::Bang),
             None,
             "closure-0".into(),
-            None,
+            span,
         );
+        assert_eq!(node.span(), span);
+        assert_eq!(node.closure.span(), span);
+        assert_eq!(node.closure.body[0].span(), span);
         assert_eq!(node.closure.name.as_str(), "closure-0");
         assert_eq!(node.closure.to_string(), "(: !$1 :)");
         assert!(node.closure.flags.private());
