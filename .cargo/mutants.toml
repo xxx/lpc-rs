@@ -213,6 +213,7 @@ examine_globs = [
     "src/interpreter/efun/query_resident_memory.rs",
     "src/interpreter/efun/query_verb.rs",
     "src/interpreter/efun/request_clean_up.rs",
+    "src/interpreter/efun/set_this_player.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
