@@ -185,6 +185,7 @@ examine_globs = [
     "src/compiler/ast/array_node.rs",
     "src/compiler/ast/spread_node.rs",
     "src/compiler/ast/assignment_node.rs",
+    "src/interpreter/efun/render_markdown/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

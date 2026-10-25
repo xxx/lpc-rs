@@ -352,6 +352,7 @@ The reviewed scope includes:
 - [Array syntax nodes](src/compiler/ast/array_node.rs): source spans, rendering and traversal.
 - [Spread syntax nodes](src/compiler/ast/spread_node.rs): source spans, rendering and traversal.
 - [Assignment syntax nodes](src/compiler/ast/assignment_node.rs): operation spellings, source spans and traversal.
+- [Markdown rendering efun](src/interpreter/efun/render_markdown/mod.rs): argument defaults and recipient terminal capabilities.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
