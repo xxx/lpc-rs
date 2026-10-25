@@ -305,6 +305,10 @@ examine_globs = [
     "src/command/grammar/builtins.rs",
     "src/command/registry/payload.rs",
     "src/command/command_task.rs",
+    "src/interpreter/json.rs",
+    "src/interpreter/file_view/metadata.rs",
+    "src/util/process_builder.rs",
+    "src/command/frontend/native/matcher.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

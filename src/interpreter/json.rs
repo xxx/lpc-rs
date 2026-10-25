@@ -374,4 +374,39 @@ mod tests {
         let decoded = decode(text, &txn).unwrap();
         assert_eq!(encode(&decoded, &txn).unwrap(), text);
     }
+
+    #[test]
+    fn encoding_accepts_the_depth_boundary_and_rejects_the_next_level() {
+        for (object, prefix, suffix) in [(false, "[", "]"), (true, "{\"x\":", "}")] {
+            for (depth, accepted) in [
+                (MAX_DEPTH - 1, true),
+                (MAX_DEPTH, true),
+                (MAX_DEPTH + 1, false),
+            ] {
+                let txn = TxnHandle::empty();
+                let mut value = LpcRef::from(0);
+                for _ in 0..depth {
+                    value = if object {
+                        mapping(&txn, vec![(LpcRef::from("x"), value)])
+                    } else {
+                        array(&txn, vec![value])
+                    };
+                }
+                let result = encode(&value, &txn);
+                if accepted {
+                    assert_eq!(
+                        result.unwrap(),
+                        format!("{}0{}", prefix.repeat(depth), suffix.repeat(depth))
+                    );
+                } else {
+                    assert!(
+                        result
+                            .unwrap_err()
+                            .to_string()
+                            .contains("json_encode: nesting deeper than 128 levels")
+                    );
+                }
+            }
+        }
+    }
 }

@@ -65,3 +65,44 @@ pub(crate) async fn metadata_through(txn: &TxnHandle, server: &Path) -> io::Resu
         Seen::File(bytes) => FileMetadata::File(bytes.len() as u64),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::TempLib;
+    use lpc_rs_core::lpc_path::LibRoot;
+
+    #[test]
+    fn append_size_requires_a_regular_file_or_a_missing_target() {
+        let root = TempLib::new("append-metadata");
+        let path = LibRoot::new(&*root).resolve("/data", "/").unwrap();
+        let server = path.server().to_owned();
+        let effects = [Effect::AppendFile {
+            path,
+            contents: "é".into(),
+        }];
+        for metadata in [FileMetadata::Other(0), FileMetadata::Other(99)] {
+            assert!(metadata.after_effects(&effects, &server).is_none());
+        }
+        assert!(matches!(
+            FileMetadata::File(99).after_effects(&effects, &server),
+            Some(FileMetadata::File(101))
+        ));
+        assert!(matches!(
+            FileMetadata::Missing.after_effects(&effects, &server),
+            Some(FileMetadata::File(2))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn socket_paths_are_neither_regular_files_nor_directories() {
+        let root = TempLib::new("socket-metadata");
+        let path = root.join("socket");
+        let _socket = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        assert!(matches!(
+            metadata_through(&TxnHandle::empty(), &path).await.unwrap(),
+            FileMetadata::Other(_)
+        ));
+    }
+}

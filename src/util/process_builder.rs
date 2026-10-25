@@ -179,3 +179,45 @@ pub async fn process_insert_and_initialize_program<const N: usize>(
         Task::initialize_process(template.into_task_context(process)).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::log_capture::LogCapture;
+    use lpc_rs_errors::lpc_warning;
+    use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog};
+
+    #[tokio::test]
+    async fn host_compilation_warnings_keep_their_order_and_diagnostic_notes() {
+        let log = LogCapture::default();
+        let config = ConfigBuilder::default()
+            .debug_log(DebugLog::new(log.clone()))
+            .build()
+            .unwrap();
+        log_warnings(
+            &config,
+            vec![
+                lpc_warning!("bootstrap-first").with_note("first diagnostic note"),
+                lpc_warning!("bootstrap-second").with_note("second diagnostic note"),
+            ],
+        )
+        .await;
+        config.debug_log.as_ref().unwrap().flush().await;
+        let rendered = log.contents();
+        let first = rendered
+            .find("bootstrap-first")
+            .expect("first warning reached the log");
+        let second = rendered
+            .find("bootstrap-second")
+            .expect("second warning reached the log");
+        assert!(first < second);
+        for message in [
+            "bootstrap-first",
+            "bootstrap-second",
+            "first diagnostic note",
+            "second diagnostic note",
+        ] {
+            assert_eq!(rendered.matches(message).count(), 1, "{rendered}");
+        }
+    }
+}
