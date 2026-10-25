@@ -409,6 +409,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn plaintext_acceptance_negotiates_with_multiple_peers() {
+        let vm = Vm::new(test_config());
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let tasks = Acceptors(vec![tokio::spawn(accept_plain(
+            listener,
+            TaskTemplate::from(vm.global_state.clone()),
+        ))]);
+        let mut clients = Vec::new();
+        for _ in 0..2 {
+            let mut client = TcpStream::connect(address).await.unwrap();
+            let greeting = read_until(&mut client, &[255, 253, 31]).await;
+            assert!(greeting.starts_with(&[255, 253, 31]));
+            clients.push(client);
+        }
+        drop(tasks);
+        drop(clients);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn accept_errors_delay_the_next_retry() {
+        let started = tokio::time::Instant::now();
+        accept_error(std::io::Error::other("injected accept failure")).await;
+        assert!(started.elapsed() >= Duration::from_millis(100));
+    }
+
+    #[tokio::test]
     async fn buffered_output_is_flushed_even_when_the_peer_sends_nothing() {
         let vm = Vm::new(test_config());
         let (mut client, server) = tokio::io::duplex(4096);
