@@ -329,6 +329,7 @@ examine_globs = [
     "src/interpreter/task/handle_call_fp.rs",
     "src/interpreter/function_type/function_ptr.rs",
     "src/interpreter/apply.rs",
+    "src/command/parser/handlers.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

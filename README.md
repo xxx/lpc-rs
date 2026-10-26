@@ -429,6 +429,7 @@ The reviewed scope includes:
 - [Function pointer dispatch](src/interpreter/task/handle_call_fp.rs): resident and loading calls, partial application, visibility and argument checks.
 - [Function pointer values](src/interpreter/function_type/function_ptr.rs): partial bindings, call classification, receiver liveness, diagnostic formatting and retained buffers.
 - [Runtime apply helpers](src/interpreter/apply.rs): nested caller/player context, master decisions, message delivery and warning reports.
+- [Parser protocol handlers](src/command/parser/handlers.rs): handler lookup tiers, typed words, replies and failure selection.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
