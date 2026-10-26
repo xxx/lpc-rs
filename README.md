@@ -421,6 +421,7 @@ The reviewed scope includes:
 - [Command verb frontend](src/command/frontend/add_action.rs): literal and prefix grammars, argument spans, reported verbs and shared grammar caching.
 - [Compiled-program storage](src/interpreter/program/code_pool.rs): validated code sharing, weak-cache cleanup and retained path and class memory accounting.
 - [Parser nesting](src/compiler/parser/nesting.rs): AST child traversal, depth boundaries and nearest source locations.
+- [Command phrases](src/command/resolve/phrase.rs): singular and plural nouns, shared vocabulary and adjective coverage.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
