@@ -347,6 +347,7 @@ examine_globs = [
     "src/interpreter/task/apply_function.rs",
     "src/interpreter/vm/system_recompile.rs",
     "src/compiler/parser_cache.rs",
+    "src/interpreter/call_stack.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -269,7 +269,7 @@ mod tests {
     use super::*;
     use crate::interpreter::{process::Process, program::ProgramBuilder};
 
-    fn stack_with_one_frame() -> CallStack<4> {
+    fn named_frame(name: &'static str) -> CallFrame {
         let program = ProgramBuilder::default()
             .filename(LpcPath::in_game("/caller".into()))
             .build()
@@ -277,24 +277,94 @@ mod tests {
         let function = ProgramFunctionBuilder::default()
             .prototype(
                 FunctionPrototypeBuilder::default()
-                    .name("f")
-                    .filename(Arc::new(LpcPath::in_game("/caller".into())))
+                    .name(name)
+                    .filename(Arc::new(LpcPath::in_game("/caller.c".into())))
                     .return_type(LpcType::Void)
                     .build()
                     .unwrap(),
             )
             .build()
             .unwrap();
-        let frame = CallFrame::new(
+        CallFrame::new(
             Arc::new(Process::new(program)),
             Arc::new(function),
             0 as RegisterSize,
             None::<&[crate::interpreter::stm::VarId]>,
             &crate::interpreter::stm::TxnHandle::default(),
-        );
+        )
+    }
+
+    fn stack_with_one_frame() -> CallStack<4> {
         let mut stack = CallStack::default();
-        stack.push(frame).unwrap();
+        stack.push(named_frame("f")).unwrap();
         stack
+    }
+
+    #[test]
+    fn pop_removes_frames_in_lifo_order_and_preserves_the_caller() {
+        let mut stack = CallStack::<4>::default();
+        stack.push(named_frame("caller")).unwrap();
+        stack.push(named_frame("callee")).unwrap();
+        assert_eq!(stack.pop().unwrap().function.name(), "callee");
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack.current_frame().unwrap().function.name(), "caller");
+        assert_eq!(stack.pop().unwrap().function.name(), "caller");
+        assert!(stack.pop().is_none());
+        assert!(stack.current_frame().is_err());
+    }
+
+    #[test]
+    fn external_callers_skip_local_frames_and_the_entry_boundary() {
+        let mut stack = CallStack::<4>::default();
+        for (name, external) in [
+            ("entry", true),
+            ("external", true),
+            ("local", false),
+            ("nested", true),
+        ] {
+            let mut frame = named_frame(name);
+            frame.external = external;
+            stack.push(frame).unwrap();
+        }
+        assert_eq!(
+            stack
+                .door_crossers(3)
+                .map(|frame| frame.function.name())
+                .collect::<Vec<_>>(),
+            ["local", "entry"],
+        );
+        assert_eq!(
+            stack
+                .door_crossers(2)
+                .map(|frame| frame.function.name())
+                .collect::<Vec<_>>(),
+            ["entry"],
+        );
+        assert_eq!(stack.door_crossers(0).count(), 0);
+    }
+
+    #[test]
+    fn program_names_and_stack_traces_report_the_active_frames() {
+        let mut stack = CallStack::<4>::default();
+        assert!(stack.stack_trace().is_empty());
+        assert_eq!(
+            stack.calling_program("/lib", NullMode::Zero),
+            LpcRef::from(0)
+        );
+        assert_eq!(
+            stack.calling_program("/lib", NullMode::Distinct),
+            LpcRef::Nil
+        );
+        stack.push(named_frame("caller")).unwrap();
+        stack.push(named_frame("callee")).unwrap();
+        assert_eq!(
+            stack.calling_program("/lib", NullMode::Zero),
+            LpcRef::from("/caller.c")
+        );
+        assert_eq!(
+            stack.stack_trace(),
+            ["(unknown) in caller()", "(unknown) in callee()"],
+        );
     }
 
     #[test]

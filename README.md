@@ -447,6 +447,7 @@ The reviewed scope includes:
 - [Function application](src/interpreter/task/apply_function.rs): retained results, named and master applies, seeded arguments and runtime error delivery.
 - [System export compatibility](src/interpreter/vm/system_recompile.rs): selector names and configuration, public export preservation and independent signature changes.
 - [Parsed syntax cache](src/compiler/parser_cache.rs): literal-sensitive keys, pristine syntax reuse, retention charges, expiration counts and per-use authorization.
+- [Call stacks](src/interpreter/call_stack.rs): frame capacity, activity tracking, LIFO removal, external callers, program names and stack traces.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
