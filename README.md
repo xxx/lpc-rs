@@ -433,6 +433,7 @@ The reviewed scope includes:
 - [String element writes](src/interpreter/task/assign_index.rs): scalar indexing, UTF-8 replacement, bounds and final byte limits.
 - [Inheritance compilation](src/compiler/codegen/inheritance_walker.rs): namespaces, loading decisions, inherited warnings and variable restrictions.
 - [Include traversal](src/compiler/preprocessor/include.rs): search order, per-directive permission checks, memoized sources, include-once and depth limits.
+- [Object initialization APIs](src/interpreter/vm/object_initializers.rs): source and path initialization, simul-efun bootstrap and compile-only behavior.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

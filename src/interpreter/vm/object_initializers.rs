@@ -212,4 +212,20 @@ mod tests {
             &vm.global_state.object_space.master_object().unwrap()
         ));
     }
+
+    #[tokio::test]
+    async fn compile_only_reports_read_and_parse_errors_without_publishing_objects() {
+        use crate::test_support::{lib_holding, temp_lib_config};
+
+        let root = lib_holding("compile-only-errors", &[("broken.c", "int value = ;")]);
+        let vm = Vm::new(temp_lib_config(&root));
+        let path = |name: &str| LpcPath::new_in_game(name, "/", &*vm.global_state.config.lib_dir);
+        let missing = vm.compile_from_path(&path("/missing")).await.unwrap_err();
+        assert!(missing.message().contains("missing"), "{missing}");
+        assert!(vm.global_state.object_space.lookup("/missing").is_none());
+
+        let invalid = vm.compile_from_path(&path("/broken")).await.unwrap_err();
+        assert_eq!(invalid.message(), "Unrecognized Token: ;");
+        assert!(vm.global_state.object_space.lookup("/broken").is_none());
+    }
 }
