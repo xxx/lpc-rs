@@ -318,6 +318,8 @@ examine_globs = [
     "src/telnet/outbox.rs",
     "src/interpreter/file_view/directory.rs",
     "src/command/frontend/add_action.rs",
+    "src/interpreter/program/code_pool.rs",
+    "src/interpreter/program/memory.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

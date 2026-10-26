@@ -204,4 +204,48 @@ mod tests {
             .code = Arc::new((*function.code).clone());
         assert!(independent.storage_bytes().unwrap() > bytes);
     }
+
+    #[test]
+    fn program_storage_counts_retained_source_path_bytes() {
+        let original = Program::new(LpcPath::in_game("/source.c".into()));
+        let mut longer = original.clone();
+        longer.filename = Arc::new(LpcPath::in_game(
+            format!("/{}source.c", "directory/".repeat(256)).into(),
+        ));
+        let growth = longer.filename.as_os_str().len() - original.filename.as_os_str().len();
+        let before = original.storage_bytes().unwrap();
+        assert!(longer.storage_bytes().unwrap() >= before + growth);
+    }
+
+    #[test]
+    fn program_storage_covers_retained_class_field_allocations() {
+        use lpc_rs_core::{
+            class::{ClassField, ClassId},
+            lpc_type::LpcType,
+        };
+
+        let original = Program::default();
+        let mut with_class = original.clone();
+        let fields = (0..2048)
+            .map(|index| ClassField {
+                name: format!("member{index}").into(),
+                type_: LpcType::Int(false),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let field_bytes = size_of_val(&*fields);
+        with_class.class_scope = Arc::new(ClassScope {
+            definitions: vec![Arc::new(ClassDefinition {
+                id: ClassId {
+                    source: "/record.h".into(),
+                    name: "record".into(),
+                },
+                fields,
+            })]
+            .into_boxed_slice(),
+            ..Default::default()
+        });
+        let before = original.storage_bytes().unwrap();
+        assert!(with_class.storage_bytes().unwrap() >= before + field_bytes);
+    }
 }
