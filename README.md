@@ -450,6 +450,7 @@ The reviewed scope includes:
 - [Call stacks](src/interpreter/call_stack.rs): frame capacity, activity tracking, LIFO removal, external callers, program names and stack traces.
 - [Function addresses](src/interpreter/function_type/function_address.rs): compatible binding, retained images, structural equality, names and diagnostics after receiver retirement.
 - [Program dispatch and lookup](src/interpreter/program.rs): override targets, inherited namespaces, function presence, global aliases and assembly listings.
+- [Object vocabulary](src/command/resolve/lpc.rs): live and remote scope entries, explicit plural lists, nickname fallback and nested apply context.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -234,3 +234,96 @@ impl Vocabulary for LpcVocabulary<'_> {
         Ok(matches!(answer, Some(value) if value.is_truthy(self.ctx.txn())))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        interpreter::vm::Vm,
+        test_support::{permissive_master, run_prog, test_config},
+    };
+
+    #[tokio::test]
+    async fn candidate_liveness_and_remote_boundaries_follow_the_scope() {
+        let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
+        let dead = vm
+            .initialize_process_from_code("/gone.c", "")
+            .await
+            .unwrap()
+            .context
+            .process;
+        let task = vm
+            .initialize_process_from_code(
+                "/caller.c",
+                "void create() { destruct(find_object(\"/gone\")); }",
+            )
+            .await
+            .unwrap();
+        let scope = vec![dead, task.context.process().clone()];
+        let vocabulary = LpcVocabulary::new(&task.context, None, scope.clone());
+        assert_eq!(vocabulary.candidates(), 2);
+        assert!(!vocabulary.is_live(0));
+        assert!(vocabulary.is_live(1));
+        assert!(!vocabulary.is_remote(0));
+        assert!(!vocabulary.is_remote(1));
+        for (remote_from, expected) in [(0, [true, true]), (1, [false, true]), (2, [false, false])]
+        {
+            let vocabulary = LpcVocabulary::with_extras(
+                &task.context,
+                None,
+                scope.clone(),
+                vec![vec![], vec![]],
+                remote_from,
+            );
+            for (index, expected) in expected.into_iter().enumerate() {
+                assert_eq!(vocabulary.is_remote(index), expected);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn explicit_plural_lists_work_without_a_master_pluralizer() {
+        let task = run_prog(
+            r#"
+            string *parse_command_id_list() { return ({ "goose" }); }
+            string *parse_command_plural_id_list() { return ({ "geese" }); }
+            string *parse_command_adjectiv_id_list() { return ({ "wild" }); }
+            int create() {
+                mixed *matches;
+                if (!parse_command("wild geese", ({ this_object() }), "%i", matches)) return 0;
+                return sizeof(matches) == 2 && matches[1] == this_object();
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+    }
+
+    #[tokio::test]
+    async fn nickname_fallback_matches_exact_aliases_for_id_function_objects() {
+        let task = run_prog(
+            r#"
+            int handled;
+            int id(string phrase) { return phrase == "native"; }
+            mixed can_touch_obj(object ob, string word) { return 1; }
+            mixed direct_touch_obj(object ob, string word) { return 1; }
+            void do_touch_obj(object ob, string word) { handled++; }
+            int create() {
+                enable_commands();
+                set_this_player(this_object());
+                parse_init();
+                parse_add_rule("touch", "OBJ");
+                object *scope = ({ this_object() });
+                mapping names = ([ "alias": this_object() ]);
+                int alias = parse_sentence("touch alias", 0, scope, names);
+                int ordinary = parse_sentence("touch native", 0, scope, names);
+                int other = parse_sentence("touch unrelated", 0, scope, names);
+                return alias == 1 && ordinary == 1 && other < 1 && handled == 2;
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+    }
+}
