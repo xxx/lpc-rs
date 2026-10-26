@@ -436,6 +436,7 @@ The reviewed scope includes:
 - [Object initialization APIs](src/interpreter/vm/object_initializers.rs): source and path initialization, simul-efun bootstrap and compile-only behavior.
 - [Grammar tokenization](src/command/grammar/tokenizer.rs): longest matches, progress, UTF-8 byte offsets, skipped rules and folded token text.
 - [Inherited program linking](src/interpreter/program/linker.rs): global relocation, shared ancestor regions, packed views and inherited visibility.
+- [Parser rule frontend](src/command/frontend/parser.rs): verb normalization, capture modifiers, handler slugs, argument layouts and pattern caching.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
