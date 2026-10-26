@@ -320,6 +320,7 @@ examine_globs = [
     "src/command/frontend/add_action.rs",
     "src/interpreter/program/code_pool.rs",
     "src/interpreter/program/memory.rs",
+    "src/compiler/parser/nesting.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
