@@ -325,6 +325,7 @@ examine_globs = [
     "src/command/registry/actor.rs",
     "src/compiler/codegen/class_walker.rs",
     "src/compiler/mod.rs",
+    "src/interpreter/task/handle_call_other.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -333,6 +334,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Collections suspend through pending calls; invalid names fail before this receiver check.
+    '^src/interpreter/task/handle_call_other\.rs:117:13: delete match arm LpcRef::Array\(_\) \| LpcRef::Mapping\(_\) in Task<STACKSIZE>::handle_call_other$',
     # Equal continuation offsets append zero spaces and keep the same column.
     '^src/interpreter/efun/sprintf/layout\.rs:81:35: replace > with >= in Layout::finish_row$',
     # Both margins cover one expression node per token, so this estimate stays conservative.

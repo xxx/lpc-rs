@@ -425,6 +425,7 @@ The reviewed scope includes:
 - [Actor command rules](src/command/registry/actor.rs): transactional registration, owner-scoped removal, visibility and departure cleanup.
 - [Class type resolution](src/compiler/codegen/class_walker.rs): nominal identities, inherited visibility, field layouts and type annotations.
 - [Compiler entry points](src/compiler/mod.rs): source-extension fallback, I/O errors, preprocessing, analysis and compiled warning groups.
+- [External call handling](src/interpreter/task/handle_call_other.rs): resident and loaded receivers, collection results and argument propagation.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -472,6 +473,11 @@ margin mutation is excluded. Parameter strings and expression storage have
 independent lower-bound checks.
 Equal `sprintf` continuation offsets append zero spaces and assign the same
 column value; that single padding comparison is excluded at its source position.
+
+Named collection calls suspend through pending calls; invalid names fail before
+the slow receiver match. The single collection-guard branch deletion in
+`Task::handle_call_other` is excluded at its source position; review it again if
+call routing changes.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out
