@@ -457,6 +457,7 @@ The reviewed scope includes:
 - [Presence hooks](src/command/presence.rs): movement and destruction cleanup, living arrival order, reentrant meetings and transaction read dependencies.
 - [Macro definitions](src/compiler/preprocessor/define.rs): keyword identifiers, object and function forms, source spelling and redefinition spacing.
 - [Observer relationships](src/interpreter/snooping/mod.rs): handler compatibility, endpoint validation, cycle prevention, matching retirement and live registration identity.
+- [Compiler scope trees](src/compiler/semantic/scope_tree.rs): lexical and function scope lookup, navigation, mutable symbols and captured-cell layout.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
