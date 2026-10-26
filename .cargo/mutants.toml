@@ -343,6 +343,7 @@ examine_globs = [
     "src/command/parser/lpc.rs",
     "src/compiler/codegen/function_prototype_walker.rs",
     "src/interpreter/file_view.rs",
+    "src/command/trial.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
