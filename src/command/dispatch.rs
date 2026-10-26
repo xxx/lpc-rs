@@ -1440,4 +1440,20 @@ mod tests {
             LpcRef::from(1)
         );
     }
+
+    #[tokio::test]
+    async fn command_from_a_live_body_without_enabled_commands_runs_no_hooks() {
+        let code = r#"
+            int hooks;
+            int result = 99;
+            string heard = "";
+            void create() {
+                set_this_player(this_object());
+                result = command("look");
+            }
+            string process_input(string line) { hooks++; return line; }
+            void catch_tell(string message) { heard = message; }
+        "#;
+        assert_eq!(globals(code, 3).await, vec![0.into(), 0.into(), s("")]);
+    }
 }
