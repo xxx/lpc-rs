@@ -452,12 +452,54 @@ mod tests {
     }
 
     #[test]
-    fn lookup_function_takes_a_mangled_name_as_str() {
+    fn lookup_and_presence_accept_mangled_and_unmangled_names() {
         let program = program_with("f");
         let mangled = program.unmangled_functions["f"].mangle();
 
         assert!(program.lookup_function(mangled.as_str()).is_some());
         assert!(program.lookup_function("f").is_some());
+        assert!(program.contains_function(mangled.as_str()));
+        assert!(program.contains_function("f"));
+        assert!(!program.contains_function("missing_function"));
+    }
+
+    #[test]
+    fn global_slots_preserve_physical_indices_and_resolve_alias_boundaries() {
+        let program = Program {
+            num_globals: 2,
+            global_views: Arc::from([1, 0]),
+            ..Program::default()
+        };
+        for (index, expected) in [(0, 0), (1, 1), (2, 1), (3, 0)] {
+            assert_eq!(program.global_slot(index), expected, "slot {index}");
+        }
+    }
+
+    #[test]
+    fn program_display_preserves_its_source_identity() {
+        let program = Program::new(LpcPath::in_game("/objects/example.c".into()));
+        assert_eq!(program.to_string(), "/objects/example.c");
+    }
+
+    #[tokio::test]
+    async fn listings_include_the_initializer_and_sorted_function_bodies() {
+        let program = crate::compiler::Compiler::new(crate::test_support::test_config())
+            .compile_string(
+                "/listing.c",
+                "int count = 7; int zulu() { return count; } int alpha() { return 2; }",
+            )
+            .await
+            .unwrap()
+            .program;
+        let listing = program.listing();
+        let names = listing
+            .iter()
+            .filter_map(|line| line.strip_prefix("fn "))
+            .map(|line| line.split_whitespace().next().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(names, [INIT_PROGRAM, "alpha", INIT_GLOBALS, "zulu"]);
+        let instruction = format!("  {}", lpc_rs_asm::instruction::Instruction::Ret);
+        assert!(listing.iter().any(|line| line.ends_with(&instruction)));
     }
 
     #[test]
