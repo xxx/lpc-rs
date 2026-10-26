@@ -346,6 +346,7 @@ examine_globs = [
     "src/command/trial.rs",
     "src/interpreter/task/apply_function.rs",
     "src/interpreter/vm/system_recompile.rs",
+    "src/compiler/parser_cache.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -354,6 +355,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Both allowances still cover the largest syntax node per token.
+    '^src/compiler/parser_cache\.rs:95:(28: replace \* with \+|52: replace \+ with -) in retained_cost$',
     # Generated initializers are outside the program's public export set.
     '^src/interpreter/vm/system_recompile\.rs:57:13: replace \|\| with && in compatible_exports$',
     # Resizing a byte vector to its existing length changes no bytes or capacity.

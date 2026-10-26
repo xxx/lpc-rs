@@ -446,6 +446,7 @@ The reviewed scope includes:
 - [Command rule trials](src/command/trial.rs): command frames, handler precedence, parser outcomes and deferred failures.
 - [Function application](src/interpreter/task/apply_function.rs): retained results, named and master applies, seeded arguments and runtime error delivery.
 - [System export compatibility](src/interpreter/vm/system_recompile.rs): selector names and configuration, public export preservation and independent signature changes.
+- [Parsed syntax cache](src/compiler/parser_cache.rs): literal-sensitive keys, pristine syntax reuse, retention charges, expiration counts and per-use authorization.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -497,6 +498,9 @@ Changing its extra `2 * size_of::<PreprocessorNode>()` allowance to
 `2 + size_of::<PreprocessorNode>()` still covers that bound; only this pinned
 margin mutation is excluded. Parameter strings and expression storage have
 independent lower-bound checks.
+The parser cache's two pinned node allowances still cover the larger of
+`AstNode` and `ExpressionNode` per token. Tests check that layout bound and
+retained token and syntax-vector storage independently.
 Equal `sprintf` continuation offsets append zero spaces and assign the same
 column value; that single padding comparison is excluded at its source position.
 In `file_view::merge_pending`, resizing a byte vector to its existing length
