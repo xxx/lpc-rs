@@ -353,6 +353,7 @@ examine_globs = [
     "src/command/resolve/lpc.rs",
     "src/interpreter/snooping/delivery.rs",
     "src/command/grammar/tree.rs",
+    "src/interpreter/sockets/callbacks.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
