@@ -315,6 +315,7 @@ examine_globs = [
     "src/command/scope/supplied.rs",
     "src/interpreter/stm/world_value.rs",
     "src/interpreter/bank.rs",
+    "src/telnet/outbox.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
