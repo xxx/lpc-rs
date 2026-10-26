@@ -424,6 +424,7 @@ The reviewed scope includes:
 - [Command phrases](src/command/resolve/phrase.rs): singular and plural nouns, shared vocabulary and adjective coverage.
 - [Actor command rules](src/command/registry/actor.rs): transactional registration, owner-scoped removal, visibility and departure cleanup.
 - [Class type resolution](src/compiler/codegen/class_walker.rs): nominal identities, inherited visibility, field layouts and type annotations.
+- [Compiler entry points](src/compiler/mod.rs): source-extension fallback, I/O errors, preprocessing, analysis and compiled warning groups.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
