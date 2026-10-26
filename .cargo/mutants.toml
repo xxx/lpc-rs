@@ -335,6 +335,7 @@ examine_globs = [
     "src/compiler/preprocessor/include.rs",
     "src/interpreter/vm/object_initializers.rs",
     "src/command/grammar/tokenizer.rs",
+    "src/interpreter/program/linker.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

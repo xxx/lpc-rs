@@ -435,6 +435,7 @@ The reviewed scope includes:
 - [Include traversal](src/compiler/preprocessor/include.rs): search order, per-directive permission checks, memoized sources, include-once and depth limits.
 - [Object initialization APIs](src/interpreter/vm/object_initializers.rs): source and path initialization, simul-efun bootstrap and compile-only behavior.
 - [Grammar tokenization](src/command/grammar/tokenizer.rs): longest matches, progress, UTF-8 byte offsets, skipped rules and folded token text.
+- [Inherited program linking](src/interpreter/program/linker.rs): global relocation, shared ancestor regions, packed views and inherited visibility.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -462,7 +463,11 @@ logs are written under
 Review `missed.txt` for changes the tests did not detect, and add tests for the
 missing observable behaviour. Check `timeout.txt` and `unviable.txt` separately:
 a timeout or compilation failure does not establish that an assertion caught the
-change. Reviewed exclusions have specific regexes and explanations:
+change. Struct-update field deletions can bypass name regex filters in
+cargo-mutants 27.1.0; check `mutants.json` after narrowing a local run. CI's diff
+and shard filters apply after discovery.
+
+Reviewed exclusions have specific regexes and explanations:
 `<` and `<=` assign the same value at equality in `RegisterCounter::set`; OR and
 XOR set the same warning flag after `Span::file_id` clears that bit.
 Telnet framing permits different linear reservation hints while preserving wire

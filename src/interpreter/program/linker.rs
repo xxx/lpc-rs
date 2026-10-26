@@ -197,4 +197,15 @@ mod tests {
         assert_eq!(linker.view(slots).unwrap(), 80_000);
         assert_eq!(linker.finish().len(), 80_000);
     }
+
+    #[test]
+    fn contiguous_views_reuse_canonical_slots_without_more_alias_storage() {
+        let mut linker = ProgramLinker::new(8);
+        assert_eq!(linker.view(vec![3, 1]).unwrap(), 8);
+        assert_eq!(linker.view(vec![2, 3, 4]).unwrap(), 2);
+        assert_eq!(linker.view(vec![0, 1]).unwrap(), 0);
+        assert_eq!(linker.view(vec![]).unwrap(), 0);
+        assert_eq!(linker.view(vec![3, 1]).unwrap(), 8);
+        assert_eq!(linker.finish().as_ref(), &[3, 1]);
+    }
 }
