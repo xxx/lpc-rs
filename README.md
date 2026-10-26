@@ -448,10 +448,11 @@ The reviewed scope includes:
 - [System export compatibility](src/interpreter/vm/system_recompile.rs): selector names and configuration, public export preservation and independent signature changes.
 - [Parsed syntax cache](src/compiler/parser_cache.rs): literal-sensitive keys, pristine syntax reuse, retention charges, expiration counts and per-use authorization.
 - [Call stacks](src/interpreter/call_stack.rs): frame capacity, activity tracking, LIFO removal, external callers, program names and stack traces.
+- [Function addresses](src/interpreter/function_type/function_address.rs): compatible binding, retained images, structural equality, names and diagnostics after receiver retirement.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
-[`.cargo/mutants.toml`](.cargo/mutants.toml) keeps the workload small.
+[`.cargo/mutants.toml`](.cargo/mutants.toml) limits mutations to reviewed modules.
 
 Install the version used by CI, then run from the repository root:
 
