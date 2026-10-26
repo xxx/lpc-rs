@@ -330,6 +330,7 @@ examine_globs = [
     "src/interpreter/function_type/function_ptr.rs",
     "src/interpreter/apply.rs",
     "src/command/parser/handlers.rs",
+    "src/interpreter/task/assign_index.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

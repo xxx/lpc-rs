@@ -430,6 +430,7 @@ The reviewed scope includes:
 - [Function pointer values](src/interpreter/function_type/function_ptr.rs): partial bindings, call classification, receiver liveness, diagnostic formatting and retained buffers.
 - [Runtime apply helpers](src/interpreter/apply.rs): nested caller/player context, master decisions, message delivery and warning reports.
 - [Parser protocol handlers](src/command/parser/handlers.rs): handler lookup tiers, typed words, replies and failure selection.
+- [String element writes](src/interpreter/task/assign_index.rs): scalar indexing, UTF-8 replacement, bounds and final byte limits.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
