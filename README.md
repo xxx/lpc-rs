@@ -418,6 +418,7 @@ The reviewed scope includes:
 - [World values and register banks](src/interpreter/bank.rs): typed world payloads, register initialization, storage operations and formatting.
 - [Client output buffering](src/telnet/outbox.rs): bounded pending bytes, truncation and recovery after writes.
 - [Pending directory views](src/interpreter/file_view/directory.rs): staged membership, recreation and rename dependencies.
+- [Command verb frontend](src/command/frontend/add_action.rs): literal and prefix grammars, argument spans, reported verbs and shared grammar caching.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
