@@ -441,6 +441,7 @@ The reviewed scope includes:
 - [Committed object updates](src/interpreter/vm/object_update.rs): request identities, status retention, caller context and transaction execution.
 - [Command dispatch](src/command/dispatch.rs): pre-hooks, actor context, handler selection and failure messages.
 - [LPC parser adapter](src/command/parser/lpc.rs): handler values, per-slot arrays, parse completion, liveness and capture access.
+- [Function prototype collection](src/compiler/codegen/function_prototype_walker.rs): defaults, closure positionals, reference metadata and inherited arity.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -479,6 +480,8 @@ Telnet framing permits different linear reservation hints while preserving wire
 bytes; a growth check catches the quadratic reservation mutation.
 Composition can reuse the inner function's register for its result after the call
 returns; that arithmetic exclusion is pinned to the expression's source position.
+The positional-argument maximum in `FunctionPrototypeWalker::visit_var` stays
+unchanged when assigned at equality; that single pinned comparison is excluded.
 Regex option bits are disjoint, so OR and XOR build the same supported flag
 mask; that exclusion is pinned to the mask's six operators and guarded by a
 test that the flags remain disjoint.

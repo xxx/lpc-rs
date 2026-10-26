@@ -341,6 +341,7 @@ examine_globs = [
     "src/interpreter/vm/object_update.rs",
     "src/command/dispatch.rs",
     "src/command/parser/lpc.rs",
+    "src/compiler/codegen/function_prototype_walker.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -349,6 +350,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # At equality the positional maximum is assigned its existing value.
+    '^src/compiler/codegen/function_prototype_walker\.rs:237:20: replace > with >= in <impl TreeWalker for FunctionPrototypeWalker>::visit_var$',
     # Collections suspend through pending calls; invalid names fail before this receiver check.
     '^src/interpreter/task/handle_call_other\.rs:117:13: delete match arm LpcRef::Array\(_\) \| LpcRef::Mapping\(_\) in Task<STACKSIZE>::handle_call_other$',
     # Equal continuation offsets append zero spaces and keep the same column.
