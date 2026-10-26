@@ -354,6 +354,7 @@ examine_globs = [
     "src/interpreter/snooping/delivery.rs",
     "src/command/grammar/tree.rs",
     "src/interpreter/sockets/callbacks.rs",
+    "src/command/presence.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

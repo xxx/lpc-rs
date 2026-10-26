@@ -62,6 +62,7 @@ impl Meeting {
                 {room_hook}
             }}
             int do_look(string arg) {{ return 1; }}
+            void start() {{ enable_commands(); }}
         "#
             ),
         )
@@ -254,7 +255,7 @@ async fn a_peer_that_leaves_during_an_earlier_hook_is_skipped() {
 }
 
 #[tokio::test]
-async fn moving_an_unrelated_object_does_not_cancel_the_arrival() {
+async fn an_unrelated_move_preserves_the_living_destinations_meeting() {
     let meeting = Meeting::new("\"/unrelated\"->leave();", true).await;
     object(
         &meeting.vm,
@@ -262,8 +263,18 @@ async fn moving_an_unrelated_object_does_not_cancel_the_arrival() {
         r#"void leave() { move_object("/elsewhere"); }"#,
     )
     .await;
+    apply_function_by_name(
+        "start",
+        &[],
+        meeting.room.clone(),
+        TaskTemplate::from(meeting.vm.global_state.clone()),
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap();
     meeting.enter("enter").await.unwrap();
-    assert_eq!(meeting.log(), "room;peer:/actor;actor:/peer;");
+    assert_eq!(meeting.log(), "room;peer:/actor;actor:/peer;actor:/room;");
 }
 
 #[tokio::test]
