@@ -244,6 +244,16 @@ mod tests {
     }
 
     #[test]
+    fn a_fresh_receiver_uses_the_unshadowed_entry_path() {
+        let target = Arc::new(Process::default());
+        let caller = Arc::new(Process::default());
+        assert!(matches!(
+            Process::shadow_entry(&TxnHandle::empty(), &target, "missing", &caller),
+            ShadowEntry::Unshadowed,
+        ));
+    }
+
+    #[test]
     fn an_empty_chain_has_no_entry() {
         let caller = Arc::new(Process::default());
         assert_eq!(entry_index(&[], None, &caller), None);
