@@ -431,6 +431,7 @@ The reviewed scope includes:
 - [Runtime apply helpers](src/interpreter/apply.rs): nested caller/player context, master decisions, message delivery and warning reports.
 - [Parser protocol handlers](src/command/parser/handlers.rs): handler lookup tiers, typed words, replies and failure selection.
 - [String element writes](src/interpreter/task/assign_index.rs): scalar indexing, UTF-8 replacement, bounds and final byte limits.
+- [Inheritance compilation](src/compiler/codegen/inheritance_walker.rs): namespaces, loading decisions, inherited warnings and variable restrictions.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
