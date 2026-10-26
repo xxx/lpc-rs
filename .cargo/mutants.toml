@@ -323,6 +323,7 @@ examine_globs = [
     "src/compiler/parser/nesting.rs",
     "src/command/resolve/phrase.rs",
     "src/command/registry/actor.rs",
+    "src/compiler/codegen/class_walker.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -661,4 +661,61 @@ mod tests {
             crate::interpreter::lpc_ref::LpcRef::from(1)
         );
     }
+
+    #[tokio::test]
+    async fn class_resolution_errors_preserve_parser_warnings() {
+        let error = Compiler::default()
+            .compile_string("/record.c", "int proto(); class missing value;")
+            .await
+            .unwrap_err();
+        let messages: Vec<_> = error
+            .to_diagnostics()
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "unknown class `missing`",
+                "function prototypes are ignored; the definition declares the function",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn local_class_declarations_inside_closures_resolve_nominal_types() {
+        let compiled = Compiler::default()
+            .compile_string(
+                "/record.c",
+                r#"
+                class record { int value; }
+                function make() {
+                    return (: class record item = new(class record, value: 7); return item; :);
+                }
+                "#,
+            )
+            .await
+            .unwrap();
+        let closure = compiled
+            .program
+            .functions
+            .values()
+            .find(|f| f.is_closure())
+            .unwrap();
+        let item = closure
+            .local_variables
+            .iter()
+            .find(|symbol| symbol.name == "item")
+            .unwrap();
+        assert_eq!(
+            item.type_,
+            LpcType::Class(
+                ClassId {
+                    source: ustr("/record.c"),
+                    name: ustr("record"),
+                },
+                false
+            )
+        );
+    }
 }
