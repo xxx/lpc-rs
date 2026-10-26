@@ -415,6 +415,7 @@ The reviewed scope includes:
 - [Command support](src/command/mod.rs): parser dispatch, shared grammar productions, ordered rule snapshots and transactional command execution.
 - [Compiler-runtime integration](src/interpreter/mod.rs): JSON values, staged-file metadata, process compilation and native command matching.
 - [Formatting and supplied scopes](src/interpreter/efun/sprintf/mod.rs): format parsing, multiline layout and caller-supplied parser scope traversal.
+- [World values and register banks](src/interpreter/bank.rs): typed world payloads, register initialization, storage operations and formatting.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

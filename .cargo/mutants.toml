@@ -313,6 +313,8 @@ examine_globs = [
     "src/interpreter/efun/sprintf/spec.rs",
     "src/interpreter/efun/sprintf/layout.rs",
     "src/command/scope/supplied.rs",
+    "src/interpreter/stm/world_value.rs",
+    "src/interpreter/bank.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
