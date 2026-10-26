@@ -432,6 +432,7 @@ The reviewed scope includes:
 - [Parser protocol handlers](src/command/parser/handlers.rs): handler lookup tiers, typed words, replies and failure selection.
 - [String element writes](src/interpreter/task/assign_index.rs): scalar indexing, UTF-8 replacement, bounds and final byte limits.
 - [Inheritance compilation](src/compiler/codegen/inheritance_walker.rs): namespaces, loading decisions, inherited warnings and variable restrictions.
+- [Include traversal](src/compiler/preprocessor/include.rs): search order, per-directive permission checks, memoized sources, include-once and depth limits.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

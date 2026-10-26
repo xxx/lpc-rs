@@ -978,4 +978,31 @@ mod tests {
             "closing the root frame empties the stack"
         );
     }
+
+    #[tokio::test]
+    async fn active_include_frames_identify_their_sources_in_debug_output() {
+        let root = TempLib::new("include-stack-debug");
+        std::fs::write(root.join("active.h"), "1\n").unwrap();
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+        assert!(format!("{:?}", walk.stack).contains("/main.c"));
+        walk.open(
+            IncludeSource::Local { path: "active.h" },
+            None,
+            &config,
+            None,
+            &DiskSourceReader,
+            &mut Diagnostics::default(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let active = format!("{:?}", walk.stack);
+        assert!(active.contains("/main.c"), "{active}");
+        assert!(active.contains("/active.h"), "{active}");
+        walk.close();
+        let closed = format!("{:?}", walk.stack);
+        assert!(closed.contains("/main.c"), "{closed}");
+        assert!(!closed.contains("/active.h"), "{closed}");
+    }
 }

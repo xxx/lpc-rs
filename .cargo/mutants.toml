@@ -332,6 +332,7 @@ examine_globs = [
     "src/command/parser/handlers.rs",
     "src/interpreter/task/assign_index.rs",
     "src/compiler/codegen/inheritance_walker.rs",
+    "src/compiler/preprocessor/include.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
