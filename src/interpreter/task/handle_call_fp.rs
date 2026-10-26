@@ -408,6 +408,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let Some(function) = process
                     .program(&self.context.txn)
                     .lookup_function(name)
+                    .filter(|function| function.public())
                     .cloned()
                 else {
                     return Ok(Called::Unresolved);
@@ -419,6 +420,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let Some(function) = real
                     .program(&self.context.txn)
                     .lookup_function(name)
+                    .filter(|function| function.public())
                     .cloned()
                 else {
                     return Ok(Called::Unresolved);
@@ -549,6 +551,7 @@ mod tests {
     use crate::{
         compile_time_config::MAX_CALL_STACK_SIZE,
         interpreter::{
+            CommittedReader,
             call_frame::CallFrame,
             lpc_ref::LpcRef,
             stm::{LiveSnapshot, Transaction, TxnHandle, VarId, start_txn},
@@ -850,5 +853,99 @@ mod tests {
             .unwrap();
 
         assert_eq!(proc.result().unwrap(), LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn dynamic_receiver_pointers_do_not_expose_foreign_private_functions() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/other.c", "private int hidden() { return 42; }")
+            .await
+            .unwrap();
+        let task = vm
+            .initialize_process_from_code(
+                "/main.c",
+                r#"
+                int create() {
+                    object receiver = find_object("/other");
+                    if (receiver->hidden() != 0) return -1;
+                    function pointer = &->hidden();
+                    return pointer(receiver);
+                }
+                "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(0)));
+    }
+
+    #[tokio::test]
+    async fn dynamic_method_visibility_is_consistent_for_resident_and_loaded_receivers() {
+        use crate::test_support::{lib_holding, permissive_master, temp_lib_config};
+
+        let source = r#"
+            int ready;
+            void create() { ready = 1; }
+            private int hidden() { return 42; }
+            protected int guarded() { return 43; }
+            int visible() { return ready * 7; }
+        "#;
+        for resident in [false, true] {
+            for call_other in [false, true] {
+                for (method, expected) in [("hidden", 0), ("guarded", 0), ("visible", 7)] {
+                    let root = lib_holding("dynamic-method-visibility", &[("other.c", source)]);
+                    let vm = Vm::new(temp_lib_config(&root));
+                    permissive_master(&vm.global_state.object_space).await;
+                    if resident {
+                        vm.initialize_process_from_code("/other.c", source)
+                            .await
+                            .unwrap();
+                    }
+                    let (pointer, arguments) = if call_other {
+                        (
+                            "&call_other()".to_string(),
+                            format!(r#""/other", "{method}""#),
+                        )
+                    } else {
+                        (format!("&->{method}()"), r#""/other""#.to_string())
+                    };
+                    let code = format!(
+                        "int create() {{ function pointer = {pointer}; return pointer({arguments}); }}"
+                    );
+                    let task = vm
+                        .initialize_process_from_code("/main.c", code)
+                        .await
+                        .unwrap();
+                    assert_eq!(
+                        task.result(),
+                        Some(LpcRef::from(expected)),
+                        "resident={resident}, call_other={call_other}, method={method}"
+                    );
+                    let receiver = vm.global_state.object_space.lookup("/other").unwrap();
+                    assert_eq!(
+                        vm.global_state.committed_global(&receiver, 0u16),
+                        LpcRef::from(1)
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_dynamic_pointer_initializes_a_resident_receiver_before_calling_it() {
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code(
+            "/other.c",
+            "int value; void create() { value = 23; } int read() { return value; }",
+        )
+        .await
+        .unwrap();
+        let task = vm
+            .initialize_process_from_code(
+                "/main.c",
+                r#"int create() { function pointer = &->read(); return pointer("/other"); }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(23)));
     }
 }

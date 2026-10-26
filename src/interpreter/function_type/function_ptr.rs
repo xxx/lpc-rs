@@ -309,7 +309,12 @@ impl FunctionPtr {
                 )));
             }
         };
-        let Some(function) = process.program(txn).lookup_function(name).cloned() else {
+        let Some(function) = process
+            .program(txn)
+            .lookup_function(name)
+            .filter(|function| function.public())
+            .cloned()
+        else {
             return Ok(None);
         };
         Ok(Some((process, function)))

@@ -326,6 +326,7 @@ examine_globs = [
     "src/compiler/codegen/class_walker.rs",
     "src/compiler/mod.rs",
     "src/interpreter/task/handle_call_other.rs",
+    "src/interpreter/task/handle_call_fp.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

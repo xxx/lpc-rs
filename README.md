@@ -426,6 +426,7 @@ The reviewed scope includes:
 - [Class type resolution](src/compiler/codegen/class_walker.rs): nominal identities, inherited visibility, field layouts and type annotations.
 - [Compiler entry points](src/compiler/mod.rs): source-extension fallback, I/O errors, preprocessing, analysis and compiled warning groups.
 - [External call handling](src/interpreter/task/handle_call_other.rs): resident and loaded receivers, collection results and argument propagation.
+- [Function pointer dispatch](src/interpreter/task/handle_call_fp.rs): resident and loading calls, partial application, visibility and argument checks.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -70,6 +70,9 @@ Breaking it down by syntax, functions can take the following forms:
   Subsequent arguments are passed to the function. Partial application can be used.
   If the receiver has no function by that name, the call returns `0`, including
   when the pointer is used as an efun callback such as `filter` or `map`.
+  Only public methods are eligible; private and protected methods return the
+  selected null value, as with an ordinary `->` call. This also applies to a
+  pointer to `call_other`.
 
 * `operator(op)` - An operator as a function. `operator(+)` is the function
   that adds its two arguments exactly as `a + b` would, for every operand
