@@ -91,6 +91,136 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn selectors_round_trip_and_require_simul_configuration() {
+        use crate::interpreter::{task::task_template::TaskTemplate, vm::Vm};
+
+        let root = crate::test_support::TempLib::new("system-selectors");
+        for (configured, accepted, rejected) in [
+            (
+                false,
+                vec![("master", SystemTarget::Master)],
+                vec!["simul_efun", "both"],
+            ),
+            (
+                true,
+                vec![
+                    ("master", SystemTarget::Master),
+                    ("simul_efun", SystemTarget::Simul),
+                    ("both", SystemTarget::Both),
+                ],
+                vec![],
+            ),
+        ] {
+            let builder =
+                lpc_rs_utils::config::ConfigBuilder::default().lib_dir(root.to_str().unwrap());
+            let builder = if configured {
+                builder.simul_efun_file("/secure/simul_efuns")
+            } else {
+                builder
+            };
+            let vm = Vm::new(builder.build().unwrap());
+            let ctx = TaskTemplate::from(vm.global_state.clone())
+                .into_task_context(Arc::new(Process::new(Program::default())));
+            for (name, target) in accepted {
+                assert_eq!(SystemTarget::parse(name, &ctx).unwrap(), target);
+                assert_eq!(target.name(), name);
+            }
+            for name in rejected {
+                let error = SystemTarget::parse(name, &ctx).unwrap_err();
+                assert!(error.message().contains("no simul-efun source"), "{error}");
+            }
+            for name in ["", "MASTER", "simul", "unknown"] {
+                let error = SystemTarget::parse(name, &ctx).unwrap_err();
+                assert!(
+                    error
+                        .message()
+                        .contains("expected master, simul_efun, or both"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn export_compatibility_rejects_independent_signature_changes() {
+        let root = crate::test_support::TempLib::new("simul-export-signatures");
+        let compiler = Compiler::new(temp_lib_config(&root));
+        for (label, old, new) in [
+            (
+                "return type",
+                "int value(int arg) { return 1; }",
+                "string value(int arg) { return \"new\"; }",
+            ),
+            (
+                "default argument",
+                "int value(int arg) { return 1; }",
+                "int value(int arg = 0) { return 1; }",
+            ),
+            (
+                "argument type",
+                "int value(int arg) { return 1; }",
+                "int value(string arg) { return 1; }",
+            ),
+            (
+                "reference parameter",
+                "int value(int arg) { return 1; }",
+                "int value(int ref arg) { return 1; }",
+            ),
+            (
+                "function flags",
+                "int value(int arg) { return 1; }",
+                "nomask int value(int arg) { return 1; }",
+            ),
+        ] {
+            let old = compiler
+                .compile_string("/simul.c", old)
+                .await
+                .unwrap()
+                .program;
+            let new = compiler
+                .compile_string("/simul.c", new)
+                .await
+                .unwrap()
+                .program;
+            compatible_exports(&old, &old).unwrap();
+            let error = compatible_exports(&old, &new).unwrap_err();
+            assert!(
+                error
+                    .message()
+                    .contains("incompatible simul-efun export `value`"),
+                "{label}: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn generated_initializers_stay_out_of_public_exports() {
+        let root = lib_holding(
+            "simul-initializer-exports",
+            &[("base.c", "int inherited = 1;")],
+        );
+        let program = Compiler::new(temp_lib_config(&root))
+            .compile_string(
+                "/simul.c",
+                "inherit \"/base\"; int own = 2; void create(int arg = 0) {} int value() { return own; }",
+            )
+            .await
+            .unwrap()
+            .program;
+
+        assert_eq!(
+            program.initializer.as_ref().unwrap().prototype.name,
+            lpc_rs_core::INIT_PROGRAM,
+        );
+        assert!(
+            !program
+                .unmangled_functions
+                .contains_key(lpc_rs_core::INIT_PROGRAM)
+        );
+        assert!(!program.unmangled_functions[lpc_rs_core::INIT_GLOBALS].public());
+    }
+
+    #[tokio::test]
     async fn a_simul_export_cannot_be_hidden_by_changing_inherit_visibility() {
         let root = lib_holding(
             "simul-inherit-recompile",

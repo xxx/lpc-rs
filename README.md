@@ -445,6 +445,7 @@ The reviewed scope includes:
 - [Transactional file content](src/interpreter/file_view.rs): pending reads, byte and character replacement, file kinds and compiler input visibility.
 - [Command rule trials](src/command/trial.rs): command frames, handler precedence, parser outcomes and deferred failures.
 - [Function application](src/interpreter/task/apply_function.rs): retained results, named and master applies, seeded arguments and runtime error delivery.
+- [System export compatibility](src/interpreter/vm/system_recompile.rs): selector names and configuration, public export preservation and independent signature changes.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -500,6 +501,9 @@ Equal `sprintf` continuation offsets append zero spaces and assign the same
 column value; that single padding comparison is excluded at its source position.
 In `file_view::merge_pending`, resizing a byte vector to its existing length
 changes neither its bytes nor capacity; only that pinned equality check is excluded.
+In `compatible_exports`, `init-program` is stored separately from the function map
+and `init-globals` is private. Replacing the pinned initializer-name OR with AND
+therefore preserves the public export set; a compiler test checks those invariants.
 
 Named collection calls suspend through pending calls; invalid names fail before
 the slow receiver match. The single collection-guard branch deletion in

@@ -345,6 +345,7 @@ examine_globs = [
     "src/interpreter/file_view.rs",
     "src/command/trial.rs",
     "src/interpreter/task/apply_function.rs",
+    "src/interpreter/vm/system_recompile.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -353,6 +354,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Generated initializers are outside the program's public export set.
+    '^src/interpreter/vm/system_recompile\.rs:57:13: replace \|\| with && in compatible_exports$',
     # Resizing a byte vector to its existing length changes no bytes or capacity.
     '^src/interpreter/file_view\.rs:128:36: replace < with <= in merge_pending$',
     # At equality the positional maximum is assigned its existing value.
