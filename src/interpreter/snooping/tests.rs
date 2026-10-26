@@ -24,11 +24,12 @@ const MASTER: &str = r#"
 const OBSERVER: &str = r#"
     string text = "";
     int count;
+    object observed_target;
     void receive_snoop(string s, object target, string direction) {
         if (this_player() || this_interactive() || previous_object() || origin() != "driver")
             throw("wrong callback context");
         text += direction + ":" + s;
-        count++;
+        count++; observed_target = target;
     }
     mixed run(object target) { return snoop(this_object(), target); }
     mixed stop() { return snoop(this_object()); }
@@ -36,6 +37,7 @@ const OBSERVER: &str = r#"
     mixed incoming() { return query_snoop(this_object()); }
     string result() { return text; }
     int hits() { return count; }
+    object observed() { return observed_target; }
 "#;
 
 async fn call(vm: &Vm, process: &Arc<Process>, name: &str, args: Vec<LpcRef>) -> Result<LpcRef> {
@@ -142,6 +144,10 @@ async fn snoop_delivery_preserves_order_context_and_explicit_stop_in_both_null_m
         connected.connection.observe("one", "input", true);
         connected.connection.observe("two", "output", false);
         until_text(&vm, &observer, "input:one\noutput:two").await;
+        assert_eq!(
+            call(&vm, &observer, "observed", vec![]).await.unwrap(),
+            LpcRef::from(Arc::downgrade(&target)),
+        );
         call(
             &vm,
             &observer,
@@ -169,6 +175,20 @@ async fn snoop_delivery_preserves_order_context_and_explicit_stop_in_both_null_m
         );
         call(&vm, &observer, "stop", vec![]).await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn a_dead_connection_invalidates_a_still_registered_observer() {
+    let (vm, observer, target, mut connected) = setup(NullMode::Distinct, 65536, OBSERVER).await;
+    let registration = attach(&vm, &observer, &target, &mut connected).await;
+    let live = crate::interpreter::stm::start_txn(&vm.global_state.committer_tx)
+        .await
+        .unwrap();
+    let mut txn = Transaction::new(live.inner.clone());
+    assert!(registration.valid(&mut txn));
+    connected.connection.mark_dead();
+    assert!(incoming(&mut txn, &target).is_some());
+    assert!(!registration.valid(&mut txn));
 }
 
 #[tokio::test]
