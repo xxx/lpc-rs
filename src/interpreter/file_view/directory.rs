@@ -145,3 +145,30 @@ pub(crate) async fn directory_is_empty(txn: &TxnHandle, server: &Path) -> io::Re
         .check_empty()
         .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::TempLib;
+    use lpc_rs_core::lpc_path::LibRoot;
+
+    #[tokio::test]
+    async fn recreated_directory_views_do_not_keep_old_disk_membership() {
+        let root = TempLib::new("recreated-directory-view");
+        let server = root.join("dir");
+        std::fs::create_dir(&server).unwrap();
+        std::fs::write(server.join("old"), "old content").unwrap();
+        let lib = LibRoot::new(&*root);
+        let effects = [
+            Effect::RemoveDir {
+                path: lib.resolve("/dir", "/").unwrap(),
+            },
+            Effect::CreateDir {
+                path: lib.resolve("/dir", "/").unwrap(),
+            },
+        ];
+        let view = PendingDirectoryView::new(&effects, &server);
+        assert!(view.check_empty().await.unwrap());
+        assert!(server.join("old").exists());
+    }
+}

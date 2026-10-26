@@ -316,6 +316,7 @@ examine_globs = [
     "src/interpreter/stm/world_value.rs",
     "src/interpreter/bank.rs",
     "src/telnet/outbox.rs",
+    "src/interpreter/file_view/directory.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

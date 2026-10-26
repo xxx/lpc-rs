@@ -417,6 +417,7 @@ The reviewed scope includes:
 - [Formatting and supplied scopes](src/interpreter/efun/sprintf/mod.rs): format parsing, multiline layout and caller-supplied parser scope traversal.
 - [World values and register banks](src/interpreter/bank.rs): typed world payloads, register initialization, storage operations and formatting.
 - [Client output buffering](src/telnet/outbox.rs): bounded pending bytes, truncation and recovery after writes.
+- [Pending directory views](src/interpreter/file_view/directory.rs): staged membership, recreation and rename dependencies.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -428,11 +429,12 @@ Install the version used by CI, then run from the repository root:
 cargo install --locked cargo-mutants --version 27.1.0
 cargo install --locked cargo-nextest
 cargo mutants --workspace --list
-CARGO_TARGET_DIR="$PWD/target" cargo mutants --workspace --jobs 1 --output /tmp/lpc-rs-mutants
+CARGO_TARGET_DIR="$PWD/target" NEXTEST_TEST_THREADS=4 cargo mutants --workspace --jobs 1 --output /tmp/lpc-rs-mutants
 ```
 
 The run first checks the unmodified tests, then tests each mutation in a temporary
-source copy. Mutation tests use nextest for process isolation, as normal CI does;
+source copy. The command runs one mutation at a time and up to four test processes.
+Mutation tests use nextest for process isolation, as normal CI does;
 doctests remain part of normal workspace validation. `CARGO_TARGET_DIR` keeps build
 output in the workspace's shared `target/`. The allowlist limits which files are
 mutated, even with `--workspace`; only the mutated crate's tests run. Continue
