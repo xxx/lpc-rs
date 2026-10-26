@@ -932,20 +932,22 @@ mod tests {
 
     #[tokio::test]
     async fn a_dynamic_pointer_initializes_a_resident_receiver_before_calling_it() {
-        let vm = Vm::new(test_config());
-        vm.create_process_from_code(
-            "/other.c",
-            "int value; void create() { value = 23; } int read() { return value; }",
-        )
-        .await
-        .unwrap();
-        let task = vm
-            .initialize_process_from_code(
-                "/main.c",
-                r#"int create() { function pointer = &->read(); return pointer("/other"); }"#,
+        for receiver in [r#""/other""#, r#"find_object("/other")"#] {
+            let vm = Vm::new(test_config());
+            vm.create_process_from_code(
+                "/other.c",
+                "int value; void create() { value = 23; } int read() { return value; }",
             )
             .await
             .unwrap();
-        assert_eq!(task.result(), Some(LpcRef::from(23)));
+            let code = format!(
+                "int create() {{ function pointer = &->read(); return pointer({receiver}); }}"
+            );
+            let task = vm
+                .initialize_process_from_code("/main.c", code)
+                .await
+                .unwrap();
+            assert_eq!(task.result(), Some(LpcRef::from(23)), "{receiver}");
+        }
     }
 }

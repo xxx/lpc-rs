@@ -427,6 +427,7 @@ The reviewed scope includes:
 - [Compiler entry points](src/compiler/mod.rs): source-extension fallback, I/O errors, preprocessing, analysis and compiled warning groups.
 - [External call handling](src/interpreter/task/handle_call_other.rs): resident and loaded receivers, collection results and argument propagation.
 - [Function pointer dispatch](src/interpreter/task/handle_call_fp.rs): resident and loading calls, partial application, visibility and argument checks.
+- [Function pointer values](src/interpreter/function_type/function_ptr.rs): partial bindings, call classification, receiver liveness, diagnostic formatting and retained buffers.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
