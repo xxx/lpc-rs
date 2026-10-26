@@ -340,6 +340,7 @@ examine_globs = [
     "src/interpreter/stm/diagnostics.rs",
     "src/interpreter/vm/object_update.rs",
     "src/command/dispatch.rs",
+    "src/command/parser/lpc.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -440,6 +440,7 @@ The reviewed scope includes:
 - [Transaction diagnostics](src/interpreter/stm/diagnostics.rs): conflict provenance, readable cell aliases and nested compilation timing.
 - [Committed object updates](src/interpreter/vm/object_update.rs): request identities, status retention, caller context and transaction execution.
 - [Command dispatch](src/command/dispatch.rs): pre-hooks, actor context, handler selection and failure messages.
+- [LPC parser adapter](src/command/parser/lpc.rs): handler values, per-slot arrays, parse completion, liveness and capture access.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
