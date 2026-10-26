@@ -31,19 +31,7 @@ pub(crate) struct TransactionSourceReader(pub(crate) TxnHandle);
 #[async_trait]
 impl SourceReader for TransactionSourceReader {
     async fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
-        // Classify read failures instead of probing every successful source read.
-        let seen = match DiskSourceReader.read(path).await {
-            Ok(bytes) => Seen::File(bytes),
-            Err(e) if e.kind() == ErrorKind::NotFound => Seen::Missing,
-            Err(e) if e.kind() == ErrorKind::IsADirectory => Seen::Dir,
-            Err(e) => {
-                if DiskSourceReader.kind(path).await.ok() == Some(SourceKind::Directory) {
-                    Seen::Dir
-                } else {
-                    return Err(e);
-                }
-            }
-        };
+        let seen = read_source(&DiskSourceReader, path).await?;
         merge_pending(&self.0, path, seen).await?.into_bytes()
     }
 
@@ -57,6 +45,22 @@ impl SourceReader for TransactionSourceReader {
             Seen::Missing => Err(Error::from(ErrorKind::NotFound)),
         }
     }
+}
+
+async fn read_source(reader: &impl SourceReader, path: &Path) -> std::io::Result<Seen> {
+    // Classify read failures instead of probing every successful source read.
+    Ok(match reader.read(path).await {
+        Ok(bytes) => Seen::File(bytes),
+        Err(e) if e.kind() == ErrorKind::NotFound => Seen::Missing,
+        Err(e) if e.kind() == ErrorKind::IsADirectory => Seen::Dir,
+        Err(e) => {
+            if reader.kind(path).await.ok() == Some(SourceKind::Directory) {
+                Seen::Dir
+            } else {
+                return Err(e);
+            }
+        }
+    })
 }
 
 /// What is at a path.
@@ -153,14 +157,127 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
+    use lpc_rs_core::lpc_path::LibRoot;
+
+    use super::*;
 
     use crate::{
         interpreter::{
             lpc_ref::LpcRef,
+            stm::Effect,
             vm::{Vm, global_state::GlobalState},
         },
         test_support::{PERMISSIVE_MASTER, TempLib, temp_lib_config},
     };
+
+    #[derive(Debug)]
+    struct SourceResult {
+        read_error: Option<ErrorKind>,
+        kind: Option<SourceKind>,
+    }
+
+    #[async_trait]
+    impl SourceReader for SourceResult {
+        async fn read(&self, _: &Path) -> std::io::Result<Vec<u8>> {
+            match self.read_error {
+                Some(kind) => Err(kind.into()),
+                None => Ok(vec![1, 2, 3]),
+            }
+        }
+
+        async fn kind(&self, _: &Path) -> std::io::Result<SourceKind> {
+            self.kind.ok_or_else(|| ErrorKind::NotFound.into())
+        }
+    }
+
+    #[tokio::test]
+    async fn source_reads_preserve_errors_and_recognize_directories() {
+        for (read_error, kind, expected) in [
+            (None, None, Ok(Seen::File(vec![1, 2, 3]))),
+            (Some(ErrorKind::NotFound), None, Ok(Seen::Missing)),
+            (Some(ErrorKind::IsADirectory), None, Ok(Seen::Dir)),
+            (
+                Some(ErrorKind::PermissionDenied),
+                Some(SourceKind::Directory),
+                Ok(Seen::Dir),
+            ),
+            (
+                Some(ErrorKind::PermissionDenied),
+                Some(SourceKind::File),
+                Err(ErrorKind::PermissionDenied),
+            ),
+            (
+                Some(ErrorKind::PermissionDenied),
+                Some(SourceKind::Other),
+                Err(ErrorKind::PermissionDenied),
+            ),
+            (
+                Some(ErrorKind::PermissionDenied),
+                None,
+                Err(ErrorKind::PermissionDenied),
+            ),
+        ] {
+            let reader = SourceResult { read_error, kind };
+            assert_eq!(
+                read_source(&reader, Path::new("/source"))
+                    .await
+                    .map_err(|error| error.kind()),
+                expected,
+                "{reader:?}",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reads_without_pending_effects_preserve_disk_entry_kinds() {
+        let root = TempLib::new("file-view-entry-kinds");
+        std::fs::write(root.join("file"), "abc").unwrap();
+        std::fs::create_dir(root.join("directory")).unwrap();
+        let txn = TxnHandle::empty();
+        for (name, expected) in [
+            ("file", Seen::File(b"abc".to_vec())),
+            ("directory", Seen::Dir),
+            ("missing", Seen::Missing),
+        ] {
+            assert_eq!(
+                read_through(&txn, &root.join(name)).await.unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_file_used_as_a_parent_preserves_the_metadata_error() {
+        let root = TempLib::new("file-view-invalid-parent");
+        std::fs::write(root.join("file"), "abc").unwrap();
+        let error = read_through(&TxnHandle::empty(), &root.join("file/child"))
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::NotADirectory);
+    }
+
+    #[tokio::test]
+    async fn pending_byte_writes_overwrite_and_extend_without_changing_disk() {
+        let root = TempLib::new("file-view-byte-writes");
+        std::fs::write(root.join("file"), "abc").unwrap();
+        let path = LibRoot::new(&*root).resolve("/file", "/").unwrap();
+        for (start, contents, expected) in [(1, "Z", "aZc"), (3, "!", "abc!"), (1, "XY", "aXY")] {
+            let txn = TxnHandle::empty();
+            txn.with(|t| {
+                t.record_effect(Effect::WriteBytes {
+                    path: path.clone(),
+                    start,
+                    contents: contents.as_bytes().to_vec(),
+                });
+            });
+            assert_eq!(
+                read_through(&txn, path.server()).await.unwrap(),
+                Seen::File(expected.as_bytes().to_vec()),
+            );
+            assert_eq!(std::fs::read(path.server()).unwrap(), b"abc");
+        }
+    }
 
     async fn allowing_vm(root: &TempLib) -> Vm {
         let config = lpc_rs_utils::config::ConfigBuilder::default()

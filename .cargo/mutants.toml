@@ -342,6 +342,7 @@ examine_globs = [
     "src/command/dispatch.rs",
     "src/command/parser/lpc.rs",
     "src/compiler/codegen/function_prototype_walker.rs",
+    "src/interpreter/file_view.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -350,6 +351,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Resizing a byte vector to its existing length changes no bytes or capacity.
+    '^src/interpreter/file_view\.rs:128:36: replace < with <= in merge_pending$',
     # At equality the positional maximum is assigned its existing value.
     '^src/compiler/codegen/function_prototype_walker\.rs:237:20: replace > with >= in <impl TreeWalker for FunctionPrototypeWalker>::visit_var$',
     # Collections suspend through pending calls; invalid names fail before this receiver check.

@@ -442,6 +442,7 @@ The reviewed scope includes:
 - [Command dispatch](src/command/dispatch.rs): pre-hooks, actor context, handler selection and failure messages.
 - [LPC parser adapter](src/command/parser/lpc.rs): handler values, per-slot arrays, parse completion, liveness and capture access.
 - [Function prototype collection](src/compiler/codegen/function_prototype_walker.rs): defaults, closure positionals, reference metadata and inherited arity.
+- [Transactional file content](src/interpreter/file_view.rs): pending reads, byte and character replacement, file kinds and compiler input visibility.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -495,6 +496,8 @@ margin mutation is excluded. Parameter strings and expression storage have
 independent lower-bound checks.
 Equal `sprintf` continuation offsets append zero spaces and assign the same
 column value; that single padding comparison is excluded at its source position.
+In `file_view::merge_pending`, resizing a byte vector to its existing length
+changes neither its bytes nor capacity; only that pinned equality check is excluded.
 
 Named collection calls suspend through pending calls; invalid names fail before
 the slow receiver match. The single collection-guard branch deletion in
