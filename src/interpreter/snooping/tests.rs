@@ -298,6 +298,22 @@ async fn snoop_stale_controls_cannot_replace_or_stop_a_new_registration() {
 }
 
 #[tokio::test]
+async fn snoop_activation_rejects_the_wrong_connection_for_a_live_registration() {
+    let (vm, observer, target, mut connected) = setup(NullMode::Distinct, 65536, OBSERVER).await;
+    call(&vm, &observer, "run", vec![Arc::downgrade(&target).into()])
+        .await
+        .unwrap();
+    let ConnectionOp::StartSnoop(registration) = connected.rx.try_recv().unwrap() else {
+        panic!("start control");
+    };
+    assert!(!registration.is_closed());
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let wrong = crate::telnet::connection::Connection::new("127.0.0.1:2".parse().unwrap(), tx);
+    registration.activate(&vm.global_state, &wrong).await;
+    assert!(registration.is_closed());
+}
+
+#[tokio::test]
 async fn snoop_disconnect_preserves_observer_but_retires_target() {
     let (vm, observer, target, mut connected) = setup(NullMode::Distinct, 65536, OBSERVER).await;
     let observer_connection = connect(&vm, &observer).await;

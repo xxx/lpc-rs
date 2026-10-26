@@ -351,6 +351,7 @@ examine_globs = [
     "src/interpreter/function_type/function_address.rs",
     "src/interpreter/program.rs",
     "src/command/resolve/lpc.rs",
+    "src/interpreter/snooping/delivery.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

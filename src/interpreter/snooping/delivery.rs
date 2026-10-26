@@ -289,6 +289,16 @@ mod tests {
     }
 
     #[test]
+    fn shared_handles_keep_registration_identity_and_new_registrations_differ() {
+        let observer = Arc::new(Process::default());
+        let first = Arc::new(registration(&observer, 4));
+        let shared = first.clone();
+        let other = registration(&observer, 4);
+        assert_eq!(first.as_ref(), shared.as_ref());
+        assert_ne!(first.as_ref(), &other);
+    }
+
+    #[test]
     fn snoop_budget_includes_in_flight_text_across_reattachment() {
         let observer = Arc::new(Process::default());
         let old = registration(&observer, 4);
