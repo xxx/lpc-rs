@@ -384,7 +384,7 @@ async fn authorized_status_queries_and_duplicate_delivery_do_not_upgrade_again()
     let other = vm
         .initialize_process_from_code(
             "/other.c",
-            "string status(int id) { return query_object_recompile(id)[\"state\"]; }",
+            "string status(int id) { return query_object_recompile(id)[\"state\"]; } object target(int id) { return query_object_recompile(id)[\"target\"]; }",
         )
         .await
         .unwrap()
@@ -395,6 +395,13 @@ async fn authorized_status_queries_and_duplicate_delivery_do_not_upgrade_again()
             .await
             .unwrap(),
         LpcRef::from("queued")
+    );
+    let target = vm.global_state.object_space.lookup("/target").unwrap();
+    assert_eq!(
+        call(&vm, &other, "target", &[queued.id.into()])
+            .await
+            .unwrap(),
+        LpcRef::from(Arc::downgrade(&target)),
     );
     assert_eq!(
         call(&vm, &admin, "status", &[(-1).into()]).await.unwrap(),
@@ -417,6 +424,29 @@ async fn authorized_status_queries_and_duplicate_delivery_do_not_upgrade_again()
             .unwrap(),
         LpcRef::from("succeeded")
     );
+}
+
+#[tokio::test]
+async fn uninitialized_prototypes_are_rejected_before_queueing_recompilation() {
+    let (_root, mut vm, _admin) = setup("recompile-uninitialized-prototype").await;
+    let unready = vm
+        .create_process_from_code("/unready.c", "void create() {}")
+        .await
+        .unwrap();
+    let caller = vm.initialize_process_from_code(
+        "/requester.c",
+        "object target() { return find_object(\"/unready\"); } int request() { return request_object_recompile(target()); }",
+    ).await.unwrap().context.process;
+    assert_eq!(
+        call(&vm, &caller, "target", &[]).await.unwrap(),
+        LpcRef::from(Arc::downgrade(&unready))
+    );
+    let error = call(&vm, &caller, "request", &[]).await.unwrap_err();
+    assert!(
+        error.message().contains("live, initialized prototype"),
+        "{error}"
+    );
+    assert!(vm.next_op().is_none());
 }
 
 #[tokio::test]

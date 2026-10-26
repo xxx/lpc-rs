@@ -458,6 +458,7 @@ The reviewed scope includes:
 - [Macro definitions](src/compiler/preprocessor/define.rs): keyword identifiers, object and function forms, source spelling and redefinition spacing.
 - [Observer relationships](src/interpreter/snooping/mod.rs): handler compatibility, endpoint validation, cycle prevention, matching retirement and live registration identity.
 - [Compiler scope trees](src/compiler/semantic/scope_tree.rs): lexical and function scope lookup, navigation, mutable symbols and captured-cell layout.
+- [Object recompilation](src/interpreter/vm/object_recompile.rs): live initialized prototypes, authorization, clone-group migration, retained globals and status targets.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

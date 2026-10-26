@@ -358,6 +358,7 @@ examine_globs = [
     "src/compiler/preprocessor/define.rs",
     "src/interpreter/snooping/mod.rs",
     "src/compiler/semantic/scope_tree.rs",
+    "src/interpreter/vm/object_recompile.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
