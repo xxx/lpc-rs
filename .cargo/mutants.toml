@@ -352,6 +352,7 @@ examine_globs = [
     "src/interpreter/program.rs",
     "src/command/resolve/lpc.rs",
     "src/interpreter/snooping/delivery.rs",
+    "src/command/grammar/tree.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

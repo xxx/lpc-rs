@@ -452,6 +452,7 @@ The reviewed scope includes:
 - [Program dispatch and lookup](src/interpreter/program.rs): override targets, inherited namespaces, function presence, global aliases and assembly listings.
 - [Object vocabulary](src/command/resolve/lpc.rs): live and remote scope entries, explicit plural lists, nickname fallback and nested apply context.
 - [Observer delivery](src/interpreter/snooping/delivery.rs): registration identity, budget leases, activation validation, delivery order and retirement.
+- [Grammar derivation trees](src/command/grammar/tree.rs): token spans, preserved source spacing, capture order and iterative cleanup of deep trees.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

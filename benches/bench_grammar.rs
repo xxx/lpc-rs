@@ -76,6 +76,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("grammar/build/give_rule", |b| b.iter(give_rule));
 
     let g = give_rule();
+    let captured = parse(&g, "give the red sword to bob", Limits::default())
+        .next()
+        .unwrap();
+    c.bench_function("grammar/capture_spans/give_rule", |b| {
+        b.iter(|| black_box(&captured).capture_spans())
+    });
     c.bench_function("grammar/parse_hit/give_rule", |b| {
         b.iter(|| {
             parse(

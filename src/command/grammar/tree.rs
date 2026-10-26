@@ -1,7 +1,10 @@
 //! A parse: the derivation tree over one tokenized input, and the captures
 //! frontends read out of it.
 
-use std::{ops::Range, sync::Arc};
+use std::{
+    ops::{Range, RangeFrom},
+    sync::Arc,
+};
 
 use super::{
     model::{Grammar, Label, ProdId},
@@ -120,20 +123,49 @@ impl<'g> Parse<'g> {
 /// Walk `root` in pre-order, pushing every labelled element's span onto
 /// `out`; an explicit stack — the tree may be `Limits::max_depth` deep.
 fn collect_captures(grammar: &Grammar, root: &Node, out: &mut Vec<(Label, Range<usize>)>) {
-    let mut stack: Vec<(&Node, usize)> = vec![(root, 0)];
-    while let Some((node, next)) = stack.last_mut() {
+    // RangeFrom uses one word of index state per frame.
+    let mut stack: Vec<(&Node, RangeFrom<usize>)> = vec![(root, 0..)];
+    while let Some((node, indices)) = stack.last_mut() {
         let node: &Node = node;
-        let Some(child) = node.children.get(*next) else {
+        let index = indices.start;
+        let Some(child) = node.children.get(index) else {
             stack.pop();
             continue;
         };
-        let element = &grammar.production(node.production).rhs[*next];
-        *next += 1;
+        let element = &grammar.production(node.production).rhs[index];
+        let _ = indices.next();
         if let Some(label) = element.label {
             out.push((label, child.span()));
         }
         if let Child::Node(inner) = child {
-            stack.push((inner, 0));
+            stack.push((inner, 0..));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deeply_nested_nodes_drop_on_a_small_stack() {
+        let mut root = Node {
+            production: ProdId(1),
+            span: 0..1,
+            children: vec![Child::Token(0)],
+        };
+        for _ in 0..16384 {
+            root = Node {
+                production: ProdId(0),
+                span: 0..1,
+                children: vec![Child::Node(root)],
+            };
+        }
+        std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(move || drop(root))
+            .unwrap()
+            .join()
+            .unwrap();
     }
 }
