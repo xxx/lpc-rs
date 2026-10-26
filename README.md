@@ -444,6 +444,7 @@ The reviewed scope includes:
 - [Function prototype collection](src/compiler/codegen/function_prototype_walker.rs): defaults, closure positionals, reference metadata and inherited arity.
 - [Transactional file content](src/interpreter/file_view.rs): pending reads, byte and character replacement, file kinds and compiler input visibility.
 - [Command rule trials](src/command/trial.rs): command frames, handler precedence, parser outcomes and deferred failures.
+- [Function application](src/interpreter/task/apply_function.rs): retained results, named and master applies, seeded arguments and runtime error delivery.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

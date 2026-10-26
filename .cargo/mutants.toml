@@ -344,6 +344,7 @@ examine_globs = [
     "src/compiler/codegen/function_prototype_walker.rs",
     "src/interpreter/file_view.rs",
     "src/command/trial.rs",
+    "src/interpreter/task/apply_function.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -381,6 +381,96 @@ mod tests {
     };
 
     #[tokio::test]
+    async fn seeded_calls_commit_fresh_mapping_arguments_and_return_the_result() {
+        let vm = Vm::new(test_config());
+        let process = vm
+            .initialize_process_from_code(
+                "/seeded.c",
+                indoc! { r#"
+                    mapping stored;
+                    int calls;
+                    int accept(mapping input, int amount) {
+                        input["value"] += amount;
+                        stored = input;
+                        calls++;
+                        return input["value"];
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let function = process
+            .initial_program()
+            .lookup_function("accept")
+            .unwrap()
+            .clone();
+        let mut mapping = LpcMapping::default();
+        mapping.insert(LpcRef::from("value"), LpcRef::from(40));
+        let result = apply_function_seeded(
+            function,
+            vec![SeedArg::FreshMapping(mapping), SeedArg::Value(2.into())],
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(process.clone()),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result, LpcRef::from(42));
+        assert_eq!(
+            vm.global_state.committed_global(&process, 1u16),
+            LpcRef::from(1)
+        );
+        let LpcRef::Mapping(cell) = vm.global_state.committed_global(&process, 0u16) else {
+            panic!("the function must retain its mapping argument");
+        };
+        assert_eq!(
+            vm.global_state
+                .committed_mapping(cell.id)
+                .unwrap()
+                .get(&LpcRef::from("value")),
+            Some(&LpcRef::from(42)),
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_error_snapshots_omit_structured_frame_fields() {
+        let vm = Vm::new(test_config());
+        let master = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                indoc! { r#"
+                    int calls;
+                    int fields;
+                    void error_handler(mapping error) {
+                        calls++;
+                        fields = has_key(error, "frames") + has_key(error, "frames_omitted");
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let error = LpcError::runtime("empty snapshot")
+            .with_error_frames(lpc_rs_errors::error_frames::ErrorFrames::default());
+        apply_runtime_error(&error, None, TaskTemplate::from(vm.global_state.clone()))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            vm.global_state.committed_global(&master, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&master, 1u16),
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
     async fn test_apply_function() {
         let code = indoc! {"
             int my_cool_func(int x) {
