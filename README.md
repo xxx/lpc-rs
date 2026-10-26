@@ -438,6 +438,7 @@ The reviewed scope includes:
 - [Inherited program linking](src/interpreter/program/linker.rs): global relocation, shared ancestor regions, packed views and inherited visibility.
 - [Parser rule frontend](src/command/frontend/parser.rs): verb normalization, capture modifiers, handler slugs, argument layouts and pattern caching.
 - [Transaction diagnostics](src/interpreter/stm/diagnostics.rs): conflict provenance, readable cell aliases and nested compilation timing.
+- [Committed object updates](src/interpreter/vm/object_update.rs): request identities, status retention, caller context and transaction execution.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -814,3 +814,22 @@ async fn enumeration_keeps_identities_without_conflicting_on_recompilation() {
             .is_ok()
     );
 }
+
+#[tokio::test]
+async fn successful_recompilation_delivers_committed_initializer_effects() {
+    let (root, mut vm, admin) = setup("recompile-delivery-effects").await;
+    let source = format!(
+        r#"{UPDATED}
+        int effect = record_delivery();
+        int record_delivery() {{ write_file("/delivered", "ok"); return 1; }}
+    "#
+    );
+    std::fs::write(root.join("target.c"), source).unwrap();
+    let status = run(&mut vm, &admin).await;
+    assert_eq!(status.state, "succeeded", "{}", status.error);
+    assert_eq!(status.updated, 3);
+    assert_eq!(
+        std::fs::read_to_string(root.join("delivered")).unwrap(),
+        "okokok"
+    );
+}

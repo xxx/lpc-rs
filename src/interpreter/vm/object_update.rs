@@ -238,4 +238,96 @@ mod tests {
         assert!(updates.get(5).is_some());
         assert_eq!(updates.entries.lock().len(), 129);
     }
+
+    #[test]
+    fn request_ids_are_positive_unique_and_stop_at_exhaustion() {
+        let updates = Updates::default();
+        let first = updates.mint_id().unwrap();
+        let second = updates.mint_id().unwrap();
+        assert!(first > 0);
+        assert!(second > first);
+        updates.next.store(i64::MAX - 1, Ordering::Relaxed);
+        assert_eq!(updates.mint_id().unwrap(), i64::MAX);
+        assert!(
+            updates
+                .mint_id()
+                .unwrap_err()
+                .message()
+                .contains("exhausted")
+        );
+        assert!(updates.mint_id().is_err());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn configured_update_deadline_includes_waiting_for_a_snapshot() {
+        use crate::interpreter::{
+            stm::{AttemptRunner, Committer},
+            vm::Vm,
+        };
+        use lpc_rs_utils::config::ConfigBuilder;
+        use std::time::Duration;
+
+        let config = crate::test_config_builder!()
+            .max_execution_time(37_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let request = UpdateRequest {
+            id: 1,
+            target: RecompileTarget::System(super::super::system_recompile::SystemTarget::Master),
+            caller: Weak::new(),
+            player: None,
+            program: None,
+        };
+        let mut body = UpdateBody {
+            gs: &vm.global_state,
+            request: &request,
+            txn: None,
+            updated: 0,
+        };
+        let (tx, rx) = flume::unbounded();
+        let runner = AttemptRunner::new(tx.clone(), None);
+        let mut committer = Committer::new();
+        let snapshot = async {
+            let start = rx.recv_async().await.unwrap();
+            assert!(matches!(&start, CommitProtocol::Start { .. }));
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            committer.process(start, &tx);
+        };
+        let ((result, stats), ()) = tokio::join!(runner.run(&mut body), snapshot);
+        while let Ok(message) = rx.try_recv() {
+            committer.process(message, &tx);
+        }
+        assert!(result.unwrap_err().message().contains("37ms"));
+        assert_eq!(stats.phases.attempt, Duration::from_millis(37));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn update_compilation_time_is_drained_between_attempts() {
+        use crate::interpreter::vm::Vm;
+        use std::time::Duration;
+
+        let vm = Vm::new(crate::test_support::test_config());
+        let request = UpdateRequest {
+            id: 1,
+            target: RecompileTarget::System(super::super::system_recompile::SystemTarget::Master),
+            caller: Weak::new(),
+            player: None,
+            program: None,
+        };
+        let mut body = UpdateBody {
+            gs: &vm.global_state,
+            request: &request,
+            txn: None,
+            updated: 0,
+        };
+        assert_eq!(body.take_compilation_time(), Duration::ZERO);
+        let txn = TxnHandle::empty();
+        let timer = txn.time_compilation();
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        drop(timer);
+        body.txn = Some(txn);
+        assert_eq!(body.take_compilation_time(), Duration::from_millis(5));
+        assert_eq!(body.take_compilation_time(), Duration::ZERO);
+    }
 }
