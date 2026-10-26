@@ -322,6 +322,7 @@ examine_globs = [
     "src/interpreter/program/memory.rs",
     "src/compiler/parser/nesting.rs",
     "src/command/resolve/phrase.rs",
+    "src/command/registry/actor.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
