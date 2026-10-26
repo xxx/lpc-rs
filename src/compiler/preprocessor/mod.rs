@@ -1105,6 +1105,11 @@ mod tests {
             "#define X a + b\n#define X a\t+ /* comment */ b\n#define STR(x) #x\n#define EXPAND(x) STR(x)\nEXPAND(X)",
             &["a + b"],
         ).await;
+        test_valid(
+            "#define X a+b\n#define X a+b\n#define STR(x) #x\n#define EXPAND(x) STR(x)\nEXPAND(X)",
+            &["a+b"],
+        )
+        .await;
     }
 
     #[tokio::test]

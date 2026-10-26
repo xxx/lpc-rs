@@ -455,6 +455,7 @@ The reviewed scope includes:
 - [Grammar derivation trees](src/command/grammar/tree.rs): token spans, preserved source spacing, capture order and iterative cleanup of deep trees.
 - [Socket callbacks](src/interpreter/sockets/callbacks.rs): runtime lifecycle, callback budgets and provenance, transactional acknowledgement and stale-event cleanup.
 - [Presence hooks](src/command/presence.rs): movement and destruction cleanup, living arrival order, reentrant meetings and transaction read dependencies.
+- [Macro definitions](src/compiler/preprocessor/define.rs): keyword identifiers, object and function forms, source spelling and redefinition spacing.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
