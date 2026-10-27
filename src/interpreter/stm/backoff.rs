@@ -49,15 +49,6 @@ fn backoff_step(losses: u64, roll: impl FnOnce(u64) -> u64) -> BackoffStep {
     BackoffStep::Sleep(SLEEP_FLOOR + Duration::from_micros(roll(span)))
 }
 
-/// One step of splitmix64 over `state`; not randomness anyone may rely on.
-fn splitmix64(state: &mut u64) -> u64 {
-    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *state;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 /// Realized backoff totals for one attempt loop.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct BackoffSpent {
@@ -78,7 +69,7 @@ pub(crate) struct BackoffSpent {
 /// executes the ladder, accumulates realized time.
 #[derive(Debug)]
 pub(crate) struct Backoff {
-    rng: u64,
+    rng: fastrand::Rng,
     spent: BackoffSpent,
     commit_watch: Option<watch::Receiver<Version>>,
 }
@@ -100,7 +91,7 @@ impl Backoff {
                 .elapsed()
                 .map_or(0, |d| u64::from(d.subsec_nanos()));
         Self {
-            rng,
+            rng: fastrand::Rng::with_seed(rng),
             spent: BackoffSpent::default(),
             commit_watch: None,
         }
@@ -123,7 +114,7 @@ impl Backoff {
     /// Stagger the re-run after `losses` conflicts. Realized time
     /// reads tokio's clock, so paused-time tests observe the sleeps.
     pub(crate) async fn stagger(&mut self, losses: u64) {
-        match backoff_step(losses, |n| splitmix64(&mut self.rng) % n + 1) {
+        match backoff_step(losses, |n| self.rng.u64(1..=n)) {
             BackoffStep::None => {}
             BackoffStep::Yields(n) => {
                 let started = tokio::time::Instant::now();

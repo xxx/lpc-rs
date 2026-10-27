@@ -475,6 +475,7 @@ The reviewed scope includes:
 - [Memory accounting](src/interpreter/memory.rs): scalar instance slots, shared and interned payloads, captured values, cycles, bounded traversal and overflow.
 - [Command scopes](src/command/scope.rs): weak membership, destination neighborhoods, actor and room boundaries, visible contents and callback context.
 - [Saved class records](src/interpreter/save_format/class.rs): canonical identities, numeric metadata, field descriptors, retained views and nesting limits.
+- [Contention backoff](src/interpreter/stm/backoff.rs): bounded jitter, yield and sleep ladders, commit wakeups and elapsed-time accounting.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
