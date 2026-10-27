@@ -478,6 +478,7 @@ The reviewed scope includes:
 - [Contention backoff](src/interpreter/stm/backoff.rs): bounded jitter, yield and sleep ladders, commit wakeups and elapsed-time accounting.
 - [Grammar model](src/command/grammar/model.rs): builder validation, token and nonterminal identities, diagnostics, case folding and bounded nullable propagation.
 - [Command rule registry](src/command/registry.rs): registration identity, flags, raw phrase slices, synonyms, ownership and transactional edits.
+- [Committed effects](src/interpreter/stm/effects.rs): deferred delivery, pending file changes, diagnostics and call-out owner identity.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

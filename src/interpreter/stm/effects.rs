@@ -542,6 +542,194 @@ mod tests {
         GlobalState::new(crate::test_support::test_config(), vm_tx)
     }
 
+    #[test]
+    fn diagnostics_identify_scheduled_work_without_process_payloads() {
+        let owner = Arc::new(Process::default());
+        let schedule = CallOutSchedule {
+            id: 42,
+            process: Arc::downgrade(&owner),
+            player: Some(Arc::downgrade(&owner)),
+            func_ref: 7.into(),
+            delay: chrono::Duration::seconds(2),
+            repeat: Some(chrono::Duration::seconds(3)),
+        };
+        let diagnostic = format!("{schedule:?}");
+        assert!(diagnostic.starts_with("CallOutSchedule {"));
+        for field in [
+            "id: 42".to_owned(),
+            format!("func_ref: {:?}", schedule.func_ref),
+            format!("delay: {:?}", schedule.delay),
+            format!("repeat: {:?}", schedule.repeat),
+        ] {
+            assert!(diagnostic.contains(&field), "{diagnostic}");
+        }
+        assert!(!diagnostic.contains("process:"));
+        assert!(!diagnostic.contains("player:"));
+        assert_eq!(
+            format!("{:?}", Effect::ScheduleCallOut(schedule)),
+            format!("ScheduleCallOut({diagnostic})")
+        );
+    }
+
+    #[tokio::test]
+    async fn pending_file_effects_change_only_their_recorded_paths() {
+        use lpc_rs_core::lpc_path::LibRoot;
+
+        use crate::interpreter::{
+            file_view::{Seen, read_through},
+            stm::TxnHandle,
+        };
+
+        let root = crate::test_support::TempLib::new("pending-effect-paths");
+        std::fs::write(root.join("file"), "abcd").unwrap();
+        std::fs::write(root.join("other"), "untouched").unwrap();
+        std::fs::create_dir(root.join("dir")).unwrap();
+        let lib = LibRoot::new(&*root);
+        let file = lib.resolve("/file", "/").unwrap();
+        let other = lib.resolve("/other", "/").unwrap();
+        let cases = [
+            (
+                Effect::WriteFile {
+                    path: file.clone(),
+                    contents: "new".to_owned(),
+                },
+                file.clone(),
+                Seen::File(b"new".to_vec()),
+            ),
+            (
+                Effect::AppendFile {
+                    path: file.clone(),
+                    contents: "ef".to_owned(),
+                },
+                file.clone(),
+                Seen::File(b"abcdef".to_vec()),
+            ),
+            (
+                Effect::RemoveFile { path: file.clone() },
+                file.clone(),
+                Seen::Missing,
+            ),
+            (
+                Effect::WriteBytes {
+                    path: file.clone(),
+                    start: 1,
+                    contents: b"XY".to_vec(),
+                },
+                file.clone(),
+                Seen::File(b"aXYd".to_vec()),
+            ),
+            (
+                Effect::ReplaceChars {
+                    path: file.clone(),
+                    start: 1,
+                    contents: "XY".to_owned(),
+                },
+                file.clone(),
+                Seen::File(b"aXYd".to_vec()),
+            ),
+            (
+                Effect::CreateDir {
+                    path: lib.resolve("/new-dir", "/").unwrap(),
+                },
+                lib.resolve("/new-dir", "/").unwrap(),
+                Seen::Dir,
+            ),
+            (
+                Effect::RemoveDir {
+                    path: lib.resolve("/dir", "/").unwrap(),
+                },
+                lib.resolve("/dir", "/").unwrap(),
+                Seen::Missing,
+            ),
+        ];
+        for (effect, target, expected) in cases {
+            assert!(effect.affects_file(target.server()));
+            assert!(!effect.affects_file(other.server()));
+            let txn = TxnHandle::empty();
+            txn.with(|t| t.record_effect(effect));
+            assert_eq!(read_through(&txn, target.server()).await.unwrap(), expected);
+            assert_eq!(
+                read_through(&txn, other.server()).await.unwrap(),
+                Seen::File(b"untouched".to_vec())
+            );
+        }
+
+        let destination = lib.resolve("/moved", "/").unwrap();
+        let effect = Effect::Rename {
+            path: file.clone(),
+            to: destination.clone(),
+        };
+        assert!(effect.affects_file(file.server()));
+        assert!(effect.affects_file(destination.server()));
+        assert!(!effect.affects_file(other.server()));
+        let txn = TxnHandle::empty();
+        txn.with(|t| t.record_effect(effect));
+        assert_eq!(
+            read_through(&txn, file.server()).await.unwrap(),
+            Seen::Missing
+        );
+        assert_eq!(
+            read_through(&txn, destination.server()).await.unwrap(),
+            Seen::File(b"abcd".to_vec())
+        );
+        assert_eq!(
+            read_through(&txn, other.server()).await.unwrap(),
+            Seen::File(b"untouched".to_vec())
+        );
+        assert_eq!(std::fs::read(file.server()).unwrap(), b"abcd");
+        assert!(root.join("dir").is_dir());
+        assert!(!root.join("new-dir").exists());
+        assert!(!destination.server().exists());
+    }
+
+    #[tokio::test]
+    async fn only_the_current_system_object_can_schedule_call_outs() {
+        use crate::{
+            interpreter::object_space::ObjectSpace,
+            util::process_builder::compile_process_from_code,
+        };
+
+        let gs = global_state();
+        let path = gs.config.master_object.as_str();
+        let (old, _) = compile_process_from_code(&gs.object_space, path, "", None, None)
+            .await
+            .unwrap();
+        let (new, _) = compile_process_from_code(&gs.object_space, path, "", None, None)
+            .await
+            .unwrap();
+        assert!(
+            gs.object_space
+                .is_system_key(&gs.object_space.process_key(&old))
+        );
+        ObjectSpace::insert_process_physical(&gs.object_space, old.clone());
+        let schedule = |owner: &Arc<Process>, id| {
+            Effect::ScheduleCallOut(CallOutSchedule {
+                id,
+                process: Arc::downgrade(owner),
+                player: None,
+                func_ref: 0.into(),
+                delay: chrono::Duration::seconds(100),
+                repeat: None,
+            })
+        };
+        schedule(&old, 11).flush(&gs).await;
+        gs.with_call_outs(|calls| {
+            assert_eq!(calls.len(), 1);
+            assert!(calls.get_by_id(11).is_some());
+        });
+        ObjectSpace::insert_process_physical(&gs.object_space, new.clone());
+        schedule(&old, 12).flush(&gs).await;
+        gs.with_call_outs(|calls| {
+            assert_eq!(calls.len(), 1);
+            assert!(calls.get_by_id(12).is_none());
+        });
+        schedule(&new, 13).flush(&gs).await;
+        gs.with_call_outs(|calls| {
+            assert_eq!(calls.len(), 2);
+            assert!(calls.get_by_id(13).is_some());
+        });
+    }
+
     #[tokio::test]
     async fn call_out_scheduling_can_precede_the_owners_physical_insert() {
         use crate::interpreter::stm::{
