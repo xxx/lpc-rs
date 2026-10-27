@@ -385,6 +385,7 @@ examine_globs = [
     "src/command/parser/attempt.rs",
     "src/command/frontend/native/mod.rs",
     "src/compiler/codegen/register_packing.rs",
+    "src/compiler/codegen/scope_walker.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

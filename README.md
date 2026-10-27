@@ -485,6 +485,7 @@ The reviewed scope includes:
 - [Parser attempts](src/command/parser/attempt.rs): selection, permission checks, liveness, handler arguments, rechecks and refusal diagnostics.
 - [Native patterns](src/command/frontend/native/mod.rs): advancing UTF-8 capture scanning, diagnostics, dialect caches, grammar construction and ordered captures.
 - [Register packing](src/compiler/codegen/register_packing.rs): liveness convergence, temporary reuse, parameter allocation bounds, in-place operands, exception paths and jump boundaries.
+- [Scope analysis](src/compiler/codegen/scope_walker.rs): closure storage, reference outputs, callable visibility, foreign calls and diagnostic aggregation.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
