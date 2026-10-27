@@ -479,6 +479,7 @@ The reviewed scope includes:
 - [Grammar model](src/command/grammar/model.rs): builder validation, token and nonterminal identities, diagnostics, case folding and bounded nullable propagation.
 - [Command rule registry](src/command/registry.rs): registration identity, flags, raw phrase slices, synonyms, ownership and transactional edits.
 - [Committed effects](src/interpreter/stm/effects.rs): deferred delivery, pending file changes, diagnostics and call-out owner identity.
+- [Transaction changesets](src/interpreter/stm/changeset.rs): tracked reads, own writes, merge ordering, container allocation reuse, publication and conflict search.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -516,6 +517,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+`Changeset::conflicting_read` may scan either collection to find any conflicting
+read. Reversing its pinned size comparison changes only the scan order; tests
+check intersection membership across both scan sizes and multiple conflicts.
 `<` and `<=` assign the same value at equality in `RegisterCounter::set`; OR and
 XOR set the same warning flag after `Span::file_id` clears that bit.
 Telnet framing permits different linear reservation hints while preserving wire

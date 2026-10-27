@@ -25,6 +25,62 @@ use crate::interpreter::{
 };
 
 #[test]
+fn updates_reuse_unshared_payloads_already_owned_by_the_attempt() {
+    use lpc_rs_core::{
+        class::{ClassDefinition, ClassField, ClassId},
+        lpc_type::LpcType,
+    };
+
+    use crate::interpreter::lpc_class::LpcClass;
+
+    let mut txn = Transaction::new(Committer::new().snapshot_clone());
+    let array = txn.mint_array(LpcArray::new([1.into()]));
+    let allocation = Arc::as_ptr(&txn.read_array(array.id).unwrap());
+    txn.with_array_cow(array.id, |payload| {
+        assert!(std::ptr::eq(payload, allocation));
+        payload[0] = 2.into();
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(txn.read_array(array.id).unwrap()[0], LpcRef::from(2));
+
+    let mapping = txn.mint_mapping(LpcMapping::default());
+    let allocation = Arc::as_ptr(&txn.read_mapping(mapping.id).unwrap());
+    txn.with_mapping_cow(mapping.id, |payload| {
+        assert!(std::ptr::eq(payload, allocation));
+        payload.insert("value".into(), 3.into());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        txn.read_mapping(mapping.id).unwrap().get(&"value".into()),
+        Some(&LpcRef::from(3))
+    );
+
+    let definition = Arc::new(ClassDefinition {
+        id: ClassId {
+            source: "/payload.c".into(),
+            name: "payload".into(),
+        },
+        fields: Box::new([ClassField {
+            name: "value".into(),
+            type_: LpcType::Int(false),
+        }]),
+    });
+    let class = txn.mint_class(LpcClass::new(definition));
+    let allocation = Arc::as_ptr(&txn.read_class(class.id).unwrap());
+    txn.with_class_cow(class.id, |payload| {
+        assert!(std::ptr::eq(payload, allocation));
+        payload.try_map_values(|_| Ok(7.into())).unwrap();
+    })
+    .unwrap();
+    assert_eq!(
+        txn.read_class(class.id).unwrap().value_at(0),
+        Some(&LpcRef::from(7))
+    );
+}
+
+#[test]
 fn paired_read_conflicts_when_either_operand_changes() {
     for changed in [0, 1] {
         let mut committer = Committer::new();

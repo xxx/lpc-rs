@@ -379,6 +379,7 @@ examine_globs = [
     "src/command/grammar/model.rs",
     "src/command/registry.rs",
     "src/interpreter/stm/effects.rs",
+    "src/interpreter/stm/changeset.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -387,6 +388,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Either scan returns an arbitrary tracked member of the written set.
+    '^src/interpreter/stm/changeset\.rs:320:26: replace <= with > in Changeset::conflicting_read$',
     # cargo-mutants 27.1.0 generates unavailable constructors for std::ops::Range.
     '^src/interpreter/task/replace_range\.rs:\d+:\d+: replace write_range -> Option<std::ops::Range<usize>> with Some\(Range::(new\([01]?\)|from\([01]\)|from_iter\(\[[01]\]\))\)$',
     # Both allowances still cover the largest syntax node per token.

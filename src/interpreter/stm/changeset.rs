@@ -375,6 +375,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn conflict_search_returns_a_tracked_member_of_the_written_set() {
+        let mut changeset = Changeset::new(Version(0));
+        let cells = std::array::from_fn::<_, 6, _>(|_| VarId::new());
+        let tracked = &cells[..2];
+        for cell in tracked {
+            changeset.track_read(*cell);
+        }
+        changeset.write(cells[2], WorldValue::ref_of(7.into()));
+
+        for mask in 0_u32..(1 << cells.len()) {
+            let written = cells
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &cell)| (mask & (1 << i) != 0).then_some(cell))
+                .collect();
+            match changeset.conflicting_read(&written) {
+                Some(cell) => {
+                    assert!(tracked.contains(&cell));
+                    assert!(written.contains(&cell));
+                }
+                None => assert!(tracked.iter().all(|cell| !written.contains(cell))),
+            }
+        }
+    }
+
+    #[test]
     fn paired_read_of_one_cell_caches_the_world_once() {
         let mut changeset = Changeset::new(Version(0));
         let var = VarId::new();
