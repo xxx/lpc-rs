@@ -462,6 +462,7 @@ The reviewed scope includes:
 - [Shadow chains](src/interpreter/process/shadow.rs): transactional links, unshadowed entry, public dispatch, caller boundaries and chain queries.
 - [Relational parser attempts](src/command/parser/attempt/relations.rs): living noun selection, pair liveness and permissions, plural partners, rechecks and refusal priority.
 - [Connection binding](src/interpreter/vm/binding.rs): registry identity, transactional handovers, stale owners, snoop retirement and conflict diagnostics.
+- [Noun resolver](src/command/resolve/mod.rs): scope order, living and remote filters, numerals, prepositions and cached vocabulary.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

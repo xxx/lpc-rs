@@ -362,6 +362,7 @@ examine_globs = [
     "src/interpreter/process/shadow.rs",
     "src/command/parser/attempt/relations.rs",
     "src/interpreter/vm/binding.rs",
+    "src/command/resolve/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

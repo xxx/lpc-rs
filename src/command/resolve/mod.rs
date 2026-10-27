@@ -451,6 +451,9 @@ mod tests {
         );
         assert_eq!(resolve(remote_scene(), Kind::Items, "guard").await, None);
         assert_eq!(resolve(remote_scene(), Kind::Object, "guard").await, None);
+        let mut non_living = remote_scene();
+        non_living.living[3] = false;
+        assert_eq!(resolve(non_living, Kind::Living, "guard").await, None);
     }
 
     #[tokio::test]
