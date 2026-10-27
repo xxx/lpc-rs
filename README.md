@@ -482,6 +482,7 @@ The reviewed scope includes:
 - [Transaction changesets](src/interpreter/stm/changeset.rs): tracked reads, own writes, merge ordering, container allocation reuse, publication and conflict search.
 - [Binary literal folding](src/compiler/parser/collapse_binary_op.rs): wrapping integer arithmetic, signed shift counts, zero-divisor deferral, bitwise operations and bounded strings.
 - [Function bindings](src/interpreter/program/function.rs): native frame compatibility, inherited visibility, shared code, canonical global projection and equality.
+- [Parser attempts](src/command/parser/attempt.rs): selection, permission checks, liveness, handler arguments, rechecks and refusal diagnostics.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -519,6 +520,8 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+`choose` rejects zero for a single object before checking for a negative numeral.
+Only that later guard's pinned `<` to `<=` mutation is equivalent.
 `Function::inherited` clears the packed visibility bits before inserting the
 restricted visibility. OR and XOR therefore produce the same binding at that
 pinned expression; tests cover both declared and inherited protection.
