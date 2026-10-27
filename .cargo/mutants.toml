@@ -387,6 +387,7 @@ examine_globs = [
     "src/compiler/codegen/register_packing.rs",
     "src/compiler/codegen/scope_walker.rs",
     "src/compiler/compilation_context.rs",
+    "src/compiler/codegen/peephole.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -395,6 +396,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # A deleted defining copy fails the non-r0 or operand-count checks.
+    '^src/compiler/codegen/peephole\.rs:117:26: replace - with / in coalesce_copies$',
     # Prepared interfaces are cleared before concrete parents are linked.
     '^src/compiler/compilation_context\.rs:207:37: replace && with \|\| in CompilationContext::lookup_inherited_function$',
     # Flow inputs have already excluded the argument registers.

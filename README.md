@@ -487,6 +487,7 @@ The reviewed scope includes:
 - [Register packing](src/compiler/codegen/register_packing.rs): liveness convergence, temporary reuse, parameter allocation bounds, in-place operands, exception paths and jump boundaries.
 - [Scope analysis](src/compiler/codegen/scope_walker.rs): closure storage, reference outputs, callable visibility, foreign calls and diagnostic aggregation.
 - [Compilation context](src/compiler/compilation_context.rs): source configuration, pragma boundaries, synthetic names, parent namespaces and function visibility.
+- [Peephole optimization](src/compiler/codegen/peephole.rs): copy coalescing, control-flow pruning, address remapping and debug convergence.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -527,6 +528,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+The peephole's non-r0 and operand-count checks already rule out a deleted
+copy definer. Its pinned `i - 1` to `i / 1` deletion check therefore leaves
+the selected rewrites unchanged.
 Compilation clears prepared parent interfaces before linking concrete parents.
 The pinned `&&` to `||` lookup change is equivalent for these disjoint states;
 with neither kind of parent, both branches return no declaration.
