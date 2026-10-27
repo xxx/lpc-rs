@@ -231,6 +231,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn input_limit_is_inclusive_and_reports_oversized_input() {
+        use crate::{
+            interpreter::{
+                task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+                vm::Vm,
+            },
+            test_support::test_config,
+        };
+        let vm = Vm::new(test_config());
+        let process = vm
+            .initialize_process_from_code(
+                "/format.c",
+                "string format(string text) { return terminal_colour(text); }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        for length in [LIMIT, LIMIT + 1] {
+            let result = apply_function_by_name(
+                "format",
+                &[LpcRef::from("x".repeat(length))],
+                process.clone(),
+                TaskTemplate::from(vm.global_state.clone()),
+                Some(5000),
+            )
+            .await
+            .unwrap();
+            if length == LIMIT {
+                assert_eq!(result.unwrap().as_str().unwrap().len(), LIMIT);
+            } else {
+                let error = result.unwrap_err();
+                assert!(error.to_string().contains("input exceeds 1 MiB"), "{error}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn wrap_and_indent_limits_accept_their_boundary_values() {
+        for (wrap, indent, length) in [
+            (LIMIT as i64, 0, 1),
+            (-(LIMIT as i64), 0, LIMIT),
+            (0, LIMIT, 1),
+        ] {
+            let output = formatted(&format!(r#""x", 1, {wrap}, {indent}, 0"#)).await;
+            assert_eq!(output.len(), length);
+            assert!(output.starts_with('x'));
+            assert!(output[1..].bytes().all(|byte| byte == b' '));
+        }
+    }
+
+    #[tokio::test]
     async fn custom_mappings_override_builtins_and_share_rgb_fallback() {
         let result = formatted(r#""%^RED%^x%^RESET%^", (["RED":"%^#f00%^"]), 0, 0, 8"#).await;
         assert_eq!(result, "\x1b[38;5;196mx\x1b[0m");
@@ -259,7 +311,7 @@ mod tests {
     #[tokio::test]
     async fn resolvers_receive_each_marked_token_and_can_supply_concrete_markup() {
         assert_eq!(
-            formatted(r#""%^one%^/%^two%^", (: "[" + $1 + "]" :)"#).await,
+            formatted(r#""%^%^%^one%^/%^two%^", (: "[" + $1 + "]" :)"#).await,
             "[one]/[two]"
         );
         assert_eq!(
@@ -348,12 +400,20 @@ mod tests {
             test_support::{connect, test_config},
         };
         let vm = Vm::new(test_config());
-        let player = vm.create_process_from_code("/player.c", r#"
+        let player = vm
+            .create_process_from_code(
+                "/player.c",
+                r#"
             string create() {
                 set_this_player(this_object());
-                return terminal_colour("%^#f00%^x") + "|" + terminal_colour("%^#f00%^x", 1, 0, 0, 24);
+                return terminal_colour("%^#f00%^x") + "|" +
+                    terminal_colour("%^#f00%^x", 1, 0, 0, -1) + "|" +
+                    terminal_colour("%^#f00%^x", 1, 0, 0, 24);
             }
-        "#).await.unwrap();
+        "#,
+            )
+            .await
+            .unwrap();
         let connected = connect(&vm, &player).await;
         let mut session = lpc_rs_telnet::Session::new();
         session.feed(b"\xff\xfb\x18\xff\xfa\x18\0MTTS 1\xff\xf0");
@@ -366,7 +426,9 @@ mod tests {
         .result();
         assert_eq!(
             result,
-            Some(LpcRef::from("\x1b[31mx\x1b[0m|\x1b[38;2;255;0;0mx\x1b[0m"))
+            Some(LpcRef::from(
+                "\x1b[31mx\x1b[0m|\x1b[31mx\x1b[0m|\x1b[38;2;255;0;0mx\x1b[0m"
+            ))
         );
     }
 
@@ -414,6 +476,9 @@ mod tests {
             (r#""x", ([0:42])"#, "mapping default"),
             (r#""x", 1, "bad""#, "wrap must be an int"),
             (r#""x", 1, 8, -1"#, "indent is out of range"),
+            (r#""x", 1, 1048577"#, "wrap is out of range"),
+            (r#""x", 1, -1048577"#, "wrap is out of range"),
+            (r#""x", 1, 0, 1048577"#, "indent is out of range"),
             (r#""x", 1, 8, 8"#, "indent must be smaller"),
             (r#""x", 1, 0, 0, 16"#, "depth must be"),
             (r#""%^X%^", (: 0 :)"#, "resolver must return a string"),

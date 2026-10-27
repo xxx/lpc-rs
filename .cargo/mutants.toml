@@ -363,6 +363,7 @@ examine_globs = [
     "src/command/parser/attempt/relations.rs",
     "src/interpreter/vm/binding.rs",
     "src/command/resolve/mod.rs",
+    "src/interpreter/efun/terminal_colour/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

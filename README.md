@@ -463,6 +463,7 @@ The reviewed scope includes:
 - [Relational parser attempts](src/command/parser/attempt/relations.rs): living noun selection, pair liveness and permissions, plural partners, rechecks and refusal priority.
 - [Connection binding](src/interpreter/vm/binding.rs): registry identity, transactional handovers, stale owners, snoop retirement and conflict diagnostics.
 - [Noun resolver](src/command/resolve/mod.rs): scope order, living and remote filters, numerals, prepositions and cached vocabulary.
+- [Terminal colour](src/interpreter/efun/terminal_colour/mod.rs): input and wrapping limits, markup expansion, resolver tokens and recipient colour depth.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
