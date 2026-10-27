@@ -370,6 +370,7 @@ examine_globs = [
     "src/interpreter/object_space.rs",
     "src/interpreter/efun/sprintf/display.rs",
     "src/telnet/connection.rs",
+    "src/interpreter/task/handle_data.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
