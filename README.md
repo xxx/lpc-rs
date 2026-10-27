@@ -468,6 +468,7 @@ The reviewed scope includes:
 - [Shared compiler cache](src/compiler/cache.rs): disabled limits, exact byte budgets, LRU eviction, replacement accounting and idle expiration.
 - [Range replacement](src/interpreter/task/replace_range.rs): inclusive and reverse bounds, Unicode scalar slices, checked sizes and retained result capacity.
 - [Object space](src/interpreter/object_space.rs): bootstrap publication, stable cell identities, compiler caches, root enumeration, clone placement and master identity.
+- [Sprintf display units](src/interpreter/efun/sprintf/display.rs): terminal columns, grapheme boundaries, SGR ownership, precision and custom padding.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
