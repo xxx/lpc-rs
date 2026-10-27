@@ -367,6 +367,7 @@ examine_globs = [
     "src/interpreter/lpc_class.rs",
     "src/compiler/cache.rs",
     "src/interpreter/task/replace_range.rs",
+    "src/interpreter/object_space.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

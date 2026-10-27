@@ -467,6 +467,7 @@ The reviewed scope includes:
 - [Class instances](src/interpreter/lpc_class.rs): nominal fields, retained views, save validation, graph copying, memory charges and read-only member access.
 - [Shared compiler cache](src/compiler/cache.rs): disabled limits, exact byte budgets, LRU eviction, replacement accounting and idle expiration.
 - [Range replacement](src/interpreter/task/replace_range.rs): inclusive and reverse bounds, Unicode scalar slices, checked sizes and retained result capacity.
+- [Object space](src/interpreter/object_space.rs): bootstrap publication, stable cell identities, compiler caches, root enumeration, clone placement and master identity.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

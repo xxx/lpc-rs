@@ -344,6 +344,145 @@ mod tests {
     use super::*;
     use crate::interpreter::program::ProgramBuilder;
 
+    fn fixture_process(path: &str) -> Arc<Process> {
+        Arc::new(Process::new(
+            ProgramBuilder::default()
+                .filename(LpcPath::in_game(path.into()))
+                .build()
+                .unwrap(),
+        ))
+    }
+
+    #[test]
+    fn bootstrap_fixtures_publish_without_minting_transactional_cells() {
+        let space = ObjectSpace::default();
+        let (tx, rx) = flume::unbounded();
+        space.set_committer(tx);
+        let process = fixture_process("/fixture.c");
+        let key = space.process_key(&process);
+        ObjectSpace::insert_process_physical(&space, process.clone());
+
+        let Ok(CommitProtocol::BootstrapObject(change)) = rx.try_recv() else {
+            panic!("bootstrap publication")
+        };
+        let mut objects = imbl::HashMap::new();
+        change.apply(&mut objects);
+        assert!(Arc::ptr_eq(objects.get(key.as_str()).unwrap(), &process));
+        assert!(process.physical.load(Ordering::Acquire));
+        assert!(space.get_cell_id(&key).is_none());
+        let roots = space.live_processes();
+        assert_eq!(roots.len(), 1);
+        assert!(Arc::ptr_eq(&roots[0], &process));
+    }
+
+    #[test]
+    fn object_cells_are_stable_and_read_lookups_do_not_mint() {
+        use std::collections::HashSet;
+
+        let space = ObjectSpace::default();
+        for (path, expected) in [
+            ("room.c", "/room"),
+            ("/room.c", "/room"),
+            ("/room", "/room"),
+            ("room#7", "/room#7"),
+        ] {
+            assert_eq!(space.path_key(path), expected);
+        }
+        assert!(space.get_cell_id("/room").is_none());
+        assert_eq!(space.all_cell_ids(), vec![space.system_revision.id]);
+        let room = space.cell_id("/room");
+        let other = space.cell_id("/other");
+        assert_eq!(space.cell_id("/room"), room);
+        assert_eq!(space.get_cell_id("/room"), Some(room));
+        assert_eq!(
+            space.all_cell_ids().into_iter().collect::<HashSet<_>>(),
+            HashSet::from([space.system_revision.id, room, other])
+        );
+    }
+
+    #[test]
+    fn cell_diagnostics_describe_rules_objects_and_paths() {
+        let space = ObjectSpace::default();
+        let process = fixture_process("/diagnostic.c");
+        ObjectSpace::insert_process_physical(&space, process.clone());
+        let path = space.cell_id("/unloaded");
+        assert_eq!(
+            space.describe_cell(space.verb_rules.id),
+            Some("object_space.verb_rules".into())
+        );
+        assert_eq!(
+            space.describe_cell(process.connection.id),
+            Some(format!("{}.connection", process.filename()))
+        );
+        assert_eq!(
+            space.describe_cell(path),
+            Some("object_space[/unloaded]".into())
+        );
+        assert_eq!(space.describe_cell(VarId::new()), None);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cache_expiration_sums_both_shared_caches() {
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code/")
+            .compiler_cache_idle_time(1_u64)
+            .build()
+            .unwrap();
+        let space = ObjectSpace::new(config);
+        let process = space
+            .create_process_from_code(
+                "/cached.c",
+                "#define VALUE 42\nint value() { return VALUE; }\n",
+            )
+            .await
+            .unwrap();
+        assert!(Arc::ptr_eq(&space.lookup("/cached").unwrap(), &process));
+        let before = space.compiler_cache_stats();
+        assert_eq!(before.parser.entries, 1);
+        assert_eq!(before.definitions.entries, 1);
+        tokio::time::advance(std::time::Duration::from_secs(2)).await;
+        assert_eq!(space.expire_compiler_caches(), 2);
+        let after = space.compiler_cache_stats();
+        assert_eq!(after.parser.entries, 0);
+        assert_eq!(after.definitions.entries, 0);
+        assert_eq!(space.expire_compiler_caches(), 0);
+    }
+
+    #[test]
+    fn stale_and_unrelated_removals_preserve_the_current_master() {
+        let config = ConfigBuilder::default()
+            .master_object(ustr("/master.c"))
+            .build()
+            .unwrap();
+        let space = ObjectSpace::new(config);
+        let old = fixture_process("/master.c");
+        let new = fixture_process("/master.c");
+        let other = fixture_process("/other.c");
+        space.apply_insert("/master", old.clone());
+        space.apply_insert("/master", new.clone());
+        space.apply_remove("/master", &old);
+        assert!(Arc::ptr_eq(&space.master_object().unwrap(), &new));
+        space.apply_insert("/other", other.clone());
+        space.apply_remove("/other", &other);
+        assert!(Arc::ptr_eq(&space.master_object().unwrap(), &new));
+        space.apply_remove("/master", &new);
+        assert!(space.master_object().is_none());
+    }
+
+    #[test]
+    fn clones_share_the_program_and_are_not_physically_inserted() {
+        let space = ObjectSpace::default();
+        let prototype = fixture_process("/cloned.c");
+        let program = prototype.initial_program().clone();
+        let first = space.create_clone_process(program.clone());
+        let second = space.create_clone_process(program.clone());
+        assert_eq!(first.filename(), "/cloned#0");
+        assert_eq!(second.filename(), "/cloned#1");
+        assert!(Arc::ptr_eq(first.initial_program(), &program));
+        assert!(Arc::ptr_eq(second.initial_program(), &program));
+        assert!(space.is_empty());
+    }
+
     // #[test]
     // fn test_insert_prototype() {
     //     let mut space = ObjectSpace::default();
@@ -407,12 +546,19 @@ mod tests {
 
     #[test]
     fn test_master_object() {
-        let config = ConfigBuilder::default()
-            .master_object(ustr("/master.c"))
-            .lib_dir("/foo/bar")
-            .build()
-            .unwrap();
-        let space = ObjectSpace::new(config);
+        let config = Arc::new(
+            ConfigBuilder::default()
+                .master_object(ustr("/master.c"))
+                .lib_dir("/foo/bar")
+                .build()
+                .unwrap(),
+        );
+        let space = ObjectSpace::new(config.clone());
+
+        assert!(Arc::ptr_eq(space.config(), &config));
+        assert!(space.is_system_key("/master"));
+        assert!(space.is_system_key("/master.c"));
+        assert!(!space.is_system_key("/ordinary"));
 
         assert!(space.master_object().is_none());
 
