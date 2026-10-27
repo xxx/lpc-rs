@@ -471,6 +471,7 @@ The reviewed scope includes:
 - [Sprintf display units](src/interpreter/efun/sprintf/display.rs): terminal columns, grapheme boundaries, SGR ownership, precision and custom padding.
 - [Connection state](src/telnet/connection.rs): callback and address identity, cached hostnames, input lifecycle, observer controls, snapshots and flags.
 - [Data instructions](src/interpreter/task/handle_data.rs): staged arrays and mappings, pointer receiver loading and captures, reverse indexes and element access.
+- [File-entry overlay](src/interpreter/file_view/entry.rs): provisional entry kinds, failed operations, rename dependencies, symlinks and metadata errors.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -159,6 +159,41 @@ mod tests {
     use super::*;
     use crate::test_support::TempLib;
 
+    #[tokio::test]
+    async fn failed_entry_operations_preserve_incompatible_kinds() {
+        let root = TempLib::new("entry-incompatible-operations");
+        let lib = LibRoot::new(&*root);
+        std::fs::write(root.join("file"), "file").unwrap();
+        std::fs::create_dir(root.join("dir")).unwrap();
+        for (effect, path, expected) in [
+            (
+                Effect::RemoveFile {
+                    path: lib.resolve("/dir", "/").unwrap(),
+                },
+                root.join("dir"),
+                EntryKind::Directory,
+            ),
+            (
+                Effect::CreateDir {
+                    path: lib.resolve("/file", "/").unwrap(),
+                },
+                root.join("file"),
+                EntryKind::File,
+            ),
+            (
+                Effect::RemoveDir {
+                    path: lib.resolve("/file", "/").unwrap(),
+                },
+                root.join("file"),
+                EntryKind::File,
+            ),
+        ] {
+            let txn = TxnHandle::empty();
+            txn.with(|t| t.record_effect(effect));
+            assert_eq!(entry_kind(&txn, &path).await.unwrap(), expected);
+        }
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn rename_chains_use_historical_source_kinds() {
