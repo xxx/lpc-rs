@@ -365,6 +365,7 @@ examine_globs = [
     "src/command/resolve/mod.rs",
     "src/interpreter/efun/terminal_colour/mod.rs",
     "src/interpreter/lpc_class.rs",
+    "src/compiler/cache.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

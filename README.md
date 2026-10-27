@@ -465,6 +465,7 @@ The reviewed scope includes:
 - [Noun resolver](src/command/resolve/mod.rs): scope order, living and remote filters, numerals, prepositions and cached vocabulary.
 - [Terminal colour](src/interpreter/efun/terminal_colour/mod.rs): input and wrapping limits, markup expansion, resolver tokens and recipient colour depth.
 - [Class instances](src/interpreter/lpc_class.rs): nominal fields, retained views, save validation, graph copying, memory charges and read-only member access.
+- [Shared compiler cache](src/compiler/cache.rs): disabled limits, exact byte budgets, LRU eviction, replacement accounting and idle expiration.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
