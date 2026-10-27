@@ -337,7 +337,7 @@ async fn snoop_activation_rejects_the_wrong_connection_for_a_live_registration()
 async fn snoop_disconnect_preserves_observer_but_retires_target() {
     let (vm, observer, target, mut connected) = setup(NullMode::Distinct, 65536, OBSERVER).await;
     let observer_connection = connect(&vm, &observer).await;
-    attach(&vm, &observer, &target, &mut connected).await;
+    let registration = attach(&vm, &observer, &target, &mut connected).await;
     vm.global_state
         .detach(&observer_connection.connection, None)
         .await;
@@ -346,6 +346,12 @@ async fn snoop_disconnect_preserves_observer_but_retires_target() {
         LpcRef::from(Arc::downgrade(&target))
     );
     vm.global_state.detach(&connected.connection, None).await;
+    assert!(registration.is_closed());
+    assert_eq!(
+        connected.rx.try_recv(),
+        Ok(ConnectionOp::StopSnoop(registration.id))
+    );
+    assert_eq!(connected.rx.try_recv(), Ok(ConnectionOp::Close));
     assert_eq!(
         call(&vm, &observer, "query", vec![]).await.unwrap(),
         LpcRef::Nil
@@ -514,6 +520,12 @@ async fn snoop_destroy_and_exec_retire_both_ends_and_replacement_binding() {
         call(&vm, &observer, "query", vec![]).await.unwrap(),
         LpcRef::Nil
     );
+    let live = crate::interpreter::stm::start_txn(&vm.global_state.committer_tx)
+        .await
+        .unwrap();
+    let mut txn = Transaction::new(live.inner.clone());
+    assert!(incoming(&mut txn, &target).is_none());
+    assert!(outgoing(&mut txn, &observer).is_none());
 }
 
 #[tokio::test]
