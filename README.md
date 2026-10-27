@@ -477,6 +477,7 @@ The reviewed scope includes:
 - [Saved class records](src/interpreter/save_format/class.rs): canonical identities, numeric metadata, field descriptors, retained views and nesting limits.
 - [Contention backoff](src/interpreter/stm/backoff.rs): bounded jitter, yield and sleep ladders, commit wakeups and elapsed-time accounting.
 - [Grammar model](src/command/grammar/model.rs): builder validation, token and nonterminal identities, diagnostics, case folding and bounded nullable propagation.
+- [Command rule registry](src/command/registry.rs): registration identity, flags, raw phrase slices, synonyms, ownership and transactional edits.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
