@@ -58,6 +58,38 @@ async fn growing_and_shrinking_leave_previous_arrays_intact() {
 }
 
 #[tokio::test]
+async fn array_replacements_charge_for_their_result_capacity() {
+    assert_eq!(
+        run(
+            "",
+            &[],
+            r#"
+            mixed *data = ({});
+            mixed *create() {
+                data = allocate(1024, 1);
+                data[0..1023] = ({ 7 });
+                int shrunk = object_memory_info(this_object())["data_bytes"];
+                data = ({ 7 });
+                int compact = object_memory_info(this_object())["data_bytes"];
+                data[0..0] = allocate(64, 7);
+                int grown = object_memory_info(this_object())["data_bytes"];
+                int count = sizeof(data), first = data[0], last = data[63];
+                data = allocate(64, 7);
+                int direct = object_memory_info(this_object())["data_bytes"];
+                return ({ shrunk > 0, shrunk == compact, count, first, last,
+                    grown > compact, grown == direct });
+            }
+        "#
+        )
+        .await,
+        [1, 1, 64, 7, 7, 1, 1]
+            .into_iter()
+            .map(LpcRef::from)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
 async fn deleting_first_last_and_all_elements_uses_inclusive_endpoints() {
     assert_eq!(
         run(

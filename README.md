@@ -466,6 +466,7 @@ The reviewed scope includes:
 - [Terminal colour](src/interpreter/efun/terminal_colour/mod.rs): input and wrapping limits, markup expansion, resolver tokens and recipient colour depth.
 - [Class instances](src/interpreter/lpc_class.rs): nominal fields, retained views, save validation, graph copying, memory charges and read-only member access.
 - [Shared compiler cache](src/compiler/cache.rs): disabled limits, exact byte budgets, LRU eviction, replacement accounting and idle expiration.
+- [Range replacement](src/interpreter/task/replace_range.rs): inclusive and reverse bounds, Unicode scalar slices, checked sizes and retained result capacity.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -496,6 +497,11 @@ a timeout or compilation failure does not establish that an assertion caught the
 change. Struct-update field deletions can bypass name regex filters in
 cargo-mutants 27.1.0; check `mutants.json` after narrowing a local run. CI's diff
 and shard filters apply after discovery.
+
+Seven constructor mutations for `write_range` are excluded because cargo-mutants
+27.1.0 generates constructors that `std::ops::Range<usize>` does not provide.
+Compile probes confirm that all seven fail; skipping them avoids repeated failed
+builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
 `<` and `<=` assign the same value at equality in `RegisterCounter::set`; OR and

@@ -366,6 +366,7 @@ examine_globs = [
     "src/interpreter/efun/terminal_colour/mod.rs",
     "src/interpreter/lpc_class.rs",
     "src/compiler/cache.rs",
+    "src/interpreter/task/replace_range.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -374,6 +375,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # cargo-mutants 27.1.0 generates unavailable constructors for std::ops::Range.
+    '^src/interpreter/task/replace_range\.rs:\d+:\d+: replace write_range -> Option<std::ops::Range<usize>> with Some\(Range::(new\([01]?\)|from\([01]\)|from_iter\(\[[01]\]\))\)$',
     # Both allowances still cover the largest syntax node per token.
     '^src/compiler/parser_cache\.rs:95:(28: replace \* with \+|52: replace \+ with -) in retained_cost$',
     # Generated initializers are outside the program's public export set.
