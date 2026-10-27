@@ -34,15 +34,18 @@ mod tests {
     async fn returns_fresh_estimates_with_an_additive_total_and_works_through_a_pointer() {
         let task = run_prog(
             r#"
+            int scalar = 7;
+            float fraction = 1.5;
             int create() {
                 mapping a = object_memory_info(this_object());
                 if (sizeof(a) != 4 || a["object_bytes"] <= 0 || a["program_bytes"] <= 0
+                    || a["data_bytes"] != 0
                     || a["total_bytes"] != a["object_bytes"] + a["program_bytes"] + a["data_bytes"])
                     return 0;
                 int total = a["total_bytes"];
                 a["total_bytes"] = -1;
                 mapping b = evaluate(object_memory_info, this_object());
-                return b["total_bytes"] == total;
+                return scalar == 7 && fraction == 1.5 && b["total_bytes"] == total;
             }
         "#,
         )
@@ -75,12 +78,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn shares_array_payloads_across_globals_and_terminates_on_a_cycle() {
+    async fn shared_values_are_counted_once_and_cycles_terminate() {
         let task = run_prog(
             r#"
             mixed a, b;
+            int text_length(string text) { return sizeof(text); }
             int create() {
+                foreach (mixed value : ({ "s" * 4096, ([ "key": "m" * 4096 ]),
+                    &text_length("f" * 8192) })) {
+                    a = value;
+                    b = nil;
+                    int single = object_memory_info(this_object())["data_bytes"];
+                    b = a;
+                    if (single <= 0 || object_memory_info(this_object())["data_bytes"] != single)
+                        return 0;
+                }
                 a = allocate(8);
+                b = nil;
                 int first = object_memory_info(this_object())["data_bytes"];
                 b = a;
                 int shared = object_memory_info(this_object())["data_bytes"];

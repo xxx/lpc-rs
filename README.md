@@ -472,6 +472,7 @@ The reviewed scope includes:
 - [Connection state](src/telnet/connection.rs): callback and address identity, cached hostnames, input lifecycle, observer controls, snapshots and flags.
 - [Data instructions](src/interpreter/task/handle_data.rs): staged arrays and mappings, pointer receiver loading and captures, reverse indexes and element access.
 - [File-entry overlay](src/interpreter/file_view/entry.rs): provisional entry kinds, failed operations, rename dependencies, symlinks and metadata errors.
+- [Memory accounting](src/interpreter/memory.rs): scalar instance slots, shared and interned payloads, captured values, cycles, bounded traversal and overflow.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

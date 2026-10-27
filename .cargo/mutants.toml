@@ -372,6 +372,7 @@ examine_globs = [
     "src/telnet/connection.rs",
     "src/interpreter/task/handle_data.rs",
     "src/interpreter/file_view/entry.rs",
+    "src/interpreter/memory.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
