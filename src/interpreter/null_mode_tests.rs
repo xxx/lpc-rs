@@ -23,6 +23,24 @@ async fn check(mode: NullMode, code: &str) {
 }
 
 #[tokio::test]
+async fn distinct_compositions_keep_static_and_dynamic_receivers() {
+    check(
+        NullMode::Distinct,
+        r#"
+        int length(string text) { return sizeof(text); }
+        int create() {
+            function static_receiver = &sizeof() @ &to_string();
+            function dynamic_receiver = &->length() @ &to_string();
+            return static_receiver(77) == 2 && static_receiver(nil) == 3
+                && dynamic_receiver(this_object(), 77) == 2
+                && dynamic_receiver(this_object(), nil) == 3;
+        }
+    "#,
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn distinct_nil_is_false_but_is_not_a_number() {
     check(
         NullMode::Distinct,

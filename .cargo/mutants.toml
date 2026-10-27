@@ -381,6 +381,7 @@ examine_globs = [
     "src/interpreter/stm/effects.rs",
     "src/interpreter/stm/changeset.rs",
     "src/compiler/parser/collapse_binary_op.rs",
+    "src/interpreter/program/function.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -389,6 +390,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Visibility bits are cleared before either replacement combines them.
+    '^src/interpreter/program/function\.rs:66:60: replace \| with \^ in Function::inherited$',
     # Either scan returns an arbitrary tracked member of the written set.
     '^src/interpreter/stm/changeset\.rs:320:26: replace <= with > in Changeset::conflicting_read$',
     # cargo-mutants 27.1.0 generates unavailable constructors for std::ops::Range.

@@ -481,6 +481,7 @@ The reviewed scope includes:
 - [Committed effects](src/interpreter/stm/effects.rs): deferred delivery, pending file changes, diagnostics and call-out owner identity.
 - [Transaction changesets](src/interpreter/stm/changeset.rs): tracked reads, own writes, merge ordering, container allocation reuse, publication and conflict search.
 - [Binary literal folding](src/compiler/parser/collapse_binary_op.rs): wrapping integer arithmetic, signed shift counts, zero-divisor deferral, bitwise operations and bounded strings.
+- [Function bindings](src/interpreter/program/function.rs): native frame compatibility, inherited visibility, shared code, canonical global projection and equality.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -518,6 +519,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+`Function::inherited` clears the packed visibility bits before inserting the
+restricted visibility. OR and XOR therefore produce the same binding at that
+pinned expression; tests cover both declared and inherited protection.
 `Changeset::conflicting_read` may scan either collection to find any conflicting
 read. Reversing its pinned size comparison changes only the scan order; tests
 check intersection membership across both scan sizes and multiple conflicts.
