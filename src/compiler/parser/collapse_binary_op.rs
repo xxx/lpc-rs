@@ -62,7 +62,7 @@ fn collapse_add(
     let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
-                value: node.value + node2.value,
+                value: node.value.wrapping_add(node2.value),
                 span,
             }),
             ExpressionNode::String(node2) => {
@@ -107,7 +107,7 @@ fn collapse_sub(
     let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
-                value: node.value - node2.value,
+                value: node.value.wrapping_sub(node2.value),
                 span,
             }),
             _ => non_collapse(op, l, r, span),
@@ -127,7 +127,7 @@ fn collapse_mul(
     let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
-                value: node.value * node2.value,
+                value: node.value.wrapping_mul(node2.value),
                 span,
             }),
             // 3 * "string" = "stringstringstring"
@@ -159,7 +159,7 @@ fn collapse_div(
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
             if node2.value != 0 {
                 ExpressionNode::Int(IntNode {
-                    value: node.value / node2.value,
+                    value: node.value.wrapping_div(node2.value),
                     span,
                 })
             } else {
@@ -184,7 +184,7 @@ fn collapse_mod(
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
             if node2.value != 0 {
                 ExpressionNode::Int(IntNode {
-                    value: node.value % node2.value,
+                    value: node.value.wrapping_rem(node2.value),
                     span,
                 })
             } else {
@@ -263,7 +263,7 @@ fn collapse_shl(
 ) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
-            value: node.value << node2.value,
+            value: node.value.wrapping_shl(node2.value as u32),
             span,
         }),
         _ => non_collapse(op, l, r, span),
@@ -280,7 +280,7 @@ fn collapse_shr(
 ) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
-            value: node.value >> node2.value,
+            value: node.value.wrapping_shr(node2.value as u32),
             span,
         }),
         _ => non_collapse(op, l, r, span),
@@ -321,6 +321,79 @@ mod tests {
     use claims::*;
 
     use super::*;
+
+    fn assert_folded_integer(
+        op: BinaryOperation,
+        left: LpcIntInner,
+        right: LpcIntInner,
+        expected: LpcIntInner,
+    ) {
+        let span = Some(Span::new(0, 3..12));
+        assert_eq!(
+            collapse_binary_op(op, left.into(), right.into(), span).unwrap(),
+            ExpressionNode::Int(IntNode {
+                value: expected,
+                span,
+            })
+        );
+    }
+
+    #[test]
+    fn integer_arithmetic_wraps_when_folded() {
+        for (op, left, right, expected) in [
+            (BinaryOperation::Add, LpcIntInner::MAX, 1, LpcIntInner::MIN),
+            (BinaryOperation::Sub, LpcIntInner::MIN, 1, LpcIntInner::MAX),
+            (BinaryOperation::Mul, LpcIntInner::MAX, 2, -2),
+            (BinaryOperation::Mul, LpcIntInner::MIN, -1, LpcIntInner::MIN),
+        ] {
+            assert_folded_integer(op, left, right, expected);
+        }
+    }
+
+    #[test]
+    fn division_and_remainder_overflow_wrap_when_folded() {
+        assert_folded_integer(BinaryOperation::Div, LpcIntInner::MIN, -1, LpcIntInner::MIN);
+        assert_folded_integer(BinaryOperation::Mod, LpcIntInner::MIN, -1, 0);
+    }
+
+    #[test]
+    fn shift_counts_wrap_when_folded() {
+        for (op, left, right, expected) in [
+            (BinaryOperation::Shl, 1, 64, 1),
+            (BinaryOperation::Shl, 1, 128, 1),
+            (BinaryOperation::Shl, 1, -1, LpcIntInner::MIN),
+            (BinaryOperation::Shl, 1, -64, 1),
+            (BinaryOperation::Shl, 1, LpcIntInner::MIN, 1),
+            (BinaryOperation::Shl, 1, LpcIntInner::MAX, LpcIntInner::MIN),
+            (BinaryOperation::Shr, LpcIntInner::MIN, 64, LpcIntInner::MIN),
+            (BinaryOperation::Shr, LpcIntInner::MIN, -1, -1),
+            (
+                BinaryOperation::Shr,
+                LpcIntInner::MIN,
+                -64,
+                LpcIntInner::MIN,
+            ),
+            (BinaryOperation::Shr, -8, 1, -4),
+        ] {
+            assert_folded_integer(op, left, right, expected);
+        }
+    }
+
+    #[test]
+    fn zero_divisors_stay_in_the_syntax_tree() {
+        let span = Some(Span::new(0, 3..12));
+        for op in [BinaryOperation::Div, BinaryOperation::Mod] {
+            assert_eq!(
+                collapse_binary_op(op, 1.into(), 0.into(), span).unwrap(),
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(1.into()),
+                    r: Box::new(0.into()),
+                    op,
+                    span,
+                })
+            );
+        }
+    }
 
     #[test]
     fn test_collapses_add_int_and_int() {

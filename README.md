@@ -480,6 +480,7 @@ The reviewed scope includes:
 - [Command rule registry](src/command/registry.rs): registration identity, flags, raw phrase slices, synonyms, ownership and transactional edits.
 - [Committed effects](src/interpreter/stm/effects.rs): deferred delivery, pending file changes, diagnostics and call-out owner identity.
 - [Transaction changesets](src/interpreter/stm/changeset.rs): tracked reads, own writes, merge ordering, container allocation reuse, publication and conflict search.
+- [Binary literal folding](src/compiler/parser/collapse_binary_op.rs): wrapping integer arithmetic, signed shift counts, zero-divisor deferral, bitwise operations and bounded strings.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

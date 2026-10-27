@@ -53,12 +53,20 @@ fn compilation(c: &mut Criterion) {
     let closures = (0..64)
         .map(|index| format!("function make_{index}() {{ return (: $1 + $16 :); }}\n"))
         .collect::<String>();
+    let literals = (0..128)
+        .map(|index| {
+            format!(
+                "int folded_{index}() {{ return (({index} + 7) * 3 - 2) / 4 % 97 | (11 << 5) ^ (704 >> 3) & 127; }}\n"
+            )
+        })
+        .collect::<String>();
     let mut group = c.benchmark_group("register_allocation_compile");
     for (name, source) in [
         ("small_function", small),
         ("temporaries", temporaries.as_str()),
         ("globals", globals.as_str()),
         ("closure_positionals", closures.as_str()),
+        ("literal_expressions", literals.as_str()),
     ] {
         group.bench_function(name, |b| {
             b.to_async(&runtime).iter(|| async {

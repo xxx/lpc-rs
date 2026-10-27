@@ -435,6 +435,32 @@ async fn unnamed_prototype_signatures_do_not_override_definitions() {
 }
 
 #[tokio::test]
+async fn folded_integer_boundaries_match_runtime_operations() {
+    let task = run_prog(indoc! { r#"
+        int add(int left, int right) { return left + right; }
+        int subtract(int left, int right) { return left - right; }
+        int multiply(int left, int right) { return left * right; }
+        int quotient(int left, int right) { return left / right; }
+        int remainder(int left, int right) { return left % right; }
+        int left_shift(int left, int right) { return left << right; }
+        int right_shift(int left, int right) { return left >> right; }
+        int create() {
+            return add(9223372036854775807, 1) == (9223372036854775807 + 1)
+                && subtract(-9223372036854775808, 1) == (-9223372036854775808 - 1)
+                && multiply(9223372036854775807, 2) == (9223372036854775807 * 2)
+                && quotient(-9223372036854775808, -1) == (-9223372036854775808 / -1)
+                && remainder(-9223372036854775808, -1) == (-9223372036854775808 % -1)
+                && left_shift(1, 64) == (1 << 64)
+                && left_shift(1, -1) == (1 << -1)
+                && right_shift(-9223372036854775808, 64) == (-9223372036854775808 >> 64)
+                && right_shift(-9223372036854775808, -1) == (-9223372036854775808 >> -1);
+        }
+    "# })
+    .await;
+    assert_eq!(task.context.result().unwrap(), LpcRef::from(1));
+}
+
+#[tokio::test]
 async fn minimum_int_macro_compiles_and_runs() {
     for minus in ["-", "−"] {
         let code = format!(

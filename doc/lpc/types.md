@@ -10,6 +10,11 @@ type-sensitive matching used by mapping keys and array set operations.
 * `int`
   - Run-of-the-mill signed integers, 64 bits by default. This size is ostensibly
     changeable in `lpc-rs-core`, but no testing is done on different sizes. 
+  - Integer arithmetic wraps at the integer width, including folded literals.
+    Dividing the minimum integer by `-1` returns that minimum; its remainder is `0`.
+    Division and remainder by zero raise runtime errors, including literal expressions.
+  - Shift counts are reduced modulo the integer width, including negative counts.
+    With 64-bit integers, `1 << 64` is `1`, and `1 << -1` equals `1 << 63`.
   - In the default zero mode, `0` doubles as null and fits any value type.
     Distinct mode uses `nil` for absence and treats `0` as an ordinary integer.
   - `1` and `0` are very commonly used as boolean values in the language.

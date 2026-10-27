@@ -380,6 +380,7 @@ examine_globs = [
     "src/command/registry.rs",
     "src/interpreter/stm/effects.rs",
     "src/interpreter/stm/changeset.rs",
+    "src/compiler/parser/collapse_binary_op.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
