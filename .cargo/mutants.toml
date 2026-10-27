@@ -374,6 +374,7 @@ examine_globs = [
     "src/interpreter/file_view/entry.rs",
     "src/interpreter/memory.rs",
     "src/command/scope.rs",
+    "src/interpreter/save_format/class.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
