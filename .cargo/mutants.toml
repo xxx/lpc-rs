@@ -376,6 +376,7 @@ examine_globs = [
     "src/command/scope.rs",
     "src/interpreter/save_format/class.rs",
     "src/interpreter/stm/backoff.rs",
+    "src/command/grammar/model.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
