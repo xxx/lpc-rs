@@ -386,6 +386,7 @@ examine_globs = [
     "src/command/frontend/native/mod.rs",
     "src/compiler/codegen/register_packing.rs",
     "src/compiler/codegen/scope_walker.rs",
+    "src/compiler/compilation_context.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -394,6 +395,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Prepared interfaces are cleared before concrete parents are linked.
+    '^src/compiler/compilation_context\.rs:207:37: replace && with \|\| in CompilationContext::lookup_inherited_function$',
     # Flow inputs have already excluded the argument registers.
     '^src/compiler/codegen/register_packing\.rs:61:25: replace > with >= in pack$',
     # In-place writes are already reads, so their definition adds no liveness or occupancy.

@@ -486,6 +486,7 @@ The reviewed scope includes:
 - [Native patterns](src/command/frontend/native/mod.rs): advancing UTF-8 capture scanning, diagnostics, dialect caches, grammar construction and ordered captures.
 - [Register packing](src/compiler/codegen/register_packing.rs): liveness convergence, temporary reuse, parameter allocation bounds, in-place operands, exception paths and jump boundaries.
 - [Scope analysis](src/compiler/codegen/scope_walker.rs): closure storage, reference outputs, callable visibility, foreign calls and diagnostic aggregation.
+- [Compilation context](src/compiler/compilation_context.rs): source configuration, pragma boundaries, synthetic names, parent namespaces and function visibility.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -526,6 +527,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Compilation clears prepared parent interfaces before linking concrete parents.
+The pinned `&&` to `||` lookup change is equivalent for these disjoint states;
+with neither kind of parent, both branches return no declaration.
 Register packing filters arguments before its occupancy check, so the pinned
 `>` to `>=` change is equivalent. Its in-place writes are already read operands,
 and have no retargetable destination; omitting their definition preserves both
