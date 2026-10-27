@@ -1,8 +1,20 @@
 use std::hint::black_box;
 
-use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
 use lpc_rs::compiler::Compiler;
-use lpc_rs_core::register_counter::RegisterCounter;
+use lpc_rs::compiler::codegen::register_packing::pack;
+use lpc_rs_asm::{
+    address::Address,
+    instruction::{Arg, ArgList, Instruction},
+};
+use lpc_rs_core::{
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+    register_counter::RegisterCounter,
+};
+use lpc_rs_function_support::{
+    function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
+};
 
 #[path = "support/profiler.rs"]
 mod profiler;
@@ -30,6 +42,68 @@ fn allocation(c: &mut Criterion) {
             }
         });
     });
+    group.finish();
+}
+
+fn packing_program(loop_carried: bool) -> ProgramFunction {
+    let prototype = FunctionPrototypeBuilder::default()
+        .name("packing")
+        .filename(std::sync::Arc::new("/packing.c".into()))
+        .return_type(LpcType::Void)
+        .build()
+        .unwrap();
+    let mut function = ProgramFunction::new(prototype, if loop_carried { 257 } else { 256 });
+    let local = |index| RegisterVariant::Local(Register(index));
+    let constant = RegisterVariant::Constant(Register(0));
+    if loop_carried {
+        function
+            .instructions
+            .push(Instruction::Copy(constant, local(1)));
+    }
+    for index in 0..256_u16 {
+        let temporary = local(index + if loop_carried { 2 } else { 1 });
+        function
+            .instructions
+            .push(Instruction::Copy(constant, temporary));
+        let args = if loop_carried {
+            vec![Arg::Value(local(1)), Arg::Value(temporary)]
+        } else {
+            vec![Arg::Value(temporary)]
+        };
+        function.arg_lists.push(args);
+        function
+            .instructions
+            .push(Instruction::CallEfun(0, ArgList(index)));
+    }
+    if loop_carried {
+        function.instructions.push(Instruction::Inc(local(1)));
+        function
+            .instructions
+            .push(Instruction::Jnz(local(0), Address(1)));
+    }
+    function.instructions.push(Instruction::Ret);
+    function.debug_spans = vec![None; function.instructions.len()];
+    function
+}
+
+fn packing(c: &mut Criterion) {
+    let mut group = c.benchmark_group("register_packing");
+    for (name, loop_carried, expected) in [("straight_line", false, 1), ("loop_carried", true, 2)] {
+        let function = packing_program(loop_carried);
+        let mut checked = function.clone();
+        pack(&mut checked);
+        assert_eq!(checked.num_locals, expected);
+        group.bench_with_input(name, &function, |b, function| {
+            b.iter_batched(
+                || function.clone(),
+                |mut function| {
+                    pack(&mut function);
+                    black_box(function)
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
     group.finish();
 }
 
@@ -85,6 +159,6 @@ fn compilation(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = profiler::profiled();
-    targets = allocation, compilation
+    targets = allocation, packing, compilation
 }
 criterion_main!(benches);

@@ -384,6 +384,7 @@ examine_globs = [
     "src/interpreter/program/function.rs",
     "src/command/parser/attempt.rs",
     "src/command/frontend/native/mod.rs",
+    "src/compiler/codegen/register_packing.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -392,6 +393,10 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Flow inputs have already excluded the argument registers.
+    '^src/compiler/codegen/register_packing\.rs:61:25: replace > with >= in pack$',
+    # In-place writes are already reads, so their definition adds no liveness or occupancy.
+    '^src/compiler/codegen/register_packing\.rs:175:13: delete match arm Instruction::Inc\(register\) \| Instruction::Dec\(register\) \| Instruction::AssignIndex\(_, register, _, _\) \| Instruction::ReplaceRange\(_, register, _, _, _\) in Flow::of$',
     # build returns the same NoVerb error for this required-verb pattern.
     '^src/command/frontend/native/mod\.rs:330:20: replace match guard verb == Verb::Required with false in group$',
     # For one object, zero is rejected before this negative guard.

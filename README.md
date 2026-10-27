@@ -484,6 +484,7 @@ The reviewed scope includes:
 - [Function bindings](src/interpreter/program/function.rs): native frame compatibility, inherited visibility, shared code, canonical global projection and equality.
 - [Parser attempts](src/command/parser/attempt.rs): selection, permission checks, liveness, handler arguments, rechecks and refusal diagnostics.
 - [Native patterns](src/command/frontend/native/mod.rs): advancing UTF-8 capture scanning, diagnostics, dialect caches, grammar construction and ordered captures.
+- [Register packing](src/compiler/codegen/register_packing.rs): liveness convergence, temporary reuse, parameter allocation bounds, in-place operands, exception paths and jump boundaries.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -515,12 +516,19 @@ change. Struct-update field deletions can bypass name regex filters in
 cargo-mutants 27.1.0; check `mutants.json` after narrowing a local run. CI's diff
 and shard filters apply after discovery.
 
+Register packing checks its convergence bound in debug builds, including mutation
+CI. The release loop is unchanged.
+
 Seven constructor mutations for `write_range` are excluded because cargo-mutants
 27.1.0 generates constructors that `std::ops::Range<usize>` does not provide.
 Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Register packing filters arguments before its occupancy check, so the pinned
+`>` to `>=` change is equivalent. Its in-place writes are already read operands,
+and have no retargetable destination; omitting their definition preserves both
+liveness and slot occupancy.
 Native pattern compilation checks the leading verb in both `group` and `build`.
 Disabling the pinned `group` guard still returns the same `NoVerb` error from
 `build`; the empty-pattern check remains distinct because it returns `Empty`.
