@@ -102,7 +102,7 @@ pub(crate) struct Candidate {
 pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<Candidate>> {
     let txn = ctx.txn();
     let environment = Process::environment_of(txn, actor);
-    let (members, mut next) = around(txn, actor, environment.as_ref());
+    let (members, start) = around(txn, actor, environment.as_ref());
     let mut out: Vec<Candidate> = members
         .into_iter()
         .map(|object| Candidate {
@@ -110,9 +110,10 @@ pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<
             reachable: true,
         })
         .collect();
-    while next < out.len() {
-        let holder = out[next].clone();
-        next += 1;
+    for next in start.. {
+        let Some(holder) = out.get(next).cloned() else {
+            break;
+        };
         if !truthy(ctx, actor, &holder.object, INVENTORY_VISIBLE).await? {
             continue;
         }
@@ -191,7 +192,34 @@ mod tests {
         assert!(scope.contains(&a));
         assert!(!scope.contains(&b));
         assert!(scope.contains_weak(&Arc::downgrade(&a)));
+        assert!(!scope.contains_weak(&Arc::downgrade(&b)));
         assert_eq!(scope, Scope::new([a.clone()]));
         assert_ne!(scope, Scope::new([b]));
+    }
+
+    #[test]
+    fn members_preserve_order_and_release_dropped_objects() {
+        let first = Arc::new(Process::default());
+        let second = Arc::new(Process::default());
+        let scope = Scope::new([second.clone(), first.clone()]);
+        let members = scope.members();
+        assert_eq!(members.len(), 2);
+        assert!(Arc::ptr_eq(&members[0], &second));
+        assert!(Arc::ptr_eq(&members[1], &first));
+        drop(members);
+        drop(second);
+        let members = scope.members();
+        assert_eq!(members.len(), 1);
+        assert!(Arc::ptr_eq(&members[0], &first));
+    }
+
+    #[test]
+    fn arrival_scope_includes_the_mover_and_destination() {
+        let txn = TxnHandle::empty();
+        let mover = Arc::new(Process::default());
+        let destination = Arc::new(Process::default());
+        let scope = after_move(&txn, &mover, &destination);
+        assert!(scope.contains(&mover));
+        assert!(scope.contains(&destination));
     }
 }
