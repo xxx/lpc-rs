@@ -291,6 +291,95 @@ mod tests {
     const NAWS: u8 = 31;
     const GMCP: u8 = 201;
 
+    fn input_callback() -> InputTo {
+        use crate::interpreter::function_type::{
+            function_address::FunctionAddress, function_ptr::FunctionPtrBuilder,
+        };
+
+        InputTo {
+            ptr: Arc::new(
+                FunctionPtrBuilder::default()
+                    .address(FunctionAddress::Efun(ustr::ustr("write_socket")))
+                    .build()
+                    .unwrap(),
+            ),
+            no_echo: false,
+            mode: InputMode::Line,
+        }
+    }
+
+    #[test]
+    fn callback_equality_uses_pointer_identity_and_input_options() {
+        let original = input_callback();
+        assert_eq!(original, original.clone());
+        assert_ne!(
+            original,
+            InputTo {
+                ptr: Arc::new((*original.ptr).clone()),
+                ..original.clone()
+            }
+        );
+        assert_ne!(
+            original,
+            InputTo {
+                no_echo: true,
+                ..original.clone()
+            }
+        );
+        assert_ne!(
+            original,
+            InputTo {
+                mode: InputMode::Character,
+                ..original.clone()
+            }
+        );
+    }
+
+    #[test]
+    fn host_name_keeps_the_first_answer() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let connection = Connection::new("127.0.0.1:1".parse().unwrap(), tx);
+        assert_eq!(connection.host_name(), None);
+        connection.set_host_name("first.example".into());
+        assert_eq!(connection.host_name(), Some("first.example"));
+        connection.set_host_name("second.example".into());
+        assert_eq!(connection.host_name(), Some("first.example"));
+    }
+
+    #[test]
+    fn callback_peeks_preserve_the_pending_value_until_taken() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let connection = Connection::new("127.0.0.1:1".parse().unwrap(), tx);
+        let callback = InputTo {
+            no_echo: true,
+            mode: InputMode::Character,
+            ..input_callback()
+        };
+        connection.set_input_to(Some(callback.clone()));
+        assert!(connection.awaits_input());
+        let peeked = connection.input_to().unwrap();
+        assert_eq!(peeked.as_ref(), &callback);
+        let taken = connection.take_input_to().unwrap();
+        assert!(Arc::ptr_eq(&peeked, &taken));
+        assert!(!connection.awaits_input());
+        assert!(connection.input_to().is_none());
+        connection.set_input_to(Some(callback));
+        connection.set_input_to(None);
+        assert!(connection.take_input_to().is_none());
+    }
+
+    #[test]
+    fn connection_equality_uses_the_client_address() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let first = Connection::new("127.0.0.1:1".parse().unwrap(), tx.clone());
+        let same_address = Connection::new(first.address, tx.clone());
+        same_address.mark_dead();
+        same_address.set_overflowed(true);
+        let other = Connection::new("127.0.0.1:2".parse().unwrap(), tx);
+        assert_eq!(first, same_address);
+        assert_ne!(first, other);
+    }
+
     #[test]
     fn a_line_restarts_the_idle_clock() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();

@@ -469,6 +469,7 @@ The reviewed scope includes:
 - [Range replacement](src/interpreter/task/replace_range.rs): inclusive and reverse bounds, Unicode scalar slices, checked sizes and retained result capacity.
 - [Object space](src/interpreter/object_space.rs): bootstrap publication, stable cell identities, compiler caches, root enumeration, clone placement and master identity.
 - [Sprintf display units](src/interpreter/efun/sprintf/display.rs): terminal columns, grapheme boundaries, SGR ownership, precision and custom padding.
+- [Connection state](src/telnet/connection.rs): callback and address identity, cached hostnames, input lifecycle, observer controls, snapshots and flags.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

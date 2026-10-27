@@ -289,6 +289,27 @@ mod tests {
     }
 
     #[test]
+    fn connection_stops_only_the_matching_registration() {
+        let observer = Arc::new(Process::default());
+        let target = Arc::new(Process::default());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let connection = Arc::new(Connection::new("127.0.0.1:1".parse().unwrap(), tx));
+        let old = Arc::new(Registration::new(&observer, &target, &connection, 1024));
+        let current = Arc::new(Registration::new(&observer, &target, &connection, 1024));
+
+        connection.set_snoop(Some(old.clone()));
+        connection.observe("before", "output", false);
+        assert_eq!(old.queue.lock().records.len(), 1);
+        connection.set_snoop(Some(current.clone()));
+        connection.stop_snoop(old.id);
+        connection.observe("current", "output", false);
+        assert_eq!(current.queue.lock().records.len(), 1);
+        connection.stop_snoop(current.id);
+        connection.observe("after", "output", false);
+        assert_eq!(current.queue.lock().records.len(), 1);
+    }
+
+    #[test]
     fn shared_handles_keep_registration_identity_and_new_registrations_differ() {
         let observer = Arc::new(Process::default());
         let first = Arc::new(registration(&observer, 4));
