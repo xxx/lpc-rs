@@ -360,6 +360,7 @@ examine_globs = [
     "src/compiler/semantic/scope_tree.rs",
     "src/interpreter/vm/object_recompile.rs",
     "src/interpreter/process/shadow.rs",
+    "src/command/parser/attempt/relations.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

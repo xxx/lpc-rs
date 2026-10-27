@@ -460,6 +460,7 @@ The reviewed scope includes:
 - [Compiler scope trees](src/compiler/semantic/scope_tree.rs): lexical and function scope lookup, navigation, mutable symbols and captured-cell layout.
 - [Object recompilation](src/interpreter/vm/object_recompile.rs): live initialized prototypes, authorization, clone-group migration, retained globals and status targets.
 - [Shadow chains](src/interpreter/process/shadow.rs): transactional links, unshadowed entry, public dispatch, caller boundaries and chain queries.
+- [Relational parser attempts](src/command/parser/attempt/relations.rs): living noun selection, pair liveness and permissions, plural partners, rechecks and refusal priority.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

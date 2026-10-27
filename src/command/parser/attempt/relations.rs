@@ -14,12 +14,12 @@ struct Pair {
 }
 
 impl Pair {
-    fn live(&self, ask: &impl Ask) -> bool {
-        self.objects.iter().all(|&object| ask.is_live(object))
+    fn live(ask: &impl Ask, objects: [usize; 2]) -> bool {
+        objects.into_iter().all(|object| ask.is_live(object))
     }
 
     fn allowed(&self, ask: &impl Ask) -> bool {
-        self.reply == Reply::Yes && self.live(ask)
+        self.reply == Reply::Yes && Self::live(ask, self.objects)
     }
 }
 
@@ -112,7 +112,7 @@ async fn check(
         reply: Reply::Yes,
     };
     for (family, object) in [Family::Direct, Family::Indirect].into_iter().zip(objects) {
-        if !pair.live(ask) {
+        if !Pair::live(ask, pair.objects) {
             break;
         }
         pair.reply = ask.call(family, Target::Candidate(object), &args).await?;
@@ -169,7 +169,7 @@ pub(super) async fn select(
         for &indirect in &nouns[1].objects {
             // Even missing handlers can leave a large pair search otherwise ready forever.
             tokio::task::yield_now().await;
-            if ask.is_live(direct) && ask.is_live(indirect) {
+            if Pair::live(ask, [direct, indirect]) {
                 let pair = check(ask, indices, [direct, indirect], &mut values, words).await?;
                 if matches!(pair.reply, Reply::Yes | Reply::Reason { .. }) {
                     pairs.push(pair);
@@ -244,7 +244,7 @@ pub(super) async fn select(
         for pair in &pairs {
             tokio::task::consume_budget().await;
             if pair.objects[single] == partner
-                && pair.live(ask)
+                && Pair::live(ask, pair.objects)
                 && let Reply::Reason {
                     text, soft: false, ..
                 } = &pair.reply
@@ -311,9 +311,15 @@ mod tests {
             let caps = rule.compiled.captures_of("sword from box").next().unwrap();
             tokio::time::timeout(Duration::from_secs(1), attempt(&mut ask, &caps)).await
         });
-        while checks.load(Ordering::Relaxed) < 16 {
+        let waiting = std::time::Instant::now();
+        while checks.load(Ordering::Relaxed) < 16 && !worker.is_finished() {
+            assert!(
+                waiting.elapsed() < Duration::from_secs(3),
+                "pair search did not reach its permission checks"
+            );
             tokio::task::yield_now().await;
         }
+        assert!(checks.load(Ordering::Relaxed) >= 16);
         tokio::time::advance(Duration::from_secs(2)).await;
         assert!(worker.await.unwrap().is_err());
         assert!(checks.load(Ordering::Relaxed) < 1024 * 1024);
