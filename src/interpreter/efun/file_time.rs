@@ -77,15 +77,14 @@ mod tests {
     #[tokio::test]
     async fn file_time_is_the_modification_second() {
         let root = TempLib::new("time-file");
-        let before = chrono::Utc::now().timestamp();
-        std::fs::write(root.join("f.txt"), "x").unwrap();
-        let after = chrono::Utc::now().timestamp();
+        File::create(root.join("f.txt"))
+            .unwrap()
+            .set_times(
+                FileTimes::new().set_modified(UNIX_EPOCH + Duration::from_secs(1_600_000_000)),
+            )
+            .unwrap();
         let vm = allowing_vm(&root).await;
-        let t = time_of(&vm, "/f.txt").await;
-        assert!(
-            (before..=after).contains(&t),
-            "{t} not in {before}..={after}"
-        );
+        assert_eq!(time_of(&vm, "/f.txt").await, 1_600_000_000);
     }
 
     #[tokio::test]
@@ -128,10 +127,16 @@ mod tests {
     #[tokio::test]
     async fn a_directory_answers_its_time() {
         let root = TempLib::new("time-dir");
-        let before = chrono::Utc::now().timestamp();
         std::fs::create_dir_all(root.join("d")).unwrap();
+        let modified = std::fs::metadata(root.join("d"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let vm = allowing_vm(&root).await;
-        assert!(time_of(&vm, "/d").await >= before);
+        assert_eq!(time_of(&vm, "/d").await, i64::try_from(modified).unwrap());
     }
 
     #[tokio::test]

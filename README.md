@@ -483,6 +483,7 @@ The reviewed scope includes:
 - [Binary literal folding](src/compiler/parser/collapse_binary_op.rs): wrapping integer arithmetic, signed shift counts, zero-divisor deferral, bitwise operations and bounded strings.
 - [Function bindings](src/interpreter/program/function.rs): native frame compatibility, inherited visibility, shared code, canonical global projection and equality.
 - [Parser attempts](src/command/parser/attempt.rs): selection, permission checks, liveness, handler arguments, rechecks and refusal diagnostics.
+- [Native patterns](src/command/frontend/native/mod.rs): advancing UTF-8 capture scanning, diagnostics, dialect caches, grammar construction and ordered captures.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -520,6 +521,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Native pattern compilation checks the leading verb in both `group` and `build`.
+Disabling the pinned `group` guard still returns the same `NoVerb` error from
+`build`; the empty-pattern check remains distinct because it returns `Empty`.
 `choose` rejects zero for a single object before checking for a negative numeral.
 Only that later guard's pinned `<` to `<=` mutation is equivalent.
 `Function::inherited` clears the packed visibility bits before inserting the

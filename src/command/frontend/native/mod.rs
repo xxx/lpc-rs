@@ -220,11 +220,12 @@ fn scan(pattern: &str) -> Result<Vec<Piece>, PatternError> {
                 &body[end + 1..]
             }
             '%' => {
-                let Some(letter) = rest.chars().nth(1) else {
+                let mut capture = rest[1..].chars();
+                let Some(letter) = capture.next() else {
                     return Err(PatternError::BareCapture);
                 };
                 pieces.push(Piece::Capture(capture_kind(letter)?));
-                &rest[1 + letter.len_utf8()..]
+                capture.as_str()
             }
             '/' => {
                 pieces.push(Piece::Slash);
@@ -629,6 +630,8 @@ mod tests {
     fn each_malformed_pattern_names_its_fault() {
         let cases = [
             ("look", PatternError::UnquotedWord("look".into())),
+            ("look %w", PatternError::UnquotedWord("look".into())),
+            ("look%w", PatternError::UnquotedWord("look".into())),
             ("'look' at", PatternError::UnquotedWord("at".into())),
             ("'look", PatternError::UnterminatedQuote),
             ("'look' [at", PatternError::UnterminatedBracket),
@@ -733,6 +736,24 @@ mod tests {
             ]
         );
         assert_eq!(compile("'x'").unwrap().kinds, vec![]);
+    }
+
+    #[test]
+    fn capture_scanning_preserves_adjacent_utf8_and_reports_unknown_letters() {
+        let compiled = compile("'go'%w 'é'%d").unwrap();
+        let captures = compiled.captures_of("go red é 7").next().unwrap();
+        assert_eq!(
+            captures
+                .iter()
+                .map(|capture| (capture.kind, capture.text.as_str()))
+                .collect::<Vec<_>>(),
+            [(CaptureKind::Word, "red"), (CaptureKind::Number, "7")]
+        );
+        assert_eq!(
+            compile("'go' %é").unwrap_err(),
+            PatternError::UnknownCapture('é')
+        );
+        assert_eq!(compile("'go' %w%").unwrap_err(), PatternError::BareCapture);
     }
 
     #[test]

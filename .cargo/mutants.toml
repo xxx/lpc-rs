@@ -383,6 +383,7 @@ examine_globs = [
     "src/compiler/parser/collapse_binary_op.rs",
     "src/interpreter/program/function.rs",
     "src/command/parser/attempt.rs",
+    "src/command/frontend/native/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -391,6 +392,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # build returns the same NoVerb error for this required-verb pattern.
+    '^src/command/frontend/native/mod\.rs:330:20: replace match guard verb == Verb::Required with false in group$',
     # For one object, zero is rejected before this negative guard.
     '^src/command/parser/attempt\.rs:98:25: replace < with <= in choose$',
     # Visibility bits are cleared before either replacement combines them.

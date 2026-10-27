@@ -152,6 +152,44 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
+fn native_patterns(c: &mut Criterion) {
+    use lpc_rs::command::frontend::native;
+
+    // Reusing these names bounds the global interned string pool.
+    let patterns = (0..1025)
+        .map(|index| format!("'scan_{index}' %w %s %d %o"))
+        .collect::<Vec<_>>();
+    let mut next = patterns.iter().cycle();
+    let mut primed = false;
+    c.bench_function("grammar/build/native_capture_pattern", |b| {
+        if !primed {
+            let first = native::compile(&patterns[0]).unwrap();
+            for pattern in &patterns[1..] {
+                black_box(native::compile(pattern).unwrap());
+            }
+            let rebuilt = native::compile(&patterns[0]).unwrap();
+            assert!(
+                !Arc::ptr_eq(&first, &rebuilt),
+                "the working set must exceed the pattern cache"
+            );
+            primed = true;
+        }
+        b.iter(|| black_box(native::compile(black_box(next.next().unwrap())).unwrap()));
+    });
+
+    let pattern = "'scan_cached' %w %s %d %o";
+    let mut primed = false;
+    c.bench_function("grammar/cache_hit/native_capture_pattern", |b| {
+        if !primed {
+            let first = native::compile(pattern).unwrap();
+            let cached = native::compile(pattern).unwrap();
+            assert!(Arc::ptr_eq(&first, &cached));
+            primed = true;
+        }
+        b.iter(|| black_box(native::compile(black_box(pattern)).unwrap()));
+    });
+}
+
 fn scope_walk(c: &mut Criterion) {
     use lpc_rs::interpreter::{
         lpc_ref::LpcRef,
@@ -252,6 +290,6 @@ fn scope_walk(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = profiler::profiled();
-    targets = criterion_benchmark, scope_walk
+    targets = criterion_benchmark, native_patterns, scope_walk
 }
 criterion_main!(benches);
