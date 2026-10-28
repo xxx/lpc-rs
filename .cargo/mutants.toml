@@ -403,6 +403,7 @@ examine_globs = [
     "src/interpreter/process/mod.rs",
     "src/interpreter/vm/global_state.rs",
     "src/compiler/preprocessor/expand.rs",
+    "src/compiler/lexer/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
