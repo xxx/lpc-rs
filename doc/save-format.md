@@ -52,6 +52,9 @@ a line's newline is ignored, so a CRLF file reads the same as an LF one. A
 file that is not valid UTF-8 is read as Latin-1. A file is always written
 as UTF-8, so re-saving a Latin-1 file changes its bytes.
 
+Hexadecimal float underflow preserves the sign of zero, including at the
+lowest supported exponent.
+
 A float that is not finite (infinity or NaN) cannot be saved: the writer
 raises a runtime error instead of writing it.
 

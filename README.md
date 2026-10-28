@@ -493,6 +493,7 @@ The reviewed scope includes:
 - [Terminal text formatting](src/interpreter/efun/terminal_text/format.rs): cursor progress, expansion limits, style offsets, grapheme wrapping and escape handling.
 - [Sprintf rendering](src/interpreter/efun/sprintf/render.rs): numeric signs and precision, nonfinite floats, field padding, wide-character wrapping and argument diagnostics.
 - [Markdown rendering](src/interpreter/efun/render_markdown/render.rs): parser invariants, table styling and fit, tight-list spacing, and cumulative expansion and output bounds.
+- [Save-file literals](src/interpreter/save_format.rs): signed-zero floats, scalar grammar, string and byte escapes, object references, container depth and debug cursor progress.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

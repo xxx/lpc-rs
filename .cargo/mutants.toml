@@ -393,6 +393,7 @@ examine_globs = [
     "src/interpreter/efun/terminal_text/format.rs",
     "src/interpreter/efun/sprintf/render.rs",
     "src/interpreter/efun/render_markdown/render.rs",
+    "src/interpreter/save_format.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
