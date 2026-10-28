@@ -771,6 +771,174 @@ mod tests {
     use crate::interpreter::program::Program;
 
     #[test]
+    fn entry_frames_keep_the_receiver_and_hide_the_driver_function() {
+        let txn = TxnHandle::empty();
+        let process = Arc::new(Process::default());
+        let entry = CallFrame::entry(process.clone(), &txn);
+        let ordinary = CallFrame::new(process.clone(), value_function(), 0, None::<&[VarId]>, &txn);
+
+        assert!(entry.is_entry());
+        assert!(entry.lpc_function().is_none());
+        assert!(Arc::ptr_eq(&entry.function, &ENTRY));
+        assert_eq!(entry.instruction(), Some(Instruction::Ret));
+        assert!(!ordinary.is_entry());
+        assert!(Arc::ptr_eq(
+            ordinary.lpc_function().unwrap(),
+            &ordinary.function
+        ));
+        for frame in [&entry, &ordinary] {
+            let receiver: &FrameReceiver = frame;
+            assert!(Arc::ptr_eq(&receiver.process, &process));
+        }
+    }
+
+    #[test]
+    fn instruction_positions_and_diagnostics_follow_the_program_counter() {
+        let txn = TxnHandle::empty();
+        let mark = Span::new(0, 0..1);
+        let mut code = (*value_function()).clone();
+        code.instructions = vec![Instruction::Ret, Instruction::Ret];
+        code.debug_spans = vec![Some(mark), None];
+        let mut frame = CallFrame::new(
+            Process::default(),
+            Arc::new(code),
+            0,
+            None::<&[VarId]>,
+            &txn,
+        );
+
+        assert_eq!(frame.pc(), 0);
+        assert_eq!(frame.instruction(), Some(Instruction::Ret));
+        assert_eq!(frame.current_debug_span(), Some(mark));
+        assert_eq!(frame.to_stack_trace_format(), format!("{mark} in g()"));
+        frame.inc_pc();
+        assert_eq!(frame.pc(), 1);
+        assert_eq!(frame.current_debug_span(), Some(mark));
+        frame.inc_pc();
+        assert_eq!(frame.pc(), 2);
+        assert_eq!(frame.instruction(), None);
+        assert_eq!(frame.current_debug_span(), None);
+        assert_eq!(frame.to_stack_trace_format(), "(unknown) in g()");
+        assert_eq!(frame.to_string(), "(unknown) in g()");
+        let error = frame.runtime_error("frame error");
+        assert!(!error.is_bug());
+        assert!(error.to_string().contains("frame error"));
+        let bug = frame.runtime_bug("frame bug");
+        assert!(bug.is_bug());
+        assert!(bug.to_string().contains("frame bug"));
+        frame.set_pc(0usize);
+        assert_eq!(frame.pc(), 0);
+        assert_eq!(frame.instruction(), Some(Instruction::Ret));
+    }
+
+    #[test]
+    fn fallback_arguments_preserve_the_local_registers_before_extra_arguments() {
+        let txn = TxnHandle::empty();
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("arguments")
+            .filename(Arc::new("arguments.c".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(2))
+            .arg_types(vec![LpcType::Int(false); 2])
+            .build()
+            .unwrap();
+        let code = Arc::new(ProgramFunction::new(prototype, 3));
+        let mut frame = CallFrame::with_minimum_arg_capacity(
+            Process::default(),
+            code,
+            4,
+            4,
+            None::<&[VarId]>,
+            &txn,
+        );
+
+        for (index, value) in [11, 12, 13, 14].into_iter().enumerate() {
+            frame.push_arg(&txn, index, LpcRef::from(value)).unwrap();
+        }
+        assert_eq!(frame.called_with_num_args, 4);
+        assert_eq!(
+            frame.registers.iter().cloned().collect::<Vec<_>>(),
+            vec![
+                NULL,
+                11.into(),
+                12.into(),
+                NULL,
+                NULL,
+                NULL,
+                13.into(),
+                14.into()
+            ]
+        );
+    }
+
+    #[test]
+    fn fresh_upvalues_preserve_inherited_and_retained_cells() {
+        let txn = TxnHandle::empty();
+        let inherited = [VarId::new()];
+        let mut code = (*value_function()).clone();
+        code.num_upvalues = 1;
+        let mut frame = CallFrame::new(
+            Process::default(),
+            Arc::new(code),
+            0,
+            Some(inherited.as_slice()),
+            &txn,
+        );
+        let old = frame.upvalue_ptrs[1];
+        txn.with(|t| t.write(old, LpcRef::from(7)));
+        let retained = frame.upvalue_ptrs.clone();
+
+        frame.new_upvalue(Register(1).as_upvalue()).unwrap();
+        assert_eq!(frame.upvalue_ptrs[0], inherited[0]);
+        assert_eq!(retained[1], old);
+        assert_ne!(frame.upvalue_ptrs[1], old);
+        assert_ne!(frame.upvalue_ptrs[1], inherited[0]);
+        assert_eq!(txn.with(|t| t.read(old)), Some(LpcRef::from(7)));
+        assert_eq!(
+            *frame.get_location(&txn, Register(1).as_upvalue()).unwrap(),
+            NULL
+        );
+        assert!(
+            frame
+                .new_upvalue(Register(1).as_local())
+                .unwrap_err()
+                .is_bug()
+        );
+        assert!(
+            frame
+                .new_upvalue(Register(2).as_upvalue())
+                .unwrap_err()
+                .is_bug()
+        );
+    }
+
+    #[test]
+    fn inherited_global_slots_use_the_receivers_bound_view() {
+        let txn = TxnHandle::empty();
+        let process = Arc::new(Process::new(Program {
+            num_globals: 5,
+            ..Program::default()
+        }));
+        let function = Function::new(value_function(), 2, 2);
+        let mut frame = CallFrame::new(process.clone(), function, 0, None::<&[VarId]>, &txn);
+
+        assert_eq!(
+            frame.ref_cell(Register(0).as_global()).unwrap(),
+            process.var_id(2)
+        );
+        assert_eq!(
+            frame.ref_cell(Register(1).as_global()).unwrap(),
+            process.var_id(3)
+        );
+        frame.set_int(&txn, Register(1).as_global(), 29).unwrap();
+        assert_eq!(
+            txn.with(|t| t.read(process.var_id(3))),
+            Some(LpcRef::from(29))
+        );
+        assert_eq!(txn.with(|t| t.read(process.var_id(1))), None);
+    }
+
+    #[test]
     fn new_sets_up_registers() {
         let process = Process::default();
 
@@ -1353,6 +1521,236 @@ mod tests {
                 &crate::interpreter::stm::TxnHandle::default(),
             );
             assert_eq!(frame.upvalue_ptrs.len(), 3);
+        }
+    }
+
+    #[test]
+    fn captured_parameters_start_with_defaults_for_the_functions_null_mode() {
+        use crate::interpreter::stm::{Snapshot, Transaction, Version};
+
+        for (mode, expected) in [
+            (NullMode::Zero, [NULL, NULL]),
+            (NullMode::Distinct, [LpcRef::from(0.0), LpcRef::Nil]),
+        ] {
+            let mut snapshot = Snapshot::new(Version::new(), imbl::HashMap::new());
+            snapshot.null_mode = mode;
+            let txn = TxnHandle::new(Transaction::new(snapshot));
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("captured")
+                .filename(Arc::new("captured.c".into()))
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(2))
+                .arg_types(vec![LpcType::Float(false), LpcType::String(false)])
+                .build()
+                .unwrap();
+            let mut code = ProgramFunction::new(prototype, 0);
+            code.null_mode = mode;
+            code.num_upvalues = 2;
+            code.arg_locations = vec![Register(0).as_upvalue(), Register(1).as_upvalue()];
+            let frame = CallFrame::new(
+                Process::default(),
+                Arc::new(code),
+                0,
+                None::<&[VarId]>,
+                &txn,
+            );
+            for (index, expected) in expected.into_iter().enumerate() {
+                let value = frame
+                    .get_location(&txn, Register(index as RegisterSize).as_upvalue())
+                    .unwrap();
+                assert_eq!(*value, expected, "{mode:?}, parameter {index}");
+            }
+        }
+    }
+
+    #[test]
+    fn class_parameters_check_nominal_types_for_values_and_references() {
+        use crate::interpreter::lpc_class::LpcClass;
+        use lpc_rs_core::class::{ClassDefinition, ClassId};
+
+        let txn = TxnHandle::empty();
+        let id = ClassId {
+            source: ustr("/types.h"),
+            name: ustr("record"),
+        };
+        let mut other_id = id;
+        other_id.name = ustr("other");
+        let class = |id| {
+            LpcRef::Class(txn.with(|t| {
+                t.mint_class(LpcClass::new(Arc::new(ClassDefinition {
+                    id,
+                    fields: Box::new([]),
+                })))
+            }))
+        };
+        let accepted = class(id);
+        let rejected = class(other_id);
+        for by_reference in [false, true] {
+            for (value, valid) in [
+                (accepted.clone(), true),
+                (NULL, true),
+                (rejected.clone(), false),
+                (LpcRef::from(1), false),
+            ] {
+                let mut code = if by_reference {
+                    (*ref_function()).clone()
+                } else {
+                    (*value_function()).clone()
+                };
+                code.prototype = FunctionPrototypeBuilder::default()
+                    .name("class_parameter")
+                    .filename(Arc::new("class_parameter.c".into()))
+                    .return_type(LpcType::Void)
+                    .arity(FunctionArity::new(1))
+                    .arg_types(vec![LpcType::Class(id, false)])
+                    .ref_params(vec![by_reference])
+                    .build()
+                    .unwrap();
+                let location = code.arg_locations[0];
+                let mut frame = CallFrame::new(
+                    Process::default(),
+                    Arc::new(code),
+                    1,
+                    None::<&[VarId]>,
+                    &txn,
+                );
+                let old_cell = by_reference.then(|| frame.ref_cell(location).unwrap());
+                let caller = VarId::new();
+                txn.with(|t| t.write(caller, value.clone()));
+                let result = if by_reference {
+                    frame.push_ref(&txn, 0, caller)
+                } else {
+                    frame.push_arg(&txn, 0, value.clone())
+                };
+                if valid {
+                    result.unwrap();
+                    assert_eq!(*frame.get_location(&txn, location).unwrap(), value);
+                    if by_reference {
+                        assert_eq!(frame.ref_cell(location).unwrap(), caller);
+                    }
+                } else {
+                    let error = result.unwrap_err();
+                    assert!(
+                        error.to_string().contains("unexpected argument type"),
+                        "{error}"
+                    );
+                    if let Some(old) = old_cell {
+                        assert_eq!(frame.ref_cell(location).unwrap(), old);
+                    } else {
+                        assert_eq!(*frame.get_location(&txn, location).unwrap(), NULL);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn addition_handles_cells_registers_constants_aliases_and_collection_values() {
+        use crate::interpreter::efun::callback::mint_array;
+
+        let txn = TxnHandle::empty();
+        let mut code = (*pooled_function()).clone();
+        code.num_upvalues = 1;
+        let function = Function::new(Arc::new(code), 0, 2);
+        let mut frame = CallFrame::new(
+            Process::new(Program {
+                num_globals: 2,
+                ..Program::default()
+            }),
+            function,
+            0,
+            None::<&[VarId]>,
+            &txn,
+        );
+        let local = Register(0).as_local();
+        let left = Register(0).as_global();
+        let right = Register(0).as_upvalue();
+        let destination = Register(1).as_global();
+        let constant = Register(0).as_constant();
+
+        frame.set_location(&txn, left, LpcRef::from("λ")).unwrap();
+        frame.set_location(&txn, right, LpcRef::from("β")).unwrap();
+        frame.add(&txn, left, right, local).unwrap();
+        assert_eq!(
+            frame.get_location(&txn, local).unwrap().as_str(),
+            Some("λβ")
+        );
+
+        frame.set_int(&txn, left, 7).unwrap();
+        frame.set_int(&txn, right, 11).unwrap();
+        frame.add(&txn, left, right, left).unwrap();
+        assert_eq!(*frame.get_location(&txn, left).unwrap(), LpcRef::from(18));
+        frame.add(&txn, left, left, local).unwrap();
+        assert_eq!(*frame.get_location(&txn, local).unwrap(), LpcRef::from(36));
+
+        frame.set_int(&txn, local, 3).unwrap();
+        frame.add(&txn, local, constant, destination).unwrap();
+        assert_eq!(
+            *frame.get_location(&txn, destination).unwrap(),
+            LpcRef::from(8)
+        );
+        assert_eq!(
+            *frame.get_location(&txn, constant).unwrap(),
+            LpcRef::from(5)
+        );
+        assert_eq!(*frame.get_location(&txn, local).unwrap(), LpcRef::from(3));
+
+        frame
+            .set_location(&txn, left, mint_array(&txn, vec![1.into()]))
+            .unwrap();
+        frame
+            .set_location(&txn, right, mint_array(&txn, vec![2.into(), 3.into()]))
+            .unwrap();
+        frame.add(&txn, left, right, local).unwrap();
+        let values = frame
+            .get_location(&txn, local)
+            .unwrap()
+            .with_array(&txn, |array| array.iter().cloned().collect::<Vec<_>>())
+            .unwrap();
+        assert_eq!(values, vec![LpcRef::from(1), 2.into(), 3.into()]);
+
+        frame.set_int(&txn, right, 2).unwrap();
+        frame
+            .set_location(&txn, local, LpcRef::from("untouched"))
+            .unwrap();
+        assert!(frame.add(&txn, left, right, local).is_err());
+        assert_eq!(
+            frame.get_location(&txn, local).unwrap().as_str(),
+            Some("untouched")
+        );
+    }
+
+    #[test]
+    fn local_bumps_wrap_and_reject_noninteger_values() {
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(
+            Process::default(),
+            value_function(),
+            0,
+            None::<&[VarId]>,
+            &txn,
+        );
+        let local = Register(0).as_local();
+        for (initial, delta, expected) in [
+            (41, 1, 42),
+            (41, -1, 40),
+            (i64::MAX, 1, i64::MIN),
+            (i64::MIN, -1, i64::MAX),
+        ] {
+            frame.set_int(&txn, local, initial).unwrap();
+            frame.bump_in_location(&txn, local, delta).unwrap();
+            assert_eq!(
+                *frame.get_location(&txn, local).unwrap(),
+                LpcRef::from(expected)
+            );
+        }
+        for (delta, message) in [(1, "invalid increment"), (-1, "invalid decrement")] {
+            for value in [LpcRef::from("keep"), LpcRef::from(1.5)] {
+                frame.set_location(&txn, local, value.clone()).unwrap();
+                let error = frame.bump_in_location(&txn, local, delta).unwrap_err();
+                assert!(error.to_string().contains(message), "{error}");
+                assert_eq!(*frame.get_location(&txn, local).unwrap(), value);
+            }
         }
     }
 }

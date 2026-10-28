@@ -495,6 +495,7 @@ The reviewed scope includes:
 - [Markdown rendering](src/interpreter/efun/render_markdown/render.rs): parser invariants, table styling and fit, tight-list spacing, and cumulative expansion and output bounds.
 - [Save-file literals](src/interpreter/save_format.rs): signed-zero floats, scalar grammar, string and byte escapes, object references, container depth and debug cursor progress.
 - [Compile-time stack configuration](src/compile_time_config.rs): driver worker stacks support compilation at the language nesting limit.
+- [Call frames](src/interpreter/call_frame.rs): receiver identity, instruction diagnostics, inherited globals, argument layout, captured defaults, nominal class bindings, transactional addition and integer updates.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -535,6 +536,10 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Call-frame string addition uses the same concatenation helper and records the
+same cell reads through its general path. Replacing an int register through
+the general assignment stores the same scalar without allocation or drop work.
+The two pinned call-frame exclusions preserve these behaviours.
 CommonMark extension flags are disjoint. Balanced blocks already flush before
 paragraph or HTML starts, and parsed tables contain columns and a header row.
 The three pinned Markdown exclusions preserve these parser invariants.
