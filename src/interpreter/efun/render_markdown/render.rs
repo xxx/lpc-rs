@@ -458,6 +458,113 @@ mod tests {
     }
 
     #[test]
+    fn enabled_parser_extensions_have_disjoint_option_bits() {
+        assert!(!Options::ENABLE_TABLES.intersects(Options::ENABLE_TASKLISTS));
+        assert_eq!(
+            Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS,
+            Options::ENABLE_TABLES ^ Options::ENABLE_TASKLISTS,
+        );
+    }
+
+    #[test]
+    fn parser_block_starts_follow_flushed_boundaries() {
+        for source in [
+            "first\n\nsecond",
+            "# heading\n\nparagraph\n\n<div>\nhtml\n</div>",
+            "> quoted\n>\n> paragraph\n\noutside",
+            "- first\n\n- second\n\n  continuation",
+            "- [x] first\n\n  continuation\n\n- [ ] second",
+            "```\ncode\n```\n\nparagraph\n\n---\n\nafter",
+            "| A | B |\n| - | - |\n| x | y |\n\nparagraph",
+        ] {
+            let parser =
+                Parser::new_ext(source, Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS);
+            let mut renderer = Renderer::new(80, ColourDepth::Plain);
+            for event in TextMergeStream::new(parser) {
+                if matches!(event, Event::Start(Tag::Paragraph | Tag::HtmlBlock)) {
+                    assert!(renderer.block.plain().is_empty(), "{source:?}");
+                }
+                renderer.event(event).unwrap();
+            }
+            renderer.flush().unwrap();
+        }
+    }
+
+    #[test]
+    fn parsed_tables_have_columns_and_a_header_row() {
+        for source in [
+            "| A |\n| - |",
+            "| | Meaning |\n| - | - |\n| x | y |",
+            "| A | B |\n| - | - |\n| x |\n| y | z | ignored |",
+            "> | A |\n> | - |\n> | value |",
+        ] {
+            let parser =
+                Parser::new_ext(source, Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS);
+            let mut renderer = Renderer::new(80, ColourDepth::Plain);
+            let mut tables = 0;
+            for event in TextMergeStream::new(parser) {
+                if matches!(event, Event::End(TagEnd::Table)) {
+                    let table = renderer.table.as_ref().unwrap();
+                    assert!(!table.alignments.is_empty());
+                    assert!(!table.rows.is_empty());
+                    tables += 1;
+                }
+                renderer.event(event).unwrap();
+            }
+            assert_eq!(tables, 1, "{source:?}");
+        }
+    }
+
+    #[test]
+    fn table_headers_are_bold_and_body_rows_restore_plain_style() {
+        let output = render("| A | B |\n| - | - |\n| x | y |", 80, ColourDepth::Ansi8).unwrap();
+        assert_eq!(output, "\x1b[1mA\x1b[0m | \x1b[1mB\x1b[0m\n--+--\nx | y\n");
+    }
+
+    #[test]
+    fn expansion_budget_includes_text_from_completed_blocks() {
+        let half = "x".repeat(LIMIT / 2);
+        let mut renderer = Renderer::new(80, ColourDepth::Plain);
+        renderer.text(&half).unwrap();
+        assert_eq!(renderer.take_block().plain().len(), LIMIT / 2);
+        renderer.text(&half).unwrap();
+        assert_eq!(renderer.take_block().plain().len(), LIMIT / 2);
+
+        let error = renderer.text("x").unwrap_err();
+        assert!(error.to_string().contains("expansion exceeds 1 MiB"));
+        assert!(renderer.block.plain().is_empty());
+    }
+
+    #[test]
+    fn output_budget_is_inclusive_and_rejects_oversized_appends() {
+        let exact = "x".repeat(LIMIT);
+        let mut renderer = Renderer::new(80, ColourDepth::Plain);
+        renderer.push(&exact).unwrap();
+        assert_eq!(renderer.output.len(), LIMIT);
+        let error = renderer.push("x").unwrap_err();
+        assert!(error.to_string().contains("output exceeds 1 MiB"));
+        assert_eq!(renderer.output, exact);
+
+        let mut renderer = Renderer::new(80, ColourDepth::Plain);
+        let error = renderer.push(&format!("{exact}x")).unwrap_err();
+        assert!(error.to_string().contains("output exceeds 1 MiB"));
+        assert!(renderer.output.is_empty());
+    }
+
+    #[test]
+    fn tables_use_the_grid_when_the_display_width_fits_exactly() {
+        let source = "| A | B |\n| - | - |\n| x | y |";
+        assert_eq!(plain(source, 5), "A | B\n--+--\nx | y\n");
+        assert_eq!(plain(source, 4), "A: x\nB: y\n");
+    }
+
+    #[test]
+    fn narrow_tables_in_tight_lists_do_not_separate_the_first_row() {
+        let source = "- a\n- | A | B |\n  | - | - |\n  | x | y |";
+        assert_eq!(plain(source, 6), "- a\n- A: x\n  B: y\n");
+    }
+
+    #[test]
     fn paragraphs_headings_and_breaks_have_readable_plain_structure() {
         assert_eq!(
             plain(

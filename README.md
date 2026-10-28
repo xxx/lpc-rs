@@ -492,6 +492,7 @@ The reviewed scope includes:
 - [Terminal colour models](src/interpreter/efun/terminal_text/colour.rs): palette conversion, named tokens, SGR parsing, style resets and hexadecimal validation.
 - [Terminal text formatting](src/interpreter/efun/terminal_text/format.rs): cursor progress, expansion limits, style offsets, grapheme wrapping and escape handling.
 - [Sprintf rendering](src/interpreter/efun/sprintf/render.rs): numeric signs and precision, nonfinite floats, field padding, wide-character wrapping and argument diagnostics.
+- [Markdown rendering](src/interpreter/efun/render_markdown/render.rs): parser invariants, table styling and fit, tight-list spacing, and cumulative expansion and output bounds.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -532,6 +533,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+CommonMark extension flags are disjoint. Balanced blocks already flush before
+paragraph or HTML starts, and parsed tables contain columns and a header row.
+The three pinned Markdown exclusions preserve these parser invariants.
 Numeric fields contain ASCII text; at equal widths, the pinned zero-padding
 comparison adds no characters and preserves the original field.
 Terminal text consumers accept smaller literal chunks with intact escape atoms;

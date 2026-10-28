@@ -392,6 +392,7 @@ examine_globs = [
     "src/interpreter/efun/terminal_text/colour.rs",
     "src/interpreter/efun/terminal_text/format.rs",
     "src/interpreter/efun/sprintf/render.rs",
+    "src/interpreter/efun/render_markdown/render.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -400,6 +401,12 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Enabled CommonMark extensions occupy disjoint option bits.
+    "^src/interpreter/efun/render_markdown/render\\.rs:18:32: replace \\| with \\^ in render$",
+    # Balanced leaf blocks and container boundaries already flush pending text.
+    "^src/interpreter/efun/render_markdown/render\\.rs:127:13: delete match arm Tag::Paragraph \\| Tag::HtmlBlock in Renderer<'a>::start$",
+    # Parsed tables contain at least one column and a header row.
+    "^src/interpreter/efun/render_markdown/render\\.rs:340:25: replace \\|\\| with && in Renderer<'a>::render_table$",
     # At equal widths the zero padding of an ASCII numeric field is empty.
     '^src/interpreter/efun/sprintf/render\.rs:51:33: replace < with <= in padded_number$',
     # Both consumers stream literal chunks while preserving complete escape atoms.
