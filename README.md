@@ -506,6 +506,7 @@ The reviewed scope includes:
 - [Language lexer](src/compiler/lexer/mod.rs): cursor progress, directive comment and quote boundaries, numeric magnitudes, keyword spelling and token spans.
 - [Socket events](src/interpreter/sockets/events.rs): input credits, ordered delivery, accept admission, callback acknowledgement and drained wakeup rearming.
 - [Socket registry](src/interpreter/sockets/mod.rs): handle identity, commit-ordered publication, write admission, ownership transfer and lifecycle cleanup.
+- [Task context](src/interpreter/task_context.rs): optional results, caller chains, transactional loading, nested entry, player state and call-out views.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -406,6 +406,7 @@ examine_globs = [
     "src/compiler/lexer/mod.rs",
     "src/interpreter/sockets/events.rs",
     "src/interpreter/sockets/mod.rs",
+    "src/interpreter/task_context.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
