@@ -405,6 +405,7 @@ examine_globs = [
     "src/compiler/preprocessor/expand.rs",
     "src/compiler/lexer/mod.rs",
     "src/interpreter/sockets/events.rs",
+    "src/interpreter/sockets/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
@@ -414,6 +415,9 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Generated channel constructors use Receiver and Sender names absent from this module.
+    "^src/interpreter/sockets/mod\\.rs:227:9:\\ replace\\ Sockets::take_commands\\ \\->\\ Option<flume::Receiver<SocketCommands>>\\ with\\ (?:Some\\(Receiver::new\\(\\)\\)|Some\\(Receiver::from_iter\\(\\[Default::default\\(\\)\\]\\)\\)|Some\\(Receiver::new\\(Default::default\\(\\)\\)\\)|Some\\(Receiver::from\\(Default::default\\(\\)\\)\\))$",
+    "^src/interpreter/sockets/mod\\.rs:249:9:\\ replace\\ Sockets::sender\\ \\->\\ Result<\\&flume::Sender<SocketCommands>>\\ with\\ (?:Ok\\(Box::leak\\(Box::new\\(Sender::new\\(\\)\\)\\)\\)|Ok\\(Box::leak\\(Box::new\\(Sender::from_iter\\(\\[Default::default\\(\\)\\]\\)\\)\\)\\)|Ok\\(Box::leak\\(Box::new\\(Sender::new\\(Default::default\\(\\)\\)\\)\\)\\)|Ok\\(Box::leak\\(Box::new\\(Sender::from\\(Default::default\\(\\)\\)\\)\\)\\))$",
     # These generated tuple replacements use four unsupported JoinHandle constructors.
     "^src/interpreter/vm/global_state\\.rs:152:9: replace GlobalState::spawn_committer \\-> \\(flume::Sender<CommitProtocol>, tokio::sync::watch::Receiver<stm::Version>, JoinHandle<Snapshot>,\\) with .*JoinHandle::(?:new\\((?:Default::default\\(\\))?\\)|from_iter\\(\\[Default::default\\(\\)\\]\\)|from\\(Default::default\\(\\)\\))\\)$",
     # A declared reference position is below arity, so the inner guard rules out equality.

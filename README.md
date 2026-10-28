@@ -505,6 +505,7 @@ The reviewed scope includes:
 - [Macro expansion](src/compiler/preprocessor/expand.rs): construction and stringification budgets, recursive hide sets, argument substitution, synthesized escaping and source spans.
 - [Language lexer](src/compiler/lexer/mod.rs): cursor progress, directive comment and quote boundaries, numeric magnitudes, keyword spelling and token spans.
 - [Socket events](src/interpreter/sockets/events.rs): input credits, ordered delivery, accept admission, callback acknowledgement and drained wakeup rearming.
+- [Socket registry](src/interpreter/sockets/mod.rs): handle identity, commit-ordered publication, write admission, ownership transfer and lifecycle cleanup.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -549,6 +550,10 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Eight generated channel replacements in the socket registry refer to unimported
+`Receiver` and `Sender` names. Compile probes confirm that all eight fail; the
+filters match only these replacements and avoid repeated slow compiler diagnostics.
+
 Sixty-four generated tuple replacements for `spawn_committer` are excluded
 because they use unsupported `JoinHandle` constructors. Small compile probes
 confirm all four handle forms fail; the filter matches only these combinations.
