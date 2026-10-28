@@ -490,6 +490,7 @@ The reviewed scope includes:
 - [Peephole optimization](src/compiler/codegen/peephole.rs): copy coalescing, control-flow pruning, address remapping and debug convergence.
 - [Runtime error frames](src/interpreter/error_frames.rs): UTF-8 text bounds, frame and variable budgets, argument metadata, transactional object liveness and fresh diagnostic mappings.
 - [Terminal colour models](src/interpreter/efun/terminal_text/colour.rs): palette conversion, named tokens, SGR parsing, style resets and hexadecimal validation.
+- [Terminal text formatting](src/interpreter/efun/terminal_text/format.rs): cursor progress, expansion limits, style offsets, grapheme wrapping and escape handling.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -530,6 +531,10 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Terminal text consumers accept smaller literal chunks with intact escape atoms;
+streaming retains CRLF normalization, styles and graphemes. Leading delimiters
+are already handled before literal scanning, and zero wrap width adds no padding.
+The three pinned formatting exclusions preserve these behaviours.
 ANSI indices within the selected palette map back to their unique entries,
 so disabling the pinned colour guard produces the same SGR codes.
 The peephole's non-r0 and operand-count checks already rule out a deleted

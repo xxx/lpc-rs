@@ -17,20 +17,39 @@ pub(in crate::interpreter::efun) fn next_part<'a>(
     cursor: &mut usize,
 ) -> Option<Part<'a>> {
     let rest = text.get(*cursor..).filter(|s| !s.is_empty())?;
+    #[cfg(debug_assertions)]
+    let before = *cursor;
     if rest.starts_with("%%^^") {
         *cursor += 4;
+        #[cfg(debug_assertions)]
+        debug_assert!(
+            before < *cursor && *cursor <= text.len(),
+            "markup cursor did not advance"
+        );
         return Some(Part::Text("%^"));
     }
     if let Some(key) = rest.strip_prefix("%^") {
         if let Some(end) = key.find("%^") {
             *cursor += end + 4;
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                before < *cursor && *cursor <= text.len(),
+                "markup cursor did not advance"
+            );
             return Some(Part::Key(&key[..end]));
         }
         *cursor = text.len();
+        #[cfg(debug_assertions)]
+        debug_assert!(
+            before < *cursor && *cursor <= text.len(),
+            "markup cursor did not advance"
+        );
         return Some(Part::Text(rest));
     }
     let mut end = 0;
     while end < rest.len() {
+        #[cfg(debug_assertions)]
+        let previous_end = end;
         let tail = &rest[end..];
         if end > 0 && (tail.starts_with("%^") || tail.starts_with("%%^^")) {
             break;
@@ -40,8 +59,15 @@ pub(in crate::interpreter::efun) fn next_part<'a>(
         } else if let Some(c) = tail.chars().next() {
             end += c.len_utf8();
         }
+        #[cfg(debug_assertions)]
+        debug_assert!(end > previous_end, "markup scan did not advance");
     }
     *cursor += end;
+    #[cfg(debug_assertions)]
+    debug_assert!(
+        before < *cursor && *cursor <= text.len(),
+        "markup cursor did not advance"
+    );
     Some(Part::Text(&rest[..end]))
 }
 
@@ -157,6 +183,7 @@ impl Text {
         while !rest.is_empty() {
             if rest.starts_with('\x1b') {
                 let (len, sgr) = escape(rest);
+                debug_assert!(len > 0, "escape did not consume input");
                 if accept_sgr && let Some(params) = sgr {
                     let previous = self.style;
                     self.style.sgr(params);
@@ -207,13 +234,22 @@ impl Text {
         let mut output = Output::new(depth, &self.changes, self.caller);
         let mut start = 0;
         let mut continuation = false;
+        #[cfg(debug_assertions)]
+        let mut previous_start = None;
         while start < atoms.len() {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_start.replace(start).is_none_or(|old| start > old),
+                "wrapped line did not advance"
+            );
             let padding = if continuation { indent } else { 0 };
             let mut col = padding;
             let mut end = start;
             let mut space = None;
             let mut soft = false;
             while end < atoms.len() && atoms[end].text != "\n" {
+                #[cfg(debug_assertions)]
+                let previous_end = end;
                 let atom = &atoms[end];
                 if width != 0 && col + atom.columns(col) > width {
                     if atom.is_space() {
@@ -233,16 +269,26 @@ impl Text {
                 }
                 col += atom.columns(col);
                 end += 1;
+                #[cfg(debug_assertions)]
+                debug_assert!(end > previous_end, "line scan did not advance");
             }
             if soft {
                 while end > start && atoms[end - 1].is_space() {
+                    #[cfg(debug_assertions)]
+                    let previous_end = end;
                     end -= 1;
+                    #[cfg(debug_assertions)]
+                    debug_assert!(end < previous_end, "space trimming did not advance");
                 }
             }
             let mut next = end;
             if soft {
                 while next < atoms.len() && atoms[next].is_space() {
+                    #[cfg(debug_assertions)]
+                    let previous_next = next;
                     next += 1;
+                    #[cfg(debug_assertions)]
+                    debug_assert!(next > previous_next, "space scan did not advance");
                 }
             }
             let explicit = next < atoms.len() && atoms[next].text == "\n";
@@ -289,6 +335,8 @@ fn escape(text: &str) -> (usize, Option<&str>) {
         Some(b']' | b'P' | b'^' | b'_' | b'X') => {
             let mut i = 2;
             while i < bytes.len() {
+                #[cfg(debug_assertions)]
+                let previous_i = i;
                 if bytes[i] == 7 {
                     return (i + 1, None);
                 }
@@ -296,6 +344,8 @@ fn escape(text: &str) -> (usize, Option<&str>) {
                     return (i + 2, None);
                 }
                 i += 1;
+                #[cfg(debug_assertions)]
+                debug_assert!(i > previous_i, "escape scan did not advance");
             }
             (text.len(), None)
         }
@@ -413,6 +463,128 @@ mod tests {
     }
 
     #[test]
+    fn literal_chunk_boundaries_preserve_streamed_rendering() {
+        let chunks = [
+            "a",
+            "\r",
+            "\x1b[31m",
+            "\n",
+            "e",
+            "́",
+            "字",
+            "\x1b[0m",
+            "\t",
+            "z",
+            "\r",
+            "\x1b]title\x07",
+            "\n",
+            "q",
+        ];
+        let mut whole = Text::default();
+        whole.literal(&chunks.concat()).unwrap();
+        let mut streamed = Text::default();
+        for chunk in chunks {
+            streamed.literal(chunk).unwrap();
+        }
+
+        assert_eq!(streamed.plain(), whole.plain());
+        for depth in [
+            ColourDepth::Plain,
+            ColourDepth::Ansi8,
+            ColourDepth::TrueColour,
+        ] {
+            for wrap in [0, 4, -4] {
+                assert_eq!(
+                    streamed.render(depth, wrap, 1).unwrap(),
+                    whole.render(depth, wrap, 1).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn extending_text_relocates_style_changes_after_the_existing_prefix() {
+        let mut left = Text::default();
+        left.builtins("%^BLUE%^prefix ").unwrap();
+        let mut right = Text::default();
+        right.builtins("x%^RED%^red%^RESET%^tail").unwrap();
+        left.extend(&right).unwrap();
+        let mut whole = Text::default();
+        whole
+            .builtins("%^BLUE%^prefix %^RESET%^x%^RED%^red%^RESET%^tail")
+            .unwrap();
+
+        assert_eq!(left.plain(), whole.plain());
+        for depth in [
+            ColourDepth::Plain,
+            ColourDepth::Ansi8,
+            ColourDepth::TrueColour,
+        ] {
+            for wrap in [0, 6, -6] {
+                assert_eq!(
+                    left.render(depth, wrap, 1).unwrap(),
+                    whole.render(depth, wrap, 1).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn replacement_limit_is_inclusive_and_rejects_larger_input_before_appending() {
+        let exact = "x".repeat(LIMIT);
+        let mut text = Text::default();
+        text.builtins(&exact).unwrap();
+        assert_eq!(text.plain().len(), LIMIT);
+
+        let mut text = Text::default();
+        let error = text.builtins(&format!("{exact}x")).unwrap_err();
+        assert!(error.to_string().contains("replacement exceeds 1 MiB"));
+        assert!(text.plain().is_empty());
+    }
+
+    #[test]
+    fn an_explicit_newline_after_soft_wrapping_resets_continuation_indent() {
+        assert_eq!(render("abc   \nx", 3, 1), "abc\nx");
+    }
+
+    #[test]
+    fn unsupported_escapes_consume_ascii_controls_and_preserve_unicode_text() {
+        for (input, expected) in [
+            ("\x1b7x", "x"),
+            ("\x1bcx", "x"),
+            ("\x1béx", "éx"),
+            ("\x1b界x", "界x"),
+            ("\x1b🦀x", "🦀x"),
+            ("\x1b", ""),
+        ] {
+            assert_eq!(render(input, 0, 0), expected);
+        }
+    }
+
+    #[test]
+    fn unterminated_control_strings_consume_the_remaining_input() {
+        for kind in [']', 'P', '^', '_', 'X'] {
+            let input = format!("before\x1b{kind}hidden%^RED%^");
+            assert_eq!(render(&input, 0, 0), "before");
+        }
+    }
+
+    #[test]
+    fn opaque_escape_terminators_preserve_crlf_normalization() {
+        for kind in [']', 'P', '^', '_', 'X'] {
+            for terminator in ["\x07", "\x1b\\"] {
+                let input = format!("a\r\x1b{kind}payload{terminator}\nb");
+                assert_eq!(render(&input, 0, 0), "a\nb");
+            }
+        }
+    }
+
+    #[test]
+    fn style_changes_inside_prefixed_graphemes_use_relative_offsets() {
+        assert_eq!(render("p e%^RED%^́x", 0, 0), "p e\x1b[38;5;1ḿx\x1b[0m",);
+    }
+
+    #[test]
     fn markup_is_delimited_escaped_and_not_recursive() {
         assert_eq!(
             render("RED %%^^RED%%^^ a%^%^b %^UNKNOWN%^ %^RED", 0, 0),
@@ -474,6 +646,18 @@ mod tests {
             render("x\x1b[38;2;255;0;0my", 0, 0),
             "x\x1b[38;2;255;0;0my\x1b[0m"
         );
+    }
+
+    #[test]
+    fn cumulative_expansion_accepts_the_exact_budget_and_rejects_more() {
+        let half = "x".repeat(LIMIT / 2);
+        let mut text = Text::default();
+        text.literal(&half).unwrap();
+        text.literal(&half).unwrap();
+        assert_eq!(text.plain().len(), LIMIT);
+
+        assert!(text.literal("x").is_err());
+        assert_eq!(text.plain().len(), LIMIT);
     }
 
     #[test]

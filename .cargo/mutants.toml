@@ -390,6 +390,7 @@ examine_globs = [
     "src/compiler/codegen/peephole.rs",
     "src/interpreter/error_frames.rs",
     "src/interpreter/efun/terminal_text/colour.rs",
+    "src/interpreter/efun/terminal_text/format.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -398,6 +399,12 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Both consumers stream literal chunks while preserving complete escape atoms.
+    '^src/interpreter/efun/terminal_text/format\.rs:54:20: replace && with \|\| in next_part$',
+    # Leading delimiters are handled before the literal scan.
+    '^src/interpreter/efun/terminal_text/format\.rs:54:16: replace > with >= in next_part$',
+    # At zero wrap width, the additional padding contains no spaces.
+    '^src/interpreter/efun/terminal_text/format\.rs:306:21: replace < with <= in Text::render$',
     # Unique ANSI entries round-trip in-range indices through nearest().
     '^src/interpreter/efun/terminal_text/colour\.rs:77:41: replace match guard n <= max with false in Colour::sgr$',
     # A deleted defining copy fails the non-r0 or operand-count checks.
