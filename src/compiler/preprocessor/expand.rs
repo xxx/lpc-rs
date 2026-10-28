@@ -842,4 +842,186 @@ mod tests {
         let e = expand_all(&pp, "F(1").unwrap_err();
         assert_eq!(e.span(), Some(Span::new(0, 0..1)));
     }
+
+    #[tokio::test]
+    async fn substitution_checks_the_remaining_budget_before_splicing_cached_arguments() {
+        let pp = table("#define F(x) 9 x\n").await;
+        let Define::Function(function) = &pp.defines["F"] else {
+            panic!("expected a function macro");
+        };
+        let mut previous = None;
+        let tokens: Vec<_> = LexWrapper::new("1 2 3", 0)
+            .map(|token| ExpansionToken::source(token.unwrap(), &mut previous))
+            .collect();
+        for (remaining, accepted) in [(4, true), (3, false)] {
+            let mut expansion = Expansion {
+                defines: &pp.defines,
+                sources: &pp.context.diagnostic_sources,
+                port: pp.context.config.port,
+                top: "F",
+                use_span: Span::new(0, 0..1),
+                hide: vec![],
+                emitted: MAX_EXPANDED_TOKENS - remaining,
+                stringified_bytes: 0,
+                depth: 1,
+            };
+            let mut args = HashMap::from([(
+                "x",
+                Argument {
+                    raw: tokens.clone(),
+                    expanded: Some(tokens.clone()),
+                },
+            )]);
+            let result = expansion.substitute(&function.tokens, &mut args);
+            if accepted {
+                let output = result.unwrap();
+                assert_eq!(output.len(), 4);
+                assert_eq!(
+                    output
+                        .iter()
+                        .map(|t| t.token.to_string())
+                        .collect::<Vec<_>>(),
+                    ["9", "1", "2", "3"]
+                );
+            } else {
+                let error = result
+                    .err()
+                    .expect("replacement exceeded the remaining token budget");
+                assert!(
+                    error.message().contains("produces too many tokens"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn ordinary_replacement_tokens_respect_the_exact_remaining_budget() {
+        let pp = table("#define THREE 1 2 3\n").await;
+        let Define::Object(object) = &pp.defines["THREE"] else {
+            panic!("expected an object macro");
+        };
+        for (remaining, accepted) in [(3, true), (2, false)] {
+            let mut expansion = Expansion {
+                defines: &pp.defines,
+                sources: &pp.context.diagnostic_sources,
+                port: pp.context.config.port,
+                top: "THREE",
+                use_span: Span::new(0, 0..5),
+                hide: vec![],
+                emitted: MAX_EXPANDED_TOKENS - remaining,
+                stringified_bytes: 0,
+                depth: 1,
+            };
+            let result = expansion.substitute(&object.tokens, &mut no_args());
+            if accepted {
+                let output = result.unwrap();
+                assert_eq!(
+                    output
+                        .iter()
+                        .map(|t| t.token.to_string())
+                        .collect::<Vec<_>>(),
+                    ["1", "2", "3"]
+                );
+            } else {
+                let error = result
+                    .err()
+                    .expect("ordinary tokens exceeded the remaining budget");
+                assert!(
+                    error.message().contains("produces too many tokens"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stringification_accepts_an_exact_utf8_byte_budget() {
+        let pp = table("").await;
+        for (remaining, accepted) in [(4, true), (3, false)] {
+            let mut expansion = Expansion {
+                defines: &pp.defines,
+                sources: &pp.context.diagnostic_sources,
+                port: pp.context.config.port,
+                top: "S",
+                use_span: Span::new(0, 0..1),
+                hide: vec![],
+                emitted: 0,
+                stringified_bytes: MAX_STRINGIFIED_BYTES - remaining,
+                depth: 1,
+            };
+            let token = ExpansionToken {
+                token: Token::StringLiteral(StringToken(Span::new(0, 0..1), "é".into())),
+                origin: None,
+                leading_space: false,
+            };
+            let result = expansion.stringify(&[token]);
+            if accepted {
+                assert_eq!(result.unwrap(), "\"é\"");
+                assert_eq!(expansion.stringified_bytes, MAX_STRINGIFIED_BYTES);
+            } else {
+                let error = result.unwrap_err();
+                assert!(error.message().contains("exceeds 1048576 bytes"), "{error}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn synthesized_string_tokens_preserve_all_control_character_escapes() {
+        let pp = table("").await;
+        let mut expansion = Expansion {
+            defines: &pp.defines,
+            sources: &pp.context.diagnostic_sources,
+            port: pp.context.config.port,
+            top: "S",
+            use_span: Span::new(0, 0..1),
+            hide: vec![],
+            emitted: 0,
+            stringified_bytes: 0,
+            depth: 1,
+        };
+        let token = ExpansionToken {
+            token: Token::StringLiteral(StringToken(
+                Span::new(0, 0..1),
+                "\\\"\n\r\t\x0B\x0C\x07\x08é".into(),
+            )),
+            origin: None,
+            leading_space: true,
+        };
+        let text = expansion.stringify(&[token]).unwrap();
+        assert_eq!(text, r#""\\\"\n\r\t\v\f\a\bé""#);
+        assert_eq!(expansion.stringified_bytes, text.len());
+    }
+
+    #[tokio::test]
+    async fn emission_accepts_the_last_permitted_token_before_reporting_the_limit() {
+        let pp = table("").await;
+        let mut expansion = Expansion {
+            defines: &pp.defines,
+            sources: &pp.context.diagnostic_sources,
+            port: pp.context.config.port,
+            top: "LIMIT",
+            use_span: Span::new(0, 0..1),
+            hide: vec![],
+            emitted: MAX_EXPANDED_TOKENS - 1,
+            stringified_bytes: 0,
+            depth: 1,
+        };
+        let mut previous = None;
+        let token = ExpansionToken::source(
+            LexWrapper::new("1", 0).next().unwrap().unwrap(),
+            &mut previous,
+        );
+        let mut output = Vec::new();
+        expansion.emit(token.clone(), &mut output).unwrap();
+        assert_eq!(expansion.emitted, MAX_EXPANDED_TOKENS);
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0].token.to_string(), "1");
+        let error = expansion.emit(token, &mut output).unwrap_err();
+        assert!(
+            error.message().contains("produces too many tokens"),
+            "{error}"
+        );
+        assert_eq!(output.len(), 1);
+    }
 }

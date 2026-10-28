@@ -502,6 +502,7 @@ The reviewed scope includes:
 - [Compiler tree walking](src/compiler/codegen/tree_walker.rs): child traversal order, lexical scope hooks, error propagation and pass diagnostic policy.
 - [Object state](src/interpreter/process/mod.rs): names, transactional images and liveness, movement, living inventories, diagnostic cell names, GC roots and stored environment links.
 - [Shared VM state](src/interpreter/vm/global_state.rs): committer lifecycle, queue metrics, GC retry limits, callback initialization and named target refresh.
+- [Macro expansion](src/compiler/preprocessor/expand.rs): construction and stringification budgets, recursive hide sets, argument substitution, synthesized escaping and source spans.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
