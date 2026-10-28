@@ -399,6 +399,7 @@ examine_globs = [
     "src/interpreter/opcode_profile.rs",
     "src/interpreter/sockets/transport.rs",
     "src/interpreter/task/handle_call.rs",
+    "src/compiler/codegen/tree_walker.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
