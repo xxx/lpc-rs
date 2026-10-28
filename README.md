@@ -494,6 +494,7 @@ The reviewed scope includes:
 - [Sprintf rendering](src/interpreter/efun/sprintf/render.rs): numeric signs and precision, nonfinite floats, field padding, wide-character wrapping and argument diagnostics.
 - [Markdown rendering](src/interpreter/efun/render_markdown/render.rs): parser invariants, table styling and fit, tight-list spacing, and cumulative expansion and output bounds.
 - [Save-file literals](src/interpreter/save_format.rs): signed-zero floats, scalar grammar, string and byte escapes, object references, container depth and debug cursor progress.
+- [Compile-time stack configuration](src/compile_time_config.rs): driver worker stacks support compilation at the language nesting limit.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
