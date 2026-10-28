@@ -491,6 +491,7 @@ The reviewed scope includes:
 - [Runtime error frames](src/interpreter/error_frames.rs): UTF-8 text bounds, frame and variable budgets, argument metadata, transactional object liveness and fresh diagnostic mappings.
 - [Terminal colour models](src/interpreter/efun/terminal_text/colour.rs): palette conversion, named tokens, SGR parsing, style resets and hexadecimal validation.
 - [Terminal text formatting](src/interpreter/efun/terminal_text/format.rs): cursor progress, expansion limits, style offsets, grapheme wrapping and escape handling.
+- [Sprintf rendering](src/interpreter/efun/sprintf/render.rs): numeric signs and precision, nonfinite floats, field padding, wide-character wrapping and argument diagnostics.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -531,6 +532,8 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Numeric fields contain ASCII text; at equal widths, the pinned zero-padding
+comparison adds no characters and preserves the original field.
 Terminal text consumers accept smaller literal chunks with intact escape atoms;
 streaming retains CRLF normalization, styles and graphemes. Leading delimiters
 are already handled before literal scanning, and zero wrap width adds no padding.

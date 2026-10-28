@@ -391,6 +391,7 @@ examine_globs = [
     "src/interpreter/error_frames.rs",
     "src/interpreter/efun/terminal_text/colour.rs",
     "src/interpreter/efun/terminal_text/format.rs",
+    "src/interpreter/efun/sprintf/render.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -399,6 +400,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # At equal widths the zero padding of an ASCII numeric field is empty.
+    '^src/interpreter/efun/sprintf/render\.rs:51:33: replace < with <= in padded_number$',
     # Both consumers stream literal chunks while preserving complete escape atoms.
     '^src/interpreter/efun/terminal_text/format\.rs:54:20: replace && with \|\| in next_part$',
     # Leading delimiters are handled before the literal scan.

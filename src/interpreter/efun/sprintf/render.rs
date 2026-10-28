@@ -104,7 +104,13 @@ fn int_text(spec: &Spec, i: i64, precision: Option<usize>) -> String {
 /// signed, two-digit exponent.
 fn exponent_text(f: BaseFloat, precision: usize, upper: bool) -> String {
     let rust = format!("{f:.precision$e}");
-    let (mantissa, exponent) = rust.split_once('e').unwrap_or((&rust, "0"));
+    let Some((mantissa, exponent)) = rust.split_once('e') else {
+        return if upper {
+            rust.to_ascii_uppercase()
+        } else {
+            rust.to_ascii_lowercase()
+        };
+    };
     let exponent: i32 = exponent.parse().unwrap_or(0);
     let e = if upper { 'E' } else { 'e' };
     let sign = if exponent < 0 { '-' } else { '+' };
@@ -134,10 +140,14 @@ fn general_text(f: BaseFloat, precision: usize, upper: bool) -> String {
         return "0".to_owned();
     }
     let probe = format!("{f:.*e}", significant - 1);
-    let exponent: i32 = probe
-        .split_once('e')
-        .and_then(|(_, e)| e.parse().ok())
-        .unwrap_or(0);
+    let Some((_, exponent)) = probe.split_once('e') else {
+        return if upper {
+            probe.to_ascii_uppercase()
+        } else {
+            probe.to_ascii_lowercase()
+        };
+    };
+    let exponent: i32 = exponent.parse().unwrap_or(0);
     if exponent < -4 || exponent >= significant as i32 {
         trimmed(&exponent_text(f, significant - 1, upper))
     } else {
@@ -433,6 +443,94 @@ mod tests {
     use super::*;
 
     #[test]
+    fn full_width_numeric_fields_are_unchanged_by_zero_padding() {
+        for text in ["-12", "+12", " 12", "-inf", "+inf", " nan"] {
+            for width in [text.len() - 1, text.len()] {
+                assert_eq!(
+                    padded_number(text, Some(width), Align::Right, &Pad::Zero),
+                    text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sign_flags_do_not_add_a_second_prefix_to_negative_floats() {
+        for conversion in ["f", "F", "e", "E", "g", "G"] {
+            let plain = super::super::spec::parse(&mut conversion.chars().peekable()).unwrap();
+            for flag in ["+", " "] {
+                let pattern = format!("{flag}{conversion}");
+                let flagged = super::super::spec::parse(&mut pattern.chars().peekable()).unwrap();
+                for value in [-12.5, BaseFloat::NEG_INFINITY] {
+                    for precision in [None, Some(0), Some(3)] {
+                        assert_eq!(
+                            float_text(&flagged, value, precision),
+                            float_text(&plain, value, precision),
+                            "{pattern}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn zero_exponents_keep_the_positive_exponent_sign() {
+        assert_eq!(exponent_text(1.25, 2, false), "1.25e+00");
+        assert_eq!(exponent_text(-1.25, 2, false), "-1.25e+00");
+        assert_eq!(exponent_text(1.25, 2, true), "1.25E+00");
+    }
+
+    #[test]
+    fn general_format_switches_notation_at_the_exponent_boundaries() {
+        for (value, lower) in [
+            (0.0001, "0.0001"),
+            (0.00001, "1e-05"),
+            (100000.0, "100000"),
+            (1000000.0, "1e+06"),
+        ] {
+            assert_eq!(general_text(value, 6, false), lower);
+            assert_eq!(general_text(value, 6, true), lower.to_ascii_uppercase());
+        }
+    }
+
+    #[test]
+    fn general_scientific_format_counts_significant_mantissa_digits() {
+        for (value, lower) in [
+            (1234567.89, "1.235e+06"),
+            (-1234567.89, "-1.235e+06"),
+            (0.0000123456789, "1.235e-05"),
+        ] {
+            assert_eq!(general_text(value, 4, false), lower);
+            assert_eq!(general_text(value, 4, true), lower.to_ascii_uppercase());
+        }
+    }
+
+    #[test]
+    fn wrapping_long_words_respects_wide_grapheme_widths() {
+        assert_eq!(wrapped("a字x", 2), ["a", "字", "x"]);
+        assert_eq!(wrapped("a👩🏽‍💻x", 2), ["a", "👩🏽‍💻", "x"]);
+    }
+
+    #[tokio::test]
+    async fn byte_arguments_report_the_text_conversion_hint() {
+        for (conversion, wanted) in [("s", "a string"), ("d", "an int")] {
+            let source = format!(
+                r#"mixed create() {{ return sprintf("%{conversion}", to_bytes("123", "UTF-8")); }}"#
+            );
+            let error = crate::test_support::try_run_prog(&source)
+                .await
+                .unwrap_err();
+            let message = error.to_string();
+            assert!(
+                message.contains(&format!("%{conversion} wants {wanted}")),
+                "{message}"
+            );
+            assert!(message.contains("convert with to_text()"), "{message}");
+        }
+    }
+
+    #[test]
     fn centering_puts_the_odd_space_on_the_left() {
         assert_eq!(padded("123", Some(6), Align::Center, &Pad::Space), "  123 ");
     }
@@ -443,6 +541,31 @@ mod tests {
             padded_number("-12", Some(5), Align::Right, &Pad::Zero),
             "-0012"
         );
+    }
+
+    #[test]
+    fn scientific_and_general_nonfinite_values_have_no_exponent_suffix() {
+        for (conversion, upper) in [("e", false), ("E", true), ("g", false), ("G", true)] {
+            let spec = super::super::spec::parse(&mut conversion.chars().peekable()).unwrap();
+            for (value, lower) in [
+                (BaseFloat::INFINITY, "inf"),
+                (BaseFloat::NEG_INFINITY, "-inf"),
+                (BaseFloat::NAN, "nan"),
+            ] {
+                let expected = if upper {
+                    lower.to_ascii_uppercase()
+                } else {
+                    lower.to_owned()
+                };
+                for precision in [None, Some(0), Some(3)] {
+                    assert_eq!(
+                        float_text(&spec, value, precision),
+                        expected,
+                        "{conversion}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
