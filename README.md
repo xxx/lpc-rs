@@ -500,6 +500,7 @@ The reviewed scope includes:
 - [TCP transport](src/interpreter/sockets/transport.rs): committed delivery, bounded stream input, output draining, worker cleanup, observer disconnection and close-control reasons.
 - [Function calls](src/interpreter/task/handle_call.rs): entry history, inherited and constructor calls, argument types, reference and spread binding, register budgets and call-site diagnostics.
 - [Compiler tree walking](src/compiler/codegen/tree_walker.rs): child traversal order, lexical scope hooks, error propagation and pass diagnostic policy.
+- [Object state](src/interpreter/process/mod.rs): names, transactional images and liveness, movement, living inventories, diagnostic cell names, GC roots and stored environment links.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
