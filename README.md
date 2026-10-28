@@ -489,6 +489,7 @@ The reviewed scope includes:
 - [Compilation context](src/compiler/compilation_context.rs): source configuration, pragma boundaries, synthetic names, parent namespaces and function visibility.
 - [Peephole optimization](src/compiler/codegen/peephole.rs): copy coalescing, control-flow pruning, address remapping and debug convergence.
 - [Runtime error frames](src/interpreter/error_frames.rs): UTF-8 text bounds, frame and variable budgets, argument metadata, transactional object liveness and fresh diagnostic mappings.
+- [Terminal colour models](src/interpreter/efun/terminal_text/colour.rs): palette conversion, named tokens, SGR parsing, style resets and hexadecimal validation.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -529,6 +530,8 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+ANSI indices within the selected palette map back to their unique entries,
+so disabling the pinned colour guard produces the same SGR codes.
 The peephole's non-r0 and operand-count checks already rule out a deleted
 copy definer. Its pinned `i - 1` to `i / 1` deletion check therefore leaves
 the selected rewrites unchanged.

@@ -389,6 +389,7 @@ examine_globs = [
     "src/compiler/compilation_context.rs",
     "src/compiler/codegen/peephole.rs",
     "src/interpreter/error_frames.rs",
+    "src/interpreter/efun/terminal_text/colour.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -397,6 +398,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Unique ANSI entries round-trip in-range indices through nearest().
+    '^src/interpreter/efun/terminal_text/colour\.rs:77:41: replace match guard n <= max with false in Colour::sgr$',
     # A deleted defining copy fails the non-r0 or operand-count checks.
     '^src/compiler/codegen/peephole\.rs:117:26: replace - with / in coalesce_copies$',
     # Prepared interfaces are cleared before concrete parents are linked.

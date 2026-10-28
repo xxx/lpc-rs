@@ -250,6 +250,228 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rgb_cube_samples_select_their_indexed_colours() {
+        for (rgb, index) in [
+            ([0, 0, 0], 16),
+            ([255, 255, 255], 231),
+            ([255, 0, 0], 196),
+            ([0, 255, 0], 46),
+            ([0, 0, 255], 21),
+            ([95, 135, 175], 67),
+            ([215, 95, 0], 166),
+        ] {
+            assert_eq!(
+                Colour::Rgb(rgb).sgr(ColourDepth::Indexed, false),
+                format!("38;5;{index}"),
+                "{rgb:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn indexed_colours_downgrade_to_the_ansi_palette() {
+        for (index, ansi8, ansi16) in [
+            (16, "30", "30"),
+            (196, "31", "91"),
+            (46, "32", "92"),
+            (21, "34", "94"),
+            (231, "37", "97"),
+            (244, "37", "90"),
+        ] {
+            assert_eq!(Colour::Indexed(index).sgr(ColourDepth::Ansi8, false), ansi8);
+            assert_eq!(
+                Colour::Indexed(index).sgr(ColourDepth::Ansi16, false),
+                ansi16
+            );
+        }
+    }
+
+    #[test]
+    fn in_range_ansi_indices_round_trip_through_the_unique_palette() {
+        use std::collections::HashSet;
+
+        assert_eq!(ANSI.iter().collect::<HashSet<_>>().len(), ANSI.len());
+        for (depth, count) in [(ColourDepth::Ansi8, 8), (ColourDepth::Ansi16, 16)] {
+            for (index, rgb) in ANSI.iter().take(count).enumerate() {
+                let index = u8::try_from(index).unwrap();
+                for background in [false, true] {
+                    assert_eq!(
+                        Colour::Indexed(index).sgr(depth, background),
+                        Colour::Rgb(*rgb).sgr(depth, background),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn named_flags_and_sgr_settings_agree_and_are_idempotent() {
+        for (token, sgr) in [
+            ("BOLD", "1"),
+            ("ITALIC", "3"),
+            ("UNDERLINE", "4"),
+            ("FLASH", "5"),
+            ("REVERSE", "7"),
+        ] {
+            let mut named = Style::default();
+            assert!(named.token(token));
+            assert_eq!(
+                named.sequence(ColourDepth::TrueColour),
+                format!("\x1b[{sgr}m")
+            );
+            let once = named;
+            assert!(named.token(token));
+            assert_eq!(named, once);
+
+            let mut raw = Style::default();
+            raw.sgr(sgr);
+            assert_eq!(raw, named);
+            raw.sgr(sgr);
+            assert_eq!(raw, named);
+        }
+    }
+
+    #[test]
+    fn resetting_styles_clears_all_fields_and_selective_clears_preserve_the_rest() {
+        let flags = [
+            ("BOLD", "22"),
+            ("ITALIC", "23"),
+            ("UNDERLINE", "24"),
+            ("FLASH", "25"),
+            ("REVERSE", "27"),
+        ];
+        let mut original = Style::default();
+        for (token, _) in flags {
+            assert!(original.token(token));
+        }
+        assert!(original.token("RED"));
+        assert!(original.token("B_BLUE"));
+
+        for (removed, clear) in flags {
+            let mut actual = original;
+            actual.sgr(clear);
+            let mut expected = Style::default();
+            assert!(expected.token("RED"));
+            assert!(expected.token("B_BLUE"));
+            for (token, _) in flags {
+                if token != removed {
+                    assert!(expected.token(token));
+                }
+            }
+            assert_eq!(actual, expected, "{removed}");
+        }
+        for reset in ["", "0"] {
+            let mut actual = original;
+            actual.sgr(reset);
+            assert_eq!(actual, Style::default());
+        }
+        let mut actual = original;
+        assert!(actual.token("RESET"));
+        assert_eq!(actual, Style::default());
+    }
+
+    #[test]
+    fn named_colours_set_foregrounds_and_backgrounds() {
+        for (name, index) in [
+            ("BLACK", 0),
+            ("RED", 1),
+            ("GREEN", 2),
+            ("YELLOW", 3),
+            ("BLUE", 4),
+            ("MAGENTA", 5),
+            ("CYAN", 6),
+            ("WHITE", 7),
+            ("ORANGE", 208),
+        ] {
+            for (token, base) in [(name.to_owned(), 38), (format!("B_{name}"), 48)] {
+                let mut style = Style::default();
+                assert!(style.token(&token));
+                assert_eq!(
+                    style.sequence(ColourDepth::Indexed),
+                    format!("\x1b[{base};5;{index}m")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn legacy_controls_are_recognized_without_changing_style() {
+        let mut style = Style::default();
+        for token in ["BOLD", "RED", "B_BLUE"] {
+            assert!(style.token(token));
+        }
+        assert!(!style.sequence(ColourDepth::TrueColour).is_empty());
+        let original = style;
+        for token in ["FG_-1", "INITTERM", "WINDOW", "ENDTERM", "STATUS"] {
+            assert!(style.token(token));
+            assert_eq!(style, original);
+        }
+    }
+
+    #[test]
+    fn ansi_foreground_and_background_sequences_preserve_their_indices() {
+        for (sgr, index, background) in [
+            (30, 0, false),
+            (31, 1, false),
+            (37, 7, false),
+            (40, 0, true),
+            (44, 4, true),
+            (47, 7, true),
+            (90, 8, false),
+            (91, 9, false),
+            (97, 15, false),
+            (100, 8, true),
+            (104, 12, true),
+            (107, 15, true),
+        ] {
+            let mut style = Style::default();
+            style.sgr(&sgr.to_string());
+            let base = if background { 48 } else { 38 };
+            assert_eq!(
+                style.sequence(ColourDepth::Indexed),
+                format!("\x1b[{base};5;{index}m")
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_hex_tokens_preserve_the_active_style() {
+        let mut original = Style::default();
+        for token in ["BOLD", "RED", "B_BLUE"] {
+            assert!(original.token(token));
+        }
+        for name in [
+            "#", "#0", "#12", "#1234", "#12345", "#1234567", "#ggg", "#00000g", "#é0", "#🦀00",
+        ] {
+            for token in [name.to_owned(), format!("B_{name}")] {
+                let mut style = original;
+                assert!(!style.token(&token), "{token}");
+                assert_eq!(style, original, "{token}");
+            }
+        }
+    }
+
+    #[test]
+    fn short_and_long_hex_tokens_encode_the_same_rgb_colours() {
+        for (short, long, rgb) in [
+            ("#123", "#112233", "17;34;51"),
+            ("#f0a", "#ff00aa", "255;0;170"),
+            ("#AbC", "#AaBbCc", "170;187;204"),
+        ] {
+            for name in [short, long] {
+                for (token, base) in [(name.to_owned(), 38), (format!("B_{name}"), 48)] {
+                    let mut style = Style::default();
+                    assert!(style.token(&token));
+                    assert_eq!(
+                        style.sequence(ColourDepth::TrueColour),
+                        format!("\x1b[{base};2;{rgb}m")
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn rgb_foregrounds_and_backgrounds_degrade_for_every_profile() {
         let red = Colour::Rgb([255, 0, 0]);
         for (bits, fg, bg) in [
