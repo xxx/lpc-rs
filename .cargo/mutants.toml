@@ -398,6 +398,7 @@ examine_globs = [
     "src/interpreter/call_frame.rs",
     "src/interpreter/opcode_profile.rs",
     "src/interpreter/sockets/transport.rs",
+    "src/interpreter/task/handle_call.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -406,6 +407,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # A declared reference position is below arity, so the inner guard rules out equality.
+    "^src/interpreter/task/handle_call\\.rs:183:21: replace < with <= in Task<STACKSIZE>::push_receiver_frame$",
     # Dropping the stop sender wakes the manager through channel closure.
     "^src/interpreter/sockets/transport\\.rs:174:9: replace <impl Drop for SocketTransport>::drop with \\(\\)$",
     # Each handle receives one Close command before any separate Retire command.

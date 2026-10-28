@@ -498,6 +498,7 @@ The reviewed scope includes:
 - [Call frames](src/interpreter/call_frame.rs): receiver identity, instruction diagnostics, inherited globals, argument layout, captured defaults, nominal class bindings, transactional addition and integer updates.
 - [Opcode counters](src/interpreter/opcode_profile.rs): direct dispatch recording and counter snapshots in ordinary test builds.
 - [TCP transport](src/interpreter/sockets/transport.rs): committed delivery, bounded stream input, output draining, worker cleanup, observer disconnection and close-control reasons.
+- [Function calls](src/interpreter/task/handle_call.rs): entry history, inherited and constructor calls, argument types, reference and spread binding, register budgets and call-site diagnostics.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -538,6 +539,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Program reference parameters have indices below their declared arity; builtin
+reference tails use the separate efun path. At equal argument counts, the later
+missing-reference check is false, preserving the pinned call-frame comparison.
 The TCP manager stops when its stop sender closes, including during ordinary
 field destruction. Each handle publishes one explicit `Close` command before
 retirement uses `Retire`; the committer preserves their order. Tests cover these

@@ -500,8 +500,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 }
 
-/// `lpc_ref` fits a parameter typed `arg_type` (0 always does), else the
-/// runtime error, labelled at `arg_def_span`, with no call site span.
+/// Check a supplied parameter type, accepting null in `NullMode::Zero`.
+/// Errors are labelled at `arg_def_span`, without a call site span.
 pub(crate) fn check_arg_type(
     txn: &TxnHandle,
     lpc_ref: &LpcRef,
@@ -524,4 +524,177 @@ pub(crate) fn check_arg_type(
         "unexpected argument type to `{function_name}`: {ref_type}. expected {arg_type}."
     ))
     .with_label("defined here", arg_def_span.copied()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interpreter::stm::{Snapshot, Transaction, Version};
+
+    #[test]
+    fn call_entries_define_external_history_and_argument_counting() {
+        for (entry, external, counted) in [
+            (CallEntry::Direct, false, true),
+            (CallEntry::Virtual, false, false),
+            (CallEntry::SimulEfun, true, true),
+            (CallEntry::Door, true, false),
+            (CallEntry::Initializer, false, false),
+        ] {
+            assert_eq!(entry.external(), external, "{entry:?}");
+            assert_eq!(entry.counted(), counted, "{entry:?}");
+        }
+    }
+
+    #[test]
+    fn runtime_argument_types_respect_null_mode_and_missing_parameter_metadata() {
+        let int = LpcType::Int(false);
+        let string = LpcType::String(false);
+        let any = LpcType::Mixed(false);
+        let number = LpcRef::from(7);
+        let text = LpcRef::from("wrong type");
+        let zero = LpcRef::from(0);
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let mut snapshot = Snapshot::new(Version::new(), imbl::HashMap::new());
+            snapshot.null_mode = mode;
+            let txn = TxnHandle::new(Transaction::new(snapshot));
+            check_arg_type(&txn, &number, Some(&int), None, "target").unwrap();
+            check_arg_type(&txn, &number, Some(&any), None, "target").unwrap();
+            check_arg_type(&txn, &text, None, None, "target").unwrap();
+            let error = check_arg_type(&txn, &text, Some(&int), None, "target")
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("unexpected argument type to `target`"),
+                "{error}"
+            );
+            assert!(error.contains("expected int"), "{error}");
+            assert_eq!(
+                check_arg_type(&txn, &zero, Some(&string), None, "target").is_ok(),
+                mode == NullMode::Zero,
+                "{mode:?}"
+            );
+        }
+    }
+
+    fn empty_task() -> (Task<1024>, Arc<Process>) {
+        use crate::interpreter::{task_context::TaskContext, vm::global_state::GlobalState};
+
+        let (tx, _receiver) = tokio::sync::mpsc::channel(8);
+        let state = Arc::new(GlobalState::new(crate::test_support::test_config(), tx));
+        let process = Arc::new(Process::default());
+        let context = TaskContext::new(state, process.clone(), None);
+        (Task::new(context), process)
+    }
+
+    #[tokio::test]
+    async fn register_budgets_accept_the_last_fitting_count_and_report_the_exact_limit() {
+        use lpc_rs_core::function_arity::FunctionArity;
+        use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+
+        let (task, _process) = empty_task();
+        for locals in [0, 1, 7] {
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("budget")
+                .filename(Arc::new("budget.c".into()))
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(0))
+                .build()
+                .unwrap();
+            let function = Function::from(Arc::new(ProgramFunction::new(prototype, locals)));
+            let limit = usize::from(RegisterSize::MAX) - usize::from(locals) - 1;
+            assert_eq!(task.checked_register_count(0, &function).unwrap(), 0);
+            assert_eq!(
+                usize::from(task.checked_register_count(limit, &function).unwrap()),
+                limit
+            );
+            let error = task
+                .checked_register_count(limit + 1, &function)
+                .unwrap_err();
+            let expected = format!("the limit is {limit}");
+            assert!(error.to_string().contains(&expected), "{error}");
+        }
+    }
+
+    #[tokio::test]
+    async fn cached_simul_calls_report_missing_reference_arguments_at_the_call_site() {
+        use lpc_rs_asm::instruction::Instruction;
+        use lpc_rs_core::function_arity::FunctionArity;
+        use lpc_rs_errors::source_map::SOURCE_MAP;
+        use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+
+        let (mut task, process) = empty_task();
+        let source = "updated()";
+        let file = SOURCE_MAP
+            .write()
+            .add("/cached_caller.c".to_owned(), source.to_owned());
+        let span = Span::new(file, 0..source.len());
+        let caller = FunctionPrototypeBuilder::default()
+            .name("cached_caller")
+            .filename(Arc::new("cached_caller.c".into()))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let mut caller = ProgramFunction::new(caller, 0);
+        caller.arg_lists = vec![vec![]];
+        caller.instructions = vec![Instruction::Call(ustr::ustr("updated"), ArgList(0))];
+        caller.debug_spans = vec![Some(span)];
+        let mut frame = CallFrame::new(
+            process,
+            Arc::new(caller),
+            0,
+            None::<&[VarId]>,
+            &task.context.txn,
+        );
+        frame.set_pc(1usize);
+        task.stack.push(frame).unwrap();
+        let updated = FunctionPrototypeBuilder::default()
+            .name("updated")
+            .filename(Arc::new("updated_simul.c".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Int(false)])
+            .ref_params(vec![true])
+            .build()
+            .unwrap();
+        let mut updated = ProgramFunction::new(updated, 0);
+        updated.num_upvalues = 1;
+        updated.arg_locations = vec![lpc_rs_core::register::Register(0).as_upvalue()];
+        let function = Function::from(Arc::new(updated));
+        let error = task
+            .push_call_frame(
+                Arc::new(Process::default()),
+                function,
+                ArgList(0),
+                CallEntry::SimulEfun,
+            )
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("argument 1 of `updated` must be passed by reference"),
+            "{error}"
+        );
+        assert_eq!(error.span(), Some(span));
+        assert_eq!(task.stack.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn mixed_value_reference_and_spread_arguments_keep_their_positions() {
+        let task = crate::test_support::run_prog(
+            r#"
+            void fill(int first, int ref output, int middle, int next, int last) {
+                output = first * 1000 + middle * 100 + next * 10 + last;
+            }
+            int create() {
+                int output;
+                int *middle = ({ 2, 3 });
+                fill(1, ref output, middle..., 4);
+                return output;
+            }
+        "#,
+        )
+        .await;
+        assert!(matches!(task.result().unwrap(), LpcRef::Int(value) if value.0 == 1234));
+    }
 }
