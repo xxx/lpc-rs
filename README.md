@@ -501,6 +501,7 @@ The reviewed scope includes:
 - [Function calls](src/interpreter/task/handle_call.rs): entry history, inherited and constructor calls, argument types, reference and spread binding, register budgets and call-site diagnostics.
 - [Compiler tree walking](src/compiler/codegen/tree_walker.rs): child traversal order, lexical scope hooks, error propagation and pass diagnostic policy.
 - [Object state](src/interpreter/process/mod.rs): names, transactional images and liveness, movement, living inventories, diagnostic cell names, GC roots and stored environment links.
+- [Shared VM state](src/interpreter/vm/global_state.rs): committer lifecycle, queue metrics, GC retry limits, callback initialization and named target refresh.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -517,6 +518,10 @@ CARGO_TARGET_DIR="$PWD/target" NEXTEST_TEST_THREADS=4 cargo mutants --workspace 
 
 The run first checks the unmodified tests, then tests each mutation in a temporary
 source copy. The command runs one mutation at a time and up to four test processes.
+Mutation runs use `--max-fail=1:immediate` to terminate other test processes after
+a failure. The committer shutdown and GC retry probes run early through
+[Nextest priorities](.config/nextest.toml), catching lifecycle failures before
+other workers can remain blocked.
 Mutation tests use nextest for process isolation, as normal CI does;
 doctests remain part of normal workspace validation. `CARGO_TARGET_DIR` keeps build
 output in the workspace's shared `target/`. The allowlist limits which files are
@@ -541,6 +546,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Sixty-four generated tuple replacements for `spawn_committer` are excluded
+because they use unsupported `JoinHandle` constructors. Small compile probes
+confirm all four handle forms fail; the filter matches only these combinations.
 Program reference parameters have indices below their declared arity; builtin
 reference tails use the separate efun path. At equal argument counts, the later
 missing-reference check is false, preserving the pinned call-frame comparison.

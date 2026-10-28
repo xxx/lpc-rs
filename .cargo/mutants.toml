@@ -401,14 +401,18 @@ examine_globs = [
     "src/interpreter/task/handle_call.rs",
     "src/compiler/codegen/tree_walker.rs",
     "src/interpreter/process/mod.rs",
+    "src/interpreter/vm/global_state.rs",
 ]
 additional_cargo_args = ["--locked"]
+additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
 test_tool = "nextest"
 minimum_test_timeout = 20
 gitignore = true
 copy_target = false
 
 exclude_re = [
+    # These generated tuple replacements use four unsupported JoinHandle constructors.
+    "^src/interpreter/vm/global_state\\.rs:152:9: replace GlobalState::spawn_committer \\-> \\(flume::Sender<CommitProtocol>, tokio::sync::watch::Receiver<stm::Version>, JoinHandle<Snapshot>,\\) with .*JoinHandle::(?:new\\((?:Default::default\\(\\))?\\)|from_iter\\(\\[Default::default\\(\\)\\]\\)|from\\(Default::default\\(\\)\\))\\)$",
     # A declared reference position is below arity, so the inner guard rules out equality.
     "^src/interpreter/task/handle_call\\.rs:183:21: replace < with <= in Task<STACKSIZE>::push_receiver_frame$",
     # Dropping the stop sender wakes the manager through channel closure.

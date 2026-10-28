@@ -448,17 +448,63 @@ mod tests {
 
     #[test]
     fn committer_thread_exits_when_global_state_drops() {
-        let (tx, _rx) = tokio::sync::mpsc::channel(8);
-        let probe;
-        {
+        let (finished, received) = flume::bounded(1);
+        let worker = std::thread::spawn(move || {
+            let (tx, _rx) = tokio::sync::mpsc::channel(8);
             let gs = Arc::new(GlobalState::new(test_config(), tx));
-            probe = gs.committer_tx.clone();
-        } // last Arc released here -> GlobalState::drop sends Close + joins.
-        // If the join ever blocked, this test would hang.
+            let probe = gs.committer_tx.clone();
+            drop(gs);
+            finished.send(probe.is_disconnected()).unwrap();
+        });
         assert!(
-            probe.is_disconnected(),
+            received
+                .recv_timeout(Duration::from_secs(3))
+                .expect("dropping global state did not finish committer shutdown"),
             "committer channel should be closed after the committer exited"
         );
+        worker.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn gc_retry_counts_are_bounded_under_continuous_refusal() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        for retries in [0, 2] {
+            let (tx, _rx) = tokio::sync::mpsc::channel(8);
+            let mut state = GlobalState::new(test_config(), tx);
+            let real = state.committer_tx.clone();
+            let live = start_txn(&real).await.unwrap();
+            let (sender, receiver) = flume::unbounded::<CommitProtocol>();
+            let requests = Arc::new(AtomicUsize::new(0));
+            let observed = requests.clone();
+            let limit = retries as usize + 1;
+            let forwarder = std::thread::spawn(move || {
+                while let Ok(message) = receiver.recv() {
+                    if matches!(&message, CommitProtocol::GcPass { .. })
+                        && observed.fetch_add(1, Ordering::SeqCst) >= limit
+                    {
+                        drop(message);
+                        break;
+                    }
+                    let closing = matches!(&message, CommitProtocol::Close);
+                    if real.send(message).is_err() || closing {
+                        break;
+                    }
+                }
+                let _ = real.send(CommitProtocol::Close);
+            });
+            state.committer_tx = sender;
+            let refused = state
+                .gc_when_quiet(retries, Duration::ZERO)
+                .await
+                .unwrap()
+                .unwrap_err();
+            assert_eq!(refused.live, 1);
+            assert_eq!(requests.load(Ordering::SeqCst), limit);
+            drop(live);
+            drop(state);
+            forwarder.join().unwrap();
+        }
     }
 
     /// A `GlobalState` with a live committer and the in-game test config
@@ -847,5 +893,191 @@ mod tests {
         let txn_c = TxnHandle::new(Transaction::new(c.inner.clone()));
         assert!(process.is_initialized(&txn_c));
         assert!(!process.claim_init(&txn_c));
+    }
+
+    #[test]
+    fn queue_length_reports_messages_waiting_for_the_committer() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(8);
+        let mut state = GlobalState::new(test_config(), tx);
+        let real = state.committer_tx.clone();
+        let (sender, receiver) = flume::unbounded::<CommitProtocol>();
+        let (release, held) = flume::bounded::<()>(1);
+        let forwarder = std::thread::spawn(move || {
+            let _ = held.recv();
+            while let Ok(message) = receiver.recv() {
+                let closing = matches!(&message, CommitProtocol::Close);
+                if real.send(message).is_err() || closing {
+                    break;
+                }
+            }
+            let _ = real.send(CommitProtocol::Close);
+        });
+        state.committer_tx = sender;
+        let empty = state.committer_queue_len();
+        let mut replies = Vec::new();
+        for _ in 0..3 {
+            let (reply, received) = flume::bounded(1);
+            state
+                .committer_tx
+                .send(CommitProtocol::Stats { reply })
+                .unwrap();
+            replies.push(received);
+        }
+        let queued = state.committer_queue_len();
+        release.send(()).unwrap();
+        assert_eq!(empty, 0);
+        assert_eq!(queued, 3);
+        drop(state);
+        forwarder.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn local_callbacks_use_the_live_receiver_and_initialize_it() {
+        let gs = state_for_receiver();
+        let _master = permissive_master(&gs.object_space).await;
+        let (receiver, _) = compile_process_from_code(
+            &gs.object_space,
+            "/local_callback.c",
+            "int marker = 7; void foo() { marker = 9; }",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        ObjectSpace::insert_process_physical(&gs.object_space, receiver.clone());
+        let function = receiver
+            .initial_program()
+            .lookup_function("foo")
+            .unwrap()
+            .clone();
+        let dead_owner = Arc::new(Process::default());
+        let owner = Arc::downgrade(&dead_owner);
+        drop(dead_owner);
+        let pointer = FunctionPtrBuilder::default()
+            .owner(owner)
+            .address(FunctionAddress::local(
+                &receiver,
+                function,
+                &TxnHandle::empty(),
+            ))
+            .build()
+            .unwrap();
+        assert!(!gs.is_initialized(&receiver));
+        let prepared = gs
+            .prepare_function_ptr(&pointer, &[], None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(gs.is_initialized(&receiver));
+        assert_eq!(gs.committed_global(&receiver, 0), LpcRef::from(7));
+        prepared.execute(1000).await.unwrap();
+        assert_eq!(gs.committed_global(&receiver, 0), LpcRef::from(9));
+    }
+
+    async fn publish_callback_code(gs: &Arc<GlobalState>, receiver: &Arc<Process>, code: &str) {
+        use crate::interpreter::process::ProgramImage;
+
+        let path = receiver.initial_program().filename.as_ref().clone();
+        let (replacement, _) = compile_process_from_code(&gs.object_space, path, code, None, None)
+            .await
+            .unwrap();
+        assert_eq!(replacement.initial_program().num_globals, 1);
+        let mut live = start_txn(&gs.committer_tx).await.unwrap();
+        let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        let old = receiver.image(&txn);
+        let image = Arc::new(ProgramImage::migrate(
+            replacement.initial_program().clone(),
+            &old,
+            &[(0, 0)],
+        ));
+        txn.with(|t| t.write_image(receiver, image));
+        live.disarm();
+        commit_changeset(&gs.committer_tx, txn.with(Transaction::take_changeset))
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn prepared_named_callbacks_resolve_committed_code_updates() {
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        for kind in ["dynamic", "call_other", "simul"] {
+            let config = crate::test_config_builder!()
+                .simul_efun_file("/callback_simul.c")
+                .build()
+                .unwrap();
+            let (tx, _rx) = tokio::sync::mpsc::channel(8);
+            let gs = Arc::new(GlobalState::new(config, tx));
+            let owner = permissive_master(&gs.object_space).await;
+            let path = if kind == "simul" {
+                "/callback_simul.c"
+            } else {
+                "/callback.c"
+            };
+            let receiver = gs
+                .initialize_process_from_code(path, "int marker; void foo() { marker = 11; }")
+                .await
+                .unwrap()
+                .context
+                .process;
+            let object = LpcRef::Object(Arc::downgrade(&receiver));
+            let (address, partial_args) = match kind {
+                "dynamic" => (
+                    FunctionAddress::Dynamic(ustr("foo")),
+                    thin_vec![Some(object)],
+                ),
+                "call_other" => (
+                    FunctionAddress::Efun(ustr("call_other")),
+                    thin_vec![Some(object), Some(LpcRef::from("foo"))],
+                ),
+                "simul" => (FunctionAddress::SimulEfun(ustr("foo")), thin_vec![]),
+                _ => unreachable!(),
+            };
+            let pointer = FunctionPtrBuilder::default()
+                .owner(Arc::downgrade(&owner))
+                .address(address)
+                .partial_args(partial_args)
+                .build()
+                .unwrap();
+            let prepared = gs
+                .prepare_function_ptr(&pointer, &[], None)
+                .await
+                .unwrap()
+                .unwrap();
+            publish_callback_code(&gs, &receiver, "int marker; void foo() { marker = 22; }").await;
+            prepared.execute(1000).await.unwrap();
+            assert_eq!(
+                gs.committed_global(&receiver, 0),
+                LpcRef::from(22),
+                "{kind}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn ordinary_efun_callbacks_execute_the_builtin_in_the_owner() {
+        let gs = state_for_receiver();
+        let _master = permissive_master(&gs.object_space).await;
+        let owner = gs
+            .initialize_process_from_code("/efun_owner.c", "void create() {}")
+            .await
+            .unwrap()
+            .context
+            .process;
+        let pointer = FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&owner))
+            .address(FunctionAddress::Efun(ustr("enable_commands")))
+            .build()
+            .unwrap();
+        let prepared = gs
+            .prepare_function_ptr(&pointer, &[], None)
+            .await
+            .unwrap()
+            .unwrap();
+        prepared.execute(1000).await.unwrap();
+        let live = start_txn(&gs.committer_tx).await.unwrap();
+        let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        assert!(owner.commands_enabled(&txn));
     }
 }
