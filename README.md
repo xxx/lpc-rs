@@ -496,6 +496,7 @@ The reviewed scope includes:
 - [Save-file literals](src/interpreter/save_format.rs): signed-zero floats, scalar grammar, string and byte escapes, object references, container depth and debug cursor progress.
 - [Compile-time stack configuration](src/compile_time_config.rs): driver worker stacks support compilation at the language nesting limit.
 - [Call frames](src/interpreter/call_frame.rs): receiver identity, instruction diagnostics, inherited globals, argument layout, captured defaults, nominal class bindings, transactional addition and integer updates.
+- [Opcode counters](src/interpreter/opcode_profile.rs): direct dispatch recording and counter snapshots in ordinary test builds.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

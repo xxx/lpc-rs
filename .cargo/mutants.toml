@@ -396,6 +396,7 @@ examine_globs = [
     "src/interpreter/save_format.rs",
     "src/compile_time_config.rs",
     "src/interpreter/call_frame.rs",
+    "src/interpreter/opcode_profile.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

@@ -23,7 +23,7 @@ pub mod lpc_mapping;
 pub mod lpc_ref;
 pub(crate) mod memory;
 pub mod object_space;
-#[cfg(feature = "opcode-profile")]
+#[cfg(any(test, feature = "opcode-profile"))]
 pub mod opcode_profile;
 pub mod process;
 pub mod program;
