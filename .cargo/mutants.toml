@@ -388,6 +388,7 @@ examine_globs = [
     "src/compiler/codegen/scope_walker.rs",
     "src/compiler/compilation_context.rs",
     "src/compiler/codegen/peephole.rs",
+    "src/interpreter/error_frames.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"

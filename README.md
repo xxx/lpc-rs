@@ -488,6 +488,7 @@ The reviewed scope includes:
 - [Scope analysis](src/compiler/codegen/scope_walker.rs): closure storage, reference outputs, callable visibility, foreign calls and diagnostic aggregation.
 - [Compilation context](src/compiler/compilation_context.rs): source configuration, pragma boundaries, synthetic names, parent namespaces and function visibility.
 - [Peephole optimization](src/compiler/codegen/peephole.rs): copy coalescing, control-flow pruning, address remapping and debug convergence.
+- [Runtime error frames](src/interpreter/error_frames.rs): UTF-8 text bounds, frame and variable budgets, argument metadata, transactional object liveness and fresh diagnostic mappings.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -21,10 +21,7 @@ struct Text {
 
 impl Write for Text {
     fn write_str(&mut self, text: &str) -> fmt::Result {
-        let mut end = text.len().min(MAX_ERROR_TEXT_BYTES - self.text.len());
-        while !text.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = text.floor_char_boundary(MAX_ERROR_TEXT_BYTES - self.text.len());
         self.text.push_str(&text[..end]);
         if end < text.len() {
             self.truncated = true;
@@ -41,10 +38,7 @@ fn text(args: fmt::Arguments<'_>) -> Text {
     };
     let _ = fmt::write(&mut result, args);
     if result.truncated {
-        let mut end = result.text.len().min(MAX_ERROR_TEXT_BYTES - 3);
-        while !result.text.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = result.text.floor_char_boundary(MAX_ERROR_TEXT_BYTES - 3);
         result.text.truncate(end);
         result.text.push_str("...");
     }
@@ -309,6 +303,258 @@ mod tests {
             .chain(&frame.locals)
             .find(|v| v.name == name)
             .unwrap()
+    }
+
+    #[test]
+    fn formatted_text_truncates_at_unicode_boundaries_across_parts() {
+        for character in ["é", "界", "🦀"] {
+            let prefix = "x".repeat(MAX_ERROR_TEXT_BYTES - character.len() - 1);
+            let suffix = character.repeat(2);
+            let result = text(format_args!("{prefix}{suffix}"));
+
+            assert!(result.truncated, "{character}");
+            assert_eq!(result.text, format!("{prefix}..."), "{character}");
+            assert!(result.text.len() <= MAX_ERROR_TEXT_BYTES);
+        }
+    }
+
+    #[test]
+    fn formatted_text_preserves_an_exact_budget_without_truncation() {
+        let prefix = "x".repeat(MAX_ERROR_TEXT_BYTES - 4);
+        let result = text(format_args!("{prefix}🦀"));
+
+        assert!(!result.truncated);
+        assert_eq!(result.text, format!("{prefix}🦀"));
+        assert_eq!(result.text.len(), MAX_ERROR_TEXT_BYTES);
+    }
+
+    async fn frame_with_names(
+        program_name: &str,
+        function_name: &str,
+        receiver_name: &str,
+        txn: &TxnHandle,
+    ) -> CallFrame {
+        let config = crate::test_support::test_config();
+        let path = lpc_rs_core::lpc_path::LpcPath::new_in_game(program_name, "/", config.lib_dir);
+        let compiled = crate::compiler::Compiler::new(config)
+            .compile_string(path, format!("int {function_name}() {{ return 1; }}"))
+            .await
+            .unwrap();
+        let function = compiled
+            .program
+            .lookup_function(function_name)
+            .unwrap()
+            .clone();
+        let process = Process::new_virtual(compiled.program.into(), receiver_name.to_owned());
+        let mut frame = CallFrame::new(
+            process,
+            function,
+            0,
+            None::<&[crate::interpreter::stm::VarId]>,
+            txn,
+        );
+        let at = frame
+            .function
+            .debug_spans
+            .iter()
+            .position(Option::is_some)
+            .unwrap();
+        frame.set_pc(at + 1);
+        frame
+    }
+
+    #[tokio::test]
+    async fn a_full_header_fits_the_remaining_frame_budget() {
+        let name = "n".repeat(MAX_ERROR_TEXT_BYTES + 1);
+        let txn = TxnHandle::default();
+        let directory = "p".repeat(MAX_ERROR_TEXT_BYTES / 2);
+        let basename = "n".repeat(MAX_ERROR_TEXT_BYTES / 2);
+        let program = format!("/{directory}/{basename}.c");
+        let receiver = format!("/{directory}/{basename}");
+        let frame = frame_with_names(&program, &name, &receiver, &txn).await;
+        let mut budget = MAX_ERROR_TEXT_BYTES * 4;
+        let captured = capture_frame(&frame, &txn, &mut budget).unwrap();
+
+        for field in [
+            &captured.function,
+            &captured.program,
+            &captured.object,
+            &captured.file,
+        ] {
+            assert_eq!(field.len(), MAX_ERROR_TEXT_BYTES);
+            assert!(field.ends_with("..."));
+        }
+        assert!(captured.truncated);
+        assert_eq!(captured.text_bytes(), MAX_ERROR_TEXT_BYTES * 4);
+        assert_eq!(budget, 0);
+        assert!(captured.arguments.is_empty() && captured.locals.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_truncated_header_field_marks_the_frame_as_truncated() {
+        let txn = TxnHandle::default();
+        let long = "r".repeat(MAX_ERROR_TEXT_BYTES + 1);
+        for (function, receiver) in [
+            ("failure", format!("/instance/{long}")),
+            (long.as_str(), "/receiver".to_owned()),
+        ] {
+            let frame = frame_with_names("/base.c", function, &receiver, &txn).await;
+            let mut budget = MAX_ERROR_FRAME_BYTES;
+            let captured = capture_frame(&frame, &txn, &mut budget).unwrap();
+
+            assert_eq!(captured.program, "/base.c");
+            assert_eq!(captured.file, "/base.c");
+            let clipped = if function == "failure" {
+                &captured.object
+            } else {
+                &captured.function
+            };
+            assert_eq!(clipped.len(), MAX_ERROR_TEXT_BYTES);
+            assert!(clipped.ends_with("..."));
+            assert!(captured.truncated);
+        }
+    }
+
+    #[tokio::test]
+    async fn error_frames_observe_destruction_before_the_failed_attempt_rolls_back() {
+        let vm = vm();
+        crate::test_support::permissive_master(&vm.global_state.object_space).await;
+        let victim = process(&vm, "/victim.c", "").await;
+        let caller = process(
+            &vm,
+            "/caller.c",
+            "void failure(object doomed) { destruct(doomed); throw(\"dead-object-snapshot\"); }",
+        )
+        .await;
+        let value = LpcRef::from(Arc::downgrade(&victim));
+        let error = failed(&vm, &caller, "failure", &[value], 4000).await;
+        assert!(error.to_string().contains("dead-object-snapshot"));
+        let frame = error.error_frames().unwrap().frames.last().unwrap();
+
+        assert_eq!(slot(frame, "doomed").value, "<destructed object>");
+        assert!(vm.global_state.object_space.lookup("/victim").is_some());
+    }
+
+    fn frame_with_arguments(
+        mut function: lpc_rs_function_support::program_function::ProgramFunction,
+        receiver: &str,
+        txn: &TxnHandle,
+    ) -> CallFrame {
+        function.instructions = vec![lpc_rs_asm::instruction::Instruction::Ret];
+        function.debug_spans = vec![None];
+        let count = function.arity().num_args;
+        let program = crate::interpreter::program::Program {
+            filename: function.prototype.filename.clone(),
+            ..Default::default()
+        };
+        CallFrame::new(
+            Process::new_virtual(Arc::new(program), receiver.to_owned()),
+            Arc::new(function),
+            count,
+            None::<&[crate::interpreter::stm::VarId]>,
+            txn,
+        )
+    }
+
+    #[test]
+    fn unnamed_arguments_keep_their_positions_with_local_debug_metadata() {
+        use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+        use lpc_rs_function_support::{
+            function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
+            symbol::Symbol,
+        };
+
+        for (count, omitted, truncated) in [(2, 0, false), (MAX_ERROR_VARIABLES + 1, 2, true)] {
+            let count = u16::try_from(count).unwrap();
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("arguments")
+                .filename(Arc::new("/arguments.c".into()))
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(count))
+                .build()
+                .unwrap();
+            let mut function = ProgramFunction::new(prototype, 0);
+            let mut alias = Symbol::new("alias", LpcType::Int(false));
+            alias.location = Some(Register(1).as_local());
+            function.local_variables.push(alias);
+            let txn = TxnHandle::default();
+            let mut frame = frame_with_arguments(function, "/receiver", &txn);
+            for (register, value) in [(0, 99), (1, 40), (2, 41)] {
+                frame
+                    .set_location(&txn, Register(register).as_local(), value.into())
+                    .unwrap();
+            }
+            let mut budget = MAX_ERROR_FRAME_BYTES;
+            let captured = capture_frame(&frame, &txn, &mut budget).unwrap();
+
+            assert_eq!(captured.arguments[0].name, "$1");
+            assert_eq!(captured.arguments[0].value, "40");
+            assert_eq!(captured.arguments[1].name, "$2");
+            assert_eq!(captured.arguments[1].value, "41");
+            assert_eq!(captured.variables_omitted, omitted);
+            assert_eq!(captured.truncated, truncated);
+            if omitted == 0 {
+                assert_eq!(captured.locals[0].name, "alias");
+                assert_eq!(captured.locals[0].value, "40");
+            }
+        }
+    }
+
+    #[test]
+    fn variable_capture_respects_its_remaining_byte_budget() {
+        use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+        use lpc_rs_function_support::{
+            function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
+            symbol::Symbol,
+        };
+
+        let name = "f".repeat(MAX_ERROR_TEXT_BYTES + 1);
+        let prototype = FunctionPrototypeBuilder::default()
+            .name(name)
+            .filename(Arc::new("/base.c".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(1))
+            .build()
+            .unwrap();
+        let mut function = ProgramFunction::new(prototype, 0);
+        let mut argument = Symbol::new(&"a".repeat(MAX_ERROR_TEXT_BYTES), LpcType::String(false));
+        argument.location = Some(Register(1).as_local());
+        function.local_variables.push(argument);
+        function.arg_locations.push(Register(1).as_local());
+        let txn = TxnHandle::default();
+        let mut frame = frame_with_arguments(
+            function,
+            &format!("/instance/{}", "r".repeat(MAX_ERROR_TEXT_BYTES + 1)),
+            &txn,
+        );
+        frame
+            .set_location(
+                &txn,
+                Register(1).as_local(),
+                "x".repeat(MAX_ERROR_TEXT_BYTES - 2).into(),
+            )
+            .unwrap();
+        let mut full_budget = MAX_ERROR_FRAME_BYTES;
+        let full = capture_frame(&frame, &txn, &mut full_budget).unwrap();
+        let header = full.function.len() + full.program.len() + full.object.len() + full.file.len();
+        let variable = &full.arguments[0];
+        let bytes = variable.name.len() + variable.type_.len() + variable.value.len();
+        let allowance = MAX_ERROR_TEXT_BYTES * 2 + 16;
+
+        for (remaining, expected) in [(bytes - 1, 0), (allowance - 1, 0), (allowance, 1)] {
+            let initial = header + remaining;
+            let mut budget = initial;
+            let captured = capture_frame(&frame, &txn, &mut budget).unwrap();
+
+            assert_eq!(captured.arguments.len(), expected);
+            assert_eq!(captured.variables_omitted, 1 - expected);
+            assert!(captured.truncated);
+            assert!(captured.text_bytes() <= initial);
+            assert_eq!(budget, initial - captured.text_bytes());
+            if expected == 1 {
+                assert_eq!(captured.arguments, full.arguments);
+            }
+        }
     }
 
     #[tokio::test]
