@@ -504,6 +504,7 @@ The reviewed scope includes:
 - [Shared VM state](src/interpreter/vm/global_state.rs): committer lifecycle, queue metrics, GC retry limits, callback initialization and named target refresh.
 - [Macro expansion](src/compiler/preprocessor/expand.rs): construction and stringification budgets, recursive hide sets, argument substitution, synthesized escaping and source spans.
 - [Language lexer](src/compiler/lexer/mod.rs): cursor progress, directive comment and quote boundaries, numeric magnitudes, keyword spelling and token spans.
+- [Socket events](src/interpreter/sockets/events.rs): input credits, ordered delivery, accept admission, callback acknowledgement and drained wakeup rearming.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

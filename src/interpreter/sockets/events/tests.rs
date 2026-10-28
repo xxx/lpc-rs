@@ -706,3 +706,107 @@ fn owner_retirement_discards_pending_accepts_and_invalidates_an_old_delivery() {
     assert_eq!(f.commands.try_iter().count(), 1);
     f.connect();
 }
+
+#[test]
+fn acknowledging_a_drained_wakeup_allows_the_next_empty_transition() {
+    let mut f = fixture(1, 2, 1);
+    let handle = stream(&mut f);
+    for sequence in 1..=2 {
+        let txn = f.begin();
+        let access = f.access(&txn);
+        access
+            .write(&f.owner, handle, Bytes::from_static(b"x"))
+            .unwrap();
+        assert!(access.complete_write(handle, sequence).unwrap());
+        f.commit(&txn);
+        assert!(
+            matches!(&f.commands.recv().unwrap()[..], [SocketCommand::Write { handle: h, .. }] if *h == handle)
+        );
+        assert_eq!(settle(&mut f, handle, true).data, SocketEventData::Drained);
+        assert!(f.access(&f.begin()).lease(handle).unwrap().is_none());
+    }
+}
+
+#[test]
+fn eof_rejects_stale_gapped_and_repeated_sequences_without_new_events() {
+    let mut f = fixture(1, 2, 1);
+    let handle = stream(&mut f);
+    let txn = f.begin();
+    let access = f.access(&txn);
+    assert!(access.read(handle, 1, Bytes::from_static(b"x")).unwrap());
+    assert!(!access.eof(handle, 0).unwrap());
+    assert!(!access.eof(handle, 1).unwrap());
+    assert!(access.eof(handle, 3).is_err());
+    assert!(access.eof(handle, 2).unwrap());
+    assert!(!access.eof(handle, 3).unwrap());
+    f.commit(&txn);
+    assert_eq!(
+        settle(&mut f, handle, true).data,
+        SocketEventData::Read(Bytes::from_static(b"x"))
+    );
+    assert_eq!(settle(&mut f, handle, true).data, SocketEventData::Eof);
+    assert!(f.access(&f.begin()).lease(handle).unwrap().is_none());
+}
+
+#[test]
+fn consumed_accept_permits_cannot_publish_again_or_consume_a_new_reservation() {
+    let mut f = fixture(3, 2, 2);
+    let parent = listener(&mut f);
+    settle(&mut f, parent, true);
+    let first = reserve(&mut f, parent);
+    let txn = f.begin();
+    let access = f.access(&txn);
+    assert_eq!(
+        access.accepted(first, endpoint(1), endpoint(2)).unwrap(),
+        SocketAdmission::Admitted(first.child)
+    );
+    assert_eq!(
+        access.accepted(first, endpoint(1), endpoint(2)).unwrap(),
+        SocketAdmission::Stopped
+    );
+    f.commit(&txn);
+    assert_eq!(
+        &f.commands.try_recv().unwrap()[..],
+        &[SocketCommand::OpenAccepted {
+            handle: first.child
+        }]
+    );
+    assert_eq!(
+        settle(&mut f, parent, true).data,
+        SocketEventData::Accept(first.child)
+    );
+    assert_eq!(
+        &f.commands.try_recv().unwrap()[..],
+        &[SocketCommand::Activate {
+            handle: first.child
+        }]
+    );
+
+    let next = reserve(&mut f, parent);
+    assert_ne!(next.child, first.child);
+    let txn = f.begin();
+    let access = f.access(&txn);
+    assert_eq!(
+        access.accepted(first, endpoint(1), endpoint(2)).unwrap(),
+        SocketAdmission::Stopped
+    );
+    assert_eq!(
+        access.accepted(next, endpoint(1), endpoint(3)).unwrap(),
+        SocketAdmission::Admitted(next.child)
+    );
+    f.commit(&txn);
+    assert_eq!(
+        &f.commands.try_recv().unwrap()[..],
+        &[SocketCommand::OpenAccepted { handle: next.child }]
+    );
+    assert_eq!(
+        settle(&mut f, parent, true).data,
+        SocketEventData::Accept(next.child)
+    );
+    assert_eq!(
+        &f.commands.try_recv().unwrap()[..],
+        &[SocketCommand::Activate { handle: next.child }]
+    );
+    assert!(f.commands.is_empty());
+    assert!(f.access(&f.begin()).lease(parent).unwrap().is_none());
+}
