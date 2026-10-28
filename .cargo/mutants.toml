@@ -397,6 +397,7 @@ examine_globs = [
     "src/compile_time_config.rs",
     "src/interpreter/call_frame.rs",
     "src/interpreter/opcode_profile.rs",
+    "src/interpreter/sockets/transport.rs",
 ]
 additional_cargo_args = ["--locked"]
 test_tool = "nextest"
@@ -405,6 +406,10 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Dropping the stop sender wakes the manager through channel closure.
+    "^src/interpreter/sockets/transport\\.rs:174:9: replace <impl Drop for SocketTransport>::drop with \\(\\)$",
+    # Each handle receives one Close command before any separate Retire command.
+    "^src/interpreter/sockets/transport\\.rs:327:53: delete ! in Routing<B>::batch$",
     # Both paths concatenate the same strings after recording the same cell reads.
     "^src/interpreter/call_frame\\.rs:535:21:\\ delete\\ match\\ arm\\ \\[Some\\(LpcRef::String\\(left\\)\\),\\ Some\\(LpcRef::String\\(right\\)\\)\\]\\ in\\ CallFrame::add$",
     # The fallback assigns the same scalar int without allocation or drop work.

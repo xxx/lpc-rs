@@ -497,6 +497,7 @@ The reviewed scope includes:
 - [Compile-time stack configuration](src/compile_time_config.rs): driver worker stacks support compilation at the language nesting limit.
 - [Call frames](src/interpreter/call_frame.rs): receiver identity, instruction diagnostics, inherited globals, argument layout, captured defaults, nominal class bindings, transactional addition and integer updates.
 - [Opcode counters](src/interpreter/opcode_profile.rs): direct dispatch recording and counter snapshots in ordinary test builds.
+- [TCP transport](src/interpreter/sockets/transport.rs): committed delivery, bounded stream input, output draining, worker cleanup, observer disconnection and close-control reasons.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -537,6 +538,10 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+The TCP manager stops when its stop sender closes, including during ordinary
+field destruction. Each handle publishes one explicit `Close` command before
+retirement uses `Retire`; the committer preserves their order. Tests cover these
+cleanup and command-stream invariants behind the two pinned TCP exclusions.
 Call-frame string addition uses the same concatenation helper and records the
 same cell reads through its general path. Replacing an int register through
 the general assignment stores the same scalar without allocation or drop work.

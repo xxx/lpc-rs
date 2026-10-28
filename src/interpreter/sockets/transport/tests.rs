@@ -1583,3 +1583,188 @@ async fn listener_close_preserves_an_already_delivered_child_descriptor() {
     assert_eq!(read, 1);
     assert_eq!(byte, [b'x']);
 }
+
+#[tokio::test]
+async fn repeated_close_requests_publish_one_command_before_retirement() {
+    for opened in [false, true] {
+        let f = Fixture::new();
+        let commands = f.gs.sockets.take_commands().unwrap();
+        let handle = f.connect("test", 9).await;
+        assert!(matches!(
+            &commands.recv_async().await.unwrap()[..],
+            [SocketCommand::Open { handle: h, .. }] if *h == handle
+        ));
+        if opened {
+            f.transact(|access| {
+                assert!(
+                    access
+                        .ready(handle, endpoint(1234), Some(endpoint(9)))
+                        .unwrap()
+                );
+            })
+            .await;
+        }
+        f.transact(|access| {
+            access.close(&f.owner, handle).unwrap();
+            access.close(&f.owner, handle).unwrap();
+        })
+        .await;
+        assert!(matches!(
+            &commands.recv_async().await.unwrap()[..],
+            [SocketCommand::Close { handle: h, drain }] if *h == handle && *drain == opened
+        ));
+        f.close(handle).await;
+        assert!(matches!(
+            commands.try_recv(),
+            Err(flume::TryRecvError::Empty)
+        ));
+        f.transact(|access| {
+            access
+                .txn
+                .with(|txn| f.gs.sockets.retire_object(txn, &f.owner));
+        })
+        .await;
+        assert!(matches!(
+            &commands.recv_async().await.unwrap()[..],
+            [SocketCommand::Retire { handle: h }] if *h == handle
+        ));
+    }
+}
+
+#[tokio::test]
+async fn dropping_the_transport_releases_a_blocked_stream_while_the_vm_stays_alive() {
+    let f = Fixture::new();
+    let script = Script::new([Action::Pending]);
+    let (backend, _) = Simulated::single(&script);
+    let transport = f.simulated(backend);
+    let handle = f.connect("test", 9).await;
+    event(&transport).await;
+    f.write(handle, b"blocked").await;
+    script.wait_polls(1).await;
+    drop(transport);
+    script.wait_dropped().await;
+    assert!(script.bytes().is_empty());
+    assert!(f.info(handle).await.is_some());
+}
+
+#[tokio::test]
+async fn a_disconnected_observer_stops_reads_after_the_committed_chunk() {
+    let f = Fixture::new();
+    let handle = f.connect("test", 9).await;
+    f.transact(|access| {
+        assert!(
+            access
+                .ready(handle, endpoint(1234), Some(endpoint(9)))
+                .unwrap()
+        );
+    })
+    .await;
+    assert!(matches!(
+        f.settle(handle, true).await.data,
+        SocketEventData::Ready { .. }
+    ));
+    let (events, received) = flume::bounded(1);
+    drop(received);
+    let publisher = Publisher::new(&f.gs, events);
+    let (_close_tx, mut close) = watch::channel(None);
+    let (mut peer, reader) = tokio::io::duplex(8);
+    peer.write_all(b"chunk").await.unwrap();
+    peer.shutdown().await.unwrap();
+    assert!(
+        read_stream(handle, reader, &publisher, &mut close)
+            .await
+            .is_none()
+    );
+    let delivered = f.settle(handle, true).await;
+    assert!(matches!(delivered.data, SocketEventData::Read(data) if data.as_ref() == b"chunk"));
+    let (txn, _live) = f.begin().await;
+    assert!(f.access(&txn).lease(handle).unwrap().is_none());
+}
+
+#[tokio::test]
+async fn commit_notification_waits_stay_pending_until_a_change() {
+    use crate::interpreter::stm::Version;
+
+    {
+        let mut no_watch = None;
+        let mut waiting = std::pin::pin!(changed(&mut no_watch));
+        std::future::poll_fn(|cx| {
+            assert!(waiting.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+    }
+    let (sender, receiver) = watch::channel(Version::new());
+    let mut commits = Some(receiver);
+    let mut waiting = std::pin::pin!(changed(&mut commits));
+    std::future::poll_fn(|cx| {
+        assert!(waiting.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    sender.send(Version::new()).unwrap();
+    waiting.await;
+}
+
+#[tokio::test]
+async fn forced_interrupts_are_immediate_and_drain_expiry_is_a_timeout() {
+    {
+        let (_sender, mut close) = watch::channel(Some(Close {
+            drain: false,
+            deadline: Instant::now() + Duration::from_secs(3600),
+        }));
+        let mut waiting = std::pin::pin!(wait_interrupt(&mut close));
+        std::future::poll_fn(|cx| match waiting.as_mut().poll(cx) {
+            Poll::Ready(terminal) => {
+                assert_eq!(terminal.reason, SocketCloseReason::Local);
+                assert_eq!(terminal.operation, None);
+                assert!(terminal.error.is_none());
+                Poll::Ready(())
+            }
+            Poll::Pending => panic!("forced close waited for the drain deadline"),
+        })
+        .await;
+    }
+    let (_sender, mut close) = watch::channel(Some(Close {
+        drain: true,
+        deadline: Instant::now(),
+    }));
+    let terminal = wait_interrupt(&mut close).await;
+    assert_eq!(terminal.reason, SocketCloseReason::Timeout);
+    assert_eq!(terminal.operation, Some(SocketOperation::Close));
+    assert_eq!(terminal.error.as_deref(), Some("TCP operation timed out"));
+}
+
+#[test]
+fn interruption_reasons_follow_close_mode_and_deadline() {
+    let (_sender, empty) = watch::channel(None);
+    assert_eq!(interruption(&empty).reason, SocketCloseReason::Local);
+    for (drain, expired, reason, operation) in [
+        (false, false, SocketCloseReason::Local, None),
+        (false, true, SocketCloseReason::Local, None),
+        (true, false, SocketCloseReason::Local, None),
+        (
+            true,
+            true,
+            SocketCloseReason::Timeout,
+            Some(SocketOperation::Close),
+        ),
+    ] {
+        let now = Instant::now();
+        let (_sender, close) = watch::channel(Some(Close {
+            drain,
+            deadline: if expired {
+                now
+            } else {
+                now + Duration::from_secs(3600)
+            },
+        }));
+        let terminal = interruption(&close);
+        assert_eq!(terminal.reason, reason);
+        assert_eq!(terminal.operation, operation);
+        assert_eq!(
+            terminal.error.as_deref(),
+            (reason == SocketCloseReason::Timeout).then_some("TCP operation timed out")
+        );
+    }
+}
