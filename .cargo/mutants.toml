@@ -409,6 +409,7 @@ examine_globs = [
     "src/interpreter/task_context.rs",
     "src/command/frontend/dgd.rs",
     "src/interpreter/stm/mod.rs",
+    "src/interpreter/stm/committer.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
@@ -418,6 +419,10 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Generated Receiver constructors name a type absent from the committer module.
+    "^src/interpreter/stm/committer\\.rs:243:9:\\ replace\\ Committer::commit_watch\\ \\->\\ watch::Receiver<Version>\\ with\\ (?:Receiver::from\\(Default::default\\(\\)\\)|Receiver::from_iter\\(\\[Default::default\\(\\)\\]\\)|Receiver::new\\(\\)|Receiver::new\\(Default::default\\(\\)\\))$",
+    # The final survivor bound makes this widened prefilter redundant.
+    "^src/interpreter/stm/committer\\.rs:429:56:\\ replace\\ /\\ with\\ \\*\\ in\\ Committer::mark_world$",
     # Token and production definitions receive distinct rule numbers.
     "^src/command/frontend/dgd\\.rs:163:34:\\ replace\\ <\\ with\\ <=\\ in\\ check_redefinitions$",
     # Generated channel constructors use Receiver and Sender names absent from this module.

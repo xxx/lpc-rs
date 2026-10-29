@@ -423,7 +423,7 @@ impl Committer {
             }
         }
 
-        let mark_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let mark_ms = milliseconds(started.elapsed());
         let scanning = std::time::Instant::now();
         // Absent marked IDs and duplicate identities make this a conservative survivor bound.
         let identities = (marked.len() <= cells_before / 10)
@@ -444,7 +444,7 @@ impl Committer {
         } else {
             Vec::new()
         };
-        let scan_ms = scanning.elapsed().as_secs_f64() * 1000.0;
+        let scan_ms = milliseconds(scanning.elapsed());
         let sweeping = std::time::Instant::now();
         let sweep_mode = if let Some(ids) = identities {
             let retired = self
@@ -459,7 +459,7 @@ impl Committer {
             "key_removal"
         };
         let reclaimed = cells_before - self.snapshot.state().len();
-        let sweep_ms = sweeping.elapsed().as_secs_f64() * 1000.0;
+        let sweep_ms = milliseconds(sweeping.elapsed());
         let marked_cells = marked.len();
         drop(marked);
         drop(images);
@@ -475,7 +475,7 @@ impl Committer {
             mark_ms,
             scan_ms,
             sweep_ms,
-            pause_ms = started.elapsed().as_secs_f64() * 1000.0,
+            pause_ms = milliseconds(started.elapsed()),
             "gc pass completed"
         );
         reclaimed
@@ -706,6 +706,11 @@ impl Committer {
         }
         self.commit_watch.send_replace(new_version);
     }
+}
+
+#[inline]
+fn milliseconds(duration: std::time::Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
 }
 
 #[cfg(test)]
@@ -1635,7 +1640,12 @@ mod tests {
             },
             &tx,
         );
-        assert!(reply_rx.recv().unwrap().is_err());
+        let refused = reply_rx.recv().unwrap().unwrap_err();
+        assert_eq!(refused.live, 1);
+        assert_eq!(
+            refused.to_string(),
+            "gc refused: committer not quiescent (1 transaction(s) in flight)"
+        );
 
         // Refused: the var survives the pass untouched.
         drop(live);
@@ -1746,6 +1756,73 @@ mod tests {
             );
             assert_eq!(committer.snapshot.null_mode, before.null_mode);
             assert_eq!(before.peek(garbage[0]), Some(&WorldValue::ref_of(7.into())));
+        }
+    }
+
+    #[test]
+    fn gc_timings_report_fractional_milliseconds() {
+        use std::time::Duration;
+
+        for (duration, expected) in [
+            (Duration::ZERO, 0.0),
+            (Duration::from_nanos(1), 0.000_001),
+            (Duration::from_millis(17), 17.0),
+            (Duration::from_secs(1), 1000.0),
+            (Duration::from_nanos(123_456_789), 123.456_789),
+        ] {
+            let actual = milliseconds(duration);
+            assert!((actual - expected).abs() < 1e-9, "{duration:?}: {actual}");
+        }
+    }
+
+    #[test]
+    fn gc_reclaims_sparse_owned_worlds_in_parallel_while_retaining_roots_and_identities() {
+        for (garbage_cells, expected_workers) in [(15, None), (45, Some(2))] {
+            let (tx, _rx) = flume::unbounded();
+            let mut committer = Committer::new();
+            let root = SVar::<LpcArray>::new();
+            let leaf = SVar::<LpcArray>::new();
+            let payload = Arc::new(LpcArray::new([]));
+            let weak = Arc::downgrade(&payload);
+            let mut seed = Changeset::new(committer.current_version());
+            seed.write(
+                root.id,
+                WorldValue::Array(Arc::new(LpcArray::new([LpcRef::Array(leaf.clone())]))),
+            );
+            seed.write(leaf.id, WorldValue::Array(Arc::new(LpcArray::new([]))));
+            let mut identities = Vec::new();
+            for value in [
+                WorldValue::Process(Arc::new(Process::default())),
+                WorldValue::Connection(None),
+                WorldValue::Rules(Default::default()),
+            ] {
+                let id = VarId::new();
+                seed.write(id, value);
+                identities.push(id);
+            }
+            seed.write(VarId::new(), WorldValue::Array(payload));
+            for _ in 1..garbage_cells {
+                seed.write(VarId::new(), WorldValue::ref_of(7.into()));
+            }
+            committer.commit(seed).unwrap();
+
+            let (reply, response) = flume::bounded(1);
+            committer.process(
+                CommitProtocol::GcPass {
+                    roots: vec![WorldRoot::Var(root.id)],
+                    reply,
+                },
+                &tx,
+            );
+            assert_eq!(
+                response.try_recv().unwrap().unwrap().reclaimed,
+                garbage_cells
+            );
+            assert!(weak.upgrade().is_none());
+            for id in identities.into_iter().chain([root.id, leaf.id]) {
+                assert!(committer.snapshot.peek(id).is_some());
+            }
+            assert_eq!(committer.reclaimer.initialized_workers(), expected_workers);
         }
     }
 
