@@ -517,6 +517,7 @@ The reviewed scope includes:
 - [Instruction execution](src/interpreter/task/eval_loop.rs): integer batching, fallback and yield budgets, bytecode errors, indexed stores and slice bounds.
 - [Task lifecycle](src/interpreter/task/mod.rs): seeded calls, lazy global defaults, system publication, cleanup eligibility, cancellation diagnostics, deadlines and attempt metadata.
 - [Earley parsing](src/command/grammar/earley.rs): chart progress, nullable recognition, lazy derivations, exact suffix spans, work budgets and depth limits.
+- [Preprocessor execution](src/compiler/preprocessor/mod.rs): directive dispatch, macro cache charges, exact evaluation-depth limits, boolean short-circuiting, integer operators and pragmas.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

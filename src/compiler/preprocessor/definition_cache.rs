@@ -365,4 +365,24 @@ VALUE
             + expression_heap(object.expr.as_ref().unwrap());
         assert!(cache.stats().estimated_bytes >= owned);
     }
+
+    #[tokio::test]
+    async fn definition_charge_depends_on_text_length_instead_of_source_offset() {
+        let root = TempLib::new("definition-charge-offset");
+        let mut charges = Vec::new();
+        for padding in [0, 128] {
+            let cache = Arc::new(DefinitionCache::default());
+            let code = format!("{}#define VALUE 7\nVALUE\n", "\n".repeat(padding));
+
+            assert_eq!(
+                tokens(&root, cache.clone(), DiagnosticSources::default(), &code).await,
+                ["7"]
+            );
+            let stats = cache.stats();
+            assert_eq!(stats.entries, 1);
+            charges.push(stats.estimated_bytes);
+        }
+        assert!(charges[0] > 0);
+        assert_eq!(charges[0], charges[1]);
+    }
 }
