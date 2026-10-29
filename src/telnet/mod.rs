@@ -3114,5 +3114,178 @@ mod tests {
             );
             assert!(w.connection.body().is_none());
         }
+
+        #[tokio::test]
+        async fn reverse_lookup_records_the_loopback_host_name() {
+            let address: SocketAddr = "127.0.0.1:4000".parse().unwrap();
+            let expected = tokio::task::spawn_blocking(move || {
+                dns_lookup::lookup_addr(&address.ip()).expect("loopback has a local host name")
+            })
+            .await
+            .unwrap();
+            assert_ne!(expected, address.ip().to_string());
+            let (tx, _rx) = mpsc::unbounded_channel();
+            let connection = Arc::new(Connection::new(address, tx));
+
+            Telnet::resolve_host_name(connection.clone());
+            eventually(|| connection.host_name().is_some()).await;
+
+            assert_eq!(connection.host_name(), Some(expected.as_str()));
+        }
+
+        #[tokio::test]
+        async fn a_zero_byte_write_closes_and_unregisters_the_connection() {
+            use std::{
+                io,
+                pin::Pin,
+                task::{Context, Poll},
+            };
+
+            struct ZeroWriter;
+
+            impl AsyncWrite for ZeroWriter {
+                fn poll_write(
+                    self: Pin<&mut Self>,
+                    _cx: &mut Context<'_>,
+                    _bytes: &[u8],
+                ) -> Poll<io::Result<usize>> {
+                    Poll::Ready(Ok(0))
+                }
+
+                // Keep flush pending so an incorrectly accepted zero-byte write can time out.
+                fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+                    Poll::Pending
+                }
+
+                fn poll_shutdown(
+                    self: Pin<&mut Self>,
+                    _cx: &mut Context<'_>,
+                ) -> Poll<io::Result<()>> {
+                    Poll::Ready(Ok(()))
+                }
+            }
+
+            let mut vm = Vm::new(test_config());
+            let (_client, reader) = tokio::io::duplex(4096);
+            let stream = tokio::io::join(reader, ZeroWriter);
+            within(Telnet::connection_loop(
+                stream,
+                ADDR.parse().unwrap(),
+                TaskTemplate::from(vm.global_state.clone()),
+            ))
+            .await;
+
+            assert!(
+                matches!(vm.next_op(), Some(VmOp::InitiateLogin(connection)) if connection.is_dead())
+            );
+            assert!(vm.global_state.registry.is_empty());
+        }
+
+        #[tokio::test]
+        async fn prompt_cycles_skip_shutdown_and_overflow_then_resume_after_drain() {
+            let vm = Vm::new(test_config());
+            let body = vm
+                .initialize_process_from_code(
+                    "/prompt-body.c",
+                    "int calls; string write_prompt() { calls++; return \"> \"; }",
+                )
+                .await
+                .unwrap()
+                .context
+                .process;
+            let template = TaskTemplate::from(vm.global_state.clone());
+            let mut expected_calls = 0;
+            for shutting_down in [false, true] {
+                for overflowed in [false, true] {
+                    let (tx, mut rx) = mpsc::unbounded_channel();
+                    let connection = Arc::new(Connection::new(ADDR.parse().unwrap(), tx));
+                    connection.set_body(Some(body.clone()));
+                    let mut session = Session::new();
+                    let mut outbox = Outbox::new(connection.clone(), 64);
+                    if overflowed {
+                        outbox.send(&mut session, Op::Text(&"x".repeat(64)));
+                        outbox.fill_from(&mut session);
+                    }
+                    assert_eq!(outbox.is_overflowed(), overflowed);
+                    let mut shutdown = shutting_down;
+                    let flow = Telnet::handle_op(
+                        Some(ConnectionOp::PromptCycle),
+                        &mut session,
+                        &connection,
+                        &template,
+                        &mut shutdown,
+                        &mut outbox,
+                    )
+                    .await;
+                    assert!(matches!(flow, Flow::Continue));
+                    let should_prompt = !shutting_down && !overflowed;
+                    let after = vm.global_state.committed_global(&body, 0u16);
+                    expected_calls += LpcIntInner::from(should_prompt);
+                    assert_eq!(after, LpcRef::from(expected_calls));
+                    assert_eq!(rx.try_recv().is_ok(), should_prompt);
+                    if overflowed && !shutting_down {
+                        outbox.wrote(outbox.pending().len());
+                        assert!(!outbox.is_overflowed());
+                        Telnet::handle_op(
+                            Some(ConnectionOp::PromptCycle),
+                            &mut session,
+                            &connection,
+                            &template,
+                            &mut shutdown,
+                            &mut outbox,
+                        )
+                        .await;
+                        expected_calls += 1;
+                        assert_eq!(
+                            vm.global_state.committed_global(&body, 0u16),
+                            LpcRef::from(expected_calls)
+                        );
+                        assert!(
+                            matches!(rx.try_recv(), Ok(ConnectionOp::Prompt(text)) if text == "> ")
+                        );
+                    }
+                }
+            }
+        }
+
+        #[tokio::test]
+        async fn leaving_a_replaced_connection_keeps_and_reports_its_replacement() {
+            use tracing::instrument::WithSubscriber;
+
+            use crate::test_support::log_capture::LogCapture;
+
+            for replaced in [false, true] {
+                let vm = Vm::new(test_config());
+                let template = TaskTemplate::from(vm.global_state.clone());
+                let (tx, _rx) = mpsc::unbounded_channel();
+                let old = Arc::new(Connection::new(ADDR.parse().unwrap(), tx.clone()));
+                let newer = Arc::new(Connection::new(old.address, tx));
+                vm.global_state.registry.insert(old.clone());
+                if replaced {
+                    vm.global_state.registry.insert(newer.clone());
+                }
+                let log = LogCapture::default();
+
+                Telnet::leave(&old, &template, Departure::Server, false)
+                    .with_subscriber(log.subscriber("lpc_rs::telnet=trace"))
+                    .await;
+
+                assert!(old.is_dead());
+                assert_eq!(
+                    log.contents()
+                        .contains("left after a reconnect took its address"),
+                    replaced
+                );
+                if replaced {
+                    assert!(Arc::ptr_eq(
+                        &vm.global_state.registry.get(old.address).unwrap(),
+                        &newer
+                    ));
+                    assert!(!newer.is_dead());
+                } else {
+                    assert!(vm.global_state.registry.is_empty());
+                }
+            }
+        }
     }
 }

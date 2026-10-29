@@ -413,6 +413,7 @@ examine_globs = [
     "src/interpreter/stm/retry.rs",
     "src/compiler/codegen/semantic_check_walker.rs",
     "src/compiler/semantic/semantic_checks.rs",
+    "src/telnet/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
