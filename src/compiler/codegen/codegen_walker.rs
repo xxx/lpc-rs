@@ -3319,11 +3319,19 @@ impl TreeWalker for CodegenWalker {
                     "captured `{}` was never given a cell",
                     node.name
                 ));
-            } else if matches!(expression, ExpressionNode::Var(_))
-                || matches!(self.current_result, RegisterVariant::Constant(_))
+            } else if matches!(
+                expression,
+                ExpressionNode::Var(_)
+                    | ExpressionNode::Assignment(_)
+                    | ExpressionNode::CommaExpression(_)
+                    | ExpressionNode::UnaryOp(UnaryOpNode {
+                        op: UnaryOperation::Inc | UnaryOperation::Dec,
+                        is_post: false,
+                        ..
+                    })
+            ) || !matches!(self.current_result, RegisterVariant::Local(Register(1..)))
             {
-                // Copy to a new register so the new var isn't literally
-                // sharing a register with the old one, or living in the pool.
+                // Expression results may still name another variable's storage.
                 let next_register =
                     allocate_register(&mut self.register_counter, node.span)?.as_local();
                 trace!("Copying var to {:?}", next_register);
@@ -3334,7 +3342,6 @@ impl TreeWalker for CodegenWalker {
                 );
                 next_register
             } else {
-                trace!("Not copying the result");
                 self.current_result
             }
         } else {
@@ -8410,6 +8417,32 @@ mod tests {
                 "{:?}",
                 f.arg_lists
             );
+        }
+    }
+
+    #[tokio::test]
+    async fn local_initializers_keep_independent_storage() {
+        use crate::interpreter::lpc_ref::LpcRef;
+        use lpc_rs_core::null_mode::NullMode;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        for code in [
+            "int create() { int original = 1; int copied = ++original; copied++; return original * 10 + copied; }",
+            "int create() { int original = 3; int copied = --original; copied++; return original * 10 + copied; }",
+            "int create() { int original = 1; int copied = (original = 2); copied++; return original * 10 + copied; }",
+            "int create() { int original = 1; int copied = (0, ++original); copied++; return original * 10 + copied; }",
+            "int original = 1; int create() { int copied = ++original; copied++; return original * 10 + copied; }",
+            "int create() { int original = 1; function read = (: original :); int copied = ++original; copied++; return evaluate(read) * 10 + copied; }",
+            "int pack(int ref original) { int copied = ++original; copied++; return original * 10 + copied; } int create() { int original = 1; return pack(ref original); }",
+        ] {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let task = crate::test_support::run_prog_with_config(code, Arc::new(config)).await;
+                assert_eq!(task.result(), Some(LpcRef::from(23)), "{mode:?}: {code}");
+            }
         }
     }
 }

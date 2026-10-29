@@ -134,6 +134,12 @@ fn compilation(c: &mut Criterion) {
             )
         })
         .collect::<String>();
+    let initializers = format!(
+        "int run(int value) {{ {} return value; }}",
+        (0..128)
+            .map(|index| format!("int local_{index} = value + {index}; value = local_{index};\n"))
+            .collect::<String>()
+    );
     let mut group = c.benchmark_group("register_allocation_compile");
     for (name, source) in [
         ("small_function", small),
@@ -141,6 +147,7 @@ fn compilation(c: &mut Criterion) {
         ("globals", globals.as_str()),
         ("closure_positionals", closures.as_str()),
         ("literal_expressions", literals.as_str()),
+        ("local_initializers", initializers.as_str()),
     ] {
         group.bench_function(name, |b| {
             b.to_async(&runtime).iter(|| async {
