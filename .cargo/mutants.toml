@@ -410,6 +410,7 @@ examine_globs = [
     "src/command/frontend/dgd.rs",
     "src/interpreter/stm/mod.rs",
     "src/interpreter/stm/committer.rs",
+    "src/interpreter/stm/retry.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
@@ -419,6 +420,10 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Generated Receiver constructors name a type absent from the retry module.
+    "^src/interpreter/stm/retry\\.rs:270:9:\\ replace\\ AttemptRunner::commit_watch\\ \\->\\ Option<tokio::sync::watch::Receiver<Version>>\\ with\\ (?:Some\\(Receiver::from\\(Default::default\\(\\)\\)\\)|Some\\(Receiver::from_iter\\(\\[Default::default\\(\\)\\]\\)\\)|Some\\(Receiver::new\\(\\)\\)|Some\\(Receiver::new\\(Default::default\\(\\)\\)\\))$",
+    # Duration::ZERO and its generated default replacement are the same value.
+    "^src/interpreter/stm/retry\\.rs:206:9:\\ replace\\ AttemptBody::take_compilation_time\\ \\->\\ Duration\\ with\\ Default::default\\(\\)$",
     # Generated Receiver constructors name a type absent from the committer module.
     "^src/interpreter/stm/committer\\.rs:243:9:\\ replace\\ Committer::commit_watch\\ \\->\\ watch::Receiver<Version>\\ with\\ (?:Receiver::from\\(Default::default\\(\\)\\)|Receiver::from_iter\\(\\[Default::default\\(\\)\\]\\)|Receiver::new\\(\\)|Receiver::new\\(Default::default\\(\\)\\))$",
     # The final survivor bound makes this widened prefilter redundant.

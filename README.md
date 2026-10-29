@@ -510,6 +510,7 @@ The reviewed scope includes:
 - [DGD grammar frontend](src/command/frontend/dgd.rs): grammar tokenization, rule diagnostics, reachable productions, regex translation, actions and caching.
 - [Transactions](src/interpreter/stm/mod.rs): slot and payload views, object placement, deferred effects, context sharing, provenance and compilation accounting.
 - [Committer](src/interpreter/stm/committer.rs): protocol replies, snapshot pins, conflict history, publication, GC reachability, reclamation strategy and timing units.
+- [Attempt runner](src/interpreter/stm/retry.rs): retry deadlines, admission, telemetry, diagnostics, committer requests and committed readers.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

@@ -822,6 +822,99 @@ mod tests {
         // the retry loop timed itself
         assert!(!total_duration.is_zero());
     }
+    #[test]
+    fn attempt_body_defaults_keep_metadata_optional_and_limits_disabled() {
+        use super::AttemptBody;
+        use std::time::Duration;
+
+        let mut body = IncBody::new(VarId::new());
+        assert!(!body.is_nested());
+        assert!(body.origin().is_none());
+        assert_eq!(body.describe_cell(VarId::new()), None);
+        assert_eq!(body.take_compilation_time(), Duration::ZERO);
+        assert_eq!(body.timeout_ms(), 0);
+        assert_eq!(
+            body.timeout_error().to_string(),
+            "runtime error: evaluation limit of 0ms has been reached"
+        );
+    }
+
+    #[tokio::test]
+    async fn committed_readers_resolve_payload_types_and_published_program_images() {
+        use lpc_rs_core::{
+            class::{ClassDefinition, ClassField, ClassId},
+            lpc_type::LpcType,
+        };
+        use lpc_rs_utils::config::ConfigBuilder;
+        use ustr::ustr;
+
+        use super::CommittedReader;
+        use crate::interpreter::{
+            lpc_class::LpcClass, process::Process, program::Program, stm::Transaction,
+            vm::global_state::GlobalState,
+        };
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let gs = Arc::new(GlobalState::new(
+            ConfigBuilder::default().build().unwrap(),
+            tx,
+        ));
+        let expected = LpcClass::new(Arc::new(ClassDefinition {
+            id: ClassId {
+                source: ustr("/committed-class.c"),
+                name: ustr("record"),
+            },
+            fields: vec![ClassField {
+                name: ustr("count"),
+                type_: LpcType::Int(false),
+            }]
+            .into_boxed_slice(),
+        }));
+        let process = Process::new(Program {
+            num_globals: 1,
+            ..Program::default()
+        });
+        let mut live = super::start_txn(&gs.committer_tx).await.unwrap();
+        let mut txn = Transaction::new(live.inner.clone());
+        let class = txn.mint_class(expected.clone());
+        let wrong_type = process.initial_image().var_id(0);
+        txn.write(wrong_type, 7.into());
+        live.disarm();
+        super::commit_changeset(&gs.committer_tx, txn.take_changeset())
+            .await
+            .unwrap()
+            .unwrap();
+        drop(live);
+
+        assert_eq!(gs.committed_class(class.id), Some(expected));
+        assert_eq!(gs.committed_class(VarId::new()), None);
+        assert_eq!(gs.committed_class(wrong_type), None);
+        assert_eq!(gs.global_slot_count(&process), 1);
+        assert_eq!(gs.committed_global(&process, 0), LpcRef::from(7));
+
+        let replacement = Process::new(Program {
+            num_globals: 3,
+            ..Program::default()
+        })
+        .initial_image()
+        .clone();
+        let mut live = super::start_txn(&gs.committer_tx).await.unwrap();
+        let mut txn = Transaction::new(live.inner.clone());
+        txn.write_image(&process, replacement.clone());
+        txn.write(replacement.var_id(0), 11.into());
+        txn.write(replacement.var_id(2), 23.into());
+        live.disarm();
+        super::commit_changeset(&gs.committer_tx, txn.take_changeset())
+            .await
+            .unwrap()
+            .unwrap();
+        drop(live);
+
+        assert_eq!(process.initial_program().num_globals, 1);
+        assert_eq!(gs.global_slot_count(&process), 3);
+        assert_eq!(gs.committed_global(&process, 0), LpcRef::from(11));
+        assert_eq!(gs.committed_global(&process, 2), LpcRef::from(23));
+    }
 }
 
 #[cfg(test)]
@@ -957,7 +1050,14 @@ mod async_tests {
         assert!(matches!(&start, CommitProtocol::Start { .. }));
         tokio::time::advance(Duration::from_millis(100)).await;
         let (result, stats) = attempt.await.unwrap();
-        assert!(result.unwrap_err().to_string().contains("evaluation limit"));
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("evaluation limit"));
+        assert!(
+            !error
+                .diagnostic_string()
+                .contains("Concurrent changes forced retries"),
+            "{error:?}"
+        );
         assert_eq!(stats.attempts, 1);
         assert_eq!(stats.conflicts, 0);
         assert_eq!(stats.phases.attempt, Duration::from_millis(100));
@@ -1237,6 +1337,86 @@ mod async_tests {
             .expect("committer channel closed");
         drop(tx);
         handle.join().expect("committer panicked");
+    }
+    #[tokio::test]
+    async fn joined_errors_preserve_the_callers_diagnostic_without_an_owner_summary() {
+        struct FailingJoiner(LpcError);
+
+        #[async_trait::async_trait]
+        impl AttemptBody for FailingJoiner {
+            fn is_nested(&self) -> bool {
+                true
+            }
+
+            async fn begin_attempt(
+                &mut self,
+                _tx: &flume::Sender<CommitProtocol>,
+            ) -> Result<Option<LiveSnapshot>> {
+                Err(self.0.clone())
+            }
+
+            async fn commit_phase(
+                &mut self,
+                _tx: &flume::Sender<CommitProtocol>,
+                _live: LiveSnapshot,
+            ) -> Result<(
+                std::result::Result<(), Conflict>,
+                Vec<crate::interpreter::stm::Effect>,
+            )> {
+                panic!("a failed joiner cannot commit")
+            }
+
+            async fn deliver(
+                &mut self,
+                _effects: Vec<crate::interpreter::stm::Effect>,
+            ) -> Result<()> {
+                panic!("a failed joiner cannot deliver effects")
+            }
+        }
+
+        let error = LpcError::runtime("joined execution failed").with_note("caller context");
+        let expected = error.diagnostic_string();
+        let mut body = FailingJoiner(error);
+        let (tx, _rx) = flume::unbounded();
+        let telemetry = AttemptTelemetry::default();
+        let (result, stats) = run_attempts(&tx, &telemetry, None, &mut body).await;
+
+        assert_eq!(result.unwrap_err().diagnostic_string(), expected);
+        assert_eq!(stats.attempts, 1);
+        assert_eq!(stats.conflicts, 0);
+        let totals = telemetry.snapshot();
+        assert_eq!(totals.applies, 1);
+        assert_eq!(totals.errors, 1);
+        assert_eq!(totals.owning_tasks, 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn successful_retries_emit_one_summary_and_clean_runs_emit_none() {
+        use tracing::instrument::WithSubscriber;
+
+        use crate::test_support::log_capture::LogCapture;
+
+        if tracing::Level::DEBUG > tracing::level_filters::STATIC_MAX_LEVEL {
+            return;
+        }
+        let _disabled = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
+        for rejections in [0, 1] {
+            let capture = LogCapture::default();
+            let subscriber = capture.subscriber("lpc_rs::transactions=debug");
+            let (result, stats, _, _) = run_timed_body(0, 0, 0, rejections)
+                .with_subscriber(subscriber)
+                .await;
+            result.unwrap();
+            assert_eq!(stats.conflicts, rejections as u64);
+            let recorded = capture.contents();
+            let summaries = recorded
+                .matches("Transaction committed after retries")
+                .count();
+            assert_eq!(summaries, rejections, "{recorded}");
+            if rejections != 0 {
+                assert!(recorded.contains("attempts=2, conflicts=1"), "{recorded}");
+            }
+        }
     }
 }
 
@@ -1712,6 +1892,40 @@ mod admission_tests {
         assert_eq!(
             harness.finish().await.read(cell),
             Some(WorldValue::ref_of(7.into()))
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn admission_ready_at_the_deadline_releases_the_turn_without_starting_an_attempt() {
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let held = harness.runner.admission.acquire(cell).await.unwrap();
+        let mut body = Body::new(&harness.runner, cell);
+        body.timeout = 10;
+        let (entered, resume) = body.pause_at(PauseAt::FirstRejection);
+        let mut run = Box::pin(harness.runner.run(&mut body));
+        tokio::select! {
+            result = &mut run => panic!("finished before pause: {result:?}"),
+            result = entered.recv_async() => result.unwrap(),
+        }
+        resume.send(()).unwrap();
+        assert!(poll(run.as_mut()).is_pending());
+        tokio::time::advance(Duration::from_millis(10)).await;
+        drop(held);
+
+        let (result, stats) = run.await;
+        assert!(result.unwrap_err().to_string().contains("evaluation limit"));
+        assert_eq!(body.begins, 1);
+        assert_eq!(stats.attempts, 1);
+        assert_eq!(stats.conflicts, 1);
+        assert_eq!(stats.admission.acquisitions, 1);
+        assert_eq!(stats.admission.timeouts, 1);
+        assert_eq!(stats.admission.waited, Duration::from_millis(10));
+        assert_eq!(body.deliveries.load(SeqCst), 0);
+        assert_eq!(harness.runner.telemetry().admission_timeouts, 1);
+        assert_eq!(
+            harness.finish().await.read(cell),
+            Some(WorldValue::ref_of(1.into()))
         );
     }
 }
