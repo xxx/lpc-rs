@@ -140,6 +140,15 @@ fn compilation(c: &mut Criterion) {
             .map(|index| format!("int local_{index} = value + {index}; value = local_{index};\n"))
             .collect::<String>()
     );
+    let call_prefix = "int pack(int left, int right) { return left * 10 + right; }";
+    let calls = format!(
+        "{call_prefix} int run(int value) {{ {} return value; }}",
+        "value = pack(value, 1);\n".repeat(128)
+    );
+    let mutating_calls = format!(
+        "{call_prefix} int run(int value) {{ {} return value; }}",
+        "value = pack(value, value = 2);\n".repeat(128)
+    );
     let mut group = c.benchmark_group("register_allocation_compile");
     for (name, source) in [
         ("small_function", small),
@@ -148,6 +157,8 @@ fn compilation(c: &mut Criterion) {
         ("closure_positionals", closures.as_str()),
         ("literal_expressions", literals.as_str()),
         ("local_initializers", initializers.as_str()),
+        ("value_arguments", calls.as_str()),
+        ("mutating_arguments", mutating_calls.as_str()),
     ] {
         group.bench_function(name, |b| {
             b.to_async(&runtime).iter(|| async {

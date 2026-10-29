@@ -779,17 +779,24 @@ impl CodegenWalker {
         Ok(())
     }
 
-    fn bound_may_mutate(expr: &ExpressionNode) -> bool {
+    fn expression_may_mutate(expr: &ExpressionNode) -> bool {
         match expr {
-            ExpressionNode::Int(_) | ExpressionNode::Var(_) => false,
+            ExpressionNode::Int(_)
+            | ExpressionNode::Float(_)
+            | ExpressionNode::String(_)
+            | ExpressionNode::Nil(_)
+            | ExpressionNode::Var(_)
+            | ExpressionNode::Ref(_) => false,
             ExpressionNode::UnaryOp(node) => {
                 matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
-                    || Self::bound_may_mutate(&node.expr)
+                    || Self::expression_may_mutate(&node.expr)
             }
             ExpressionNode::BinaryOp(node) => {
-                Self::bound_may_mutate(&node.l) || Self::bound_may_mutate(&node.r)
+                Self::expression_may_mutate(&node.l) || Self::expression_may_mutate(&node.r)
             }
-            ExpressionNode::Cast(node) => Self::bound_may_mutate(&node.expr),
+            ExpressionNode::Cast(node) => Self::expression_may_mutate(&node.expr),
+            ExpressionNode::Spread(node) => Self::expression_may_mutate(&node.expr),
+            ExpressionNode::Array(node) => node.value.iter().any(Self::expression_may_mutate),
             _ => true,
         }
     }
@@ -800,8 +807,16 @@ impl CodegenWalker {
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
     async fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
-        let start_may_mutate = node.l.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
-        let end_may_mutate = node.r.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
+        let start_may_mutate = node
+            .l
+            .as_ref()
+            .as_ref()
+            .is_some_and(Self::expression_may_mutate);
+        let end_may_mutate = node
+            .r
+            .as_ref()
+            .as_ref()
+            .is_some_and(Self::expression_may_mutate);
         let reference = if (start_may_mutate || end_may_mutate)
             && !matches!(reference, RegisterVariant::Constant(_))
         {
@@ -857,6 +872,18 @@ impl CodegenWalker {
         let saved = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(self, Instruction::Copy(self.current_result, saved), span);
         Ok(saved)
+    }
+
+    fn capture_result(
+        &mut self,
+        mutates_later: bool,
+        span: Option<Span>,
+    ) -> Result<RegisterVariant> {
+        if mutates_later && !matches!(self.current_result, RegisterVariant::Constant(_)) {
+            self.save_result(span)
+        } else {
+            Ok(self.current_result)
+        }
     }
 
     async fn capture_assignment_owner(
@@ -1987,6 +2014,8 @@ impl TreeWalker for CodegenWalker {
 
         let argument_len = node.arguments.len();
 
+        let last_mutation = node.arguments.iter().rposition(Self::expression_may_mutate);
+
         // Resolved before the arguments are visited: an implicit efun lvalue
         // is pushed as a cell, never evaluated.
         // A function-typed variable answers a bare name only.
@@ -2009,9 +2038,16 @@ impl TreeWalker for CodegenWalker {
         let receiver_result = match receiver {
             Some(rcvr) => {
                 rcvr.visit(self).await?;
-                Some(self.current_result)
+                Some(self.capture_result(last_mutation.is_some(), rcvr.span())?)
             }
             None => None,
+        };
+
+        let variable_result = if !has_receiver && calls_variable {
+            self.current_result = self.location_of(name)?;
+            Some(self.capture_result(last_mutation.is_some(), node.span)?)
+        } else {
+            None
         };
 
         let mut arg_results: Vec<Arg> = Vec::with_capacity(argument_len);
@@ -2020,9 +2056,11 @@ impl TreeWalker for CodegenWalker {
         let mut write_backs: Vec<Instruction> = Vec::new();
         let lvalue_temps = node.lvalue_temps.clone();
         for (index, argument) in node.arguments.iter_mut().enumerate() {
+            let mutates_later = last_mutation.is_some_and(|last| index < last);
             if let ExpressionNode::Spread(spread) = argument {
                 spread.expr.visit(self).await?;
-                arg_results.push(Arg::Spread(self.current_result));
+                let result = self.capture_result(mutates_later, spread.span)?;
+                arg_results.push(Arg::Spread(result));
                 spread_seen = true;
                 continue;
             }
@@ -2093,7 +2131,8 @@ impl TreeWalker for CodegenWalker {
                 }
                 None => {
                     argument.visit(self).await?;
-                    arg_results.push(Arg::Value(self.current_result));
+                    let result = self.capture_result(mutates_later, argument.span())?;
+                    arg_results.push(Arg::Value(result));
                 }
             }
         }
@@ -2135,8 +2174,8 @@ impl TreeWalker for CodegenWalker {
 
                 Instruction::CallOther(receiver, name_index, list)
             } else {
-                if calls_variable {
-                    Instruction::CallFp(self.location_of(name)?, list)
+                if let Some(variable_result) = variable_result {
+                    Instruction::CallFp(variable_result, list)
                 } else {
                     let Some(func) = self.context.lookup_function_complete(name, namespace) else {
                         return Err(lpc_bug!(
@@ -2220,18 +2259,23 @@ impl TreeWalker for CodegenWalker {
         };
 
         chain_node.visit(self).await?;
-        let fp_loc = self.current_result;
+
+        let last_mutation = node.arguments.iter().rposition(Self::expression_may_mutate);
+        let fp_loc = self.capture_result(last_mutation.is_some(), node.span)?;
 
         let argument_len = node.arguments.len();
         let mut arg_results = Vec::with_capacity(argument_len);
 
-        for argument in &mut node.arguments {
+        for (index, argument) in node.arguments.iter_mut().enumerate() {
+            let mutates_later = last_mutation.is_some_and(|last| index < last);
             if let ExpressionNode::Spread(spread) = argument {
                 spread.expr.visit(self).await?;
-                arg_results.push(Arg::Spread(self.current_result));
+                let result = self.capture_result(mutates_later, spread.span)?;
+                arg_results.push(Arg::Spread(result));
             } else {
                 argument.visit(self).await?;
-                arg_results.push(Arg::Value(self.current_result));
+                let result = self.capture_result(mutates_later, argument.span())?;
+                arg_results.push(Arg::Value(result));
             }
         }
 
@@ -8442,6 +8486,69 @@ mod tests {
                     .unwrap();
                 let task = crate::test_support::run_prog_with_config(code, Arc::new(config)).await;
                 assert_eq!(task.result(), Some(LpcRef::from(23)), "{mode:?}: {code}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn calls_capture_values_before_later_arguments_reassign_them() {
+        use crate::interpreter::lpc_ref::LpcRef;
+        use lpc_rs_core::null_mode::NullMode;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        for (code, expected) in [
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; return pack(value, value = 2); }",
+                12,
+            ),
+            (
+                "int value = 1; int change() { value = 2; return value; } int pack(int left, int right) { return left * 10 + right; } int create() { return pack(value, change()); }",
+                12,
+            ),
+            (
+                "int change(int ref value) { value = 2; return value; } int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; return pack(value, change(ref value)); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; function f = pack; return f(value, value = 2); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } function get_pack() { return pack; } int create() { int value = 1; return get_pack()(value, value = 2); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int *values = ({ 1 }); return pack(values..., sizeof(values = ({ 2, 3 }))); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int *values = ({ 1 }); return pack(values..., values[0] = 2); }",
+                22,
+            ),
+            (
+                "int mark(object ignored) { return 7; } int create() { object target = this_object(); return target->mark(target = nil); }",
+                7,
+            ),
+            (
+                "int mark(object ignored) { return 7; } int create() { object target = this_object(); return call_other(target, \"mark\", target = nil); }",
+                7,
+            ),
+            (
+                "int first(int ignored) { return 1; } int second(int ignored) { return 2; } int change(function ref f) { f = second; return 0; } int create() { function f = first; return f(change(ref f)); }",
+                1,
+            ),
+        ] {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let task = crate::test_support::run_prog_with_config(code, Arc::new(config)).await;
+                assert_eq!(
+                    task.result(),
+                    Some(LpcRef::from(expected)),
+                    "{mode:?}: {code}"
+                );
             }
         }
     }

@@ -52,6 +52,23 @@ notes:
 
 ## Function calls
 
+The receiver or function value is evaluated first, then arguments run once each,
+from left to right. A value argument keeps the result produced at its position,
+even when a later argument reassigns the same variable:
+
+```c
+int pack(int left, int right) { return left * 10 + right; }
+
+int example() {
+    int value = 1;
+    return pack(value, value = 2);  // 12
+}
+```
+
+Arrays, mappings, class instances and objects retain their shared identities;
+changes through those identities remain visible. A [reference argument](references.md)
+retains its alias to the caller's variable.
+
 A nonempty argument list may end with one trailing comma:
 
 ```c

@@ -177,10 +177,18 @@ fn mentions(func: &ProgramFunction, reg: RegisterVariant) -> usize {
 /// How many of this instruction's operand slots, its argument list's
 /// included, name `reg`.
 fn mentions_in(func: &ProgramFunction, instruction: &Instruction, reg: RegisterVariant) -> usize {
-    func.operand_registers(instruction)
-        .into_iter()
-        .filter(|&r| r == reg)
-        .count()
+    let count = std::cell::Cell::new(0);
+    let _ = instruction.map_registers(|operand| {
+        count.set(count.get() + usize::from(operand == reg));
+        operand
+    });
+    count.get()
+        + instruction.arg_list().map_or(0, |list| {
+            func.args(list)
+                .iter()
+                .filter(|arg| arg.register() == reg)
+                .count()
+        })
 }
 
 /// The single use of `temp` reachable straight-line from the copy at

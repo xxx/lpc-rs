@@ -22,6 +22,13 @@ collector, or in `argv` for a bare `...` declaration. See
 The same `xs...` syntax inserts elements into an
 [array literal](array_spreading.md).
 
+## Evaluation order
+
+Arguments follow the [normal call order](anatomy_of_a_program.md#function-calls).
+Each spread saves its array value when evaluated, and expansion happens after all
+argument expressions have run. Reassigning an earlier spread's variable does not
+replace its saved array; mutating that array's elements affects the expanded values.
+
 ## Rules the compiler enforces
 
 - The operand's type is an array or `mixed`; anything else is
