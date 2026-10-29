@@ -4570,4 +4570,75 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn jump_permissions_end_with_the_enclosing_loop_or_switch() {
+        for statement in [
+            "while (0) {}",
+            "do {} while (0);",
+            "for (int i = 0; i < 1; i++) {}",
+            "foreach (i: ({1})) {}",
+            "switch (0) { default: break; }",
+        ] {
+            let code = format!("void f() {{ {statement} break; continue; }}");
+            assert_eq!(
+                messages(&code).await,
+                ["Invalid `break`.", "invalid `continue`."],
+                "{code}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unreachable_blocks_and_declarations_point_at_their_first_statement() {
+        for (code, target) in [
+            ("void f() { return; { 123; } }", "123"),
+            ("void f() { return; int unused_value = 1; }", "unused_value"),
+        ] {
+            let context = walk_code(code).await.unwrap();
+            let warnings: Vec<_> = context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|error| error.is_warning() && error.message() == "unreachable statement")
+                .collect();
+            assert_eq!(warnings.len(), 1, "{code}: {warnings:?}");
+            let span = warnings[0].span().expect("the first unreachable statement");
+            assert_eq!(span.l(), code.find(target).unwrap(), "{code}");
+        }
+    }
+
+    #[tokio::test]
+    async fn block_exit_restores_the_outer_variable_type() {
+        for code in [
+            r#"string f() { string value = "outer"; { int value = 1; } return value; }"#,
+            r#"int f() { int value = 1; { string value = "inner"; } return value; }"#,
+            r#"void f() { { int value = 1; } { string value = "sibling"; value = "updated"; } }"#,
+        ] {
+            assert!(messages(code).await.is_empty(), "{code}");
+        }
+    }
+
+    #[tokio::test]
+    async fn member_access_checks_its_receiver_call_arguments() {
+        let code = r#"
+            mixed fetch_record(int value) { return 0; }
+            void f() { fetch_record("wrong").field; }
+        "#;
+        assert_eq!(
+            messages(code).await,
+            ["unexpected argument type to `fetch_record`: string. Expected int."]
+        );
+    }
+
+    #[tokio::test]
+    async fn wide_defaulted_signatures_keep_the_required_argument_count_in_range() {
+        let count = usize::from(lpc_rs_core::RegisterSize::MAX) / 2 + 1;
+        let parameters = (0..count)
+            .map(|index| format!("int value_{index} = 0"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let code = format!("void f({parameters}) {{}}");
+        assert!(messages(&code).await.is_empty());
+    }
 }

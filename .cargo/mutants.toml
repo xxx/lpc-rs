@@ -411,6 +411,7 @@ examine_globs = [
     "src/interpreter/stm/mod.rs",
     "src/interpreter/stm/committer.rs",
     "src/interpreter/stm/retry.rs",
+    "src/compiler/codegen/semantic_check_walker.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
