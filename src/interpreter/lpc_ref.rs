@@ -2423,4 +2423,123 @@ mod tests {
             assert_err!(string.dec());
         }
     }
+
+    #[test]
+    fn float_divisor_tolerance_is_strict_at_epsilon() {
+        for (divisor, rejected) in [
+            (0.0, true),
+            (-0.0, true),
+            (BaseFloat::EPSILON / 2.0, true),
+            (-BaseFloat::EPSILON / 2.0, true),
+            (BaseFloat::EPSILON, false),
+            (-BaseFloat::EPSILON, false),
+            (2.0 * BaseFloat::EPSILON, false),
+            (-2.0 * BaseFloat::EPSILON, false),
+        ] {
+            let left = LpcRef::from(1.0);
+            let right = LpcRef::from(divisor);
+            assert_eq!(left.div(&right).is_err(), rejected, "division by {divisor}");
+            assert_eq!(
+                left.rem(&right).is_err(),
+                rejected,
+                "remainder by {divisor}"
+            );
+        }
+    }
+    #[test]
+    fn whole_word_shift_counts_preserve_the_original_integer() {
+        let width = LpcIntInner::BITS as LpcIntInner;
+        for value in [1, -1, LpcIntInner::MIN, LpcIntInner::MAX, 0x1234] {
+            for count in [0, width, -width, 2 * width, -2 * width, LpcIntInner::MIN] {
+                assert_eq!(int_shl(value, count), value, "left: {value}, {count}");
+                assert_eq!(int_shr(value, count), value, "right: {value}, {count}");
+                let left = LpcRef::from(value);
+                let right = LpcRef::from(count);
+                assert_eq!(left.shl(&right).unwrap(), LpcRef::from(value));
+                assert_eq!(left.shr(&right).unwrap(), LpcRef::from(value));
+            }
+        }
+    }
+    #[test]
+    fn representation_null_checks_distinguish_nonnull_values() {
+        assert!(LpcRef::Nil.is_null());
+        assert!(LpcRef::from(0).is_null());
+        for value in [
+            LpcRef::from(1),
+            LpcRef::from(-1),
+            LpcRef::from(0.0),
+            LpcRef::from(""),
+            LpcRef::from("value"),
+            LpcRef::from(Vec::<u8>::new()),
+        ] {
+            assert!(!value.is_null(), "{value:?}");
+        }
+    }
+    #[test]
+    fn integer_or_preserves_shared_bits() {
+        let txn = TxnHandle::empty();
+        for value in [1, -1, LpcIntInner::MIN, LpcIntInner::MAX, 3, 6] {
+            let value = LpcRef::from(value);
+            assert_eq!(value.bitor(&value, &txn).unwrap(), value);
+        }
+        assert_eq!(
+            LpcRef::from(3).bitor(&LpcRef::from(6), &txn).unwrap(),
+            LpcRef::from(7)
+        );
+    }
+    #[test]
+    fn numeric_wrapper_conversions_preserve_their_variant_and_value() {
+        for number in [LpcIntInner::MIN, -17, 0, 17, LpcIntInner::MAX] {
+            let wrapped = LpcInt(number);
+            assert_eq!(LpcRef::from(wrapped), LpcRef::Int(wrapped));
+        }
+        for number in [-3.5, -0.0, 0.0, 3.5] {
+            let wrapped = LpcFloat::from(number);
+            assert_eq!(LpcRef::from(wrapped), LpcRef::Float(wrapped));
+        }
+    }
+    #[test]
+    fn scalar_hashes_are_stable_and_contribute_value_information() {
+        use std::{
+            collections::{HashSet, hash_map::DefaultHasher},
+            hash::{Hash, Hasher},
+        };
+
+        fn digest(value: &LpcRef) -> u64 {
+            let mut hasher = DefaultHasher::new();
+            value.hash(&mut hasher);
+            hasher.finish()
+        }
+        let values = [
+            LpcRef::Nil,
+            LpcRef::from(0),
+            LpcRef::from(1),
+            LpcRef::from(-17),
+            LpcRef::from(3.5),
+            LpcRef::from(""),
+            LpcRef::from("value"),
+            LpcRef::from(vec![1u8, 2, 3]),
+        ];
+        let mut hashes = HashSet::new();
+        for value in values {
+            let hash = digest(&value);
+            assert_eq!(hash, digest(&value.clone()));
+            hashes.insert(hash);
+        }
+        assert!(
+            hashes.len() > 1,
+            "scalar values must not all hash to a constant"
+        );
+        assert_eq!(digest(&LpcRef::from(-0.0)), digest(&LpcRef::from(0.0)));
+    }
+    #[test]
+    fn integer_references_compare_with_usize_by_value() {
+        assert_eq!(LpcRef::from(0), 0usize);
+        assert_eq!(LpcRef::from(17), 17usize);
+        assert_ne!(LpcRef::from(17), 18usize);
+        assert_ne!(LpcRef::from(-1), 0usize);
+        assert_ne!(LpcRef::Nil, 0usize);
+        assert_ne!(LpcRef::from(17.0), 17usize);
+        assert_ne!(LpcRef::from("17"), 17usize);
+    }
 }

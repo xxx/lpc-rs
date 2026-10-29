@@ -519,6 +519,7 @@ The reviewed scope includes:
 - [Earley parsing](src/command/grammar/earley.rs): chart progress, nullable recognition, lazy derivations, exact suffix spans, work budgets and depth limits.
 - [Preprocessor execution](src/compiler/preprocessor/mod.rs): directive dispatch, macro cache charges, exact evaluation-depth limits, boolean short-circuiting, integer operators and pragmas.
 - [Directive grammar](src/compiler/preprocessor/directive.rs): classification, cursor progress, macro and include syntax, diagnostic spans, expression depth and minimum integer literals.
+- [Runtime reference values](src/interpreter/lpc_ref.rs): numeric comparisons and overflow, float divisor tolerance, shift counts, null classification, collection operations, wrapper conversions, hashing and Rust comparisons.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
