@@ -520,6 +520,7 @@ The reviewed scope includes:
 - [Preprocessor execution](src/compiler/preprocessor/mod.rs): directive dispatch, macro cache charges, exact evaluation-depth limits, boolean short-circuiting, integer operators and pragmas.
 - [Directive grammar](src/compiler/preprocessor/directive.rs): classification, cursor progress, macro and include syntax, diagnostic spans, expression depth and minimum integer literals.
 - [Runtime reference values](src/interpreter/lpc_ref.rs): numeric comparisons and overflow, float divisor tolerance, shift counts, null classification, collection operations, wrapper conversions, hashing and Rust comparisons.
+- [Bytecode generation](src/compiler/codegen/codegen_walker.rs): control flow, operands and lvalues, call and partial-argument capture, initialization, and compiler consistency guards.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

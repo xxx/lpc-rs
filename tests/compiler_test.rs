@@ -198,7 +198,7 @@ mod callable_visibility {
                 r#"
                 private void callback(int ref n) {{ n++; }}
                 {type_} callback = (: $1 + $2 :);
-                int create() {{ return callback(2, 3) + callback(4, 5); }}
+                int create() {{ int first = 2; return callback(first, 3) + callback(4, 5); }}
             "#
             );
             assert_eq!(result(&code, NullMode::Distinct).await, LpcRef::from(14));
@@ -213,10 +213,12 @@ mod callable_visibility {
                 function sscanf = (: $3 + 1 :);
                 int *values = ({ 3 });
                 class Value value = new(class Value, n: 4);
-                return sscanf("", "", values[0]) + sscanf("", "", value.n);
+                int number = 5;
+                return sscanf("", "", values[0]) + sscanf("", "", value.n)
+                    + sscanf("", "", number);
             }
         "#;
-        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(9));
+        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(15));
     }
 
     #[tokio::test]

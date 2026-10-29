@@ -8679,5 +8679,299 @@ mod tests {
                 assert_eq!(run(code, mode).await, Some(LpcRef::from(1)), "{mode:?}");
             }
         }
+        #[tokio::test]
+        async fn function_pointer_effects_do_not_replace_an_earlier_argument() {
+            for code in [
+                "int read(int number) { return number; } int take(int first, function unused) { return first; } int create() { int value = 1; return take(value, &read(value = 2)); }",
+                "int value = 1; object target() { value = 2; return this_object(); } int read() { return 0; } int take(int first, function unused) { return first; } int create() { return take(value, &(target())->read()); }",
+            ] {
+                for mode in [NullMode::Zero, NullMode::Distinct] {
+                    assert_eq!(
+                        run(code, mode).await,
+                        Some(LpcRef::from(1)),
+                        "{mode:?}: {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn inconsistent_debug_spans_prevent_program_publication() {
+        for initializer in [false, true] {
+            let mut walker = walk_prog("void f() {}").await;
+            let function = if initializer {
+                walker.initializer.as_mut().unwrap()
+            } else {
+                walker
+                    .functions
+                    .values_mut()
+                    .find(|f| f.name() == "f")
+                    .unwrap()
+            };
+            Arc::make_mut(function).debug_spans.clear();
+
+            let error = walker.into_program().unwrap_err();
+
+            assert!(error.to_string().contains("out of sync"), "{error}");
+        }
+    }
+
+    #[tokio::test]
+    async fn pure_later_arguments_do_not_copy_an_earlier_parameter() {
+        use lpc_rs_asm::instruction::Arg;
+
+        for expression in [
+            "value",
+            "1",
+            "1.5",
+            "\"text\"",
+            "nil",
+            "-value",
+            "!value",
+            "~value",
+            "value + 1",
+            "(int)value",
+            "({ value })",
+            "({ ({ value })... })",
+            "&dump()",
+            "&dump(value)",
+            "&target->dump()",
+        ] {
+            let code = format!(
+                "int consume(mixed first, mixed second) {{ return 0; }} int f(int value, object target) {{ return consume(value, {expression}); }}"
+            );
+            let walker = walk_prog(&code).await;
+            let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+
+            assert_eq!(
+                function.arg_lists.last().unwrap().first(),
+                Some(&Arg::Value(Register(1).as_local())),
+                "{expression}: {:?}",
+                function.instructions,
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn slice_bounds_are_copied_only_before_later_mutation() {
+        let walker =
+            walk_prog("mixed f(mixed *items, int begin, int end) { return items[begin..end]; }")
+                .await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let operands = function
+            .instructions
+            .iter()
+            .find_map(|instruction| match *instruction {
+                Instruction::Range(reference, begin, end, _) => Some((reference, begin, end)),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            operands,
+            (
+                Register(1).as_local(),
+                Register(2).as_local(),
+                Register(3).as_local()
+            ),
+            "{:?}",
+            function.instructions
+        );
+
+        let walker = walk_prog("string f(int end) { return \"abc\"[1..end++]; }").await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let (reference, begin) = function
+            .instructions
+            .iter()
+            .find_map(|instruction| match *instruction {
+                Instruction::Range(reference, begin, _, _) => Some((reference, begin)),
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            matches!(reference, RegisterVariant::Constant(_)),
+            "{:?}",
+            function.instructions
+        );
+        assert!(
+            matches!(begin, RegisterVariant::Constant(_)),
+            "{:?}",
+            function.instructions
+        );
+    }
+
+    #[tokio::test]
+    async fn context_accessors_preserve_declarations_through_the_handoff() {
+        let mut walker = walk_prog("int first() { return 1; } int retained() { return 2; }").await;
+
+        assert!(walker.context().function_prototypes.contains_key("first"));
+        assert!(
+            walker
+                .context_mut()
+                .function_prototypes
+                .remove("first")
+                .is_some()
+        );
+
+        let context = walker.into_context();
+        assert!(!context.function_prototypes.contains_key("first"));
+        assert!(context.function_prototypes.contains_key("retained"));
+    }
+
+    #[tokio::test]
+    async fn the_last_bound_argument_is_not_copied_without_a_later_effect() {
+        for expression in ["&pack(value, value = 2)", "&operator(-)(value, value = 2)"] {
+            let walker = walk_prog(&format!(
+                "int pack(int first, int second) {{ return first * 10 + second; }} function f(int value) {{ return {expression}; }}"
+            )).await;
+            let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+            let arguments = function
+                .instructions
+                .iter()
+                .filter_map(|instruction| match instruction {
+                    Instruction::PushPartialArg(Some(register)) => Some(*register),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                arguments.len(),
+                2,
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_ne!(
+                arguments[0],
+                Register(1).as_local(),
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_eq!(
+                arguments[1],
+                Register(1).as_local(),
+                "{expression}: {:?}",
+                function.instructions
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_last_array_item_is_not_copied_without_a_later_effect() {
+        let walker = walk_prog("mixed f(int value) { return ({ value, value = 2 }); }").await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let items = function
+            .instructions
+            .iter()
+            .filter_map(|instruction| match instruction {
+                Instruction::PushArrayItem(register) => Some(*register),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 2, "{:?}", function.instructions);
+        assert_ne!(
+            items[0],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+        assert_eq!(
+            items[1],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+    }
+
+    #[tokio::test]
+    async fn the_last_call_argument_is_not_copied_without_a_later_effect() {
+        use lpc_rs_asm::instruction::Arg;
+
+        for expression in [
+            "pack(value, value = 2)",
+            "callback(value, value = 2)",
+            "get_pack()(value, value = 2)",
+        ] {
+            let walker = walk_prog(&format!(
+                "int pack(int first, int second) {{ return first * 10 + second; }} function get_pack() {{ return pack; }} mixed f(int value, function callback) {{ return {expression}; }}"
+            )).await;
+            let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+            let arguments = function.arg_lists.last().unwrap();
+
+            assert_eq!(
+                arguments.len(),
+                2,
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_ne!(
+                arguments[0],
+                Arg::Value(Register(1).as_local()),
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_eq!(
+                arguments[1],
+                Arg::Value(Register(1).as_local()),
+                "{expression}: {:?}",
+                function.instructions
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_last_mapping_entry_is_not_copied_without_a_later_effect() {
+        let walker = walk_prog(
+            "mixed f(int value, int other) { return ([ value : other, value = 2 : other ]); }",
+        )
+        .await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let items = function
+            .instructions
+            .iter()
+            .filter_map(|instruction| match instruction {
+                Instruction::PushArrayItem(register) => Some(*register),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 4, "{:?}", function.instructions);
+        assert_ne!(
+            items[0],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+        assert_eq!(
+            items[2],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+        assert_eq!(
+            items[3],
+            Register(2).as_local(),
+            "{:?}",
+            function.instructions
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reference_cannot_be_returned_as_an_ordinary_value() {
+        let mut walker = default_walker();
+        let before = walker_init_instructions(&mut walker);
+        let mut node = ReturnNode::new(Some(ExpressionNode::Ref(RefNode {
+            name: ustr("value"),
+            span: None,
+            global: false,
+        })));
+
+        let error = walker.visit_return(&mut node).await.unwrap_err();
+
+        assert!(
+            error.to_string().contains("outside an argument list"),
+            "{error}"
+        );
+        assert_eq!(walker_init_instructions(&mut walker), before);
     }
 }
