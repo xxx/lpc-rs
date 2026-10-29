@@ -407,6 +407,7 @@ examine_globs = [
     "src/interpreter/sockets/events.rs",
     "src/interpreter/sockets/mod.rs",
     "src/interpreter/task_context.rs",
+    "src/command/frontend/dgd.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
@@ -416,6 +417,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Token and production definitions receive distinct rule numbers.
+    "^src/command/frontend/dgd\\.rs:163:34:\\ replace\\ <\\ with\\ <=\\ in\\ check_redefinitions$",
     # Generated channel constructors use Receiver and Sender names absent from this module.
     "^src/interpreter/sockets/mod\\.rs:227:9:\\ replace\\ Sockets::take_commands\\ \\->\\ Option<flume::Receiver<SocketCommands>>\\ with\\ (?:Some\\(Receiver::new\\(\\)\\)|Some\\(Receiver::from_iter\\(\\[Default::default\\(\\)\\]\\)\\)|Some\\(Receiver::new\\(Default::default\\(\\)\\)\\)|Some\\(Receiver::from\\(Default::default\\(\\)\\)\\))$",
     "^src/interpreter/sockets/mod\\.rs:249:9:\\ replace\\ Sockets::sender\\ \\->\\ Result<\\&flume::Sender<SocketCommands>>\\ with\\ (?:Ok\\(Box::leak\\(Box::new\\(Sender::new\\(\\)\\)\\)\\)|Ok\\(Box::leak\\(Box::new\\(Sender::from_iter\\(\\[Default::default\\(\\)\\]\\)\\)\\)\\)|Ok\\(Box::leak\\(Box::new\\(Sender::new\\(Default::default\\(\\)\\)\\)\\)\\)|Ok\\(Box::leak\\(Box::new\\(Sender::from\\(Default::default\\(\\)\\)\\)\\)\\))$",

@@ -507,6 +507,7 @@ The reviewed scope includes:
 - [Socket events](src/interpreter/sockets/events.rs): input credits, ordered delivery, accept admission, callback acknowledgement and drained wakeup rearming.
 - [Socket registry](src/interpreter/sockets/mod.rs): handle identity, commit-ordered publication, write admission, ownership transfer and lifecycle cleanup.
 - [Task context](src/interpreter/task_context.rs): optional results, caller chains, transactional loading, nested entry, player state and call-out views.
+- [DGD grammar frontend](src/command/frontend/dgd.rs): grammar tokenization, rule diagnostics, reachable productions, regex translation, actions and caching.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -551,6 +552,9 @@ Compile probes confirm that all seven fail; skipping them avoids repeated failed
 builds in CI.
 
 Reviewed exclusions have specific regexes and explanations:
+Token and production definitions receive distinct rule numbers. The pinned DGD
+redefinition comparison differs only at equality, which the rule parser cannot produce.
+
 Eight generated channel replacements in the socket registry refer to unimported
 `Receiver` and `Sender` names. Compile probes confirm that all eight fail; the
 filters match only these replacements and avoid repeated slow compiler diagnostics.

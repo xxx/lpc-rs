@@ -389,7 +389,14 @@ fn parse_rules(text: &str) -> Result<Rules, DgdError> {
         seen_nomatch: false,
     };
     while parser.at < pieces.len() {
+        #[cfg(debug_assertions)]
+        let previous = parser.at;
         parser.rule()?;
+        #[cfg(debug_assertions)]
+        debug_assert!(
+            previous < parser.at && parser.at <= pieces.len(),
+            "grammar rule parser failed to advance"
+        );
     }
     Ok(parser.rules)
 }
@@ -480,6 +487,8 @@ impl RuleParser<'_> {
         let mut rhs = Vec::new();
         let mut action = None;
         while self.at < self.pieces.len() && !self.rule_starts(0) {
+            #[cfg(debug_assertions)]
+            let previous = self.at;
             match self.peek(0) {
                 Some(Piece::Symbol(name)) => rhs.push(RhsText::Symbol(name.clone())),
                 Some(Piece::Constant(text)) => rhs.push(RhsText::Constant(text.clone())),
@@ -490,6 +499,11 @@ impl RuleParser<'_> {
                     // `< func` is parsed and has no effect.
                     self.at += 1;
                     self.function_name()?;
+                    #[cfg(debug_assertions)]
+                    debug_assert!(
+                        previous < self.at && self.at <= self.pieces.len(),
+                        "grammar production parser failed to advance"
+                    );
                     continue;
                 }
                 Some(Piece::Question) => {
@@ -504,6 +518,11 @@ impl RuleParser<'_> {
                 _ => return Err(self.fault("unexpected token")),
             }
             self.at += 1;
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous < self.at && self.at <= self.pieces.len(),
+                "grammar production parser failed to advance"
+            );
         }
         self.rules.productions.push(ProductionText {
             number: self.number,
@@ -994,5 +1013,63 @@ mod tests {
     fn a_malformed_grammar_is_not_cached() {
         assert!(compile_cached("w = ").is_err());
         assert!(compile_cached("w = ").is_err());
+    }
+
+    #[test]
+    fn a_disconnected_production_group_cannot_make_the_start_rule_invalid() {
+        let grammar = "w = /a/ S: w Orphan: Dead Dead: missing";
+        assert_eq!(first_parse(grammar, "a").unwrap().0, vec!["a".to_owned()]);
+        assert!(matches!(
+            compile("w = /a/ S: Dead Orphan: w Dead: missing"),
+            Err(DgdError::Grammar(GrammarError::UnknownNonTerminal { .. }))
+        ));
+    }
+
+    #[test]
+    fn leading_lexical_errors_keep_their_diagnostics_without_a_rule_header() {
+        for (text, expected) in [
+            ("@", "Rule 1: bad token"),
+            ("/a", "Rule 1: malformed regular expression"),
+            ("'a", "Rule 1: malformed string constant"),
+            ("''", "Rule 1: malformed string constant"),
+        ] {
+            assert_eq!(error(text), expected, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn nomatch_is_the_only_identifier_allowed_as_a_token_pattern() {
+        for text in ["w = unknown", "w = NOMATCH", "w = nomatch_extra"] {
+            assert_eq!(
+                error(text),
+                "Rule 1: regular expression expected",
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn trailing_lexical_faults_keep_the_completed_rules_diagnostic() {
+        for (text, expected) in [
+            ("w = /a/ @", "Rule 1: unexpected token"),
+            ("w = nomatch @", "Rule 1: unexpected token"),
+            ("w = /a/ /oops", "Rule 1: unexpected token"),
+            ("w = /a/ 'oops", "Rule 1: unexpected token"),
+            ("w = /a/ S: w ? handle @", "Rule 2: unexpected token"),
+            ("w = /a/ S: w ? handle /oops", "Rule 2: unexpected token"),
+        ] {
+            assert_eq!(error(text), expected, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn inclusive_ranges_with_equal_bounds_match_their_single_character() {
+        for (grammar, character) in [("w = /[a-a]/ S: w", "a"), ("w = /[é-é]/ S: w", "é")] {
+            assert_eq!(
+                first_parse(grammar, character).unwrap().0,
+                vec![character.to_owned()]
+            );
+            assert!(first_parse(grammar, "b").is_none());
+        }
     }
 }
