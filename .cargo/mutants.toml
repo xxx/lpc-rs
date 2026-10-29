@@ -418,6 +418,7 @@ examine_globs = [
     "src/interpreter/task/mod.rs",
     "src/command/grammar/earley.rs",
     "src/compiler/preprocessor/mod.rs",
+    "src/compiler/preprocessor/directive.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
@@ -427,6 +428,10 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # The empty include-path branch has a zero path length.
+    "^src/compiler/preprocessor/directive\\.rs:320:23:\\ replace\\ \\+\\ with\\ \\-\\ in\\ Cursor<'a>::include$",
+    # Parameter error ranges widen to the same one-byte span in sub_span.
+    "^(?:src/compiler/preprocessor/directive\\.rs:374:27:\\ replace\\ \\+\\ with\\ \\*\\ in\\ Cursor<'a>::params|src/compiler/preprocessor/directive\\.rs:374:27:\\ replace\\ \\+\\ with\\ \\-\\ in\\ Cursor<'a>::params)$",
     # Completed chart spans and exact suffixes make these iterator failure paths unreachable.
     "^(?:src/command/grammar/earley\\.rs:603:27:\\ delete\\ !\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next|src/command/grammar/earley\\.rs:637:28:\\ replace\\ <\\ with\\ <=\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next|src/command/grammar/earley\\.rs:637:34:\\ replace\\ \\&\\&\\ with\\ \\|\\|\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next|src/command/grammar/earley\\.rs:641:31:\\ delete\\ !\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next)$",
     # Shortened final-child spans fail the empty suffix before budget or cache updates.

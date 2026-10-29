@@ -518,6 +518,7 @@ The reviewed scope includes:
 - [Task lifecycle](src/interpreter/task/mod.rs): seeded calls, lazy global defaults, system publication, cleanup eligibility, cancellation diagnostics, deadlines and attempt metadata.
 - [Earley parsing](src/command/grammar/earley.rs): chart progress, nullable recognition, lazy derivations, exact suffix spans, work budgets and depth limits.
 - [Preprocessor execution](src/compiler/preprocessor/mod.rs): directive dispatch, macro cache charges, exact evaluation-depth limits, boolean short-circuiting, integer operators and pragmas.
+- [Directive grammar](src/compiler/preprocessor/directive.rs): classification, cursor progress, macro and include syntax, diagnostic spans, expression depth and minimum integer literals.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -656,6 +657,11 @@ mutations are unreachable under those invariants. A fifth only probes shortened
 final-child spans: the empty suffix rejects them before spending budget or
 updating caches. That pruning variant preserves results and accounting while
 doing unnecessary cursor work; its exclusion does not assert equal performance.
+
+The empty include-path error has a zero path length, so its pinned addition
+and subtraction produce the same span. Two pinned parameter-error expressions
+produce shorter or collapsed ranges that `sub_span` widens to the same visible
+one-byte caret; parameter parsing has already advanced past the directive name.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out
