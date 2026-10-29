@@ -50,6 +50,20 @@ notes:
 - `#define` supports object macros, function macros, and argument stringification with `#`; see [macros](macros.md)
 - a source file that is not UTF-8 is read as Latin-1, with a warning
 
+## Expression evaluation
+
+Binary operands run from left to right and keep their evaluated values when a
+later operand reassigns a variable. For example, with `int value = 1`,
+`value + (value = 2)` produces `3`.
+
+Array items and mapping entries follow the same rule; each mapping key runs
+before its value. Shared container contents retain their normal identity, so a
+later mutation through that identity remains visible.
+
+Indexed and slice assignments follow their documented
+[value and target evaluation order](indexing.md). A class member assignment
+evaluates its [receiver before its right-hand side](classes.md).
+
 ## Function calls
 
 The receiver or function value is evaluated first, then arguments run once each,

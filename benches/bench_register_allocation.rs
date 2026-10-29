@@ -149,6 +149,21 @@ fn compilation(c: &mut Criterion) {
         "{call_prefix} int run(int value) {{ {} return value; }}",
         "value = pack(value, value = 2);\n".repeat(128)
     );
+    let mutating_operands = format!(
+        "int run(int value) {{ {} return value; }}",
+        "value = value + (value = 2);\n".repeat(128)
+    );
+    let literal_items = |mutating| {
+        let second = if mutating { "value = 2" } else { "2" };
+        format!(
+            "int run(int value) {{ {} return value; }}",
+            (0..64)
+                .map(|index| format!("int *items_{index} = ({{ value, {second} }}); value = items_{index}[0] + items_{index}[1];\n"))
+                .collect::<String>()
+        )
+    };
+    let pure_items = literal_items(false);
+    let mutating_items = literal_items(true);
     let mut group = c.benchmark_group("register_allocation_compile");
     for (name, source) in [
         ("small_function", small),
@@ -159,6 +174,9 @@ fn compilation(c: &mut Criterion) {
         ("local_initializers", initializers.as_str()),
         ("value_arguments", calls.as_str()),
         ("mutating_arguments", mutating_calls.as_str()),
+        ("mutating_operands", mutating_operands.as_str()),
+        ("pure_literal_items", pure_items.as_str()),
+        ("mutating_literal_items", mutating_items.as_str()),
     ] {
         group.bench_function(name, |b| {
             b.to_async(&runtime).iter(|| async {

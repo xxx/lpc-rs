@@ -797,6 +797,17 @@ impl CodegenWalker {
             ExpressionNode::Cast(node) => Self::expression_may_mutate(&node.expr),
             ExpressionNode::Spread(node) => Self::expression_may_mutate(&node.expr),
             ExpressionNode::Array(node) => node.value.iter().any(Self::expression_may_mutate),
+            ExpressionNode::FunctionPtr(node) => {
+                node.arguments
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .any(Self::expression_may_mutate)
+                    || matches!(
+                        &node.receiver,
+                        Some(FunctionPtrReceiver::Static(receiver)) if Self::expression_may_mutate(receiver)
+                    )
+            }
             _ => true,
         }
     }
@@ -1183,7 +1194,7 @@ impl CodegenWalker {
 
             if let Some((kind, l, r)) = as_comparison(node) {
                 l.visit(self).await?;
-                let left = self.current_result;
+                let left = self.capture_result(Self::expression_may_mutate(r), l.span())?;
                 r.visit(self).await?;
                 let right = self.current_result;
                 return self.emit_compare_jump(kind, left, right, when, label, span);
@@ -1524,13 +1535,19 @@ impl CodegenWalker {
     async fn visit_partial_arguments(
         &mut self,
         arguments: &mut Option<Vec<Option<ExpressionNode>>>,
+        mutates_after: bool,
     ) -> Result<Vec<Option<RegisterVariant>>> {
         let mut applied = vec![];
         if let Some(args) = arguments {
-            for argument in args {
+            let last_mutation = args
+                .iter()
+                .rposition(|argument| argument.as_ref().is_some_and(Self::expression_may_mutate));
+            for (index, argument) in args.iter_mut().enumerate() {
                 if let Some(n) = argument {
                     n.visit(self).await?;
-                    applied.push(Some(self.current_result));
+                    let mutates_later =
+                        mutates_after || last_mutation.is_some_and(|last| index < last);
+                    applied.push(Some(self.capture_result(mutates_later, n.span())?));
                 } else {
                     applied.push(None);
                 }
@@ -1656,9 +1673,11 @@ impl TreeWalker for CodegenWalker {
         }
 
         let mut items = Vec::with_capacity(node.value.len());
-        for member in &mut node.value {
+        let last_mutation = node.value.iter().rposition(Self::expression_may_mutate);
+        for (index, member) in node.value.iter_mut().enumerate() {
             member.visit(self).await?;
-            items.push(self.current_result);
+            let mutates_later = last_mutation.is_some_and(|last| index < last);
+            items.push(self.capture_result(mutates_later, member.span())?);
         }
 
         let register = allocate_register(&mut self.register_counter, node.span)?.as_local();
@@ -1811,7 +1830,8 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
         node.rhs.visit(self).await?;
-        let rhs_result = self.current_result;
+        let rhs_result =
+            self.capture_result(Self::expression_may_mutate(&node.lhs), node.rhs.span())?;
         let target = node_type(&node.lhs, &self.context)?;
         self.guard_class(rhs_result, target, node.span)?;
         let lhs = &mut *node.lhs;
@@ -1922,6 +1942,8 @@ impl TreeWalker for CodegenWalker {
             BinaryOperation::Compose => {
                 // This literally just sets up a call to the compose() efun, and
                 // puts the result of it into a register.
+                let reg_left =
+                    self.capture_result(Self::expression_may_mutate(&node.r), node.l.span())?;
                 node.r.visit(self).await?;
                 let reg_right = self.current_result;
                 let list =
@@ -1948,6 +1970,7 @@ impl TreeWalker for CodegenWalker {
             _ => { /* fallthrough */ }
         }
 
+        let reg_left = self.capture_result(Self::expression_may_mutate(&node.r), node.l.span())?;
         let reg_right = if node.op == BinaryOperation::Index {
             self.emit_index(reg_left, &mut node.r).await?
         } else {
@@ -2725,7 +2748,13 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
-        let applied_arguments = self.visit_partial_arguments(&mut node.arguments).await?;
+        let receiver_mutates = matches!(
+            &node.receiver,
+            Some(FunctionPtrReceiver::Static(receiver)) if Self::expression_may_mutate(receiver)
+        );
+        let applied_arguments = self
+            .visit_partial_arguments(&mut node.arguments, receiver_mutates)
+            .await?;
 
         let receiver = if let Some(rcvr) = &mut node.receiver {
             // remote receiver, i.e. `call_other`
@@ -2845,13 +2874,18 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
         let mut items = Vec::with_capacity(node.value.len() * 2);
+        let last_mutation = node.value.iter().rposition(|(key, value)| {
+            Self::expression_may_mutate(key) || Self::expression_may_mutate(value)
+        });
 
-        for (key, value) in &mut node.value {
+        for (index, (key, value)) in node.value.iter_mut().enumerate() {
+            let later_pairs_mutate = last_mutation.is_some_and(|last| index < last);
+            let value_mutates = Self::expression_may_mutate(value);
             key.visit(self).await?;
-            items.push(self.current_result);
+            items.push(self.capture_result(later_pairs_mutate || value_mutates, key.span())?);
 
             value.visit(self).await?;
-            items.push(self.current_result);
+            items.push(self.capture_result(later_pairs_mutate, value.span())?);
         }
 
         for item in items {
@@ -2868,7 +2902,9 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_operator(&mut self, node: &mut OperatorNode) -> Result<()> {
-        let applied_arguments = self.visit_partial_arguments(&mut node.arguments).await?;
+        let applied_arguments = self
+            .visit_partial_arguments(&mut node.arguments, false)
+            .await?;
         self.stage_partial_arguments(&applied_arguments, node.span);
 
         node.closure.visit(self).await
@@ -7492,16 +7528,26 @@ mod tests {
 
         #[tokio::test]
         async fn an_if_comparison_is_one_branch() {
-            let code = "void f(int a, int b) { if (a < b) { a = 1; } }";
-            assert_eq!(
-                instructions_of_f(code).await,
-                vec![
-                    Instruction::Jncmp(Comparison::Lt, local(1), local(2), Address(2)),
-                    Instruction::Copy(constant(0), local(1)),
-                    Instruction::Copy(constant(1), local(0)),
-                    Instruction::Ret,
-                ]
-            );
+            for (operator, kind) in [
+                ("<", Comparison::Lt),
+                ("<=", Comparison::Lte),
+                (">", Comparison::Gt),
+                (">=", Comparison::Gte),
+                ("==", Comparison::Eq),
+                ("!=", Comparison::Ne),
+            ] {
+                let code = format!("void f(int a, int b) {{ if (a {operator} b) {{ a = 1; }} }}");
+                assert_eq!(
+                    instructions_of_f(&code).await,
+                    vec![
+                        Instruction::Jncmp(kind, local(1), local(2), Address(2)),
+                        Instruction::Copy(constant(0), local(1)),
+                        Instruction::Copy(constant(1), local(0)),
+                        Instruction::Ret,
+                    ],
+                    "{operator}",
+                );
+            }
         }
 
         #[tokio::test]
@@ -8549,6 +8595,88 @@ mod tests {
                     Some(LpcRef::from(expected)),
                     "{mode:?}: {code}"
                 );
+            }
+        }
+    }
+
+    mod operand_capture_regressions {
+        use super::*;
+        use crate::interpreter::lpc_ref::LpcRef;
+        use lpc_rs_core::null_mode::NullMode;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        async fn run(code: &str, mode: NullMode) -> Option<LpcRef> {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            crate::test_support::run_prog_with_config(code, Arc::new(config))
+                .await
+                .result()
+        }
+
+        #[tokio::test]
+        async fn arithmetic_keeps_the_left_value_before_the_right_reassigns_it() {
+            let code = "int create() { int value = 1; return value + (value = 2); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(3)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn fused_comparisons_keep_the_left_value_before_the_right_reassigns_it() {
+            let code =
+                "int create() { int value = 1; if (value < (value = 2)) return 1; return 0; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(1)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn array_items_keep_values_before_later_items_reassign_them() {
+            let code = "int create() { int value = 1; int *items = ({ value, value = 2 }); return items[0] * 10 + items[1]; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(12)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn mapping_keys_and_values_are_saved_before_later_entries_run() {
+            let code = "int create() { int value = 1; mapping items = ([ value : value, value = 2 : 3 ]); return items[1] * 10 + items[2]; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(13)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn indexed_assignment_keeps_the_rhs_before_the_index_reassigns_it() {
+            let code = "int create() { int value = 1; int *items = ({ 0, 0, 0 }); items[value = 2] = value; return items[2]; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(1)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn partial_arguments_keep_values_before_later_arguments_reassign_them() {
+            let code = "int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; function f = &pack(value, value = 2); return evaluate(f); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(12)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn operator_arguments_keep_values_before_later_arguments_reassign_them() {
+            let code = "int create() { int value = 1; function f = &operator(-)(value, value = 2); return evaluate(f); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(-1)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn partial_arguments_keep_values_before_the_receiver_runs() {
+            let code = "int value = 1; object target() { value = 2; return this_object(); } int read(int x) { return x; } int create() { function f = &(target())->read(value); return evaluate(f); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(1)), "{mode:?}");
             }
         }
     }

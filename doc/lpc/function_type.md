@@ -27,6 +27,10 @@ Prefer the bare function name when no arguments are being bound:
 `evaluate(strindex, "hello", "ll")`. Use `&name(args)` to bind arguments,
 such as `function add_ten = &add(10)`.
 
+Bound arguments run from left to right when the pointer is constructed, keeping
+their values before later bound expressions can reassign their variables. In a
+receiver-bound pointer, the receiver expression runs after the bound arguments.
+
 Breaking it down by syntax, functions can take the following forms:
 
 * `function_name` - A reference to a function of this program (own or
