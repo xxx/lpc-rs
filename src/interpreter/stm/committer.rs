@@ -1174,12 +1174,12 @@ mod tests {
         };
         let process = Arc::new(Process::new_virtual(Arc::default(), "/writer".to_owned()));
         let weak_process = Arc::downgrade(&process);
-        let origin = Arc::new(CommitOrigin::new(&process, "populate"));
+        let mut writer = Transaction::new(committer.snapshot_clone());
+        writer.set_origin(&process, "populate");
+        let origin = writer.clone_changeset().origin.unwrap();
         let weak_origin = Arc::downgrade(&origin);
-        let mut writer = Changeset::new(base);
-        writer.origin = Some(origin.clone());
         writer.merge(cell, super::super::MergeOp::IntAdd(1));
-        committer.commit(writer).unwrap();
+        committer.commit(writer.take_changeset()).unwrap();
         let written_at = committer.current_version();
         drop(process);
         assert!(weak_process.upgrade().is_none());

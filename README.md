@@ -508,6 +508,7 @@ The reviewed scope includes:
 - [Socket registry](src/interpreter/sockets/mod.rs): handle identity, commit-ordered publication, write admission, ownership transfer and lifecycle cleanup.
 - [Task context](src/interpreter/task_context.rs): optional results, caller chains, transactional loading, nested entry, player state and call-out views.
 - [DGD grammar frontend](src/command/frontend/dgd.rs): grammar tokenization, rule diagnostics, reachable productions, regex translation, actions and caching.
+- [Transactions](src/interpreter/stm/mod.rs): slot and payload views, object placement, deferred effects, context sharing, provenance and compilation accounting.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
