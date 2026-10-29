@@ -516,6 +516,7 @@ The reviewed scope includes:
 - [Telnet connection loop](src/telnet/mod.rs): hostname enrichment, input callbacks, protocol events, prompt suppression, stalled writes, departure cleanup and reconnect diagnostics.
 - [Instruction execution](src/interpreter/task/eval_loop.rs): integer batching, fallback and yield budgets, bytecode errors, indexed stores and slice bounds.
 - [Task lifecycle](src/interpreter/task/mod.rs): seeded calls, lazy global defaults, system publication, cleanup eligibility, cancellation diagnostics, deadlines and attempt metadata.
+- [Earley parsing](src/command/grammar/earley.rs): chart progress, nullable recognition, lazy derivations, exact suffix spans, work budgets and depth limits.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in
@@ -647,6 +648,13 @@ Named collection calls suspend through pending calls; invalid names fail before
 the slow receiver match. The single collection-guard branch deletion in
 `Task::handle_call_other` is excluded at its source position; review it again if
 call routing changes.
+
+Completed Earley items and exact suffix checks keep terminal reads and completed
+right-hand sides inside their chart spans. Four pinned iterator failure-path
+mutations are unreachable under those invariants. A fifth only probes shortened
+final-child spans: the empty suffix rejects them before spending budget or
+updating caches. That pruning variant preserves results and accounting while
+doing unnecessary cursor work; its exclusion does not assert equal performance.
 
 The [Mutation testing workflow](.github/workflows/mutation.yml) uses `--in-diff`
 on pull requests and pushes to `master`. Pull requests compare the checked-out

@@ -416,6 +416,7 @@ examine_globs = [
     "src/telnet/mod.rs",
     "src/interpreter/task/eval_loop.rs",
     "src/interpreter/task/mod.rs",
+    "src/command/grammar/earley.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
@@ -425,6 +426,10 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Completed chart spans and exact suffixes make these iterator failure paths unreachable.
+    "^(?:src/command/grammar/earley\\.rs:603:27:\\ delete\\ !\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next|src/command/grammar/earley\\.rs:637:28:\\ replace\\ <\\ with\\ <=\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next|src/command/grammar/earley\\.rs:637:34:\\ replace\\ \\&\\&\\ with\\ \\|\\|\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next|src/command/grammar/earley\\.rs:641:31:\\ delete\\ !\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next)$",
+    # Shortened final-child spans fail the empty suffix before budget or cache updates.
+    "^src/command/grammar/earley\\.rs:612:35:\\ replace\\ \\+\\ with\\ \\*\\ in\\ <impl\\ Iterator\\ for\\ Derivations<'_>>::next$",
     # A mixed scalar reaches the same mixed result through the fallback.
     "^src/compiler/semantic/semantic_checks\\.rs:429:39:\\ replace\\ \\|\\|\\ with\\ \\&\\&\\ in\\ combine_types$",
     # Generated Receiver constructors name a type absent from the retry module.
