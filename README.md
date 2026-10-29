@@ -512,6 +512,7 @@ The reviewed scope includes:
 - [Committer](src/interpreter/stm/committer.rs): protocol replies, snapshot pins, conflict history, publication, GC reachability, reclamation strategy and timing units.
 - [Attempt runner](src/interpreter/stm/retry.rs): retry deadlines, admission, telemetry, diagnostics, committer requests and committed readers.
 - [Semantic checking pass](src/compiler/codegen/semantic_check_walker.rs): scopes, jump and label boundaries, reference and spread arguments, class validation and diagnostic locations.
+- [Semantic type utilities](src/compiler/semantic/semantic_checks.rs): operator compatibility, null-sensitive casts, collection inference, expression types and conversion advice.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

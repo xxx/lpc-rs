@@ -412,6 +412,7 @@ examine_globs = [
     "src/interpreter/stm/committer.rs",
     "src/interpreter/stm/retry.rs",
     "src/compiler/codegen/semantic_check_walker.rs",
+    "src/compiler/semantic/semantic_checks.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]
@@ -421,6 +422,8 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # A mixed scalar reaches the same mixed result through the fallback.
+    "^src/compiler/semantic/semantic_checks\\.rs:429:39:\\ replace\\ \\|\\|\\ with\\ \\&\\&\\ in\\ combine_types$",
     # Generated Receiver constructors name a type absent from the retry module.
     "^src/interpreter/stm/retry\\.rs:270:9:\\ replace\\ AttemptRunner::commit_watch\\ \\->\\ Option<tokio::sync::watch::Receiver<Version>>\\ with\\ (?:Some\\(Receiver::from\\(Default::default\\(\\)\\)\\)|Some\\(Receiver::from_iter\\(\\[Default::default\\(\\)\\]\\)\\)|Some\\(Receiver::new\\(\\)\\)|Some\\(Receiver::new\\(Default::default\\(\\)\\)\\))$",
     # Duration::ZERO and its generated default replacement are the same value.
