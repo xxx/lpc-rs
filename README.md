@@ -514,6 +514,7 @@ The reviewed scope includes:
 - [Semantic checking pass](src/compiler/codegen/semantic_check_walker.rs): scopes, jump and label boundaries, reference and spread arguments, class validation and diagnostic locations.
 - [Semantic type utilities](src/compiler/semantic/semantic_checks.rs): operator compatibility, null-sensitive casts, collection inference, expression types and conversion advice.
 - [Telnet connection loop](src/telnet/mod.rs): hostname enrichment, input callbacks, protocol events, prompt suppression, stalled writes, departure cleanup and reconnect diagnostics.
+- [Instruction execution](src/interpreter/task/eval_loop.rs): integer batching, fallback and yield budgets, bytecode errors, indexed stores and slice bounds.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

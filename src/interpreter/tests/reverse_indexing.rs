@@ -128,12 +128,20 @@ async fn each_reverse_slice_form_works_on_strings() {
             mixed *create() {
                 string text = "aé🙂z";
                 return ({ text[<3..<2], text[<3..2], text[1..<2], text[<2..],
-                    text[..<2], text[0.. < 2] });
+                    text[..<2], text[0.. < 2], text[..<4] });
             }
         "#
         )
         .await,
-        vec![s("é🙂"), s("é🙂"), s("é🙂"), s("🙂z"), s("aé🙂"), s("aé🙂")]
+        vec![
+            s("é🙂"),
+            s("é🙂"),
+            s("é🙂"),
+            s("🙂z"),
+            s("aé🙂"),
+            s("aé🙂"),
+            s("a")
+        ]
     );
 }
 
@@ -145,7 +153,7 @@ async fn reverse_array_slices_clip_each_endpoint() {
         r#"
         mixed *create() {
             int *a = ({ 1, 2, 3 });
-            return ({ a[<99..<1], a[<3..<0], a[0..<4], a[<0..], a[<1..<3], a[<2..1] });
+            return ({ a[<99..<1], a[<3..<0], a[0..<4], a[<0..], a[<1..<3], a[<2..1], a[..<3] });
         }
     "#,
     )
@@ -169,7 +177,8 @@ async fn reverse_array_slices_clip_each_endpoint() {
             vec![],
             vec![],
             vec![],
-            vec![LpcRef::from(2)]
+            vec![LpcRef::from(2)],
+            vec![LpcRef::from(1)]
         ]
     );
 }
@@ -182,12 +191,20 @@ async fn reverse_bytes_slices_clip_each_endpoint() {
             mixed *create() {
                 bytes b = to_bytes("abc", "UTF-8");
                 return ({ to_text(b[<99..<1], "UTF-8"), to_text(b[..<0], "UTF-8"),
-                    sizeof(b[..<4]), sizeof(b[<0..]), to_text(b[<2..1], "UTF-8") });
+                    sizeof(b[..<4]), sizeof(b[<0..]), to_text(b[<2..1], "UTF-8"),
+                    to_text(b[..<3], "UTF-8") });
             }
         "#
         )
         .await,
-        vec![s("abc"), s("abc"), LpcRef::from(0), LpcRef::from(0), s("b")]
+        vec![
+            s("abc"),
+            s("abc"),
+            LpcRef::from(0),
+            LpcRef::from(0),
+            s("b"),
+            s("a")
+        ]
     );
 }
 
