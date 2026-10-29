@@ -356,4 +356,42 @@ mod tests {
         registration.capture("again", "output", false);
         assert!(registration.queue.lock().failure.take().is_none());
     }
+
+    #[tokio::test]
+    async fn an_open_registration_with_a_departed_target_cannot_invoke_its_handler() {
+        use crate::interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm};
+
+        let vm = Vm::new(crate::test_support::test_config());
+        let observer = vm
+            .initialize_process_from_code(
+                "/snoop-observer.c",
+                "int calls; void receive_snoop(string text, object target, string direction) { calls++; }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let registration = Arc::new(registration(&observer, 1024));
+        assert!(!registration.is_closed());
+        assert!(registration.target.upgrade().is_none());
+
+        registration
+            .run(
+                &vm.global_state,
+                observer.clone(),
+                SeedEntry::Snoop(registration.clone()),
+                vec![
+                    SeedArg::Value(LpcRef::from("stale output")),
+                    SeedArg::Value(LpcRef::from(0)),
+                    SeedArg::Value(LpcRef::from("output")),
+                ],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            vm.global_state.committed_global(&observer, 0u16),
+            LpcRef::from(0)
+        );
+    }
 }

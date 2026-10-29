@@ -415,6 +415,7 @@ examine_globs = [
     "src/compiler/semantic/semantic_checks.rs",
     "src/telnet/mod.rs",
     "src/interpreter/task/eval_loop.rs",
+    "src/interpreter/task/mod.rs",
 ]
 additional_cargo_args = ["--locked"]
 additional_cargo_test_args = ["--test-threads=4", "--max-fail=1:immediate"]

@@ -515,6 +515,7 @@ The reviewed scope includes:
 - [Semantic type utilities](src/compiler/semantic/semantic_checks.rs): operator compatibility, null-sensitive casts, collection inference, expression types and conversion advice.
 - [Telnet connection loop](src/telnet/mod.rs): hostname enrichment, input callbacks, protocol events, prompt suppression, stalled writes, departure cleanup and reconnect diagnostics.
 - [Instruction execution](src/interpreter/task/eval_loop.rs): integer batching, fallback and yield budgets, bytecode errors, indexed stores and slice bounds.
+- [Task lifecycle](src/interpreter/task/mod.rs): seeded calls, lazy global defaults, system publication, cleanup eligibility, cancellation diagnostics, deadlines and attempt metadata.
 
 [cargo-mutants](https://mutants.rs/) changes the code and checks whether the tests
 detect each change. The file allowlist in

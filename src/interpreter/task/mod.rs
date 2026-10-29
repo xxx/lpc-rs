@@ -1624,4 +1624,424 @@ mod stm_retry_tests {
         drop(tx);
         let _ = handle.join();
     }
+
+    #[tokio::test]
+    async fn finite_calls_publish_the_configured_deadline_to_the_attempt_runner() {
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let mut task = vm
+            .initialize_process_from_code(
+                "/deadline-configuration.c",
+                "int complete() { return 1; }",
+            )
+            .await
+            .unwrap();
+        let function = task
+            .context
+            .process()
+            .initial_program()
+            .lookup_function("complete")
+            .unwrap()
+            .clone();
+
+        for timeout_ms in [25_000, 0, 1_000] {
+            task.timed_eval(function.clone(), &[], timeout_ms)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                crate::interpreter::stm::AttemptBody::timeout_ms(&task),
+                timeout_ms
+            );
+            assert_eq!(task.result(), Some(LpcRef::from(1)));
+        }
+    }
+
+    #[tokio::test]
+    async fn binary_shortcuts_run_for_integers_and_fall_back_when_declined() {
+        use std::cell::Cell;
+
+        use crate::interpreter::bank::RefBank;
+
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let (mut task, _live) =
+            crate::test_support::task_at(&vm, "void create() {}", |_| true).await;
+        let [left, right, destination] = [0, 1, 2].map(|i| Register(i).as_local());
+        task.stack.current_frame_mut().unwrap().registers =
+            RefBank::new(vec![6.into(), 3.into(), 0.into()]);
+        let shortcuts = Cell::new(0);
+        let fallbacks = Cell::new(0);
+
+        task.binary_operation(
+            left,
+            right,
+            destination,
+            |x, y| {
+                shortcuts.set(shortcuts.get() + 1);
+                Some(x + y)
+            },
+            |x, y, txn| {
+                fallbacks.set(fallbacks.get() + 1);
+                x.add(y, txn)
+            },
+        )
+        .unwrap();
+        assert_eq!((shortcuts.get(), fallbacks.get()), (1, 0));
+        assert_eq!(
+            task.stack.current_frame().unwrap().registers[2u16],
+            LpcRef::from(9)
+        );
+
+        task.stack.current_frame_mut().unwrap().registers[1u16] = LpcRef::from(0);
+        let error = task
+            .binary_operation(
+                left,
+                right,
+                destination,
+                |x, y| {
+                    shortcuts.set(shortcuts.get() + 1);
+                    crate::interpreter::lpc_ref::int_div(x, y)
+                },
+                |x, y, _| {
+                    fallbacks.set(fallbacks.get() + 1);
+                    x.div(y)
+                },
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("Division by zero"), "{error}");
+        assert_eq!((shortcuts.get(), fallbacks.get()), (2, 1));
+
+        task.stack.current_frame_mut().unwrap().registers[1u16] = LpcRef::from(3.0);
+        task.binary_operation(
+            left,
+            right,
+            destination,
+            |_, _| panic!("a float must use the general operation"),
+            |x, y, txn| {
+                fallbacks.set(fallbacks.get() + 1);
+                x.add(y, txn)
+            },
+        )
+        .unwrap();
+        assert_eq!((shortcuts.get(), fallbacks.get()), (2, 2));
+        assert_eq!(
+            task.stack.current_frame().unwrap().registers[2u16],
+            LpcRef::from(9.0)
+        );
+    }
+    #[tokio::test]
+    async fn diagnostic_truncation_stays_within_the_budget_at_a_multibyte_boundary() {
+        use std::time::Duration;
+
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let (task, _live) = crate::test_support::task_at(&vm, "void create() {}", |_| true).await;
+        let limit = MAX_STRING_LENGTH / 2;
+        let notice = "\n[diagnostic truncated; full diagnostic in debug log]\n";
+        let cut = limit - notice.len();
+        let error = (0..4)
+            .map(|padding| {
+                LpcError::runtime(format!("{}{}", "x".repeat(padding), "🙂".repeat(limit)))
+                    .with_catch_diagnostics()
+            })
+            .find(|error| !error.catch_diagnostic().unwrap().is_char_boundary(cut))
+            .expect("the diagnostic budget cuts through a four-byte scalar");
+        let (tx, rx) = flume::bounded(1);
+
+        // Keep this off Tokio's blocking pool so a stuck formatter cannot block runtime shutdown.
+        let worker = std::thread::spawn(move || {
+            tx.send(task.catch_message(&error)).unwrap();
+        });
+        let message = rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("formatting a bounded diagnostic must make progress");
+        worker.join().unwrap();
+
+        assert!(
+            message.len() <= limit,
+            "{} bytes exceeds {limit}",
+            message.len()
+        );
+        assert!(message.ends_with(notice));
+        assert!(message.contains('🙂'));
+    }
+    #[tokio::test]
+    async fn attempt_callbacks_describe_cells_and_drain_compilation_time() {
+        use std::time::Duration;
+
+        use crate::interpreter::stm::{AttemptBody, VarId};
+
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let (mut task, _live) =
+            crate::test_support::task_at(&vm, "int marker; void create() {}", |_| true).await;
+        let cell = task.context.process().initial_image().var_id(0);
+        let description =
+            AttemptBody::describe_cell(&task, cell).expect("the process owns this global");
+        assert!(description.contains("marker"), "{description}");
+        assert!(description.contains("/main"), "{description}");
+        assert_eq!(AttemptBody::describe_cell(&task, VarId::new()), None);
+
+        let timer = task.context.txn.time_compilation();
+        tokio::time::sleep(Duration::from_millis(1)).await;
+        drop(timer);
+        assert!(AttemptBody::take_compilation_time(&mut task) > Duration::ZERO);
+        assert_eq!(
+            AttemptBody::take_compilation_time(&mut task),
+            Duration::ZERO
+        );
+    }
+    #[tokio::test(start_paused = true)]
+    async fn queued_cleanup_rechecks_a_disabled_scheduler_and_a_replaced_process() {
+        use crate::interpreter::CommittedReader;
+        use std::time::Duration;
+
+        let code = "int calls; int clean_up() { calls++; return 1; }";
+        for (interval, replaced) in [(0u64, false), (10u64, true)] {
+            let config = crate::test_config_builder!()
+                .clean_up_interval(interval)
+                .max_execution_time(0u64)
+                .build()
+                .unwrap();
+            let vm = crate::interpreter::vm::Vm::new(config);
+            let process = vm
+                .initialize_process_from_code("/cleanup-admission.c", code)
+                .await
+                .unwrap()
+                .context
+                .process;
+            if replaced {
+                let replacement = vm
+                    .global_state
+                    .object_space
+                    .create_process_from_code("/cleanup-admission.c", code)
+                    .await
+                    .unwrap();
+                assert!(!Arc::ptr_eq(&process, &replacement));
+            }
+            tokio::time::advance(Duration::from_secs(10)).await;
+            assert!(
+                process
+                    .cleanup
+                    .as_ref()
+                    .unwrap()
+                    .is_idle(Duration::from_secs(interval))
+            );
+            let context = crate::interpreter::task::task_template::TaskTemplate::from(
+                vm.global_state.clone(),
+            )
+            .into_task_context(process.clone());
+            let mut task =
+                Task::<{ crate::compile_time_config::MAX_CALL_STACK_SIZE }>::new(context);
+
+            task.timed_eval_seed(
+                TaskSeed {
+                    process: process.clone(),
+                    entry: SeedEntry::CleanUp,
+                    args: vec![],
+                    initializes: false,
+                },
+                0,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(
+                vm.global_state.committed_global(&process, 0u16),
+                LpcRef::from(0)
+            );
+        }
+    }
+    #[tokio::test]
+    async fn zero_mode_initializer_frames_keep_unwritten_globals_lazy() {
+        let (program, _, _) =
+            crate::test_support::compile_prog("int marker; string text; void create() {}").await;
+        let process = Arc::new(Process::new(program));
+        let function = process
+            .initial_program()
+            .functions
+            .values()
+            .find(|function| function.name() == lpc_rs_core::INIT_GLOBALS)
+            .unwrap()
+            .clone();
+        let txn = TxnHandle::empty();
+        assert_eq!(txn.null_mode(), NullMode::Zero);
+        let seed = TaskSeed {
+            process: process.clone(),
+            entry: SeedEntry::Function(function.clone()),
+            args: vec![],
+            initializes: true,
+        };
+
+        let _frame = seed
+            .build_call_frame(process.clone(), function, &txn, None)
+            .unwrap();
+
+        for index in 0..2u16 {
+            let cell = process.initial_image().var_id(index);
+            assert_eq!(txn.with(|txn| txn.read(cell)), None);
+        }
+    }
+    #[tokio::test]
+    async fn an_initialized_system_seed_does_not_republish_a_replaced_object() {
+        use crate::interpreter::CommittedReader;
+
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let code = "int creates; void create() { creates++; }";
+        let original = vm
+            .initialize_process_from_code("/secure/master.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let space = &vm.global_state.object_space;
+        assert!(space.is_system_key(&space.process_key(&original)));
+        let replacement = space
+            .create_process_from_code("/secure/master.c", code)
+            .await
+            .unwrap();
+        assert!(!Arc::ptr_eq(&original, &replacement));
+        let context =
+            crate::interpreter::task::task_template::TaskTemplate::from(vm.global_state.clone())
+                .into_task_context(original.clone());
+
+        Task::<{ crate::compile_time_config::MAX_CALL_STACK_SIZE }>::bootstrap_system_process(
+            context,
+        )
+        .await
+        .unwrap();
+
+        assert!(Arc::ptr_eq(
+            &space.lookup("/secure/master").unwrap(),
+            &replacement
+        ));
+        assert_eq!(
+            vm.global_state.committed_global(&original, 0u16),
+            LpcRef::from(1)
+        );
+    }
+    #[tokio::test]
+    async fn a_missing_named_entry_reports_its_completion() {
+        use crate::test_support::log_capture::LogCapture;
+        use tracing::instrument::WithSubscriber;
+
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let process = vm
+            .initialize_process_from_code("/missing-apply.c", "void create() {}")
+            .await
+            .unwrap()
+            .context
+            .process;
+        let context =
+            crate::interpreter::task::task_template::TaskTemplate::from(vm.global_state.clone())
+                .into_task_context(process.clone());
+        let mut task = Task::<{ crate::compile_time_config::MAX_CALL_STACK_SIZE }>::new(context);
+        let log = LogCapture::default();
+
+        task.timed_eval_seed(
+            TaskSeed {
+                process,
+                entry: SeedEntry::Named("missing_named_apply".into()),
+                args: vec![],
+                initializes: false,
+            },
+            0,
+        )
+        .with_subscriber(log.subscriber("lpc_rs::applies=debug"))
+        .await
+        .unwrap();
+
+        assert!(task.result().is_none());
+        let output = log.contents();
+        assert!(output.contains("Applying function"), "{output}");
+        assert!(
+            output.contains("Missing optional apply; using driver fallback"),
+            "{output}"
+        );
+        assert!(output.contains("missing_named_apply"), "{output}");
+    }
+    #[tokio::test]
+    async fn a_finished_error_does_not_leave_cancellation_metadata() {
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let mut task = vm
+            .initialize_process_from_code(
+                "/finished-error.c",
+                "int fail() { int zero; return 1 / zero; }",
+            )
+            .await
+            .unwrap();
+        let function = task
+            .context
+            .process()
+            .initial_program()
+            .lookup_function("fail")
+            .unwrap()
+            .clone();
+
+        let error = task.timed_eval(function, &[], 0).await.unwrap_err();
+        assert!(error.to_string().contains("Division by zero"), "{error}");
+        let unrelated = task
+            .context
+            .txn()
+            .with_interruption(LpcError::runtime("unrelated failure"));
+
+        assert!(unrelated.span().is_none(), "{unrelated:?}");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn queued_cleanup_skips_a_process_retired_in_the_parent_attempt() {
+        use std::time::Duration;
+
+        let config = crate::test_config_builder!()
+            .clean_up_interval(10u64)
+            .max_execution_time(0u64)
+            .build()
+            .unwrap();
+        let vm = crate::interpreter::vm::Vm::new(config);
+        let process = vm
+            .initialize_process_from_code(
+                "/retired-cleanup.c",
+                "int calls; int clean_up() { calls++; return 1; }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        tokio::time::advance(Duration::from_secs(10)).await;
+        let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+        let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        let cell = *process.cell.get_or_init(|| {
+            vm.global_state
+                .object_space
+                .cell_id(&vm.global_state.object_space.process_key(&process))
+        });
+        let global = process.initial_image().var_id(0);
+        let before = txn.with(|txn| txn.read(global));
+        txn.with(|txn| txn.remove_object(cell, process.clone()));
+        assert!(!process.is_live(&txn));
+        assert!(process.is_initialized(&txn));
+        assert!(Arc::ptr_eq(
+            &vm.global_state
+                .object_space
+                .lookup("/retired-cleanup")
+                .unwrap(),
+            &process
+        ));
+        let mut context =
+            crate::interpreter::task::task_template::TaskTemplate::from(vm.global_state.clone())
+                .into_task_context(process.clone());
+        context.txn = txn.clone();
+        let mut task = Task::<{ crate::compile_time_config::MAX_CALL_STACK_SIZE }>::new(context);
+
+        task.timed_eval_seed(
+            TaskSeed {
+                process,
+                entry: SeedEntry::CleanUp,
+                args: vec![],
+                initializes: false,
+            },
+            0,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(txn.with(|txn| txn.read(global)), before);
+    }
 }
