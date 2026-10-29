@@ -227,7 +227,7 @@ pub fn check_binary_operation_types(
                     "Reverse indexing requires an array, string or bytes"
                 ));
             }
-            if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
+            if matches!(left_type, LpcType::Mapping(false) | LpcType::Mixed(false))
                 || ((left_type.is_array()
                     || matches!(left_type, LpcType::String(false) | LpcType::Bytes(false)))
                     && (LpcType::Int(false).matches_type(right_type)
@@ -2912,6 +2912,69 @@ mod tests {
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
             }
+        }
+    }
+
+    #[test]
+    fn all_array_types_require_integer_or_range_indices() {
+        use crate::compiler::ast::range_node::RangeNode;
+
+        let mut context = CompilationContext::default();
+        context.scopes.push_new();
+        for type_ in [
+            LpcType::Int(true),
+            LpcType::Float(true),
+            LpcType::String(true),
+            LpcType::Bytes(true),
+            LpcType::Object(true),
+            LpcType::Function(true),
+            LpcType::Mapping(true),
+            LpcType::Mixed(true),
+        ] {
+            context
+                .scopes
+                .current_mut()
+                .unwrap()
+                .insert(Symbol::new("items", type_));
+            let check = |index| {
+                check_binary_operation_types(
+                    &BinaryOpNode {
+                        l: Box::new(ExpressionNode::Var(VarNode::new("items"))),
+                        r: Box::new(index),
+                        op: BinaryOperation::Index,
+                        span: None,
+                    },
+                    &context,
+                )
+            };
+            assert!(check(ExpressionNode::from("key")).is_err(), "{type_}");
+            assert!(check(ExpressionNode::from(0)).is_ok(), "{type_}");
+            assert!(
+                check(ExpressionNode::Range(RangeNode::new(
+                    Some(ExpressionNode::from(0)),
+                    Some(ExpressionNode::from(1)),
+                    None,
+                )))
+                .is_ok(),
+                "{type_}"
+            );
+        }
+        for type_ in [LpcType::Mapping(false), LpcType::Mixed(false)] {
+            context
+                .scopes
+                .current_mut()
+                .unwrap()
+                .insert(Symbol::new("items", type_));
+            let node = BinaryOpNode {
+                l: Box::new(ExpressionNode::Var(VarNode::new("items"))),
+                r: Box::new(ExpressionNode::from("key")),
+                op: BinaryOperation::Index,
+                span: None,
+            };
+            assert!(
+                check_binary_operation_types(&node, &context).is_ok(),
+                "{type_}"
+            );
         }
     }
 }
