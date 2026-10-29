@@ -249,30 +249,45 @@ impl TreeWalker for SemanticCheckWalker {
         node: &mut crate::compiler::ast::class_expression::ClassInitNode,
     ) -> Result<()> {
         super::tree_walker::walk_class_init(self, node).await?;
-        let LpcType::Class(id, false) = node.type_.resolved()? else {
-            return Err(lpc_error!(node.span, "constructor requires a class"));
+        let LpcType::Class(id, false) = node
+            .type_
+            .resolved()
+            .map_err(|error| self.context.diagnostics.fail(error))?
+        else {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "constructor requires a class")));
         };
-        let definition = self
-            .context
-            .class_scope
-            .get(id)
-            .ok_or_else(|| lpc_error!(node.span, "no visible definition for {id}"))?;
+        let definition = self.context.class_scope.get(id).ok_or_else(|| {
+            self.context
+                .diagnostics
+                .fail(lpc_error!(node.span, "no visible definition for {id}"))
+        })?;
         let mut names = std::collections::HashSet::new();
         for (name, value) in &node.initializers {
             if !names.insert(*name) {
-                return Err(lpc_error!(value.span(), "duplicate initializer `{name}`"));
+                return Err(self
+                    .context
+                    .diagnostics
+                    .fail(lpc_error!(value.span(), "duplicate initializer `{name}`")));
             }
             let field = definition
                 .fields
                 .iter()
                 .find(|field| field.name == *name)
-                .ok_or_else(|| lpc_error!(value.span(), "unknown field `{name}` in {id}"))?;
+                .ok_or_else(|| {
+                    self.context
+                        .diagnostics
+                        .fail(lpc_error!(value.span(), "unknown field `{name}` in {id}"))
+                })?;
             if let Some(actual) = mismatch(field.type_, value, &self.context)? {
-                return Err(lpc_error!(
+                let error = lpc_error!(
                     value.span(),
                     "initializer `{name}` expects {}, found {actual}",
                     field.type_
-                ));
+                );
+                return Err(self.context.diagnostics.fail(error));
             }
         }
         Ok(())
@@ -283,7 +298,8 @@ impl TreeWalker for SemanticCheckWalker {
         node: &mut crate::compiler::ast::class_expression::MemberNode,
     ) -> Result<()> {
         node.receiver.visit(self).await?;
-        crate::compiler::semantic::semantic_checks::member_type(node, &self.context)?;
+        crate::compiler::semantic::semantic_checks::member_type(node, &self.context)
+            .map_err(|error| self.context.diagnostics.fail(error))?;
         Ok(())
     }
 
@@ -299,13 +315,15 @@ impl TreeWalker for SemanticCheckWalker {
             op: node.op,
             span: node.span,
         };
-        check_binary_operation_types(&binary, &self.context)?;
+        check_binary_operation_types(&binary, &self.context)
+            .map_err(|error| self.context.diagnostics.fail(error))?;
         let target = node_type(&node.lhs, &self.context)?;
         if let Some(actual) = mismatch(target, &ExpressionNode::BinaryOp(binary), &self.context)? {
-            return Err(lpc_error!(
+            let error = lpc_error!(
                 node.span,
                 "compound assignment expects {target}, found {actual}"
-            ));
+            );
+            return Err(self.context.diagnostics.fail(error));
         }
         Ok(())
     }
@@ -4496,6 +4514,60 @@ mod tests {
         async fn a_bare_variable_at_an_efun_ref_position_is_clean() {
             let errors = errors_of(r#"void f() { int n; sscanf("1", "%d", n); }"#).await;
             assert!(errors.is_empty(), "{errors:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn nested_statements_preserve_class_validation_diagnostics() {
+        for (invalid, expected) in [
+            (
+                "class Record item = new(class Record, field: 1, field: 2);",
+                "duplicate initializer `field`",
+            ),
+            (
+                "class Record item = new(class Record, missing: 1);",
+                "unknown field `missing`",
+            ),
+            (
+                "class Record item = new(class Record, field: \"wrong\");",
+                "initializer `field` expects int",
+            ),
+            (
+                "class Record item = new(class Record); item.missing;",
+                "unknown field `missing`",
+            ),
+            (
+                "class Record item = new(class Record); item.field += \"wrong\";",
+                "compound assignment expects int",
+            ),
+            (
+                "class Record item = new(class Record); item.field &= \"wrong\";",
+                "Mismatched types",
+            ),
+        ] {
+            for statement in [
+                invalid.to_owned(),
+                format!("while (1) {{ {invalid} }}"),
+                format!("do {{ {invalid} }} while (0);"),
+                format!("for (int i = 0; i < 1; i++) {{ {invalid} }}"),
+                format!("foreach (i: ({{1}})) {{ {invalid} }}"),
+                format!("if (1) {{ {invalid} }}"),
+            ] {
+                let code = format!(
+                    "class Record {{ int field; }} int probe() {{ {statement} return 0; }}"
+                );
+                let errors = match crate::compiler::Compiler::default()
+                    .compile_string("/class-diagnostics.c", &code)
+                    .await
+                {
+                    Ok(_) => Vec::new(),
+                    Err(error) => vec![error.diagnostic_string()],
+                };
+                assert!(
+                    errors.iter().any(|error| error.contains(expected)),
+                    "{code}: {errors:?}"
+                );
+            }
         }
     }
 }
