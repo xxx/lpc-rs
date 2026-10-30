@@ -141,6 +141,8 @@ jobs:
 
       - name: Run mutation tests
         env:
+          # rust-cache disables incremental compilation for subsequent steps.
+          CARGO_INCREMENTAL: "1"
           MUTATION_SHARD: ${{ matrix.shard }}
         run: >-
           cargo mutants --workspace --in-place --no-shuffle
