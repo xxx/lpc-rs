@@ -86,14 +86,14 @@ jobs:
 
           listing = Path('/tmp/lpc-rs-mutants.json').read_text().strip()
           count = len(json.loads(listing)) if listing else 0
-          shards = min(4, count)
+          shards = min(16, (count + 23) // 24)
           denominator = max(1, shards)
           matrix = {'shard': [f'{i}/{denominator}' for i in range(denominator)]}
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               print(f'count={count}', file=output)
               print(f'matrix={json.dumps(matrix)}', file=output)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-              print(f'{count} changed-line mutations across {shards} shards (maximum 4).', file=summary)
+              print(f'{count} changed-line mutations across {shards} shards (maximum 16, target 24 per shard).', file=summary)
           PY
 
   mutation:
@@ -101,10 +101,10 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.count != '0'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 16
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout
