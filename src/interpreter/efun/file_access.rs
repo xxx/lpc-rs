@@ -107,7 +107,7 @@ impl FileAccess {
         })
     }
 
-    /// Require a parent directory on disk or in this task's pending directory creations.
+    /// Require a parent directory in this task's current file view.
     pub(crate) async fn require_parent<const N: usize>(
         &self,
         context: &EfunContext<'_, N>,
@@ -219,7 +219,7 @@ async fn authorize_at<const N: usize>(
     Ok(allowed.then_some(FileAccess { path, efun }))
 }
 
-/// Whether `server`'s parent is a directory on disk or in this task's pending creations.
+/// Whether `server`'s parent is a directory in this task's file view.
 pub(crate) async fn parent_is_dir<const N: usize>(
     context: &EfunContext<'_, N>,
     server: &Path,
@@ -227,14 +227,10 @@ pub(crate) async fn parent_is_dir<const N: usize>(
     let Some(parent) = server.parent() else {
         return Ok(false);
     };
-    if context.has_pending_dir(parent) {
-        return Ok(true);
-    }
-    match tokio::fs::metadata(parent).await {
-        Ok(m) => Ok(m.is_dir()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(e),
-    }
+    Ok(matches!(
+        file_view::metadata_through(context.txn(), parent).await?,
+        FileMetadata::Directory
+    ))
 }
 
 #[cfg(test)]
@@ -242,7 +238,11 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::vm::Vm,
+        interpreter::{
+            call_stack::CallStack,
+            efun::{Efun, efun_context::EfunContext},
+            vm::Vm,
+        },
         test_support::{TempLib, string_global, temp_lib_config},
     };
 
@@ -257,6 +257,129 @@ mod tests {
             return 1;
         }
     "# };
+
+    async fn allowing_vm(root: &TempLib) -> Vm {
+        let vm = Vm::new(temp_lib_config(root));
+        vm.initialize_process_from_code("/secure/master.c", ALLOWING)
+            .await
+            .unwrap();
+        vm
+    }
+
+    #[tokio::test]
+    async fn removed_parent_directories_reject_later_writes() {
+        for (name, existing, setup) in [
+            ("access-removed-parent", true, r#"rmdir("/parent");"#),
+            (
+                "access-created-removed-parent",
+                false,
+                r#"mkdir("/parent"); rmdir("/parent");"#,
+            ),
+        ] {
+            let root = TempLib::new(name);
+            if existing {
+                std::fs::create_dir(root.join("parent")).unwrap();
+            }
+            let vm = allowing_vm(&root).await;
+            let task = vm
+                .initialize_process_from_code(
+                    "/writer.c",
+                    format!(
+                        r#"
+                            int create() {{
+                                {setup}
+                                string err = catch(write_file("/parent/file", "x"));
+                                return stringp(err) && strindex(err, "parent directory does not exist") >= 0;
+                            }}
+                        "#
+                    ),
+                )
+                .await
+                .unwrap();
+            assert_eq!(task.result(), Some(1.into()), "{name}");
+            assert!(!root.join("parent").exists());
+        }
+    }
+
+    #[tokio::test]
+    async fn moved_parent_directories_allow_later_writes() {
+        let root = TempLib::new("access-moved-parent");
+        std::fs::create_dir(root.join("before")).unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"
+                    int create() {
+                        rename("/before", "/after");
+                        string err = catch(write_file("/after/file", "x"));
+                        return !stringp(err);
+                    }
+                "#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(1.into()));
+        assert!(!root.join("before").exists());
+        assert_eq!(
+            std::fs::read_to_string(root.join("after/file")).unwrap(),
+            "x"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn parent_metadata_errors_keep_their_cause() {
+        let root = TempLib::new("access-parent-error");
+        std::fs::write(root.join("file"), "not a directory").unwrap();
+        let cause = std::fs::metadata(root.join("file/child")).unwrap_err();
+        let vm = allowing_vm(&root).await;
+        let caller = vm
+            .initialize_process_from_code(
+                "/writer.c",
+                r#"string err; void create() { err = catch(save_map(([ "x": 1 ]), "/file/child/save")); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let error = string_global(&vm, &caller, "err");
+        assert!(error.contains("save_map: /file/child/save.o:"), "{error}");
+        assert!(error.contains(&cause.to_string()), "{error}");
+        assert!(!error.contains(root.to_str().unwrap()), "{error}");
+    }
+
+    #[tokio::test]
+    async fn unchanged_regular_files_support_bounded_disk_reads() {
+        let root = TempLib::new("access-disk-range");
+        std::fs::write(root.join("range.bin"), b"abcdef").unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        let task = vm
+            .initialize_process_from_code("/reader.c", "void create() {}")
+            .await
+            .unwrap();
+        let mut stack = CallStack::<8>::default();
+        let context = EfunContext::fired(
+            &mut stack,
+            &task.context,
+            Efun::read_bytes,
+            vec![],
+            task.context.process().clone(),
+            None,
+        );
+        let access = super::FileAccess {
+            path: context
+                .config()
+                .paths()
+                .resolve("/range.bin", std::path::Path::new("/"))
+                .unwrap(),
+            efun: "read_bytes",
+        };
+        assert_eq!(
+            access.read_disk_range(&context, 2, Some(3)).await.unwrap(),
+            Some(b"cde".to_vec())
+        );
+    }
 
     #[tokio::test]
     async fn file_efuns_keep_their_argument_and_authorization_order() {

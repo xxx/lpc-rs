@@ -86,3 +86,65 @@ impl PartialEq<IndexMap<LpcRef, LpcRef>> for LpcMapping {
         &self.mapping == other
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_core::LpcIntInner;
+
+    use super::{LpcMapping, LpcRef};
+
+    fn mapping_from_pairs(entries: &[(LpcIntInner, LpcIntInner)]) -> LpcMapping {
+        LpcMapping::new(
+            entries
+                .iter()
+                .map(|&(key, value)| (LpcRef::from(key), LpcRef::from(value)))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn display_preserves_delimiters_and_insertion_order() {
+        for (entries, expected) in [
+            ([].as_slice(), "([ ])"),
+            ([(7, 11)].as_slice(), "([7: 11 ])"),
+            ([(7, 11), (3, 5)].as_slice(), "([7: 11, 3: 5 ])"),
+        ] {
+            assert_eq!(mapping_from_pairs(entries).to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn debug_includes_the_mapping_type_and_debug_entries() {
+        let mapping = mapping_from_pairs(&[(7, 11), (3, 5)]);
+        assert_eq!(
+            format!("{mapping:?}"),
+            "LpcMapping {LpcInt(7): LpcInt(11), LpcInt(3): LpcInt(5) }"
+        );
+    }
+
+    #[test]
+    fn raw_map_comparison_checks_entries_independently_of_order() {
+        let mapping = mapping_from_pairs(&[(7, 11), (3, 5)]);
+        for (entries, expected) in [
+            ([(3, 5), (7, 11)].as_slice(), true),
+            ([(7, 11), (3, 6)].as_slice(), false),
+            ([(7, 11), (4, 5)].as_slice(), false),
+            ([(7, 11)].as_slice(), false),
+            ([].as_slice(), false),
+        ] {
+            let other = mapping_from_pairs(entries).mapping;
+            assert_eq!(mapping == other, expected, "{entries:?}");
+        }
+    }
+
+    #[test]
+    fn owned_iteration_preserves_pairs_and_insertion_order() {
+        let entries = [(7, 11), (3, 5)];
+        let actual: Vec<_> = mapping_from_pairs(&entries).into_iter().collect();
+        let expected: Vec<_> = entries
+            .into_iter()
+            .map(|(key, value)| (LpcRef::from(key), LpcRef::from(value)))
+            .collect();
+        assert_eq!(actual, expected);
+    }
+}

@@ -269,6 +269,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn interned_text_is_shared_across_distinct_string_handles() {
+        let process = Process::new(Program {
+            num_globals: 2,
+            ..Default::default()
+        });
+        let txn = TxnHandle::empty();
+        let shared = ustr::ustr(&"s".repeat(4096));
+        let different = ustr::ustr(&"t".repeat(4096));
+        let string = |text| LpcRef::String(Arc::new(LpcString::Static(text)));
+        txn.with(|t| {
+            t.write(process.initial_image().global(0), string(shared));
+            t.write(process.initial_image().global(1), string(shared));
+        });
+        let shared_bytes = object_memory(&process, &txn).await.unwrap().data_bytes;
+        txn.with(|t| t.write(process.initial_image().global(1), string(different)));
+        let separate_bytes = object_memory(&process, &txn).await.unwrap().data_bytes;
+        assert_eq!(separate_bytes, shared_bytes + shared.len());
+    }
+
+    #[tokio::test]
     async fn large_graphs_fail_instead_of_returning_a_partial_estimate() {
         let (process, txn) = array_object();
         let error = measure(&process, &txn, 16).await.err().unwrap();

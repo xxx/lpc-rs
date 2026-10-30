@@ -56,7 +56,8 @@ impl GlobalState {
                 };
                 if call_out.is_repeating() {
                     call_out.refresh();
-                } else {
+                }
+                if !call_out.is_repeating() {
                     co.remove_by_id(id);
                 }
                 true

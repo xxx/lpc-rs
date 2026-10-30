@@ -6,8 +6,8 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
 };
 
-/// `file_time(path)`: when the file was last modified, in seconds since
-/// the epoch; -1 for a missing file or one the master's `valid_read`
+/// `file_time(path)`: when the file was last modified, rounded down to
+/// whole Unix seconds; -1 for a missing file or one the master's `valid_read`
 /// refuses.
 pub async fn file_time<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(access) = authorize_or_deny(context, "file_time", VALID_READ, 0).await? else {
@@ -22,7 +22,12 @@ pub async fn file_time<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         // filesystem can hold.
         Ok(modified) => match modified.duration_since(std::time::UNIX_EPOCH) {
             Ok(d) => i64::try_from(d.as_secs()).unwrap_or(i64::MAX),
-            Err(e) => -i64::try_from(e.duration().as_secs()).unwrap_or(i64::MAX),
+            Err(e) => {
+                let duration = e.duration();
+                let seconds =
+                    -i128::from(duration.as_secs()) - i128::from(duration.subsec_nanos() != 0);
+                i64::try_from(seconds).unwrap_or(i64::MIN)
+            }
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => -1,
         Err(e) => {
@@ -35,6 +40,11 @@ pub async fn file_time<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        fs::{File, FileTimes},
+        time::{Duration, UNIX_EPOCH},
+    };
+
     use crate::{
         interpreter::{lpc_ref::LpcRef, vm::Vm},
         test_support::{TempLib, temp_lib_config},
@@ -67,24 +77,66 @@ mod tests {
     #[tokio::test]
     async fn file_time_is_the_modification_second() {
         let root = TempLib::new("time-file");
-        let before = chrono::Utc::now().timestamp();
-        std::fs::write(root.join("f.txt"), "x").unwrap();
-        let after = chrono::Utc::now().timestamp();
+        File::create(root.join("f.txt"))
+            .unwrap()
+            .set_times(
+                FileTimes::new().set_modified(UNIX_EPOCH + Duration::from_secs(1_600_000_000)),
+            )
+            .unwrap();
         let vm = allowing_vm(&root).await;
-        let t = time_of(&vm, "/f.txt").await;
-        assert!(
-            (before..=after).contains(&t),
-            "{t} not in {before}..={after}"
-        );
+        assert_eq!(time_of(&vm, "/f.txt").await, 1_600_000_000);
+    }
+
+    #[tokio::test]
+    async fn pre_epoch_modification_times_round_down_to_whole_seconds() {
+        for (age, expected) in [
+            (Duration::from_secs(2), -2),
+            (Duration::from_millis(1500), -2),
+            (Duration::from_millis(500), -1),
+        ] {
+            let root = TempLib::new("time-pre-epoch");
+            let modified = UNIX_EPOCH - age;
+            File::create(root.join("old.txt"))
+                .unwrap()
+                .set_times(FileTimes::new().set_modified(modified))
+                .unwrap();
+            let vm = allowing_vm(&root).await;
+
+            assert_eq!(time_of(&vm, "/old.txt").await, expected, "{modified:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_errors_keep_the_efun_and_in_game_path() {
+        let root = TempLib::new("time-metadata-error");
+        std::fs::write(root.join("file"), "x").unwrap();
+        let vm = allowing_vm(&root).await;
+        let error = vm
+            .initialize_process_from_code(
+                "/timer.c",
+                "int create() { return file_time(\"/file/child\"); }",
+            )
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("file_time: /file/child:"), "{error}");
+        assert!(!error.contains(root.to_str().unwrap()), "{error}");
     }
 
     #[tokio::test]
     async fn a_directory_answers_its_time() {
         let root = TempLib::new("time-dir");
-        let before = chrono::Utc::now().timestamp();
         std::fs::create_dir_all(root.join("d")).unwrap();
+        let modified = std::fs::metadata(root.join("d"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let vm = allowing_vm(&root).await;
-        assert!(time_of(&vm, "/d").await >= before);
+        assert_eq!(time_of(&vm, "/d").await, i64::try_from(modified).unwrap());
     }
 
     #[tokio::test]

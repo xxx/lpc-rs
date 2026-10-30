@@ -134,7 +134,11 @@ impl Iterator for TokenTriples<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let t = self.tokens.get(self.count)?;
+        #[cfg(debug_assertions)]
+        let previous = self.count;
         self.count += 1;
+        #[cfg(debug_assertions)]
+        debug_assert!(self.count > previous, "token cursor did not advance");
         let span = t.span();
         Some(Ok((span.l(), t.clone(), span.r())))
     }
@@ -390,7 +394,14 @@ fn directive_token(lex: &mut Lexer<Token>) -> StringToken {
     let mut quote = None;
     let mut line_comment = false;
 
+    #[cfg(debug_assertions)]
+    let mut previous = None;
     while end < bytes.len() {
+        #[cfg(debug_assertions)]
+        debug_assert!(
+            previous.replace(end).is_none_or(|previous| end > previous),
+            "directive cursor did not advance"
+        );
         match bytes[end] {
             b'\n' => {
                 let continued = bytes[..end].ends_with(b"\\") || bytes[..end].ends_with(b"\\\r");
@@ -1196,5 +1207,206 @@ mod tests {
             triples,
             vec![(0, tokens[0].clone(), 1), (1, tokens[1].clone(), 2)]
         );
+    }
+
+    #[test]
+    fn lexer_debug_output_identifies_the_wrapper() {
+        let lexer = LexWrapper::new("value + 1", 0);
+        assert!(format!("{lexer:?}").starts_with("LexWrapper"));
+    }
+
+    #[test]
+    fn minimum_integer_magnitudes_are_marked_in_every_radix() {
+        let magnitude = 1_u64 << 63;
+        for spelling in [
+            magnitude.to_string(),
+            format!("0x{magnitude:x}"),
+            format!("0o{magnitude:o}"),
+            format!("0b{magnitude:b}"),
+        ] {
+            let tokens = LexWrapper::new_at(&spelling, 7, 20)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(
+                tokens,
+                [Token::MinIntMagnitude(Span::new(
+                    7,
+                    20..20 + spelling.len()
+                ))]
+            );
+            let negative = format!("-{spelling}");
+            let tokens = LexWrapper::new_at(&negative, 7, 20)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(
+                tokens,
+                [
+                    Token::Minus(Span::new(7, 20..21)),
+                    Token::MinIntMagnitude(Span::new(7, 21..20 + negative.len())),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn an_unquoted_backslash_does_not_hide_a_directive_string_opener() {
+        for newline in ["\n", "\r\n"] {
+            let directive = format!("#define RAW \\\"/* unfinished{newline}");
+            let source = format!("{directive}int");
+            let tokens = LexWrapper::new_at(&source, 7, 20)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(
+                tokens,
+                [
+                    Token::DirectiveLine(StringToken(
+                        Span::new(7, 20..20 + directive.len() - 1),
+                        directive.clone(),
+                    )),
+                    Token::Int(Span::new(7, 20 + directive.len()..20 + source.len())),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn division_and_apostrophe_literals_do_not_hide_multiline_block_comments() {
+        for newline in ["\n", "\r\n"] {
+            for prefix in ["8 /", "''' /"] {
+                let directive =
+                    format!("#define VALUE {prefix} /* first{newline}second */ 2{newline}");
+                let source = format!("{directive}int");
+                let tokens = LexWrapper::new_at(&source, 7, 20)
+                    .collect::<Result<Vec<_>>>()
+                    .unwrap();
+                assert_eq!(
+                    tokens,
+                    [
+                        Token::DirectiveLine(StringToken(
+                            Span::new(7, 20..20 + directive.len() - 1),
+                            directive.clone(),
+                        )),
+                        Token::Int(Span::new(7, 20 + directive.len()..20 + source.len())),
+                    ],
+                    "{prefix}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn adjacent_directive_block_comments_are_each_consumed_once() {
+        for newline in ["\n", "\r\n"] {
+            let directive = format!("#define VALUE 1 /* first *//* second */ + 2{newline}");
+            let source = format!("{directive}int");
+            let tokens = LexWrapper::new_at(&source, 7, 20)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(
+                tokens,
+                [
+                    Token::DirectiveLine(StringToken(
+                        Span::new(7, 20..20 + directive.len() - 1),
+                        directive.clone(),
+                    )),
+                    Token::Int(Span::new(7, 20 + directive.len()..20 + source.len())),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn signed_integer_limits_are_enforced_in_every_radix() {
+        let signed_max = (1_u64 << 63) - 1;
+        for spelling in [
+            signed_max.to_string(),
+            format!("0x{signed_max:x}"),
+            format!("0o{signed_max:o}"),
+            format!("0b{signed_max:b}"),
+        ] {
+            let tokens = LexWrapper::new_at(&spelling, 7, 20)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(
+                tokens,
+                [Token::IntLiteral(IntToken(
+                    Span::new(7, 20..20 + spelling.len()),
+                    signed_max,
+                ))]
+            );
+        }
+        for magnitude in [(1_u64 << 63) + 1, u64::MAX] {
+            for spelling in [
+                magnitude.to_string(),
+                format!("0x{magnitude:x}"),
+                format!("0o{magnitude:o}"),
+                format!("0b{magnitude:b}"),
+            ] {
+                let error = LexWrapper::new_at(&spelling, 7, 20)
+                    .collect::<Result<Vec<_>>>()
+                    .unwrap_err();
+                assert_eq!(
+                    error.span(),
+                    Some(Span::new(7, 20..20 + spelling.len())),
+                    "{spelling}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_keyword_keeps_its_spelling_and_span_when_respanned() {
+        for word in [
+            "if",
+            "else",
+            "while",
+            "for",
+            "inherit",
+            "break",
+            "continue",
+            "case",
+            "do",
+            "int",
+            "float",
+            "string",
+            "bytes",
+            "object",
+            "mapping",
+            "mixed",
+            "nil",
+            "void",
+            "return",
+            "static",
+            "class",
+            "nosave",
+            "varargs",
+            "nomask",
+            "ref",
+            "efun",
+            "switch",
+            "default",
+            "foreach",
+            "operator",
+            "function",
+            "private",
+            "public",
+            "protected",
+        ] {
+            let mut tokens = LexWrapper::new_at(word, 7, 20);
+            let token = tokens.next().unwrap().unwrap();
+            assert!(tokens.next().is_none());
+            assert_eq!(token.keyword_text(), Some(word), "{word}");
+            assert_eq!(token.to_string(), word);
+            assert_eq!(token.span(), Span::new(7, 20..20 + word.len()));
+            let replacement = Span::new(8, 40..45);
+            let respanned = token.with_span(replacement);
+            assert_eq!(respanned.span(), replacement);
+            assert_eq!(respanned.keyword_text(), Some(word));
+            assert_eq!(respanned.to_string(), word);
+        }
+        for source in ["if_suffix", "identifier", "123", "+"] {
+            let token = LexWrapper::new(source, 0).next().unwrap().unwrap();
+            assert_eq!(token.keyword_text(), None, "{source}");
+        }
     }
 }

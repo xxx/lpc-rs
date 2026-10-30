@@ -12,14 +12,10 @@ pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     let Some(contents) = context.arg(1).as_str() else {
         return Err(context.runtime_error("write_file: contents must be a string"));
     };
-    let mode = if context.arg_count() > 2 {
-        let LpcRef::Int(value) = context.arg(2) else {
-            return Err(context.runtime_error("write_file: mode must be an int"));
-        };
-        value.0
-    } else {
-        0
+    let LpcRef::Int(value) = context.arg(2) else {
+        return Err(context.runtime_error("write_file: mode must be an int"));
     };
+    let mode = value.0;
     if !(0..=1).contains(&mode) {
         return Err(context.runtime_error("write_file: mode must be 0 (append) or 1 (overwrite)"));
     }
@@ -624,6 +620,8 @@ mod tests {
     async fn a_non_directory_path_component_is_a_runtime_error() {
         let root = TempLib::new("write-enotdir");
         std::fs::write(root.join("f.txt"), "").unwrap();
+        #[cfg(unix)]
+        let cause = std::fs::metadata(root.join("f.txt/o.txt")).unwrap_err();
         let vm = allowing_vm(&root).await;
         let err = vm
             .initialize_process_from_code(
@@ -634,6 +632,8 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("write_file: /f.txt/o.txt:"), "{err}");
+        #[cfg(unix)]
+        assert!(err.contains(&cause.to_string()), "{err}");
         assert!(!err.contains(root.to_str().unwrap()), "{err}");
     }
 

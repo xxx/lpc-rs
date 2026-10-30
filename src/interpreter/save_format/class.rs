@@ -182,9 +182,11 @@ impl Reader<'_> {
 
     fn metadata_number(&mut self) -> Result<usize> {
         let start = self.at;
-        while matches!(self.peek(), Some(b'0'..=b'9')) {
-            self.at += 1;
-        }
+        let digits = self.text[start..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        self.at += digits;
         std::str::from_utf8(&self.text[start..self.at])
             .ok()
             .and_then(|text| text.parse().ok())

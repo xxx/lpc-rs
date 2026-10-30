@@ -25,6 +25,62 @@ use crate::interpreter::{
 };
 
 #[test]
+fn updates_reuse_unshared_payloads_already_owned_by_the_attempt() {
+    use lpc_rs_core::{
+        class::{ClassDefinition, ClassField, ClassId},
+        lpc_type::LpcType,
+    };
+
+    use crate::interpreter::lpc_class::LpcClass;
+
+    let mut txn = Transaction::new(Committer::new().snapshot_clone());
+    let array = txn.mint_array(LpcArray::new([1.into()]));
+    let allocation = Arc::as_ptr(&txn.read_array(array.id).unwrap());
+    txn.with_array_cow(array.id, |payload| {
+        assert!(std::ptr::eq(payload, allocation));
+        payload[0] = 2.into();
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(txn.read_array(array.id).unwrap()[0], LpcRef::from(2));
+
+    let mapping = txn.mint_mapping(LpcMapping::default());
+    let allocation = Arc::as_ptr(&txn.read_mapping(mapping.id).unwrap());
+    txn.with_mapping_cow(mapping.id, |payload| {
+        assert!(std::ptr::eq(payload, allocation));
+        payload.insert("value".into(), 3.into());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        txn.read_mapping(mapping.id).unwrap().get(&"value".into()),
+        Some(&LpcRef::from(3))
+    );
+
+    let definition = Arc::new(ClassDefinition {
+        id: ClassId {
+            source: "/payload.c".into(),
+            name: "payload".into(),
+        },
+        fields: Box::new([ClassField {
+            name: "value".into(),
+            type_: LpcType::Int(false),
+        }]),
+    });
+    let class = txn.mint_class(LpcClass::new(definition));
+    let allocation = Arc::as_ptr(&txn.read_class(class.id).unwrap());
+    txn.with_class_cow(class.id, |payload| {
+        assert!(std::ptr::eq(payload, allocation));
+        payload.try_map_values(|_| Ok(7.into())).unwrap();
+    })
+    .unwrap();
+    assert_eq!(
+        txn.read_class(class.id).unwrap().value_at(0),
+        Some(&LpcRef::from(7))
+    );
+}
+
+#[test]
 fn paired_read_conflicts_when_either_operand_changes() {
     for changed in [0, 1] {
         let mut committer = Committer::new();
@@ -514,4 +570,160 @@ fn movers_of_distinct_tokens_commute_and_same_token_movers_conflict() {
         committer.commit(d).is_err(),
         "two movers of one token conflict on its environment cell"
     );
+}
+
+#[test]
+fn distinct_variable_identities_keep_distinct_numeric_representations() {
+    let first = VarId::new();
+    let second = VarId::new();
+    assert_ne!(first, second);
+    assert_ne!(first.as_u64(), second.as_u64());
+}
+
+#[test]
+fn policy_globals_isolate_ordinary_writes_and_mirror_authorized_updates() {
+    use crate::interpreter::{
+        process::Process,
+        program::Program,
+        stm::{AuthorityView, TxnHandle},
+    };
+
+    let process = Process::new(Program {
+        num_globals: 1,
+        ..Program::default()
+    });
+    let slot = process.initial_image().var_id(0);
+    let ordinary = TxnHandle::new(Transaction::new(Committer::new().snapshot_clone()));
+    ordinary.with(|txn| txn.write(slot, 7.into()));
+    let mut view = AuthorityView::default();
+    view.pin(&ordinary, &process, true);
+    let view = Arc::new(view);
+    let policy = ordinary.with_authority(view.clone());
+
+    ordinary.with(|txn| txn.write(slot, 8.into()));
+    assert_eq!(ordinary.with(|txn| txn.read(slot)), Some(LpcRef::from(8)));
+    assert_eq!(policy.with(|txn| txn.read(slot)), Some(LpcRef::from(7)));
+
+    policy.with(|txn| txn.write(slot, 11.into()));
+    assert_eq!(policy.with(|txn| txn.read(slot)), Some(LpcRef::from(11)));
+    assert_eq!(ordinary.with(|txn| txn.read(slot)), Some(LpcRef::from(11)));
+
+    policy.with(|txn| txn.merge(slot, MergeOp::IntAdd(4)));
+    assert_eq!(policy.with(|txn| txn.read(slot)), Some(LpcRef::from(15)));
+    assert_eq!(ordinary.with(|txn| txn.read(slot)), Some(LpcRef::from(15)));
+    assert_eq!(view.retained(&ordinary, slot), Some(LpcRef::from(15)));
+}
+
+#[test]
+fn integer_merge_probes_follow_attempt_values_without_tracking_world_reads() {
+    let mut committer = Committer::new();
+    let integer = VarId::new();
+    let text = VarId::new();
+    let missing = VarId::new();
+    let mut seed = Transaction::new(committer.snapshot_clone());
+    seed.write(integer, 11.into());
+    seed.write(text, "text".into());
+    committer.commit(seed.take_changeset()).unwrap();
+
+    let mut probe = Transaction::new(committer.snapshot_clone());
+    assert!(probe.peek_int(integer));
+    assert!(!probe.peek_int(text));
+    assert!(probe.peek_int(missing));
+    let mut changed = Transaction::new(committer.snapshot_clone());
+    changed.write(integer, "changed".into());
+    changed.write(text, 2.into());
+    committer.commit(changed.take_changeset()).unwrap();
+    committer.commit(probe.take_changeset()).unwrap();
+
+    let mut own = Transaction::new(committer.snapshot_clone());
+    own.write(integer, 3.into());
+    assert!(own.peek_int(integer));
+    own.write(text, "changed again".into());
+    assert!(!own.peek_int(text));
+    own.drop_var(text);
+    assert!(own.peek_int(text));
+    own.merge(missing, MergeOp::IntAdd(4));
+    assert!(own.peek_int(missing));
+}
+
+#[test]
+fn transaction_cleanliness_distinguishes_reads_writes_and_pending_effects() {
+    use crate::interpreter::stm::Effect;
+
+    let mut txn = Transaction::new(Committer::new().snapshot_clone());
+    let cell = VarId::new();
+    assert!(txn.is_clean());
+    assert_eq!(txn.read(cell), None);
+    assert!(txn.is_clean());
+    txn.write(cell, 7.into());
+    assert!(!txn.is_clean());
+    let _writes = txn.take_changeset();
+    assert!(txn.is_clean());
+    txn.record_effect(Effect::DebugLog("pending".into()));
+    assert!(!txn.is_clean());
+    assert_eq!(txn.take_effects().len(), 1);
+    assert!(txn.is_clean());
+}
+
+#[test]
+fn callback_resolution_reports_attempt_metadata_and_drains_compilation_time() {
+    use crate::interpreter::{
+        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
+        process::Process,
+        stm::{AttemptBody, ResolvePointerCallBody, TxnHandle},
+        vm::global_state::GlobalState,
+    };
+    use lpc_rs_utils::config::ConfigBuilder;
+    use std::time::Duration;
+
+    let seat = Arc::new(Process::new_virtual(
+        Arc::default(),
+        "/callback-owner".to_owned(),
+    ));
+    let pointer = FunctionPtrBuilder::default()
+        .owner(Arc::downgrade(&seat))
+        .address(FunctionAddress::Efun(ustr::ustr("dump")))
+        .build()
+        .unwrap();
+    let config = ConfigBuilder::default()
+        .max_execution_time(37_u64)
+        .build()
+        .unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let global = Arc::new(GlobalState::new(config, tx));
+    let mut body = ResolvePointerCallBody {
+        gs: &global,
+        ptr: &pointer,
+        passed: &[],
+        seat,
+        this_player: None,
+        txn: None,
+        resolved: None,
+    };
+    assert_eq!(
+        body.origin().unwrap().to_string(),
+        "/callback-owner::resolve_callback"
+    );
+    assert_eq!(body.timeout_ms(), 37);
+    let error = body.timeout_error().to_string();
+    assert!(error.contains("37ms"), "{error}");
+    assert!(error.contains("/callback-owner"), "{error}");
+    assert_eq!(body.take_compilation_time(), Duration::ZERO);
+    let unknown = VarId::new();
+    assert_eq!(body.describe_cell(unknown), None);
+
+    let mut committer = Committer::new();
+    let mut seed = Transaction::new(committer.snapshot_clone());
+    let payload = seed.mint_array(LpcArray::new([1.into()]));
+    committer.commit(seed.take_changeset()).unwrap();
+    let txn = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+    txn.with(|txn| txn.compilation.elapsed = Duration::from_millis(17));
+    body.txn = Some(txn);
+    assert_eq!(
+        body.describe_cell(payload.id),
+        Some("array payload".to_owned())
+    );
+    assert_eq!(body.describe_cell(unknown), None);
+    assert_eq!(body.take_compilation_time(), Duration::from_millis(17));
+    assert_eq!(body.take_compilation_time(), Duration::ZERO);
 }

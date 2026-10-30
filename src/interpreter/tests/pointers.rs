@@ -8,6 +8,77 @@ use crate::interpreter::lpc_ref::LpcRef;
 const ADD3: &str = "int add3(int a, int b, int c) { return a + 10 * b + 100 * c; }\n";
 
 #[tokio::test]
+async fn cold_string_receiver_pointers_initialize_before_use_and_keep_bound_arguments() {
+    use crate::{
+        interpreter::tests::run_with,
+        test_support::{lib_holding, temp_lib_config},
+    };
+
+    let root = lib_holding(
+        "cold-function-pointer",
+        &[(
+            "target.c",
+            r#"
+            int starts, ready;
+            void create() {
+                starts++;
+                ready = 100;
+                "/shared"->change_value();
+            }
+            int answer(int a, int b) { return ready + 10 * a + b; }
+            int initialization_count() { return starts; }
+        "#,
+        )],
+    );
+    let result = run_with(
+        temp_lib_config(&root),
+        "int valid_load(string p, string f, object c, string g) { return 1; }",
+        &[(
+            "/shared.c",
+            "int value = 3; int query_value() { return value; } void change_value() { value = 9; }",
+        )],
+        r#"
+        mixed *create() {
+            int loaded_before = !!find_object("/target");
+            function callback = &("/target")->answer("/shared"->query_value());
+            int result = callback(4);
+            return ({ loaded_before, result, "/shared"->query_value(),
+                !!find_object("/target"), "/target"->initialization_count() });
+        }
+    "#,
+    )
+    .await;
+    assert_eq!(result, [0, 134, 9, 1, 1].map(LpcRef::from));
+}
+
+#[tokio::test]
+async fn named_pointers_do_not_retain_their_creator_closures_capture_cells() {
+    let result = run(
+        "",
+        &[],
+        r#"
+        function held;
+        int answer(int n) { return n + 1; }
+        function factory() {
+            int *payload = allocate(4096);
+            return (: &answer(sizeof(payload)) :);
+        }
+        mixed *create() {
+            function make = factory();
+            held = make();
+            int from_closure = object_memory_info(this_object())["data_bytes"];
+            int result = held();
+            held = &answer(4096);
+            int direct = object_memory_info(this_object())["data_bytes"];
+            return ({ result, from_closure > 0, from_closure == direct });
+        }
+    "#,
+    )
+    .await;
+    assert_eq!(result, [4097, 1, 1].map(LpcRef::from));
+}
+
+#[tokio::test]
 async fn trailing_call_commas_work_with_computed_and_partially_bound_functions() {
     let result = run(
         "",

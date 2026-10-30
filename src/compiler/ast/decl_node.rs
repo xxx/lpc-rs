@@ -38,6 +38,6 @@ impl Display for DeclNode {
             .map(|item| format!("{item}"))
             .join(", ");
 
-        write!(f, "{} {}", self.type_, s)
+        write!(f, "{s}")
     }
 }

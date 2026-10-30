@@ -41,6 +41,6 @@ impl AstNodeTrait for SwitchNode {
 
 impl Display for SwitchNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "switch({}) {{ {} }}]", self.expression, self.body)
+        write!(f, "switch({}) {{ {} }}", self.expression, self.body)
     }
 }

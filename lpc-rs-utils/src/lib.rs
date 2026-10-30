@@ -49,6 +49,23 @@ where
 mod tests {
     use super::*;
 
+    #[test]
+    fn decoding_preserves_contents_and_adds_only_a_missing_trailing_newline() {
+        for (bytes, expected, latin1) in [
+            (vec![], "\n", false),
+            (b"value".to_vec(), "value\n", false),
+            (b"value\n".to_vec(), "value\n", false),
+            (b"value\n\n".to_vec(), "value\n\n", false),
+            ("café".as_bytes().to_vec(), "café\n", false),
+            (b"caf\xe9".to_vec(), "café\n", true),
+            (vec![0xc3, 0x28], "Ã(\n", true),
+        ] {
+            let source = LpcSource::from_bytes(bytes);
+
+            assert_eq!((source.text.as_str(), source.latin1), (expected, latin1));
+        }
+    }
+
     #[tokio::test]
     async fn test_read_lpc_file() {
         let with_newline = read_lpc_file("./tests/fixtures/newlines/file_ending_with_newline.h")

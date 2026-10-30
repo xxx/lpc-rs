@@ -16,13 +16,12 @@ pub fn replace_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     };
     let mut bounds = [0, 0];
     for (i, bound) in bounds.iter_mut().enumerate() {
-        if context.arg_count() > i + 3 {
-            let LpcRef::Int(value) = context.arg(i + 3) else {
-                return Err(context
-                    .runtime_error(format!("replace_string: argument {} must be an int", i + 4)));
-            };
-            *bound = value.0;
-        }
+        let LpcRef::Int(value) = context.arg(i + 3) else {
+            return Err(
+                context.runtime_error(format!("replace_string: argument {} must be an int", i + 4))
+            );
+        };
+        *bound = value.0;
     }
     let [first, last] = if context.arg_count() == 4 {
         [1, bounds[0]]
@@ -221,6 +220,14 @@ mod tests {
     async fn checks_the_final_utf8_byte_length_before_allocating() {
         assert_eq!(
             result_of(&format!(
+                r#"replace_string("é" * {}, "é", "bb")"#,
+                MAX_STRING_LENGTH / 2
+            ))
+            .await,
+            LpcRef::from("bb".repeat(MAX_STRING_LENGTH / 2))
+        );
+        assert_eq!(
+            result_of(&format!(
                 r#"replace_string("a" * {}, "a", "é")"#,
                 MAX_STRING_LENGTH / 2
             ))
@@ -253,10 +260,15 @@ mod tests {
             result_of(&format!(r#"replace_string("{source}", "a", "", 1)"#)).await,
             LpcRef::from("a".repeat(MAX_STRING_LENGTH))
         );
-        assert_eq!(
-            result_of(&format!(r#"replace_string("{source}", "x", "z")"#)).await,
-            LpcRef::from(source)
-        );
+        for (pattern, replacement) in [("x", "z"), ("a", "a")] {
+            assert_eq!(
+                result_of(&format!(
+                    r#"replace_string("{source}", "{pattern}", "{replacement}")"#
+                ))
+                .await,
+                LpcRef::from(source.as_str())
+            );
+        }
     }
 
     #[tokio::test]

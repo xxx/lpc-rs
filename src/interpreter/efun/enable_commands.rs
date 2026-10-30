@@ -22,12 +22,72 @@ pub fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use indoc::indoc;
 
     use crate::{
-        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
+        interpreter::{
+            CommittedReader,
+            lpc_ref::LpcRef,
+            task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+            vm::Vm,
+        },
         test_support::test_config,
     };
+
+    #[tokio::test]
+    async fn enabling_in_a_room_records_the_object_once() {
+        let code = indoc! { r#"
+            void create() {
+                move_object("/room");
+                enable_commands();
+            }
+
+            void enable_again() {
+                enable_commands();
+            }
+        "# };
+        let vm = Vm::new(test_config());
+        let room = vm
+            .initialize_process_from_code("/room.c", "")
+            .await
+            .unwrap()
+            .context
+            .process;
+        let object = vm
+            .initialize_process_from_code("/ob.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let expected = vec![LpcRef::Object(Arc::downgrade(&object))];
+
+        assert_eq!(
+            vm.global_state
+                .committed_array(room.position.livings.id)
+                .unwrap(),
+            expected
+        );
+
+        apply_function_by_name(
+            "enable_again",
+            &[],
+            object,
+            TaskTemplate::from(vm.global_state.clone()),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(
+            vm.global_state
+                .committed_array(room.position.livings.id)
+                .unwrap(),
+            expected
+        );
+    }
 
     #[tokio::test]
     async fn a_failed_attempt_does_not_enable_commands() {

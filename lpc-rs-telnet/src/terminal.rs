@@ -200,4 +200,15 @@ mod tests {
             assert_eq!(terminal.info, TerminalInfo::default());
         }
     }
+
+    #[test]
+    fn a_report_at_the_name_length_limit_is_accepted() {
+        let mut terminal = Terminal::default();
+        terminal.start();
+        assert!(report(&mut terminal, &"a".repeat(128)));
+        assert_eq!(
+            terminal.info.client_name.as_deref(),
+            Some("A".repeat(128).as_str())
+        );
+    }
 }

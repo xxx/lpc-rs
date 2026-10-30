@@ -11,14 +11,10 @@ pub fn trim<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(text) = context.arg(0).as_str() else {
         return Err(context.runtime_error("trim: text must be a string"));
     };
-    let where_ = if context.arg_count() > 1 {
-        let LpcRef::Int(value) = context.arg(1) else {
-            return Err(context.runtime_error("trim: where must be an int"));
-        };
-        value.0
-    } else {
-        0
+    let LpcRef::Int(value) = context.arg(1) else {
+        return Err(context.runtime_error("trim: where must be an int"));
     };
+    let where_ = value.0;
     if !(0..=2).contains(&where_) {
         return Err(context.runtime_error("trim: where must be 0 (both), 1 (left), or 2 (right)"));
     }

@@ -197,7 +197,16 @@ pub(crate) fn read_value_counted(
         resolve,
     };
     let value = reader.value(0)?;
+    #[cfg(debug_assertions)]
+    let mut previous_at = None;
     while reader.peek() == Some(b' ') {
+        #[cfg(debug_assertions)]
+        debug_assert!(
+            previous_at
+                .replace(reader.at)
+                .is_none_or(|old| old < reader.at && reader.at <= reader.text.len()),
+            "save parser cursor did not advance within the input"
+        );
         reader.at += 1;
     }
     if reader.at != reader.text.len() {
@@ -261,7 +270,16 @@ impl Reader<'_> {
             self.at += 1;
         }
         let digits = self.at;
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         while matches!(self.peek(), Some(b'0'..=b'9')) {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             self.at += 1;
         }
         if self.at == digits {
@@ -271,7 +289,16 @@ impl Reader<'_> {
         if is_float {
             if self.peek() == Some(b'.') {
                 self.at += 1;
+                #[cfg(debug_assertions)]
+                let mut previous_at = None;
                 while matches!(self.peek(), Some(b'0'..=b'9')) {
+                    #[cfg(debug_assertions)]
+                    debug_assert!(
+                        previous_at
+                            .replace(self.at)
+                            .is_none_or(|previous| self.at > previous),
+                        "save parser cursor did not advance"
+                    );
                     self.at += 1;
                 }
             }
@@ -280,7 +307,16 @@ impl Reader<'_> {
                 if matches!(self.peek(), Some(b'+') | Some(b'-')) {
                     self.at += 1;
                 }
+                #[cfg(debug_assertions)]
+                let mut previous_at = None;
                 while matches!(self.peek(), Some(b'0'..=b'9')) {
+                    #[cfg(debug_assertions)]
+                    debug_assert!(
+                        previous_at
+                            .replace(self.at)
+                            .is_none_or(|previous| self.at > previous),
+                        "save parser cursor did not advance"
+                    );
                     self.at += 1;
                 }
             }
@@ -311,7 +347,16 @@ impl Reader<'_> {
         let mut frac_digits: i32 = 0;
         let mut seen_dot = false;
         let mut seen_digit = false;
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         loop {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             match self.peek() {
                 Some(c) if c.is_ascii_hexdigit() => {
                     seen_digit = true;
@@ -342,7 +387,16 @@ impl Reader<'_> {
         if matches!(self.peek(), Some(b'+') | Some(b'-')) {
             self.at += 1;
         }
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         while matches!(self.peek(), Some(b'0'..=b'9')) {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             self.at += 1;
         }
         let exp = std::str::from_utf8(&self.text[exp_start..self.at])
@@ -351,7 +405,7 @@ impl Reader<'_> {
             .map_err(|_| self.error("expected an exponent"))?;
         self.expect("#")?;
         // Halved: powi(scale) alone can overflow to infinity and invert to 0.
-        let scale = (exp - 4 * frac_digits).clamp(-1100, 1100);
+        let scale = (i64::from(exp) - 4 * i64::from(frac_digits)).clamp(-1100, 1100) as i32;
         let half = scale / 2;
         let value = (mantissa as f64) * 2f64.powi(half) * 2f64.powi(scale - half);
         Ok(LpcRef::from(if negative { -value } else { value }))
@@ -362,7 +416,16 @@ impl Reader<'_> {
     fn string(&mut self) -> Result<String> {
         self.expect("\"")?;
         let mut bytes = Vec::new();
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         loop {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             match self.peek() {
                 None => return Err(self.error("unterminated string")),
                 Some(b'"') => {
@@ -392,7 +455,16 @@ impl Reader<'_> {
     fn bytes(&mut self) -> Result<LpcRef> {
         self.expect("b\"")?;
         let mut bytes = Vec::new();
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         loop {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             match self.peek() {
                 None => return Err(self.error("unterminated bytes")),
                 Some(b'"') => {
@@ -443,7 +515,16 @@ impl Reader<'_> {
     fn object(&mut self) -> Result<LpcRef> {
         self.expect("$")?;
         let start = self.at;
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         while matches!(self.peek(), Some(b'0'..=b'9')) {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             self.at += 1;
         }
         let created = std::str::from_utf8(&self.text[start..self.at])
@@ -452,7 +533,16 @@ impl Reader<'_> {
             .map_err(|_| self.error("expected a creation time"))?;
         self.expect("@")?;
         let name_start = self.at;
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         while !matches!(self.peek(), Some(b'$') | None) {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             self.at += 1;
         }
         let name = std::str::from_utf8(&self.text[name_start..self.at])
@@ -468,7 +558,16 @@ impl Reader<'_> {
     fn array(&mut self, depth: usize) -> Result<LpcRef> {
         self.expect("({")?;
         let mut items = Vec::new();
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         while !self.text[self.at..].starts_with(b"})") {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             items.push(self.value(depth + 1)?);
             self.expect(",")?;
         }
@@ -481,7 +580,16 @@ impl Reader<'_> {
     fn mapping(&mut self, depth: usize) -> Result<LpcRef> {
         self.expect("([")?;
         let mut entries: IndexMap<LpcRef, LpcRef> = IndexMap::new();
+        #[cfg(debug_assertions)]
+        let mut previous_at = None;
         while !self.text[self.at..].starts_with(b"])") {
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                previous_at
+                    .replace(self.at)
+                    .is_none_or(|previous| self.at > previous),
+                "save parser cursor did not advance"
+            );
             let key = self.value(depth + 1)?;
             self.expect(":")?;
             let value = self.value(depth + 1)?;
@@ -707,6 +815,20 @@ mod tests {
     }
 
     #[test]
+    fn minimum_hex_exponents_with_fractions_underflow_without_panicking() {
+        let txn = TxnHandle::empty();
+        for (text, expected) in [
+            ("#0x1.1p-2147483648#", 0.0_f64),
+            ("#-0x1.1p-2147483648#", -0.0_f64),
+        ] {
+            let LpcRef::Float(value) = read(text, &txn) else {
+                panic!("hexadecimal value must restore as a float");
+            };
+            assert_eq!(value.0.into_inner().to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
     fn a_decimal_float_reads_as_a_float() {
         let txn = TxnHandle::empty();
         assert_eq!(read("3.25", &txn), LpcRef::from(3.25));
@@ -861,5 +983,67 @@ mod tests {
             assert!(write_line(&mut out, name, &value, &txn).unwrap());
         }
         assert_eq!(out, file);
+    }
+
+    #[test]
+    fn mapping_key_and_value_edges_count_toward_the_nesting_limit() {
+        for nested_key in [false, true] {
+            let txn = TxnHandle::empty();
+            let wrap = |value| {
+                if nested_key {
+                    mapping(&txn, vec![(value, LpcRef::from(0))])
+                } else {
+                    mapping(&txn, vec![(LpcRef::from(0), value)])
+                }
+            };
+            let mut value = LpcRef::from(1);
+            for _ in 0..MAX_DEPTH {
+                value = wrap(value);
+            }
+            let text = written(&value, &txn);
+            assert_eq!(written(&read(&text, &txn), &txn), text);
+            value = wrap(value);
+            let error = write_value(&mut String::new(), &value, &txn, 0).unwrap_err();
+            assert!(error.to_string().contains("nesting deeper than 128 levels"));
+            let text = if nested_key {
+                format!("([{text}:0,])")
+            } else {
+                format!("([0:{text},])")
+            };
+            assert!(rejects(&text).contains("nesting deeper than 128 levels"));
+        }
+    }
+
+    #[test]
+    fn malformed_value_prefixes_report_the_start_of_the_value() {
+        for text in ["b", "bnoquote", "(", "(x", "x", "\t1"] {
+            let error = rejects(text);
+            assert!(error.contains("not a value at byte 0"), "{text:?}: {error}");
+        }
+    }
+
+    #[test]
+    fn signed_decimal_exponents_keep_the_sign_and_require_digits() {
+        let txn = TxnHandle::empty();
+        for (text, expected) in [
+            ("1e+3", 1000.0),
+            ("1.25E-2", 0.0125),
+            ("-2E+3", -2000.0),
+            ("1e-3", 0.001),
+        ] {
+            assert_eq!(read(text, &txn), LpcRef::from(expected), "{text}");
+        }
+        for text in ["1e+", "1e-", "1E++1", "1E+-1", "1E+ 2"] {
+            let error = rejects(text);
+            assert!(error.contains("not a float"), "{text:?}: {error}");
+        }
+    }
+
+    #[test]
+    fn hexadecimal_literals_reject_multiple_radix_points() {
+        for text in ["#0x1..1p+0#", "#0x1.2.3p+0#", "#0x.1.2p+0#"] {
+            let error = rejects(text);
+            assert!(error.contains("expected `p`"), "{text}: {error}");
+        }
     }
 }

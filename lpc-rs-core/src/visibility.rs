@@ -34,3 +34,42 @@ impl Display for Visibility {
         write!(f, "{s}")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inheritance_keeps_the_more_restrictive_visibility() {
+        use Visibility::{Private, Protected, Public};
+
+        for (declared, inheritance, expected) in [
+            (Public, Public, Public),
+            (Public, Protected, Protected),
+            (Public, Private, Private),
+            (Protected, Public, Protected),
+            (Protected, Protected, Protected),
+            (Protected, Private, Private),
+            (Private, Public, Private),
+            (Private, Protected, Private),
+            (Private, Private, Private),
+        ] {
+            assert_eq!(
+                declared.restricted_by(inheritance),
+                expected,
+                "{declared} inherited as {inheritance}"
+            );
+        }
+    }
+
+    #[test]
+    fn visibility_names_are_lpc_modifiers() {
+        for (visibility, expected) in [
+            (Visibility::Public, "public"),
+            (Visibility::Protected, "protected"),
+            (Visibility::Private, "private"),
+        ] {
+            assert_eq!(visibility.to_string(), expected);
+        }
+    }
+}

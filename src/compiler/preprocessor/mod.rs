@@ -1105,6 +1105,11 @@ mod tests {
             "#define X a + b\n#define X a\t+ /* comment */ b\n#define STR(x) #x\n#define EXPAND(x) STR(x)\nEXPAND(X)",
             &["a + b"],
         ).await;
+        test_valid(
+            "#define X a+b\n#define X a+b\n#define STR(x) #x\n#define EXPAND(x) STR(x)\nEXPAND(X)",
+            &["a+b"],
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -3926,6 +3931,185 @@ mod tests {
             let warnings = warnings_of(&root, "#include \"h.h\"\n").await;
 
             assert_eq!(warnings, ["`/h.h` is not UTF-8; read as Latin-1"]);
+        }
+    }
+
+    #[tokio::test]
+    async fn boolean_if_evaluation_accepts_the_frame_limit_and_rejects_the_next_frame() {
+        fn program(depth: usize, form: &str) -> String {
+            const MACROS: usize = 6;
+            let operators = depth - 1 - MACROS;
+            let terminal =
+                if form.starts_with("or") || (form == "not" && !operators.is_multiple_of(2)) {
+                    "0"
+                } else {
+                    "1"
+                };
+            let mut previous = terminal.to_owned();
+            let mut code = String::new();
+            for index in 0..MACROS {
+                let count = operators / MACROS + usize::from(index < operators % MACROS);
+                let body = match form {
+                    "not" => format!("{}{previous}", "!".repeat(count)),
+                    "and_left" | "or_left" => {
+                        let (operator, value) = if form == "and_left" {
+                            (" && ", "1")
+                        } else {
+                            (" || ", "0")
+                        };
+                        std::iter::once(previous.as_str())
+                            .chain(std::iter::repeat_n(value, count))
+                            .collect::<Vec<_>>()
+                            .join(operator)
+                    }
+                    "and_right" | "or_right" => {
+                        let (operator, value) = if form == "and_right" {
+                            ("&&", "1")
+                        } else {
+                            ("||", "0")
+                        };
+                        let mut body = previous;
+                        for _ in 0..count {
+                            body = format!("{value} {operator} ({body})");
+                        }
+                        body
+                    }
+                    _ => unreachable!(),
+                };
+                let name = format!("DEPTH_{index}");
+                code.push_str(&format!("#define {name} {body}\n"));
+                previous = name;
+            }
+            code.push_str(&format!("#if {previous}\n\"kept\";\n#endif\n"));
+            code
+        }
+
+        for form in ["not", "and_left", "and_right", "or_left", "or_right"] {
+            let expected: &[&str] = if form.starts_with("or") {
+                &[]
+            } else {
+                &["kept", ";"]
+            };
+            test_valid(&program(MAX_IF_EVAL_DEPTH, form), expected).await;
+            test_invalid(
+                &program(MAX_IF_EVAL_DEPTH + 1, form),
+                "`#if` evaluation nests too deeply",
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn boolean_or_short_circuits_errors_and_undefined_integer_names() {
+        test_valid("#if 1 || 1 / 0\n\"kept\";\n#endif\n", &["kept", ";"]).await;
+        test_valid("#if 1 || UNKNOWN\n\"kept\";\n#endif\n", &["kept", ";"]).await;
+    }
+    #[tokio::test]
+    async fn integer_if_evaluation_keeps_the_combined_frame_limit_at_each_entry() {
+        fn program(depth: usize, form: &str, negate: bool) -> String {
+            const MACROS: usize = 6;
+            let operators = depth - 3 - MACROS;
+            let mut previous =
+                if form.starts_with("or") || (form == "bang" && !operators.is_multiple_of(2)) {
+                    "0".to_owned()
+                } else {
+                    "1".to_owned()
+                };
+            let mut code = String::new();
+            for index in 0..MACROS {
+                let count = operators / MACROS + usize::from(index < operators % MACROS);
+                let body = match form {
+                    "negate" => format!("{}{previous}", "- ".repeat(count)),
+                    "bang" => format!("{}{previous}", "!".repeat(count)),
+                    _ => {
+                        let (operator, value) = if form.starts_with("and") {
+                            ("&&", "1")
+                        } else if form.starts_with("or") {
+                            ("||", "0")
+                        } else {
+                            ("+", "1")
+                        };
+                        if form.ends_with("right") {
+                            let mut body = previous;
+                            for _ in 0..count {
+                                body = format!("{value} {operator} ({body})");
+                            }
+                            body
+                        } else {
+                            std::iter::once(previous.as_str())
+                                .chain(std::iter::repeat_n(value, count))
+                                .collect::<Vec<_>>()
+                                .join(&format!(" {operator} "))
+                        }
+                    }
+                };
+                let name = format!("INTEGER_DEPTH_{index}");
+                code.push_str(&format!("#define {name} {body}\n"));
+                previous = name;
+            }
+            let condition = if negate {
+                format!("-({previous})")
+            } else {
+                format!("{previous} + 0")
+            };
+            code.push_str(&format!("#if {condition}\n\"kept\";\n#endif\n"));
+            code
+        }
+
+        for form in [
+            "negate",
+            "bang",
+            "add_left",
+            "add_right",
+            "and_left",
+            "and_right",
+            "or_left",
+            "or_right",
+        ] {
+            for negate in [false, true] {
+                let expected: &[&str] = if form.starts_with("or") {
+                    &[]
+                } else {
+                    &["kept", ";"]
+                };
+                test_valid(&program(MAX_IF_EVAL_DEPTH, form, negate), expected).await;
+                test_invalid(
+                    &program(MAX_IF_EVAL_DEPTH + 1, form, negate),
+                    "`#if` evaluation nests too deeply",
+                )
+                .await;
+            }
+        }
+    }
+    #[tokio::test]
+    async fn integer_operators_preserve_truth_tables_and_boundary_results() {
+        for (operator, left, right, expected) in [
+            ("&&", 0, 0, 0),
+            ("&&", 0, 1, 0),
+            ("&&", 1, 0, 0),
+            ("&&", 1, 1, 1),
+            ("||", 0, 0, 0),
+            ("||", 0, 1, 1),
+            ("||", 1, 0, 1),
+            ("||", 1, 1, 1),
+            ("&&", -7, 13, 1),
+            ("||", -7, 0, 1),
+            ("|", 3, 6, 7),
+            ("&", 6, 3, 2),
+            ("^", 7, 3, 4),
+            ("<", 4, 4, 0),
+            ("<=", 4, 4, 1),
+            (">", 4, 4, 0),
+            (">=", 4, 4, 1),
+            ("==", 4, 4, 1),
+            ("!=", 4, 4, 0),
+            ("<", 3, 4, 1),
+            (">", 5, 4, 1),
+        ] {
+            let code = format!(
+                "#if ((({left}) {operator} ({right})) + 0) == {expected}\n\"kept\";\n#else\n\"wrong\";\n#endif\n"
+            );
+            test_valid(&code, &["kept", ";"]).await;
         }
     }
 }

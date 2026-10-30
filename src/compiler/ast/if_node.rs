@@ -60,6 +60,6 @@ impl Display for IfNode {
             String::from("")
         };
 
-        write!(f, "if({}) {{ {} }}{}]", self.condition, self.body, e)
+        write!(f, "if({}) {{ {} }}{}", self.condition, self.body, e)
     }
 }

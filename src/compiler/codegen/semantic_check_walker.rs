@@ -249,30 +249,45 @@ impl TreeWalker for SemanticCheckWalker {
         node: &mut crate::compiler::ast::class_expression::ClassInitNode,
     ) -> Result<()> {
         super::tree_walker::walk_class_init(self, node).await?;
-        let LpcType::Class(id, false) = node.type_.resolved()? else {
-            return Err(lpc_error!(node.span, "constructor requires a class"));
+        let LpcType::Class(id, false) = node
+            .type_
+            .resolved()
+            .map_err(|error| self.context.diagnostics.fail(error))?
+        else {
+            return Err(self
+                .context
+                .diagnostics
+                .fail(lpc_error!(node.span, "constructor requires a class")));
         };
-        let definition = self
-            .context
-            .class_scope
-            .get(id)
-            .ok_or_else(|| lpc_error!(node.span, "no visible definition for {id}"))?;
+        let definition = self.context.class_scope.get(id).ok_or_else(|| {
+            self.context
+                .diagnostics
+                .fail(lpc_error!(node.span, "no visible definition for {id}"))
+        })?;
         let mut names = std::collections::HashSet::new();
         for (name, value) in &node.initializers {
             if !names.insert(*name) {
-                return Err(lpc_error!(value.span(), "duplicate initializer `{name}`"));
+                return Err(self
+                    .context
+                    .diagnostics
+                    .fail(lpc_error!(value.span(), "duplicate initializer `{name}`")));
             }
             let field = definition
                 .fields
                 .iter()
                 .find(|field| field.name == *name)
-                .ok_or_else(|| lpc_error!(value.span(), "unknown field `{name}` in {id}"))?;
+                .ok_or_else(|| {
+                    self.context
+                        .diagnostics
+                        .fail(lpc_error!(value.span(), "unknown field `{name}` in {id}"))
+                })?;
             if let Some(actual) = mismatch(field.type_, value, &self.context)? {
-                return Err(lpc_error!(
+                let error = lpc_error!(
                     value.span(),
                     "initializer `{name}` expects {}, found {actual}",
                     field.type_
-                ));
+                );
+                return Err(self.context.diagnostics.fail(error));
             }
         }
         Ok(())
@@ -283,7 +298,8 @@ impl TreeWalker for SemanticCheckWalker {
         node: &mut crate::compiler::ast::class_expression::MemberNode,
     ) -> Result<()> {
         node.receiver.visit(self).await?;
-        crate::compiler::semantic::semantic_checks::member_type(node, &self.context)?;
+        crate::compiler::semantic::semantic_checks::member_type(node, &self.context)
+            .map_err(|error| self.context.diagnostics.fail(error))?;
         Ok(())
     }
 
@@ -299,13 +315,15 @@ impl TreeWalker for SemanticCheckWalker {
             op: node.op,
             span: node.span,
         };
-        check_binary_operation_types(&binary, &self.context)?;
+        check_binary_operation_types(&binary, &self.context)
+            .map_err(|error| self.context.diagnostics.fail(error))?;
         let target = node_type(&node.lhs, &self.context)?;
         if let Some(actual) = mismatch(target, &ExpressionNode::BinaryOp(binary), &self.context)? {
-            return Err(lpc_error!(
+            let error = lpc_error!(
                 node.span,
                 "compound assignment expects {target}, found {actual}"
-            ));
+            );
+            return Err(self.context.diagnostics.fail(error));
         }
         Ok(())
     }
@@ -4497,5 +4515,130 @@ mod tests {
             let errors = errors_of(r#"void f() { int n; sscanf("1", "%d", n); }"#).await;
             assert!(errors.is_empty(), "{errors:?}");
         }
+    }
+
+    #[tokio::test]
+    async fn nested_statements_preserve_class_validation_diagnostics() {
+        for (invalid, expected) in [
+            (
+                "class Record item = new(class Record, field: 1, field: 2);",
+                "duplicate initializer `field`",
+            ),
+            (
+                "class Record item = new(class Record, missing: 1);",
+                "unknown field `missing`",
+            ),
+            (
+                "class Record item = new(class Record, field: \"wrong\");",
+                "initializer `field` expects int",
+            ),
+            (
+                "class Record item = new(class Record); item.missing;",
+                "unknown field `missing`",
+            ),
+            (
+                "class Record item = new(class Record); item.field += \"wrong\";",
+                "compound assignment expects int",
+            ),
+            (
+                "class Record item = new(class Record); item.field &= \"wrong\";",
+                "Mismatched types",
+            ),
+        ] {
+            for statement in [
+                invalid.to_owned(),
+                format!("while (1) {{ {invalid} }}"),
+                format!("do {{ {invalid} }} while (0);"),
+                format!("for (int i = 0; i < 1; i++) {{ {invalid} }}"),
+                format!("foreach (i: ({{1}})) {{ {invalid} }}"),
+                format!("if (1) {{ {invalid} }}"),
+            ] {
+                let code = format!(
+                    "class Record {{ int field; }} int probe() {{ {statement} return 0; }}"
+                );
+                let errors = match crate::compiler::Compiler::default()
+                    .compile_string("/class-diagnostics.c", &code)
+                    .await
+                {
+                    Ok(_) => Vec::new(),
+                    Err(error) => vec![error.diagnostic_string()],
+                };
+                assert!(
+                    errors.iter().any(|error| error.contains(expected)),
+                    "{code}: {errors:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn jump_permissions_end_with_the_enclosing_loop_or_switch() {
+        for statement in [
+            "while (0) {}",
+            "do {} while (0);",
+            "for (int i = 0; i < 1; i++) {}",
+            "foreach (i: ({1})) {}",
+            "switch (0) { default: break; }",
+        ] {
+            let code = format!("void f() {{ {statement} break; continue; }}");
+            assert_eq!(
+                messages(&code).await,
+                ["Invalid `break`.", "invalid `continue`."],
+                "{code}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unreachable_blocks_and_declarations_point_at_their_first_statement() {
+        for (code, target) in [
+            ("void f() { return; { 123; } }", "123"),
+            ("void f() { return; int unused_value = 1; }", "unused_value"),
+        ] {
+            let context = walk_code(code).await.unwrap();
+            let warnings: Vec<_> = context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|error| error.is_warning() && error.message() == "unreachable statement")
+                .collect();
+            assert_eq!(warnings.len(), 1, "{code}: {warnings:?}");
+            let span = warnings[0].span().expect("the first unreachable statement");
+            assert_eq!(span.l(), code.find(target).unwrap(), "{code}");
+        }
+    }
+
+    #[tokio::test]
+    async fn block_exit_restores_the_outer_variable_type() {
+        for code in [
+            r#"string f() { string value = "outer"; { int value = 1; } return value; }"#,
+            r#"int f() { int value = 1; { string value = "inner"; } return value; }"#,
+            r#"void f() { { int value = 1; } { string value = "sibling"; value = "updated"; } }"#,
+        ] {
+            assert!(messages(code).await.is_empty(), "{code}");
+        }
+    }
+
+    #[tokio::test]
+    async fn member_access_checks_its_receiver_call_arguments() {
+        let code = r#"
+            mixed fetch_record(int value) { return 0; }
+            void f() { fetch_record("wrong").field; }
+        "#;
+        assert_eq!(
+            messages(code).await,
+            ["unexpected argument type to `fetch_record`: string. Expected int."]
+        );
+    }
+
+    #[tokio::test]
+    async fn wide_defaulted_signatures_keep_the_required_argument_count_in_range() {
+        let count = usize::from(lpc_rs_core::RegisterSize::MAX) / 2 + 1;
+        let parameters = (0..count)
+            .map(|index| format!("int value_{index} = 0"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let code = format!("void f({parameters}) {{}}");
+        assert!(messages(&code).await.is_empty());
     }
 }

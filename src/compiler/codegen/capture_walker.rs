@@ -80,3 +80,40 @@ impl TreeWalker for CaptureWalker {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::CaptureWalker;
+    use crate::{
+        compiler::{Compiler, codegen::tree_walker::apply},
+        test_support::test_config,
+    };
+
+    #[tokio::test]
+    async fn invalid_captures_report_each_occurrence_before_later_passes() {
+        let (mut program, context) = Compiler::new(test_config())
+            .parse_string(
+                &"/captures.c".into(),
+                "void run() { if (1) $(1); else $(2); }",
+            )
+            .await
+            .unwrap();
+        let error = match apply::<CaptureWalker>(&mut program, context, true).await {
+            Err(error) => error,
+            Ok(_) => panic!("the capture pass accepted invalid captures"),
+        };
+        let diagnostics = error.to_diagnostics();
+        assert_eq!(diagnostics.len(), 2, "{}", error.diagnostic_string());
+        for diagnostic in &diagnostics {
+            assert_eq!(
+                diagnostic.message,
+                "`$()` can only be used within a closure"
+            );
+            assert!(!diagnostic.labels.is_empty());
+        }
+        assert_ne!(
+            diagnostics[0].labels[0].range,
+            diagnostics[1].labels[0].range
+        );
+    }
+}

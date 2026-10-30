@@ -74,7 +74,7 @@ from the caller object's name through inheritance or virtual objects.
 | `valid_store_variable(object caller, object target, string name, string declaring_program, mixed value, string program)` | Replacing another object's named global. The requested source selector may be nil; declaration lookup and type checks follow authorization. Self-writes do not ask. | Deny. |
 | `valid_recompile(object prototype, object caller, string program)` | In-place upgrades of a prototype and its current clones, including system prototypes; checked when requested and before compilation, under old system policy. Also permits other objects to query a job's status using the querying caller, program and command giver; a missing target is 0. The original requester reads its own status directly. | Deny. |
 | `valid_shutdown(object caller, string program)` | The LPC shutdown efun, not the host's Ctrl-C or termination signal. | Deny. |
-| `query_allow_shadow(object target)` | Shadowing `target`; `previous_object()` is the would-be shadow. A target's `no_shadow` pragma can also forbid it. | Deny. |
+| `query_allow_shadow(object target)` | Shadowing `target`; `previous_object()` is the would-be shadow. The driver rechecks liveness and structural restrictions after an allow. A target's `no_shadow` pragma can also forbid it. | Deny. |
 
 ### Grammar vocabulary
 
@@ -305,7 +305,7 @@ These belong on a connection's body. Live examples are in
 
 | Apply and arguments | Result and behaviour | Example |
 |---|---|---|
-| `logon(string remote_ip_addr, int remote_port)` | Called after attaching a body; return nonzero to keep the connection, `0` to disconnect. Required for successful login. Output and input registrations are delivered in call order after commit. Enabling commands is the mudlib's responsibility. | Live: prompt for a name with `input_to()`. |
+| `logon(string remote_ip_addr, int remote_port)` | Called after attaching a body; return nonzero to keep the connection, `0` to disconnect. Required for successful login. Output and input registrations are delivered in call order after commit; typed replies wait until this delivery finishes. Enabling commands is the mudlib's responsibility. | Live: prompt for a name with `input_to()`. |
 | `write_prompt()` | Return prompt text, optionally writing output too. Skipped while `input_to()` or `get_char()` waits. Without the hook there is no automatic prompt or prompt marker. | Live: `alice> ` after naming. |
 | `net_dead()` | Unexpected disconnect, with the connection already unbound and `interactive()` false. Not called for `quit`/destruction, `exec`, failed `logon` or orderly shutdown. Missing leaves cleanup to the mudlib. | Live: announce departure and destruct the body. |
 | `gmcp(string package, string payload)` | Negotiated GMCP from the client; `payload` is raw JSON text and may arrive before login finishes. Its return is ignored. | Optional: empty hook with a validation reminder. |

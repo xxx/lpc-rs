@@ -200,11 +200,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn denied_header_calls_keep_the_header_diagnostic() {
+    async fn denied_header_calls_keep_the_header_diagnostic_and_encoding_warning() {
         let root = TempLib::new("override-header-denied");
         std::fs::write(
             root.join("header.h"),
-            "int f() { return efun::sizeof(({ 1 })); }",
+            b"// \xe9\nint f() { return efun::sizeof(({ 1 })); }",
         )
         .unwrap();
         let gate = Arc::new(Gate::default());
@@ -214,6 +214,9 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(error.to_string(), "efun::sizeof: permission denied");
+        let diagnostics = error.to_diagnostics();
+        assert_eq!(diagnostics.len(), 2);
+        assert!(diagnostics[1].message.contains("read as Latin-1"));
         assert_eq!(
             sources
                 .read()

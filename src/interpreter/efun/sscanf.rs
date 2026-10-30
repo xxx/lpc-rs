@@ -144,12 +144,16 @@ fn scan_float(input: &str) -> Option<Scanned> {
         i += 1;
     }
     while i < bytes.len() && bytes[i].is_ascii_digit() {
+        let previous = i;
         i += 1;
+        debug_assert!(i > previous, "sscanf: numeric scan must advance");
     }
     if i < bytes.len() && bytes[i] == b'.' {
         i += 1;
         while i < bytes.len() && bytes[i].is_ascii_digit() {
+            let previous = i;
             i += 1;
+            debug_assert!(i > previous, "sscanf: numeric scan must advance");
         }
     }
     if i < bytes.len() && matches!(bytes[i], b'e' | b'E') {
@@ -159,7 +163,9 @@ fn scan_float(input: &str) -> Option<Scanned> {
         }
         let exp_digits_start = j;
         while j < bytes.len() && bytes[j].is_ascii_digit() {
+            let previous = j;
             j += 1;
+            debug_assert!(j > previous, "sscanf: numeric scan must advance");
         }
         if j > exp_digits_start {
             i = j;
@@ -280,7 +286,9 @@ pub fn sscanf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
                 }
             }
         }
+        let previous = i;
         i += 1;
+        debug_assert!(i > previous, "sscanf: format scan must advance");
     }
     // Every piece matched, input remains, a variable is unused: it takes the rest.
     if i == pieces.len() && !rest.is_empty() && usize::from(next_var) - 2 < variables {
@@ -320,10 +328,10 @@ mod tests {
     async fn scan_fails(body: &str) -> String {
         let code = format!("mixed *create() {{ {body} }}");
         let vm = Vm::new(test_config());
-        vm.initialize_process_from_code("/master.c", &code)
-            .await
-            .unwrap_err()
-            .to_string()
+        match vm.initialize_process_from_code("/master.c", &code).await {
+            Err(error) => error.to_string(),
+            Ok(_) => panic!("sscanf unexpectedly accepted invalid input"),
+        }
     }
 
     #[tokio::test]
@@ -405,6 +413,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn floats_accept_signs_whitespace_and_numeric_token_boundaries() {
+        for (input, value, tail) in [
+            ("-1.5tail", -1.5, "tail"),
+            ("+2.25tail", 2.25, "tail"),
+            (" \t-0.5tail", -0.5, "tail"),
+            ("  +3.5tail", 3.5, "tail"),
+            (".5tail", 0.5, "tail"),
+            ("+1E+2tail", 100.0, "tail"),
+            (" -1.25e-1tail", -0.125, "tail"),
+            ("1e+", 1.0, "e+"),
+            ("1e-", 1.0, "e-"),
+        ] {
+            let body = format!(
+                r#"float number = 2.5; string tail = "old";
+                int matched = sscanf({input:?}, "%f%s", number, tail);
+                return ({{ matched, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![LpcRef::from(2), LpcRef::from(value), LpcRef::from(tail)],
+                "{input:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_float_digits_preserve_every_destination() {
+        for input in [
+            "", " ", "\t ", "+", "-", ".", "+.", "-.", "e2", "+e2", "-e2",
+        ] {
+            let body = format!(
+                r#"float number = 2.5; string tail = "old";
+                int matched = sscanf({input:?}, "%f%s", number, tail);
+                return ({{ matched, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![LpcRef::from(0), LpcRef::from(2.5), LpcRef::from("old")],
+                "{input:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn an_explicit_ref_at_an_implicit_position_is_identical() {
         let r = scan(r#"int n; int c = sscanf("7", "%d", ref n); return ({ c, n });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(7)]);
@@ -428,6 +480,70 @@ mod tests {
             r,
             vec![LpcRef::from(1), LpcRef::from("id 31"), LpcRef::from(0)]
         );
+    }
+
+    #[tokio::test]
+    async fn string_before_float_stops_at_the_first_numeric_start() {
+        for (input, prefix, number) in [
+            ("value 42tail", "value ", 42.0),
+            ("file.ext .5tail", "file.ext ", 0.5),
+            (".5tail", "", 0.5),
+            ("é42tail", "é", 42.0),
+        ] {
+            let body = format!(
+                r#"string prefix = "old"; float number = 9.0; string tail = "old";
+                int matched = sscanf({input:?}, "%s%f%s", prefix, number, tail);
+                return ({{ matched, prefix, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![
+                    LpcRef::from(3),
+                    LpcRef::from(prefix),
+                    LpcRef::from(number),
+                    LpcRef::from("tail")
+                ],
+                "{input:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn string_before_hex_requires_a_complete_prefix() {
+        for (input, prefix) in [("0xftail", ""), ("zero0 then 0xftail", "zero0 then ")] {
+            let body = format!(
+                r#"string prefix = "old"; int number = 99; string tail = "old";
+                int matched = sscanf({input:?}, "%s%x%s", prefix, number, tail);
+                return ({{ matched, prefix, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![
+                    LpcRef::from(3),
+                    LpcRef::from(prefix),
+                    LpcRef::from(15),
+                    LpcRef::from("tail")
+                ],
+                "{input:?}"
+            );
+        }
+        for input in ["no prefix", "0x", "0xZ"] {
+            let body = format!(
+                r#"string prefix = "old"; int number = 99; string tail = "old";
+                int matched = sscanf({input:?}, "%s%x%s", prefix, number, tail);
+                return ({{ matched, prefix, number, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![
+                    LpcRef::from(1),
+                    LpcRef::from(input),
+                    LpcRef::from(99),
+                    LpcRef::from("old")
+                ],
+                "{input:?}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -492,6 +608,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn formats_without_conversions_capture_only_remaining_input() {
+        for (input, format, matched, tail) in [
+            ("prefix rest", "prefix", 1, " rest"),
+            ("prefix", "prefix", 0, "old"),
+            ("mismatch", "prefix", 0, "old"),
+            ("all", "", 1, "all"),
+            ("", "", 0, "old"),
+        ] {
+            let body = format!(
+                r#"string tail = "old";
+                int matched = sscanf({input:?}, {format:?}, tail);
+                return ({{ matched, tail }});"#
+            );
+            assert_eq!(
+                scan(&body).await,
+                vec![LpcRef::from(matched), LpcRef::from(tail)],
+                "{input:?} / {format:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn a_trailing_s_matches_the_empty_rest() {
         // MudOS: `%s` at the end of the format takes the rest, even "".
         let r = scan(r#"string s = "old"; int c = sscanf("", "%s", s); return ({ c, s });"#).await;
@@ -539,6 +677,12 @@ mod tests {
     async fn an_unknown_conversion_is_an_error() {
         let err = scan_fails(r#"int n; sscanf("x", "%q", n); return ({});"#).await;
         assert!(err.contains("sscanf: %q is not a conversion"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn a_literal_percent_cannot_be_suppressed() {
+        let error = scan_fails(r#"sscanf("%", "%*%"); return ({});"#).await;
+        assert!(error.contains("sscanf: %% is not a conversion"), "{error}");
     }
 
     #[tokio::test]

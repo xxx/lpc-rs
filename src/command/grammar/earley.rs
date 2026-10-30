@@ -715,14 +715,20 @@ mod tests {
 
     #[test]
     fn sequence_of_literals() {
-        let (mut b, _, _) = words();
-        let s = b.nonterminal("S");
-        b.production(s, [lit("a"), lit("b")]);
-        let g = b.build(s).unwrap();
-        assert!(recognize(&g, "a b"));
-        assert!(!recognize(&g, "a"));
-        assert!(!recognize(&g, "a b c"));
-        assert!(!recognize(&g, "b a"));
+        let (tx, rx) = flume::bounded(1);
+        let worker = std::thread::spawn(move || {
+            let (mut b, _, _) = words();
+            let s = b.nonterminal("S");
+            b.production(s, [lit("a"), lit("b")]);
+            let g = b.build(s).unwrap();
+            tx.send(["a b", "a", "a b c", "b a"].map(|input| recognize(&g, input)))
+                .unwrap();
+        });
+        let recognized = rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("chart construction must advance through its items");
+        worker.join().unwrap();
+        assert_eq!(recognized, [true, false, false, false]);
     }
 
     #[test]
@@ -1418,5 +1424,118 @@ mod tests {
             assert_eq!(parses.by_ref().count(), 1);
             assert_eq!(parses.ending(), Ending::Done);
         });
+    }
+
+    #[test]
+    fn literal_suffixes_consume_the_entire_remaining_span_and_finish() {
+        let (tx, rx) = flume::bounded(1);
+        let worker = std::thread::spawn(move || {
+            for suffix in [vec!["b", "c"], vec!["b", "c", "d"]] {
+                let (mut b, _, _) = words();
+                let s = b.nonterminal("S");
+                let prefix = b.nonterminal("Prefix");
+                let production = b.production(
+                    s,
+                    iter::once(nt(prefix)).chain(suffix.iter().map(|word| lit(word))),
+                );
+                b.production(prefix, [lit("a")]);
+                let long = b.production(
+                    prefix,
+                    iter::once(lit("a")).chain(suffix.iter().map(|word| lit(word))),
+                );
+                let g = b.build(s).unwrap();
+                let input = iter::once("a")
+                    .chain(suffix.iter().copied())
+                    .chain(suffix.iter().copied())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                let scan = Arc::new(g.tokenize(&input).unwrap());
+                let end = scan.tokens().len();
+                let budget = Arc::new(Budget::new(usize::MAX));
+                let chart = Chart::build(&g, &scan, &budget);
+                let mut derivations =
+                    Derivations::new(&g, chart, scan, budget, Limits::default().max_depth);
+                assert!(!derivations.suffix_matches(production, 1, 1, end));
+                assert!(derivations.suffix_matches(production, 1, 1 + suffix.len(), end));
+
+                let parses: Vec<_> = parse(&g, &input, Limits::default()).collect();
+
+                assert_eq!(parses.len(), 1, "{input}");
+                assert!(
+                    matches!(parses[0].root().children.first(), Some(Child::Node(node)) if node.production == long)
+                );
+                assert_eq!(parses[0].root().span, 0..(1 + 2 * suffix.len()));
+            }
+            tx.send(()).unwrap();
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(2))
+            .expect("suffix matching must finish advancing through its cache");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn a_single_nonterminal_suffix_fits_its_lookup_budget() {
+        let (mut b, _, _) = words();
+        let s = b.nonterminal("S");
+        let tail = b.nonterminal("Tail");
+        let production = b.production(s, [lit("a"), nt(tail)]);
+        b.production(tail, [lit("b")]);
+        let g = b.build(s).unwrap();
+        let scan = Arc::new(g.tokenize("a b").unwrap());
+        let chart = Chart::build(&g, &scan, &Budget::new(usize::MAX));
+        let budget = Arc::new(Budget::new(3));
+        let mut derivations =
+            Derivations::new(&g, chart, scan, budget.clone(), Limits::default().max_depth);
+
+        assert!(derivations.suffix_matches(production, 0, 0, 2));
+        assert_eq!(budget.used(), 3);
+        assert_eq!(budget.ending(), Ending::Done);
+    }
+
+    #[test]
+    fn suffix_cache_requires_completed_productions_of_the_requested_nonterminal() {
+        let (mut b, _, _) = words();
+        let s = b.nonterminal("S");
+        let prefix = b.nonterminal("Prefix");
+        let a = b.nonterminal("A");
+        let bee = b.nonterminal("B");
+        let production = b.production(s, [nt(prefix), nt(a), nt(bee)]);
+        b.production(prefix, []);
+        b.production(prefix, [lit("a"), lit("b")]);
+        b.production(a, []);
+        b.production(a, [lit("a")]);
+        b.production(bee, [lit("b")]);
+        let g = b.build(s).unwrap();
+        let scan = Arc::new(g.tokenize("a b").unwrap());
+        let budget = Arc::new(Budget::new(usize::MAX));
+        let chart = Chart::build(&g, &scan, &budget);
+        let mut derivations =
+            Derivations::new(&g, chart, scan, budget, Limits::default().max_depth);
+
+        assert!(!derivations.suffix_matches(production, 1, 2, 2));
+        assert!(derivations.suffix_matches(production, 1, 0, 2));
+    }
+
+    #[test]
+    fn a_noninitial_child_cursor_stays_within_its_work_budget() {
+        let (mut b, _, _) = words();
+        let s = b.nonterminal("S");
+        let a = b.nonterminal("A");
+        b.production(s, [lit("a"), nt(a), lit("a")]);
+        b.production(a, [lit("a")]);
+        let g = b.build(s).unwrap();
+        let scan = Arc::new(g.tokenize("a a a").unwrap());
+        let budget = Arc::new(Budget::new(usize::MAX));
+        let chart = Chart::build(&g, &scan, &budget);
+        let mut derivations =
+            Derivations::new(&g, chart, scan, budget.clone(), Limits::default().max_depth);
+        assert!(derivations.next().is_some());
+        let before = budget.used();
+
+        assert!(derivations.next().is_none());
+
+        assert_eq!(budget.used() - before, 1);
+        assert_eq!(budget.ending(), Ending::Done);
     }
 }

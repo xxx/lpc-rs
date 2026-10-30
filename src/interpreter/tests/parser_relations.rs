@@ -675,14 +675,16 @@ async fn living_slots_use_pair_permissions_with_both_plural_orientations() {
             int indirect_get_obj_from_liv(object item, object box) { return 1; }
         "#,
             r#"
-            box->wake(); a->move(box);
+            a->move(box);
+            mixed nonliving = parse_sentence("get sword from box", 0, ({ a, box }));
+            box->wake();
             mixed result = parse_sentence("get sword from box", 0, ({ a, box }));
             mixed item = "/verb"->one(), container = "/verb"->two();
             if (arrayp(item)) item = item[0];
             if (arrayp(container)) container = container[0];
-            return ({ result, item == a, container == box });
+            return ({ nonliving, result, item == a, container == box });
         "#,
-            vec![1.into(), 1.into(), 1.into()],
+            vec![s("kind:2"), 1.into(), 1.into(), 1.into()],
         )
         .await;
     }

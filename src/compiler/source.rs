@@ -71,3 +71,31 @@ impl fmt::Debug for CompilerSource {
             .finish_non_exhaustive()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    #[test]
+    fn debug_identifies_sources_without_exposing_host_paths() {
+        let config = ConfigBuilder::default().lib_dir("/mudlib").build().unwrap();
+        for (path, name) in [
+            (
+                LpcPath::new_in_game("/rooms/start.c", "/", "/mudlib"),
+                "/rooms/start.c",
+            ),
+            (
+                LpcPath::new_server("/private/compiler-input.c"),
+                "<outside mudlib>",
+            ),
+        ] {
+            let source = CompilerSource::new(path, &config);
+            let diagnostic = format!("{source:?}");
+            assert!(diagnostic.contains("CompilerSource"), "{diagnostic}");
+            assert!(diagnostic.contains(name), "{diagnostic}");
+            assert!(!diagnostic.contains("/mudlib"), "{diagnostic}");
+            assert!(!diagnostic.contains("/private"), "{diagnostic}");
+        }
+    }
+}

@@ -263,6 +263,51 @@ mod tests {
         InheritanceWalker::new(context)
     }
 
+    #[tokio::test]
+    async fn inheritance_pass_rejects_deep_parents_and_retains_parser_warnings() {
+        let root = crate::test_support::lib_holding(
+            "inheritance-pass-depth",
+            &[
+                ("parent.c", "inherit \"/grandparent\";"),
+                ("grandparent.c", ""),
+            ],
+        );
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .max_inherit_depth(1)
+            .build()
+            .unwrap();
+        let compiler = CompilerBuilder::default().config(config).build().unwrap();
+        let (mut program, context) = compiler
+            .parse_string(
+                &LpcPath::from("/child.c"),
+                "inherit \"/parent\"; int proto();",
+            )
+            .await
+            .unwrap();
+        let Err(error) = crate::compiler::codegen::tree_walker::apply::<InheritanceWalker>(
+            &mut program,
+            context,
+            true,
+        )
+        .await
+        else {
+            panic!("the inherited program must exceed the depth limit");
+        };
+        let messages: Vec<_> = error
+            .to_diagnostics()
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "maximum inheritance depth reached",
+                "function prototypes are ignored; the definition declares the function",
+            ]
+        );
+    }
+
     mod test_place {
         use std::sync::Arc;
 

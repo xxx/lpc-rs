@@ -237,6 +237,118 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn literal_payloads_with_shared_spans_keep_independent_cached_syntax() {
+        let root = TempLib::new("parser-literal-payloads");
+        let compiler = compiler(&root, Arc::default());
+        for literal in ["1", "1.0", "\"old\""] {
+            let code = format!("mixed value() {{ return {literal}; }}");
+            let (tokens, preprocessor) = compiler
+                .preprocess_string(LpcPath::from("/main.c"), &code)
+                .await
+                .unwrap();
+            let mut changed = tokens.clone();
+            let token = changed
+                .iter_mut()
+                .find(|token| {
+                    matches!(
+                        token,
+                        Token::IntLiteral(_) | Token::FloatLiteral(_) | Token::StringLiteral(_)
+                    )
+                })
+                .unwrap();
+            match token {
+                Token::IntLiteral(value) => value.1 = 2,
+                Token::FloatLiteral(value) => value.1 = 2.0,
+                Token::StringLiteral(value) => value.1 = "new".to_owned(),
+                _ => unreachable!(),
+            }
+            let mut context = preprocessor.into_context();
+            let cache = ParserCache::default();
+            let original = cache.parse(tokens.clone(), &mut context).unwrap();
+            let other = cache.parse(changed, &mut context).unwrap();
+            assert_ne!(original, other);
+            assert_eq!(cache.parse(tokens, &mut context).unwrap(), original);
+            assert_eq!(cache.stats().entries, 2, "{literal}");
+            assert_eq!(cache.stats().hits, 1, "{literal}");
+        }
+    }
+
+    #[tokio::test]
+    async fn ordinary_syntax_fits_the_budget_and_charges_its_owned_storage() {
+        let root = TempLib::new("parser-retained-storage");
+        let compiler = compiler(&root, Arc::default());
+        let functions = (0..1024)
+            .map(|i| format!("int value{i}() {{ return {i}; }}\n"))
+            .collect::<String>();
+        let empty_statements = format!("void value() {{ {} }}", ";".repeat(4096));
+        for code in [functions, empty_statements] {
+            let (tokens, preprocessor) = compiler
+                .preprocess_string(LpcPath::from("/main.c"), &code)
+                .await
+                .unwrap();
+            let mut context = preprocessor.into_context();
+            let policy = Policy::new(&context);
+            let key = fingerprint(&tokens, &policy);
+            let cache = ParserCache::default();
+            cache.parse(tokens.clone(), &mut context).unwrap();
+            assert_eq!(cache.stats().entries, 1);
+            let entry = cache
+                .get(key, &tokens, &policy, &context.diagnostic_sources)
+                .unwrap();
+            let statements = entry
+                .node
+                .body
+                .iter()
+                .map(|node| {
+                    let AstNode::FunctionDef(function) = node else {
+                        panic!("the fixture contains only functions");
+                    };
+                    function.body.capacity() * size_of::<AstNode>()
+                })
+                .sum::<usize>();
+            let owned = size_of::<Parsed>()
+                + entry.tokens.capacity() * size_of::<Token>()
+                + entry.node.body.capacity() * size_of::<AstNode>()
+                + statements;
+            assert!(
+                cache.stats().estimated_bytes >= owned,
+                "charge {} must cover at least {owned} owned bytes",
+                cache.stats().estimated_bytes
+            );
+        }
+    }
+
+    #[test]
+    fn reviewed_node_allowances_cover_the_largest_syntax_node() {
+        let ast = size_of::<AstNode>();
+        let expression = size_of::<ExpressionNode>();
+        for allowance in [2 + ast + expression, 2 * (ast - expression)] {
+            assert!(allowance >= ast.max(expression));
+        }
+    }
+
+    #[tokio::test]
+    async fn expiration_counts_empty_and_multiple_retired_entries() {
+        let root = TempLib::new("parser-expiration-count");
+        let cache = Arc::new(ParserCache::default());
+        let compiler = compiler(&root, cache.clone());
+        assert_eq!(cache.expire(), 0);
+        for i in 0..3 {
+            compiler
+                .parse_string(&LpcPath::from("/main.c"), &format!("int value{i};"))
+                .await
+                .unwrap();
+        }
+        assert_eq!(cache.stats().entries, 3);
+        assert_eq!(cache.expire(), 0);
+        tokio::time::pause();
+        tokio::time::advance(Duration::from_secs(300)).await;
+        assert_eq!(cache.expire(), 3);
+        assert_eq!(cache.expire(), 0);
+        assert_eq!(cache.stats().entries, 0);
+    }
+
+    #[tokio::test]
     async fn hits_restore_generated_names_and_warnings_without_retaining_walked_syntax() {
         let root = TempLib::new("parser-generated-names");
         let cache = Arc::new(ParserCache::default());

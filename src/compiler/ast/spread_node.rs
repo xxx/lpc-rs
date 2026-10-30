@@ -68,13 +68,16 @@ mod tests {
 
     #[test]
     fn a_trailing_ellipsis_makes_a_spread_argument() {
-        let call = call_of("mixed m = g(a, xs...);");
+        let source = "mixed m = g(a, xs...);";
+        let call = call_of(source);
         assert_eq!(call.arguments.len(), 2);
         assert!(matches!(call.arguments[0], ExpressionNode::Var(_)));
         let ExpressionNode::Spread(spread) = &call.arguments[1] else {
             panic!("expected a spread");
         };
         assert!(matches!(*spread.expr, ExpressionNode::Var(_)));
+        let start = source.find("xs...").unwrap();
+        assert_eq!(spread.span(), Some(Span::new(0, start..start + 5)));
         assert_eq!(call.to_string(), "g(a ,xs...)");
     }
 

@@ -295,6 +295,49 @@ mod tests {
     use super::*;
 
     #[test]
+    fn context_conversion_preserves_global_and_function_scope_lookup() {
+        let mut context = CompilationContext::default();
+        assert!(context.scopes.lookup_global("shared").is_none());
+        let root = context.scopes.push_new();
+        context
+            .scopes
+            .current_mut()
+            .unwrap()
+            .insert(Symbol::new("shared", LpcType::Int(false)));
+        let function = context.scopes.push_new();
+        context.scopes.insert_function("example", &function);
+        context
+            .scopes
+            .current_mut()
+            .unwrap()
+            .insert(Symbol::new("shared", LpcType::String(false)));
+        context
+            .scopes
+            .current_mut()
+            .unwrap()
+            .insert(Symbol::new("local_only", LpcType::Float(false)));
+
+        let tree = ScopeTree::from(context);
+        assert_eq!(tree.root_id, Some(root));
+        assert_eq!(tree.current_id, Some(function));
+        assert_eq!(tree.lookup("shared").unwrap().type_, LpcType::String(false));
+        let global = tree.lookup_global("shared").unwrap();
+        assert_eq!(global.name, "shared");
+        assert_eq!(global.type_, LpcType::Int(false));
+        assert_eq!(global.scope_id, Some(root));
+        assert!(tree.lookup_global("local_only").is_none());
+        assert!(tree.lookup_global("missing").is_none());
+        assert_eq!(
+            tree.function_scope("example")
+                .unwrap()
+                .lookup("local_only")
+                .unwrap()
+                .type_,
+            LpcType::Float(false),
+        );
+    }
+
+    #[test]
     fn push_new() {
         let mut collection = ScopeTree::default();
         let scope1_id = collection.push_new();

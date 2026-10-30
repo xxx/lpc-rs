@@ -433,8 +433,114 @@ mod tests {
 
     #[test]
     fn an_error_is_one_pointer_wide() {
-        assert_eq!(std::mem::size_of::<LpcError>(), 8);
-        assert_eq!(std::mem::size_of::<Result<()>>(), 8);
+        assert_eq!(
+            std::mem::size_of::<LpcError>(),
+            std::mem::size_of::<usize>()
+        );
+        assert_eq!(
+            std::mem::size_of::<Result<()>>(),
+            std::mem::size_of::<usize>()
+        );
+    }
+
+    #[test]
+    fn severity_predicates_and_debug_output_distinguish_all_error_kinds() {
+        for (error, warning, bug) in [
+            (LpcError::new("ordinary"), false, false),
+            (LpcError::warning("warning"), true, false),
+            (LpcError::bug("broken invariant"), false, true),
+        ] {
+            assert_eq!(error.is_warning(), warning);
+            assert_eq!(error.is_bug(), bug);
+            assert!(format!("{error:?}").contains(error.message()));
+        }
+    }
+
+    #[test]
+    fn attached_errors_keep_accessor_and_recursive_diagnostic_order() {
+        let error = LpcError::new("head").with_additional_errors(vec![
+            LpcError::new("middle").with_additional_errors(vec![LpcError::new("tail")]),
+        ]);
+
+        assert_eq!(error.additional_errors()[0].message(), "middle");
+        let messages = error
+            .to_diagnostics()
+            .into_iter()
+            .map(|d| d.message)
+            .collect::<Vec<_>>();
+        assert_eq!(messages, ["head", "middle", "tail"]);
+    }
+
+    #[test]
+    fn runtime_snapshots_retain_inner_frames_after_outer_attachment() {
+        use crate::error_frames::{ErrorFrame, ErrorFrames};
+
+        let error = LpcError::new("failure");
+        assert_eq!(error.error_frames(), None);
+        let error = error
+            .with_error_frames(ErrorFrames {
+                frames: vec![ErrorFrame {
+                    function: "inner".into(),
+                    ..Default::default()
+                }],
+                omitted: 0,
+            })
+            .with_error_frames(ErrorFrames {
+                frames: vec![ErrorFrame {
+                    function: "outer".into(),
+                    ..Default::default()
+                }],
+                omitted: 0,
+            });
+        let snapshot = error.error_frames().unwrap();
+
+        assert_eq!(
+            snapshot
+                .frames
+                .iter()
+                .map(|frame| frame.function.as_str())
+                .collect::<Vec<_>>(),
+            ["outer", "inner"]
+        );
+        assert_eq!(snapshot.omitted, 0);
+    }
+
+    #[test]
+    fn catch_rendering_requires_the_compilation_diagnostic_marker() {
+        let error = LpcError::new("preserved compilation diagnostic");
+        assert_eq!(error.catch_diagnostic(), None);
+        let error = error.with_catch_diagnostics();
+        let rendered = error.catch_diagnostic().unwrap();
+
+        assert!(rendered.contains("preserved compilation diagnostic"));
+        assert_eq!(rendered, error.diagnostic_string());
+        assert!(!rendered.contains('\u{1b}'));
+    }
+
+    #[test]
+    fn expected_token_messages_distinguish_one_choice_from_multiple_choices() {
+        assert_eq!(format_expected(&["int".into()]), "expected: int");
+        assert_eq!(
+            format_expected(&["int".into(), "string".into()]),
+            "expected one of: int, string"
+        );
+    }
+
+    #[test]
+    fn terminal_diagnostics_write_to_stderr() {
+        const CHILD: &str = "LPC_RS_ERROR_STDERR_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            LpcError::new("terminal diagnostic marker").emit_diagnostics();
+            return;
+        }
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tests::terminal_diagnostics_write_to_stderr"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("terminal diagnostic marker"));
     }
 
     #[test]

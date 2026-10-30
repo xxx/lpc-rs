@@ -165,7 +165,12 @@ impl Evaluator<'_> {
         loop {
             let top = stack.last_mut().expect("the root frame closes last");
             if let Some(child) = top.node.children.get(top.next) {
+                let previous = top.next;
                 top.next += 1;
+                debug_assert!(
+                    top.next > previous,
+                    "parse_string: child traversal must advance"
+                );
                 match child {
                     Child::Token(i) => {
                         i.hash(&mut top.hasher);

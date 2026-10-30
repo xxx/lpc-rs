@@ -137,6 +137,10 @@ mod tests {
             let original = SimpleFile::new("/source.c".to_owned(), source.to_owned());
             let compact = SourceFile::new("/source.c".to_owned(), source.to_owned());
             assert_eq!(compact.name(), original.name());
+            assert_eq!(
+                Files::name(&compact, ()).unwrap(),
+                Files::name(&original, ()).unwrap()
+            );
             assert_eq!(compact.source(), original.source());
             for byte in 0..source.len() + 3 {
                 assert_eq!(

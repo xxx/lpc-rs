@@ -832,6 +832,48 @@ const GEM: (&str, &str) = (
 );
 
 #[tokio::test]
+async fn default_scope_does_not_consult_actor_or_room_inventory_hooks() {
+    let guard = r#"
+        int inventory_visible() { throw("unexpected initial inventory hook"); }
+        int inventory_accessible() { throw("unexpected initial inventory hook"); }
+    "#;
+    let container = r#"
+        string *parse_command_id_list() { return ({ "box" }); }
+        int inventory_visible() { return 1; }
+        int inventory_accessible() { return 1; }
+        void go(object destination) { move_object(destination); }
+    "#;
+    for in_room in [false, true] {
+        let location = if in_room {
+            r#"move_object(find_object("/room"));"#
+        } else {
+            ""
+        };
+        let body = format!(
+            r#"
+            {location}
+            "/box"->go(this_object());
+            "/gem"->go(find_object("/box"));
+            int parsed = parse_sentence("take gem");
+            return ({{ parsed, "/verbs"->query_log() }});
+        "#
+        );
+        let main = format!("{guard}\n{}", custom_main(&body));
+        let result = run(
+            MASTER,
+            &[("/room.c", guard), ("/box.c", container), GEM, VERBS],
+            &main,
+        )
+        .await;
+        assert_eq!(
+            result,
+            vec![LpcRef::from(1), s("took gem /gem")],
+            "in_room={in_room}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn a_closed_container_is_visible_but_not_reachable() {
     let body = r#"
         object room = find_object("/room");

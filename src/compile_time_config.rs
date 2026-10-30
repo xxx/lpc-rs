@@ -45,3 +45,25 @@ pub const THREAD_STACK: usize = 16 * 1024 * 1024;
 
 /// Compiled pattern and option pairs retained per VM, evicting least recent uses.
 pub(crate) const REGEX_CACHE_CAPACITY: usize = 64;
+
+#[cfg(test)]
+mod tests {
+    use super::MAX_NESTING_DEPTH;
+    use crate::{compiler::Compiler, test_support::test_config};
+
+    #[test]
+    fn the_driver_runtime_compiles_at_the_nesting_limit() {
+        let closures = MAX_NESTING_DEPTH - 4;
+        let code = format!(
+            "function factory() {{ return {}1{}; }}",
+            "(: ".repeat(closures),
+            " :)".repeat(closures)
+        );
+        crate::runtime::run(async move {
+            Compiler::new(test_config())
+                .compile_string("/stack_capacity.c", code)
+                .await
+                .unwrap();
+        });
+    }
+}

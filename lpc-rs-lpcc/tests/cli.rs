@@ -92,6 +92,55 @@ fn assembly_can_target_the_configured_simul_efun_file() {
 }
 
 #[test]
+fn check_and_execution_can_target_the_configured_simul_efun_file() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("sefun.c"),
+        "nomask int helper() { return 1; }\nvoid create() { dump(\"sefun initialized\\n\"); }\n",
+    )
+    .unwrap();
+    for (args, expected) in [
+        (["--check", "sefun.c"].as_slice(), ""),
+        (["sefun.c"].as_slice(), "sefun initialized\n"),
+    ] {
+        let output = lpcc(dir.path())
+            .env("LPC_SIMUL_EFUN_FILE", "/sefun")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+        assert!(output.stderr.is_empty(), "{output:?}");
+    }
+}
+
+#[test]
+fn check_initializes_configured_simul_efuns_for_a_different_target() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("sefun.c"),
+        "nomask int helper() { return 1; }\nvoid create() { dump(\"sefun initialized\\n\"); }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("object.c"),
+        "int answer() { return helper(); }\nvoid create() { throw(\"target initialized\"); }\n",
+    )
+    .unwrap();
+    let output = lpcc(dir.path())
+        .env("LPC_SIMUL_EFUN_FILE", "/sefun")
+        .args(["--check", "object.c"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "sefun initialized\n"
+    );
+    assert!(output.stderr.is_empty(), "{output:?}");
+}
+
+#[test]
 fn assembly_warnings_go_to_stderr() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("object.c"), "void f() { int unused; }\n").unwrap();

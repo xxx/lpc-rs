@@ -151,6 +151,10 @@ harness = false
 name = "bench_arithmetic"
 harness = false
 
+[[bench]]
+name = "bench_register_allocation"
+harness = false
+
 [workspace]
 members = [
     "lpc-rs-asm",

@@ -1622,3 +1622,163 @@ mod apply_tests {
         assert_eq!(walker.into_context().diagnostics.errors().len(), 1);
     }
 }
+
+#[cfg(test)]
+mod traversal_contract_tests {
+    use lpc_rs_core::{class::ClassId, lpc_type::LpcType};
+    use ustr::ustr;
+
+    use super::{tests::*, *};
+    use crate::compiler::ast::class_expression::ClassInitNode;
+
+    #[tokio::test]
+    async fn class_initializers_visit_values_in_order_and_stop_at_an_error() {
+        let id = ClassId {
+            source: ustr("/types.h"),
+            name: ustr("record"),
+        };
+        let mut node = ClassInitNode {
+            type_: LpcType::Class(id, false).into(),
+            initializers: vec![(ustr("first"), var("a")), (ustr("second"), var("b"))],
+            span: None,
+        };
+        let mut walker = spy();
+        walker.visit_class_init(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["a", "b"]);
+        let mut walker = poisoned("a");
+        assert!(walker.visit_class_init(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["a"]);
+    }
+
+    #[tokio::test]
+    async fn labeled_statements_visit_the_label_before_the_statement() {
+        let mut node = LabeledStatementNode::new(stmt("body"), LabelNode::new(var("label"), None));
+        let mut walker = spy();
+        walker.visit_labeled_statement(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["label", "body"]);
+        let mut walker = poisoned("label");
+        assert!(walker.visit_labeled_statement(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["label"]);
+    }
+
+    #[tokio::test]
+    async fn operator_functions_visit_bound_arguments_before_the_generated_closure() {
+        use crate::compiler::ast::{binary_op_node::BinaryOperation, operator_node::Operator};
+
+        let mut node = OperatorNode::new(
+            Operator::Binary(BinaryOperation::Add),
+            Some(vec![Some(var("a")), None, Some(var("b"))]),
+            ustr("closure-0"),
+            None,
+        );
+        let mut walker = spy();
+        walker.visit_operator(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["a", "b", "enter", "$1", "$2", "exit"]);
+        let mut walker = poisoned("a");
+        assert!(walker.visit_operator(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["a"]);
+    }
+
+    #[tokio::test]
+    async fn spread_expressions_visit_the_array_and_propagate_its_error() {
+        let mut node = SpreadNode {
+            expr: Box::new(var("array")),
+            span: None,
+        };
+        let mut walker = spy();
+        walker.visit_spread(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["array"]);
+        let mut walker = poisoned("array");
+        assert!(walker.visit_spread(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["array"]);
+    }
+
+    #[tokio::test]
+    async fn casts_visit_the_operand_and_propagate_its_error() {
+        let mut node = CastNode {
+            expr: Box::new(var("operand")),
+            type_: LpcType::Int(false).into(),
+            span: None,
+        };
+        let mut walker = spy();
+        walker.visit_cast(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["operand"]);
+        let mut walker = poisoned("operand");
+        assert!(walker.visit_cast(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["operand"]);
+    }
+
+    #[tokio::test]
+    async fn catch_bodies_keep_the_block_scope_and_propagate_walk_errors() {
+        let mut node = CatchNode {
+            body: BlockNode::new(vec![stmt("a"), stmt("b")]),
+            span: None,
+        };
+        let mut walker = spy();
+        walker.visit_catch(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "a", "b", "exit"]);
+        let mut walker = poisoned("a");
+        assert!(walker.visit_catch(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["enter", "a", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn member_access_visits_the_receiver_and_propagates_its_error() {
+        use crate::compiler::ast::class_expression::MemberNode;
+
+        let mut node = MemberNode {
+            receiver: Box::new(var("receiver")),
+            name: ustr("field"),
+            span: None,
+        };
+        let mut walker = spy();
+        walker.visit_member(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["receiver"]);
+        let mut walker = poisoned("receiver");
+        assert!(walker.visit_member(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["receiver"]);
+    }
+
+    #[tokio::test]
+    async fn compound_assignment_visits_the_receiver_before_the_value() {
+        use crate::compiler::ast::{
+            binary_op_node::BinaryOperation,
+            class_expression::{CompoundAssignmentNode, MemberNode},
+            expression_node::ExpressionNode,
+        };
+
+        let mut node = CompoundAssignmentNode {
+            lhs: Box::new(ExpressionNode::Member(MemberNode {
+                receiver: Box::new(var("receiver")),
+                name: ustr("field"),
+                span: None,
+            })),
+            rhs: Box::new(var("value")),
+            op: BinaryOperation::Add,
+            span: None,
+        };
+        let mut walker = spy();
+        walker.visit_compound_assignment(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["receiver", "value"]);
+        let mut walker = poisoned("receiver");
+        assert!(walker.visit_compound_assignment(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["receiver"]);
+    }
+
+    #[tokio::test]
+    async fn captures_visit_the_creation_expression_and_propagate_its_error() {
+        use crate::compiler::ast::capture_node::CaptureNode;
+
+        let mut node = CaptureNode {
+            name: ustr("capture-0"),
+            expr: Box::new(var("captured")),
+            span: None,
+        };
+        let mut walker = spy();
+        walker.visit_capture(&mut node).await.unwrap();
+        assert_eq!(walker.visited, ["captured"]);
+        let mut walker = poisoned("captured");
+        assert!(walker.visit_capture(&mut node).await.is_err());
+        assert_eq!(walker.visited, ["captured"]);
+    }
+}

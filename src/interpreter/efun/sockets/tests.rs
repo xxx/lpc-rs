@@ -148,15 +148,26 @@ impl Fixture {
             panic!("handle")
         };
         let handle = SocketHandle::try_from(h.0).unwrap();
+        self.publish_ready(
+            handle,
+            "127.0.0.1:1000".parse().unwrap(),
+            Some("127.0.0.1:9000".parse().unwrap()),
+        )
+        .await;
+        handle
+    }
+
+    async fn publish_ready(
+        &self,
+        handle: SocketHandle,
+        local: SocketAddr,
+        remote: Option<SocketAddr>,
+    ) {
         let mut live = start_txn(&self.vm.global_state.committer_tx).await.unwrap();
         let mut ctx = TaskContext::new(self.vm.global_state.clone(), self.owner.clone(), None);
         ctx.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         SocketAccess::new(&ctx)
-            .ready(
-                handle,
-                "127.0.0.1:1000".parse().unwrap(),
-                Some("127.0.0.1:9000".parse().unwrap()),
-            )
+            .ready(handle, local, remote)
             .unwrap();
         live.disarm();
         commit_changeset(
@@ -166,14 +177,63 @@ impl Fixture {
         .await
         .unwrap()
         .unwrap();
-        handle
+    }
+}
+
+#[tokio::test]
+async fn known_stream_and_listener_endpoints_reach_permission_hooks() {
+    let owner = format!(
+        r#"{OWNER}
+        int bind() {{ return handle = socket_listen("127.0.0.1", 0, event); }}
+    "#
+    );
+    for (open, local, remote, port) in [
+        ("open", "127.0.0.1:1000", Some("127.0.0.1:9000"), 9000),
+        ("bind", "127.0.0.1:7000", None, 7000),
+    ] {
+        let policy = format!(
+            r#"
+            int valid_socket(object caller, string op, mixed *info) {{
+                if (op == "connect" || op == "listen") return 1;
+                return info[2] == "127.0.0.1" && info[3] == {port};
+            }}
+        "#
+        );
+        let fixture = Fixture::new(&policy, &owner, RECIPIENT).await;
+        let LpcRef::Int(value) = fixture.call(&fixture.owner, open, &[]).await.unwrap() else {
+            panic!("socket handle");
+        };
+        let handle = SocketHandle::try_from(value.0).unwrap();
+        fixture
+            .publish_ready(
+                handle,
+                local.parse().unwrap(),
+                remote.map(|a| a.parse().unwrap()),
+            )
+            .await;
+        let args = [handle.get().into()];
+        assert!(matches!(
+            fixture.call(&fixture.owner, "info", &args).await.unwrap(),
+            LpcRef::Mapping(_)
+        ));
+        if remote.is_some() {
+            assert_eq!(
+                fixture.call(&fixture.owner, "write", &args).await.unwrap(),
+                LpcRef::from(1)
+            );
+        }
+        fixture.call(&fixture.owner, "cancel", &args).await.unwrap();
     }
 }
 
 #[tokio::test]
 async fn creation_inspection_and_query_use_native_nil_and_transaction_snapshots() {
     for mode in [NullMode::Zero, NullMode::Distinct] {
-        let rows = run_with(ConfigBuilder::default().lib_dir("tests/fixtures/code").null_mode(mode).build().unwrap(), ALLOW, &[], r#"
+        let rows = run_with(ConfigBuilder::default().lib_dir("tests/fixtures/code").null_mode(mode).build().unwrap(), r#"
+            int valid_socket(object caller, string op, mixed *info) {
+                return op != "query" || info[0] == -1;
+            }
+        "#, &[], r#"
             void event(int h, string event, mixed data) {}
             mixed *create() {
                 int stream = socket_connect("localhost", 9000, event);
@@ -284,6 +344,8 @@ async fn shape_errors_and_dead_query_selectors_do_not_become_global_inspection()
         mixed *create() {
             object dead = find_object("/other"); destruct(dead);
             return ({ stringp(catch(socket_connect("localhost", 0, event))),
+                stringp(catch(socket_connect("", 80, event))),
+                stringp(catch(socket_connect(sprintf("local%chost", 0), 80, event))),
                 stringp(catch(socket_connect("localhost", 65536, event))),
                 stringp(catch(socket_listen("localhost", 1, event))),
                 stringp(catch(socket_listen("::1", -1, event))),
@@ -294,7 +356,7 @@ async fn shape_errors_and_dead_query_selectors_do_not_become_global_inspection()
     "#,
     )
     .await;
-    assert_eq!(rows, vec![LpcRef::from(1); 8]);
+    assert_eq!(rows, vec![LpcRef::from(1); 10]);
 }
 
 #[tokio::test]
@@ -475,6 +537,31 @@ async fn offer_scope_rejects_third_objects_recursive_offers_wrong_handles_and_re
     assert_eq!(
         f.call(&f.recipient, "scope_ok", &[]).await.unwrap(),
         LpcRef::from(1)
+    );
+}
+
+#[tokio::test]
+async fn an_offer_cannot_acquire_another_live_stream_of_the_previous_owner() {
+    let recipient = r#"
+        void event(int h, string event, mixed data) {}
+        void wrong(int h, object previous) { socket_acquire(h - 1, event); }
+        function offer(string name) { return wrong; }
+    "#;
+    let fixture = Fixture::new(ALLOW, OWNER, recipient).await;
+    let first = fixture.established().await;
+    let offered = fixture.established().await;
+    assert_eq!(offered.get(), first.get() + 1);
+    assert!(
+        fixture
+            .call(&fixture.owner, "give", &["wrong".into()])
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("invalid offer context")
+    );
+    assert_eq!(
+        fixture.call(&fixture.owner, "owner", &[]).await.unwrap(),
+        LpcRef::from(Arc::downgrade(&fixture.owner))
     );
 }
 
@@ -696,6 +783,34 @@ async fn acquisition_rechecks_lifecycle_changed_by_the_master() {
     assert_eq!(
         f.call(&f.owner, "owner", &[]).await.unwrap(),
         LpcRef::from(Arc::downgrade(&f.owner))
+    );
+}
+
+#[tokio::test]
+async fn acquisition_rechecks_owner_retirement_by_the_master() {
+    let fixture = Fixture::new(
+        r#"
+        int valid_socket(object caller, string op, mixed *info) {
+            if (op == "acquire") destruct(info[1]);
+            return 1;
+        }
+        "#,
+        OWNER,
+        RECIPIENT,
+    )
+    .await;
+    fixture.established().await;
+    assert!(
+        fixture
+            .call(&fixture.owner, "give", &["yes".into()])
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("invalid offer context")
+    );
+    assert_eq!(
+        fixture.call(&fixture.owner, "owner", &[]).await.unwrap(),
+        LpcRef::from(Arc::downgrade(&fixture.owner))
     );
 }
 

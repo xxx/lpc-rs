@@ -72,6 +72,7 @@ fn natural_sort<const N: usize>(
     for item in items {
         let (mut low, mut high) = (0, sorted.len());
         while low < high {
+            let previous = (low, high);
             let mid = low + (high - low) / 2;
             let Some(ordering) = sorted[mid].natural_cmp(&item) else {
                 return Err(context.runtime_error(format!(
@@ -90,6 +91,10 @@ fn natural_sort<const N: usize>(
             } else {
                 low = mid + 1;
             }
+            debug_assert!(
+                low > previous.0 || high < previous.1,
+                "sort search did not shrink"
+            );
         }
         sorted.insert(low, item);
     }
@@ -161,10 +166,14 @@ impl Continuation for Sort {
 mod tests {
     use indoc::indoc;
     use lpc_rs_asm::instruction::Instruction;
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use crate::{
         interpreter::{lpc_ref::LpcRef, task::eval_loop::Slice, vm::Vm},
-        test_support::{run_prog, strings_of, task_at, test_config, try_run_prog},
+        test_support::{
+            run_prog, run_prog_with_config, strings_of, task_at, test_config, try_run_prog,
+        },
     };
 
     #[tokio::test]
@@ -198,10 +207,25 @@ mod tests {
 
     #[tokio::test]
     async fn an_omitted_direction_sorts_ascending_like_zero() {
-        for direction in ["", ", 0"] {
-            let code =
-                format!("mixed *create() {{ return sort_array(({{ 3, 1.5, 1 }}){direction}); }}");
-            assert_eq!(strings_of(&code).await, ["1", "1.5", "3"]);
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            for direction in ["", ", 0"] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let code = format!(
+                    "mixed *create() {{ return sort_array(({{ 3, 1.5, 1 }}){direction}); }}"
+                );
+                let task = run_prog_with_config(&code, config.into()).await;
+                let values = task
+                    .result()
+                    .unwrap()
+                    .with_array(task.context.txn(), |array| {
+                        array.iter().map(ToString::to_string).collect::<Vec<_>>()
+                    })
+                    .unwrap();
+                assert_eq!(values, ["1", "1.5", "3"], "{mode}: {direction}");
+            }
         }
     }
 
@@ -226,6 +250,33 @@ mod tests {
     async fn natural_order_spans_ints_and_floats() {
         let code = "mixed *create() { return sort_array(({ 2, 1.5, 1 }), 1); }";
         assert_eq!(strings_of(code).await, ["1", "1.5", "2"]);
+    }
+
+    #[tokio::test]
+    async fn natural_sort_searches_both_halves_for_larger_inputs() {
+        for values in [
+            (0..64).collect::<Vec<i64>>(),
+            (0..64).rev().collect::<Vec<i64>>(),
+            (0..64).map(|i| (i * 37) % 13).collect::<Vec<i64>>(),
+        ] {
+            let literal = values
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            for direction in [0, -1] {
+                let code = format!(
+                    "int *create() {{ return sort_array(({{ {literal} }}), {direction}); }}"
+                );
+                let mut expected = values.clone();
+                expected.sort();
+                if direction == -1 {
+                    expected.reverse();
+                }
+                let expected = expected.iter().map(ToString::to_string).collect::<Vec<_>>();
+                assert_eq!(strings_of(&code).await, expected, "{direction}: {literal}");
+            }
+        }
     }
 
     #[tokio::test]

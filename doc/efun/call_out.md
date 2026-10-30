@@ -18,8 +18,9 @@ interval, after the initial delay.
 
 If `seconds_repeat` is 0 or negative, the function will only be called once.
 
-When `seconds_delay` or `seconds_repeat` are floating point numbers, they will be
-accurate to millisecond precision.
+Floating point times are truncated to whole milliseconds. A repeat interval
+that truncates to zero schedules one firing. NaN, infinite values, and times
+outside the duration or timer clocks' supported ranges raise a runtime error.
 
 A firing that cannot start, because the receiver could not be loaded or has no
 such function, removes the call out, repeating or not; a firing that ran and

@@ -9,17 +9,17 @@ pub const MAX_STRING_LENGTH: usize = 8192;
 ///
 /// Return an error if there is an overflow.
 pub fn repeat_string(s: &str, i: LpcIntInner) -> Result<String> {
-    if i >= 0 {
-        let new_capacity = (i as usize).checked_mul(s.len());
-        if let Some(capacity) = new_capacity
-            && capacity <= MAX_STRING_LENGTH
-        {
-            Ok(s.repeat(i as usize))
-        } else {
-            Err(lpc_error!("overflow in string repetition"))
-        }
+    if i <= 0 || s.is_empty() {
+        return Ok(String::new());
+    }
+
+    if let Ok(count) = usize::try_from(i)
+        && let Some(capacity) = count.checked_mul(s.len())
+        && capacity <= MAX_STRING_LENGTH
+    {
+        Ok(s.repeat(count))
     } else {
-        Ok(String::from(""))
+        Err(lpc_error!("overflow in string repetition"))
     }
 }
 
@@ -61,6 +61,29 @@ mod tests {
 
     mod test_repeat_string {
         use super::*;
+
+        #[test]
+        fn the_limit_counts_utf8_bytes_and_accepts_the_exact_cap() {
+            let count = LpcIntInner::try_from(MAX_STRING_LENGTH / 2).unwrap();
+
+            assert_eq!(repeat_string("é", count).unwrap().len(), MAX_STRING_LENGTH);
+            assert!(repeat_string("é", count + 1).is_err());
+        }
+
+        #[test]
+        fn empty_results_do_not_depend_on_count_width() {
+            for count in [LpcIntInner::MIN, -1, 0] {
+                assert_eq!(repeat_string("value", count).unwrap(), "");
+            }
+            assert_eq!(repeat_string("", LpcIntInner::MAX).unwrap(), "");
+        }
+
+        #[test]
+        fn large_positive_counts_cannot_wrap_on_narrow_hosts() {
+            for count in [1_i64 << 32, LpcIntInner::MAX] {
+                assert!(repeat_string("x", count).is_err());
+            }
+        }
 
         #[test]
         fn returns_ok_with_the_string() {
@@ -110,6 +133,18 @@ mod tests {
 
     mod test_closure_arg_number {
         use super::*;
+
+        #[test]
+        fn argument_numbers_respect_register_width_and_reject_malformed_text() {
+            assert_eq!(
+                closure_arg_number(format!("${}", RegisterSize::MAX)).unwrap(),
+                RegisterSize::MAX
+            );
+            assert!(closure_arg_number(format!("${}", u32::from(RegisterSize::MAX) + 1)).is_err());
+            for text in ["", "$", "1", "$-1", "$1x"] {
+                assert!(closure_arg_number(text).is_err(), "{text}");
+            }
+        }
 
         #[test]
         fn returns_number() {

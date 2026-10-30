@@ -1178,4 +1178,70 @@ mod tests {
         };
         assert_eq!(count.events.load(Ordering::Relaxed), expected_events);
     }
+
+    #[tokio::test]
+    async fn integer_batches_execute_supported_operations_before_noninteger_fallback() {
+        use lpc_rs_asm::instruction::Comparison::{Eq, Gt, Lt};
+        use lpc_rs_function_support::constant::LpcConstant;
+
+        use crate::interpreter::bank::RefBank;
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "void create() {}", |_| true).await;
+        let [r0, r1, r2, r3, r4] = [0, 1, 2, 3, 4].map(|i| Register(i).as_local());
+        let [c0, c1] = [0, 1].map(|i| Register(i).as_constant());
+        let target = Address(2);
+        let cases = [
+            (
+                Instruction::Add(r1, r2, r0),
+                Some((0u16, LpcIntInner::MIN)),
+                1,
+            ),
+            (Instruction::Sub(r4, r2, r0), Some((0, LpcIntInner::MAX)), 1),
+            (Instruction::Mul(r1, c0, r0), Some((0, -2)), 1),
+            (Instruction::Copy(c0, r0), Some((0, 2)), 1),
+            (Instruction::Inc(r1), Some((1, LpcIntInner::MIN)), 1),
+            (Instruction::Dec(r4), Some((4, LpcIntInner::MAX)), 1),
+            (Instruction::Cmp(Eq, r1, r1, r0), Some((0, 1)), 1),
+            (Instruction::Jcmp(Lt, r3, r2, target), None, 2),
+            (Instruction::Jcmp(Gt, r3, r2, target), None, 1),
+            (Instruction::Jncmp(Gt, r3, r2, target), None, 2),
+            (Instruction::Jncmp(Lt, r3, r2, target), None, 1),
+            (Instruction::Jmp(target), None, 2),
+            (Instruction::Jz(r0, target), None, 2),
+            (Instruction::Jz(r2, target), None, 1),
+            (Instruction::Jnz(r2, target), None, 2),
+            (Instruction::Jnz(r0, target), None, 1),
+        ];
+        for (instruction, store, pc) in cases {
+            let frame = task.stack.current_frame_mut().unwrap();
+            frame.set_pc(0usize);
+            frame.registers = RefBank::new(vec![
+                0.into(),
+                LpcIntInner::MAX.into(),
+                1.into(),
+                (-3).into(),
+                LpcIntInner::MIN.into(),
+            ]);
+            let mut expected = frame.registers.clone();
+            if let Some((register, value)) = store {
+                expected[register] = value.into();
+            }
+            let function = Arc::make_mut(&mut frame.function);
+            function.constants = vec![LpcConstant::Int(2), LpcConstant::Float(0.5.into())];
+            function.instructions = vec![
+                instruction,
+                Instruction::Add(c1, r0, r0),
+                Instruction::Add(c1, r0, r0),
+            ];
+            function.debug_spans.resize(3, None);
+            let mut remaining = 2;
+
+            run_integer_frame(frame, &task.context.txn, &mut remaining).unwrap();
+
+            assert_eq!(remaining, 1, "{instruction:?}");
+            assert_eq!(frame.pc(), pc, "{instruction:?}");
+            assert_eq!(frame.registers, expected, "{instruction:?}");
+        }
+    }
 }

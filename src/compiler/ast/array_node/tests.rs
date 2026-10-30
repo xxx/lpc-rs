@@ -1,13 +1,49 @@
 use std::sync::Arc;
 
 use lpc_rs_core::null_mode::NullMode;
+use lpc_rs_errors::span::Span;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::{
-    compiler::Compiler,
+    compiler::{
+        Compiler,
+        ast::{
+            ast_node::{AstNode, SpannedNode},
+            expression_node::ExpressionNode,
+        },
+        compilation_context::CompilationContext,
+        lexer::LexWrapper,
+    },
     interpreter::{lpc_ref::LpcRef, vm::Vm},
     test_support::{initialize_program, lib_holding, run_prog, strings_of, temp_lib_config},
 };
+
+#[test]
+fn parsed_array_retains_its_element_range_and_source_form() {
+    let source = "int *items = ({ 12, 34 });";
+    let mut context = CompilationContext::default();
+    let mut program = crate::lpc_parser::ProgramParser::new()
+        .parse(&mut context, LexWrapper::new(source, 7).triples())
+        .unwrap();
+    let Some(AstNode::Decl(mut declaration)) = program.body.pop() else {
+        panic!("array declaration");
+    };
+    let Some(ExpressionNode::Array(array)) = declaration
+        .initializations
+        .pop()
+        .and_then(|init| init.value)
+    else {
+        panic!("array initializer");
+    };
+    assert_eq!(
+        array.span(),
+        Some(Span::new(
+            7,
+            source.find("12").unwrap()..source.find("34").unwrap() + 2
+        ))
+    );
+    assert_eq!(array.to_string(), "({ 12, 34 })");
+}
 
 fn config(mode: NullMode) -> Arc<Config> {
     ConfigBuilder::default()

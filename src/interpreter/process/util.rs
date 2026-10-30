@@ -45,3 +45,36 @@ impl Iterator for AllEnvironment {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interpreter::program::Program;
+
+    #[test]
+    fn staged_environments_are_returned_in_order_then_the_iterator_stays_empty() {
+        let object = |path: &str| {
+            Arc::new(Process::new(Program {
+                filename: Arc::new(path.into()),
+                ..Default::default()
+            }))
+        };
+        let item = object("/item.c");
+        let bag = object("/bag.c");
+        let room = object("/room.c");
+        let txn = TxnHandle::empty();
+        Process::move_to(&txn, &item, &bag).unwrap();
+        Process::move_to(&txn, &bag, &room).unwrap();
+
+        let mut environments = AllEnvironment::new(txn, item.clone());
+        assert!(Arc::ptr_eq(&environments.next().unwrap(), &bag));
+        assert!(Arc::ptr_eq(&environments.next().unwrap(), &room));
+        assert!(environments.next().is_none());
+        assert!(environments.next().is_none());
+        assert!(
+            AllEnvironment::new(TxnHandle::empty(), item)
+                .next()
+                .is_none()
+        );
+    }
+}

@@ -22,6 +22,10 @@ order, then a type letter.
 | `O` | anything | as `dump` prints it; arrays and mappings one entry per line |
 | `Q` | anything | debug output with quoted, escaped strings, including inside arrays and mappings |
 
+For `e`, `E`, `g`, and `G`, infinity and NaN use `inf`, `-inf`, and `nan`
+with uppercase tokens for `E` and `G`, without an exponent suffix. Precision
+does not change these tokens.
+
 An argument of the wrong type, a missing argument, an unknown letter, or a
 `%` with no letter is an error. Extra arguments are ignored.
 

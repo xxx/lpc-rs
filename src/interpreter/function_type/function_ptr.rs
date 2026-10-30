@@ -309,7 +309,12 @@ impl FunctionPtr {
                 )));
             }
         };
-        let Some(function) = process.program(txn).lookup_function(name).cloned() else {
+        let Some(function) = process
+            .program(txn)
+            .lookup_function(name)
+            .filter(|function| function.public())
+            .cloned()
+        else {
             return Ok(None);
         };
         Ok(Some((process, function)))
@@ -472,5 +477,48 @@ mod tests {
             ptr.bound_args(&[LpcRef::from(1)], Default::default()),
             vec![LpcRef::from(1), NULL, LpcRef::from("x")]
         );
+    }
+
+    #[test]
+    fn pointer_storage_covers_owned_buffers_without_charging_empty_vectors() {
+        let pointer =
+            || FunctionPtrBuilder::default().address(FunctionAddress::Dynamic("f".into()));
+        let empty = pointer().build().unwrap();
+        assert_eq!(empty.storage_bytes().unwrap(), size_of::<FunctionPtr>());
+
+        let partial = pointer()
+            .partial_args(std::iter::repeat_n(Some(LpcRef::from(1)), 4096).collect::<ThinVec<_>>())
+            .build()
+            .unwrap();
+        assert!(
+            partial.storage_bytes().unwrap()
+                >= size_of::<FunctionPtr>() + size_of_val(partial.partial_args())
+        );
+
+        let captured = pointer()
+            .upvalue_ptrs(
+                std::iter::repeat_with(VarId::new)
+                    .take(4096)
+                    .collect::<ThinVec<_>>(),
+            )
+            .build()
+            .unwrap();
+        assert!(
+            captured.storage_bytes().unwrap()
+                >= size_of::<FunctionPtr>() + size_of_val(captured.upvalue_ptrs.as_slice())
+        );
+    }
+
+    #[test]
+    fn pointer_diagnostics_include_the_method_bound_arguments_and_holes() {
+        let pointer = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Dynamic("inspect".into()))
+            .partial_args(thin_vec![Some(LpcRef::from(7)), None])
+            .build()
+            .unwrap();
+        let rendered = pointer.to_string();
+        for expected in ["inspect", "7", "<None>", "destructed"] {
+            assert!(rendered.contains(expected), "{rendered}");
+        }
     }
 }

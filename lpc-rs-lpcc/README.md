@@ -55,7 +55,7 @@ LPC_LIB_DIR=./lib lpc-rs-lpcc -S lib/hello.c > hello.asm
 | Mode | Behaviour |
 |---|---|
 | No mode flag | Compile and initialise the object, including its `create()` hook, then exit |
-| `--check` | Compile without initialising the target object; configured simulated efuns are still initialised |
+| `--check` | Compile without initialising the target object; configured simulated efuns are initialised first when checking a different file |
 | `-S`, `--emit-asm` | Print the compiled instruction listing without executing LPC |
 
 `--emit-asm` and `--check` are mutually exclusive. Assembly output goes to stdout;

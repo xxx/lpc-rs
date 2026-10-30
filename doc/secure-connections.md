@@ -69,7 +69,9 @@ The helper creates `identity.pem` in `TLS_CERT_DIR`. It contains the chain and
 private key together so replacements are atomic. On Unix new bundles have mode
 `0600` and new state directories have mode `0700`. Keep the entire directory,
 including Certbot's account state, outside `LIB_DIR`; the helper and driver reject
-private material beneath the mudlib, including through existing symlinks. Running
+private material beneath the mudlib, including through existing symlinks. Dangling
+symlinks and paths with invalid ancestors are rejected; resolve them before
+provisioning or enabling TLS. Running
 the helper and driver as different users requires an operator-managed publication
 and permissions arrangement; use external PEM paths for that setup.
 

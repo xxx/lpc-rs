@@ -120,7 +120,15 @@ pub fn pack(func: &mut ProgramFunction) {
 /// later along some path with no write in between.
 fn liveness(flows: &[Flow], universe: usize) -> Vec<BitSet> {
     let mut live_in = vec![BitSet::with_capacity(universe); flows.len()];
+    // Each bit follows a simple path; one extra pass confirms stabilization.
+    #[cfg(debug_assertions)]
+    let mut passes = (0..flows.len()).chain(std::iter::once(0));
     loop {
+        #[cfg(debug_assertions)]
+        assert!(
+            passes.next().is_some(),
+            "register liveness failed to converge"
+        );
         let mut changed = false;
         for (at, flow) in flows.iter().enumerate().rev() {
             let mut live = BitSet::with_capacity(universe);
@@ -292,6 +300,55 @@ mod tests {
 
     fn constant(i: u16) -> RegisterVariant {
         RegisterVariant::Constant(Register(i))
+    }
+
+    #[test]
+    fn a_live_read_propagates_through_every_backward_successor() {
+        let mut instructions = vec![Copy(local(1), local(0))];
+        instructions.extend((1..64).map(|at| Jmp(Address(at - 1))));
+        let func = temps_only(instructions);
+        let arity = func.arity();
+        let flows = func
+            .instructions
+            .iter()
+            .enumerate()
+            .map(|(at, instruction)| {
+                Flow::of(&func, instruction, at, 0, &arity, func.instructions.len())
+            })
+            .collect::<Vec<_>>();
+
+        let live = liveness(&flows, 2);
+        assert_eq!(live.len(), 64);
+        assert!(live.iter().all(|registers| registers.iter().eq([1])));
+    }
+
+    #[test]
+    #[cfg(not(target_env = "msvc"))]
+    fn parameter_indices_do_not_expand_temporary_analysis_allocations() {
+        let allocated = jemalloc_ctl::thread::allocatedp::read().unwrap();
+        let bytes_for = |num_args| {
+            let mut func = func_with(
+                FunctionArity {
+                    num_args,
+                    ..Default::default()
+                },
+                &[],
+                vec![Copy(local(num_args), local(0)), Ret],
+            );
+            let before = allocated.get();
+            pack(&mut func);
+            let bytes = allocated.get() - before;
+            assert_eq!(func.num_locals, 0);
+            assert_eq!(func.instructions, [Copy(local(num_args), local(0)), Ret]);
+            bytes
+        };
+
+        let small = bytes_for(1);
+        let large = bytes_for(RegisterSize::MAX - 1);
+        assert!(
+            large <= small * 2,
+            "parameter-only analysis allocated {small} bytes at a low index and {large} at a high index"
+        );
     }
 
     #[test]
@@ -653,6 +710,14 @@ mod tests {
         assert_eq!(
             successors(&Jmp(Address(9)), 7, &arity, 8),
             Vec::<usize>::new()
+        );
+        assert_eq!(
+            successors(&Jmp(Address(8)), 7, &arity, 8),
+            Vec::<usize>::new()
+        );
+        assert_eq!(
+            successors(&Jnz(local(1), Address(8)), 6, &arity, 8),
+            vec![7]
         );
     }
 }

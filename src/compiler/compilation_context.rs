@@ -431,13 +431,94 @@ mod tests {
 
     #[test]
     fn the_default_source_uses_the_selected_mudlib_root() {
+        let root = crate::test_support::lib_holding("compilation-context-config", &[]);
+        let config = lpc_rs_utils::config::ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/include", "/sys"])
+            .build()
+            .unwrap();
         let context = CompilationContextBuilder::default()
-            .config(crate::test_support::test_config())
+            .config(config)
             .build()
             .unwrap();
 
         assert_eq!(context.source.name().as_str(), "<outside mudlib>");
         assert_eq!(**context.source.program_path(), LpcPath::default());
+        assert_eq!(context.lib_dir(), root.to_str().unwrap());
+        assert_eq!(
+            context.system_include_dirs(),
+            &vec![ustr("/include"), ustr("/sys")]
+        );
+    }
+
+    #[tokio::test]
+    async fn parent_namespaces_and_visibility_agree_before_and_after_codegen() {
+        use crate::compiler::{Compiler, prepared_program::PreparedProgram};
+
+        let config = Arc::new(crate::test_support::test_config());
+        let compiler = Compiler::new(config.clone());
+        let parents = [
+            (
+                "/left/source.c",
+                "int shared() { return 1; } private int hidden() { return 2; } protected int guarded() { return 3; }",
+            ),
+            ("/right/base.c", "int shared() { return 4; }"),
+            ("/efun.c", "private int sizeof(mixed value) { return 99; }"),
+        ];
+        let mut declarations = CompilationContext::default();
+        let mut linked = CompilationContext::default();
+        let mut paths = Vec::new();
+        for (filename, code) in parents {
+            let path = LpcPath::new_in_game(filename, "/", &config.lib_dir);
+            let source = Arc::new(CompilerSource::new(path.clone(), &config));
+            let prepared = PreparedProgram::parse(&compiler, source, code, None)
+                .await
+                .unwrap();
+            declarations.inherited_interfaces.push(prepared.interface);
+            let compiled = compiler.compile_string(path.clone(), code).await.unwrap();
+            linked.inherits.push(compiled.program.into());
+            paths.push(path);
+        }
+
+        for context in [&mut declarations, &mut linked] {
+            context.inherit_names.insert("base".into(), 0);
+            context.inherit_names.insert("helpers".into(), 1);
+            for (namespace, parent) in [
+                (CallNamespace::Local, 1),
+                (CallNamespace::Parent, 1),
+                (CallNamespace::Named(ustr("base")), 0),
+                (CallNamespace::Named(ustr("source")), 0),
+                (CallNamespace::Named(ustr("helpers")), 1),
+            ] {
+                let function = context.lookup_function("shared", &namespace).unwrap();
+                assert_eq!(function.filename.as_ref(), &paths[parent], "{namespace:?}");
+            }
+            assert!(
+                context
+                    .lookup_function("shared", &CallNamespace::Named(ustr("missing")))
+                    .is_none()
+            );
+            for namespace in [
+                CallNamespace::Local,
+                CallNamespace::Parent,
+                CallNamespace::Named(ustr("source")),
+            ] {
+                assert!(!context.function_accessible("hidden", &namespace));
+                assert!(context.function_accessible("guarded", &namespace));
+            }
+
+            let native = CallNamespace::Named(ustr(EFUN));
+            assert!(context.function_accessible("sizeof", &native));
+            assert_eq!(
+                context.lookup_function_complete("sizeof", &native),
+                Some(Callee::Efun(EFUN_PROTOTYPES.get("sizeof").unwrap()))
+            );
+            context
+                .function_prototypes
+                .insert("hidden".into(), make_function_prototype("hidden"));
+            assert!(context.function_accessible("hidden", &CallNamespace::Local));
+            assert!(!context.function_accessible("hidden", &CallNamespace::Parent));
+        }
     }
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {

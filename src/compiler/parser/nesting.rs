@@ -236,18 +236,6 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
     }
 }
 
-/// Whether folding away this expression would discard an explicit capture.
-pub fn contains_capture(expr: &ExpressionNode) -> bool {
-    let mut pending = vec![Child::Expr(expr)];
-    while let Some(node) = pending.pop() {
-        if matches!(node, Child::Expr(ExpressionNode::Capture(_))) {
-            return true;
-        }
-        push_children(node, &mut pending);
-    }
-    false
-}
-
 /// Where a tree crossed the cap: the first node found more than `max`
 /// levels down, or the nearest ancestor with a span when it has none, or
 /// the caller's fallback when the whole path is spanless.
@@ -766,5 +754,14 @@ mod tests {
             .expect_err("too deep at the use");
         assert_eq!(e.to_string(), TOO_DEEP);
         assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("A"));
+    }
+
+    #[test]
+    fn an_empty_program_requires_one_level_and_reports_the_fallback_at_zero() {
+        let program = ProgramNode::default();
+        let root = Child::Program(&program);
+        let fallback = Some(Span::new(0, 3..4));
+        assert_eq!(exceeds(root, 0, fallback), Err(TooDeep(fallback)));
+        assert_eq!(exceeds(root, 1, fallback), Ok(()));
     }
 }

@@ -2,3 +2,7 @@
 
 failure-output = "immediate-final"
 
+[[profile.default.overrides]]
+filter = 'test(interpreter::vm::global_state::tests::committer_thread_exits_when_global_state_drops) | test(interpreter::vm::global_state::tests::gc_retry_counts_are_bounded_under_continuous_refusal)'
+priority = 100
+

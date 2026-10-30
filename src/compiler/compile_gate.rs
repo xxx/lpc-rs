@@ -19,8 +19,7 @@ pub trait CompileGate: Debug + Send + Sync {
     /// May `source` call `efun::name` while compiling `main_file`?
     /// Paths retain extensions; macro expansion identifies the invocation site.
     /// Gates that do not implement this optional policy allow explicit efuns.
-    async fn efun_override(&self, source: &str, name: &str, main_file: &str) -> Result<bool> {
-        let _ = (source, name, main_file);
+    async fn efun_override(&self, _source: &str, _name: &str, _main_file: &str) -> Result<bool> {
         Ok(true)
     }
 }
@@ -127,6 +126,18 @@ mod gate_tests {
         v.iter()
             .map(|(a, b)| (a.to_string(), b.to_string()))
             .collect()
+    }
+
+    #[tokio::test]
+    async fn a_dependency_gate_without_an_override_policy_allows_explicit_efuns() {
+        let root = TempLib::new("gate-default-override");
+        write(
+            &root,
+            "child.c",
+            "int value() { return efun::sizeof(({ 1, 2 })); }",
+        );
+        let (result, _) = compile_under(config_at(&root), RecordingGate::allowing()).await;
+        assert!(result.is_ok(), "{}", result.unwrap_err());
     }
 
     #[tokio::test]

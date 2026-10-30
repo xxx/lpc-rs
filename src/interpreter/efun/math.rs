@@ -172,6 +172,10 @@ mod tests {
         assert_eq!(float_of("tan(1.0)").await, 1.0_f64.tan());
         assert_eq!(float_of("asin(1.0)").await, FRAC_PI_2);
         assert_eq!(float_of("acos(1.0)").await, 0.0);
+        assert_eq!(float_of("asin(-1.0)").await, -FRAC_PI_2);
+        assert_eq!(float_of("asin(0.0)").await, 0.0);
+        assert_eq!(float_of("acos(-1.0)").await, std::f64::consts::PI);
+        assert_eq!(float_of("acos(0.0)").await, FRAC_PI_2);
         assert_eq!(float_of("atan(1.0)").await, FRAC_PI_4);
     }
 
@@ -179,6 +183,7 @@ mod tests {
     async fn an_int_argument_is_promoted_to_float() {
         assert_eq!(float_of("cos(0)").await, 1.0);
         assert_eq!(float_of("sqrt(4)").await, 2.0);
+        assert_eq!(float_of("sqrt(0)").await, 0.0);
         assert_eq!(float_of("floor(5)").await, 5.0);
         assert_eq!(float_of("ceil(4)").await, 4.0);
         assert_eq!(float_of("exp(0)").await, 1.0);
@@ -226,6 +231,10 @@ mod tests {
     #[tokio::test]
     async fn pow_returns_a_float_for_int_arguments() {
         assert_eq!(float_of("pow(2, 3)").await, 8.0);
+        assert_eq!(float_of("pow(2, -2)").await, 0.25);
+        assert_eq!(float_of("pow(0, 2)").await, 0.0);
+        assert_eq!(float_of("pow(0, 0.5)").await, 0.0);
+        assert_eq!(float_of("pow(0, 0)").await, 1.0);
         assert_eq!(float_of("pow(-2, 3)").await, -8.0);
         assert_eq!(float_of("pow(2.0, 0.5)").await, 2.0_f64.sqrt());
     }

@@ -9,6 +9,7 @@ moved into it under its own name; otherwise `to` is the new name, and a
 file already there is replaced. A missing `from`, a `to` whose parent
 directory does not exist, or a refusal by the master for either path is an
 error. Both paths are resolved against the calling object's directory.
+The destination parent is checked against earlier directory changes in the task.
 
 The move happens when the task commits; a read of either path later in the
 same task already sees it (the source as missing, the target holding what

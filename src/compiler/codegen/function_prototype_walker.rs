@@ -103,7 +103,7 @@ impl TreeWalker for FunctionPrototypeWalker {
                 highest_positional
             ));
         }
-        for position in (declared + 1)..=highest_positional {
+        for position in (u32::from(declared) + 1)..=u32::from(highest_positional) {
             let mut positional = VarInitNode::new(&format!("${position}"), LpcType::Mixed(false));
             positional.span = node.span;
             parameters.push(positional);
@@ -460,5 +460,57 @@ mod tests {
                 .build()
                 .expect("Failed to build function prototype"),
         )
+    }
+
+    #[tokio::test]
+    async fn maximum_declared_closure_arity_does_not_add_a_positional_parameter() {
+        let mut walker = FunctionPrototypeWalker::default();
+        let mut node = ClosureNode {
+            variadic: None,
+            name: "closure-maximum-arity".into(),
+            return_type: LpcType::Mixed(false).into(),
+            flags: FunctionFlags::default(),
+            parameters: Some(
+                (0..RegisterSize::MAX)
+                    .map(|i| VarInitNode::new(&format!("p{i}"), LpcType::Mixed(false)))
+                    .collect(),
+            ),
+            body: vec![],
+            span: None,
+            scope_id: None,
+            captures: Vec::new(),
+            capture_scope_id: None,
+        };
+        walker.visit_closure(&mut node).await.unwrap();
+        let prototype = &walker.context.function_prototypes["closure-maximum-arity"];
+        assert_eq!(prototype.arity.num_args, RegisterSize::MAX);
+        assert_eq!(prototype.arg_types.len(), usize::from(RegisterSize::MAX));
+        assert_eq!(
+            node.parameters.as_ref().unwrap().len(),
+            usize::from(RegisterSize::MAX)
+        );
+    }
+
+    #[tokio::test]
+    async fn prototype_errors_preserve_parser_warnings() {
+        let error = crate::compiler::Compiler::default()
+            .compile_string(
+                "/defaults.c",
+                "int proto(); void f(int optional=1,int required) {}",
+            )
+            .await
+            .unwrap_err();
+        let messages: Vec<_> = error
+            .to_diagnostics()
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "parameter `required` must have a default value because it follows a defaulted parameter",
+                "function prototypes are ignored; the definition declares the function",
+            ]
+        );
     }
 }

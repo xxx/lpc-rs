@@ -447,4 +447,22 @@ mod tests {
             vec![token(0, 0..2), token(2, 2..4), token(0, 4..6)]
         );
     }
+
+    #[test]
+    fn longest_matches_require_progress_and_keep_absolute_byte_offsets() {
+        let empty = set(&[("stars", "a*", false)]);
+        assert_eq!(empty.longest_match("b", 0), None);
+        let words = set(DGD_PROBE);
+        assert_eq!(words.longest_match("abc", 0), Some((TokenClass(2), 3)));
+        assert_eq!(words.longest_match("??abc", 2), Some((TokenClass(2), 5)));
+    }
+
+    #[test]
+    fn nomatch_search_returns_a_later_character_boundary_or_input_end() {
+        let words = set(&[("word", "word", false)]);
+        assert_eq!(words.next_match_start("é!??word", 2), 5);
+        assert_eq!(words.next_match_start("éword", 0), 2);
+        let unmatched = "é!??";
+        assert_eq!(words.next_match_start(unmatched, 2), unmatched.len());
+    }
 }

@@ -29,6 +29,10 @@ struct State {
 }
 
 impl State {
+    fn invalidate_checks(&mut self) {
+        self.generation += 1;
+    }
+
     fn diagnostic_notification(
         &self,
         uri: Uri,
@@ -46,7 +50,7 @@ impl State {
     }
 
     fn invalidate(&mut self) -> Vec<Notification> {
-        self.generation += 1;
+        self.invalidate_checks();
         std::mem::take(&mut self.published)
             .into_iter()
             .map(|uri| self.diagnostic_notification(uri, vec![]))
@@ -291,7 +295,7 @@ fn serve(connection: &Connection, args: Args, runtime: &tokio::runtime::Runtime)
         match message {
             Message::Request(request) if request.method == "shutdown" && !shutdown => {
                 shutdown = true;
-                state.lock().generation += 1;
+                state.lock().invalidate_checks();
                 worker.abort();
                 connection
                     .sender
@@ -345,19 +349,115 @@ mod tests {
     use super::*;
 
     #[test]
+    fn advertised_capabilities_enable_the_implemented_editor_features() {
+        let capabilities = capabilities();
+        assert_eq!(
+            capabilities.position_encoding,
+            Some(PositionEncodingKind::UTF16)
+        );
+        let Some(TextDocumentSyncCapability::Options(sync)) = capabilities.text_document_sync
+        else {
+            panic!("missing synchronization options")
+        };
+        assert_eq!(sync.open_close, Some(true));
+        assert_eq!(sync.change, Some(TextDocumentSyncKind::FULL));
+        let Some(TextDocumentSyncSaveOptions::SaveOptions(save)) = sync.save else {
+            panic!("missing save options")
+        };
+        assert_eq!(save.include_text, Some(false));
+        assert!(capabilities.completion_provider.is_some());
+        assert!(matches!(
+            capabilities.hover_provider,
+            Some(HoverProviderCapability::Simple(true))
+        ));
+    }
+
+    #[tokio::test]
+    async fn explicit_mudlib_directory_overrides_the_workspace_root() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = directory.path().join("workspace");
+        let explicit = directory.path().join("explicit");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&explicit).unwrap();
+        let params = serde_json::from_value(json!({
+            "capabilities": {},
+            "workspaceFolders": [{
+                "uri": crate::documents::file_uri(&workspace).unwrap(),
+                "name": "workspace"
+            }]
+        }))
+        .unwrap();
+        let config = configuration(
+            Args {
+                lib_dir: Some(explicit.clone()),
+                config: None,
+            },
+            &params,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::path::Path::new(&*config.lib_dir),
+            explicit.canonicalize().unwrap()
+        );
+    }
+
+    #[test]
+    fn invalid_full_sync_changes_preserve_the_document() {
+        let mut state = State::default();
+        let uri: Uri = "file:///mud/test.c".parse().unwrap();
+        state.update(Notification::new("textDocument/didOpen".into(), json!({
+            "textDocument": { "uri": uri, "languageId": "lpc", "version": 1, "text": "int value;" }
+        }))).unwrap();
+        let generation = state.generation;
+        for changes in [
+            json!([]),
+            json!([{ "text": "first" }, { "text": "second" }]),
+            json!([{ "text": "partial", "range": Range::new(Position::new(0, 0), Position::new(0, 0)) }]),
+        ] {
+            let result = state.update(Notification::new(
+                "textDocument/didChange".into(),
+                json!({
+                    "textDocument": { "uri": uri, "version": 2 }, "contentChanges": changes
+                }),
+            ));
+            assert!(result.is_err());
+            assert_eq!(state.documents[&uri].version, 1);
+            assert_eq!(&*state.documents[&uri].text, "int value;");
+            assert_eq!(state.generation, generation);
+        }
+    }
+
+    #[test]
+    fn cancelled_checks_cannot_publish_pending_reports() {
+        let mut state = State::default();
+        let generation = state.generation;
+        let uri: Uri = "file:///mud/test.c".parse().unwrap();
+        let reports = Reports::from([(
+            uri,
+            vec![Diagnostic::new_simple(Range::default(), "stale".into())],
+        )]);
+        state.invalidate_checks();
+        assert!(state.publish(generation, reports).is_empty());
+    }
+
+    #[test]
     fn protocol_initializes_checks_edits_answers_requests_and_shuts_down() {
         let root = tempfile::tempdir().unwrap();
         let uri = crate::documents::file_uri(&root.path().join("example.c")).unwrap();
         let (server, client) = Connection::memory();
         let path = root.path().to_owned();
+        let (finished, completion) = flume::bounded(1);
         let thread = std::thread::spawn(move || {
-            run(
+            let result = run(
                 server,
                 Args {
                     lib_dir: Some(path),
                     config: None,
                 },
-            )
+            );
+            let _ = finished.send(());
+            result
         });
         let send = |message: Message| client.sender.send(message).unwrap();
         let receive = || {
@@ -434,9 +534,34 @@ mod tests {
             panic!("close diagnostics")
         };
         assert_eq!(closed.params["diagnostics"], json!([]));
+        send(Notification::new("textDocument/didOpen".into(), json!({
+            "textDocument": { "uri": uri, "languageId": "lpc", "version": 3, "text": "void create() {}" }
+        })).into());
+        assert!(matches!(receive(), Message::Notification(_)));
         send(Request::new(4.into(), "shutdown".into(), Value::Null).into());
         assert!(matches!(receive(), Message::Response(_)));
+        send(
+            Notification::new(
+                "textDocument/didClose".into(),
+                json!({
+                    "textDocument": { "uri": uri }
+                }),
+            )
+            .into(),
+        );
+        send(Request::new(5.into(), "textDocument/hover".into(), Value::Null).into());
+        let Message::Response(rejected) = receive() else {
+            panic!("notification after shutdown")
+        };
+        assert_eq!(rejected.id, 5.into());
+        assert_eq!(
+            rejected.response_result.unwrap_err().code,
+            ErrorCode::InvalidRequest as i32
+        );
         send(Notification::new("exit".into(), Value::Null).into());
+        completion
+            .recv_timeout(Duration::from_secs(20))
+            .expect("exit must stop the server");
         thread.join().unwrap().unwrap();
     }
 

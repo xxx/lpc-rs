@@ -166,6 +166,57 @@ mod tests {
     use super::*;
 
     #[test]
+    fn diagnostic_storage_identity_distinguishes_clones_and_independent_maps() {
+        let global = DiagnosticSources::default();
+        let scoped = DiagnosticSources::scoped();
+        let independent = DiagnosticSources::scoped();
+        scoped.add("/same.c".into(), "int value;".into());
+        independent.add("/same.c".into(), "int value;".into());
+
+        assert!(global.same_storage(&DiagnosticSources::default()));
+        assert!(scoped.same_storage(&scoped.clone()));
+        assert!(!scoped.same_storage(&independent));
+        assert!(!global.same_storage(&scoped));
+        assert!(!scoped.same_storage(&global));
+    }
+
+    #[test]
+    fn scoped_reuse_preserves_nonzero_source_indices() {
+        let sources = DiagnosticSources::scoped();
+        sources.add("/first.c".into(), "int first;".into());
+        let second = sources.add("/second.c".into(), "int second;".into());
+
+        assert_eq!(
+            sources.add("/second.c".into(), "int second;".into()),
+            second
+        );
+        assert_eq!(sources.read().source(second).unwrap(), "int second;");
+    }
+
+    #[test]
+    fn hash_bucket_collisions_still_compare_both_name_and_contents() {
+        for (name, text) in [
+            ("/first.c", "new"),
+            ("/second.c", "old"),
+            ("/second.c", "new"),
+        ] {
+            let mut sources = SourceMap::default();
+            let first = sources.add("/first.c".into(), "old".into());
+            let name = name.to_owned();
+            let text = text.to_owned();
+            let hash = sources.by_content.hasher().hash_one((&name, &text));
+            sources.by_content.entry(hash).or_default().push(first);
+
+            let second = sources.add(name.clone(), text.clone());
+
+            assert_ne!(first, second);
+            assert_eq!(sources.name(second).unwrap(), name);
+            assert_eq!(sources.source(second).unwrap(), text);
+            assert_eq!(sources.source(first).unwrap(), "old");
+        }
+    }
+
+    #[test]
     fn scoped_sources_are_released_and_cannot_resolve_in_the_global_map() {
         let sources = DiagnosticSources::scoped();
         let weak = Arc::downgrade(sources.0.as_ref().unwrap());

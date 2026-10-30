@@ -62,7 +62,7 @@ impl Fixture {
             .unwrap();
         self.commit(&txn);
         assert!(
-            matches!(&self.commands.recv().unwrap()[..], [SocketCommand::Open { handle: found, .. }] if *found == handle)
+            matches!(&self.commands.try_recv().unwrap()[..], [SocketCommand::Open { handle: found, .. }] if *found == handle)
         );
         handle
     }
@@ -938,4 +938,112 @@ async fn caught_initializer_failure_retires_the_failed_owners_sockets() {
             SocketCommand::Retire { handle },
         ]
     );
+}
+
+#[test]
+fn committed_record_snapshots_distinguish_lifecycle_and_callback_changes() {
+    let mut f = Fixture::new(1, 4, 2);
+    let handle = f.connect();
+    let snapshot = |f: &Fixture| {
+        f.begin()
+            .with(|txn| f.sockets.record(txn, handle))
+            .unwrap()
+            .1
+    };
+    let connecting = snapshot(&f);
+    assert_eq!(connecting, connecting.clone());
+    f.open(handle);
+    let open = snapshot(&f);
+    assert_ne!(connecting, open);
+    assert_eq!(open, snapshot(&f));
+
+    let txn = f.begin();
+    f.access(&txn)
+        .transfer(handle, &f.owner, &f.owner, callback(&f.owner))
+        .unwrap();
+    f.commit(&txn);
+    let replaced_callback = snapshot(&f);
+    assert_ne!(open, replaced_callback);
+    assert_eq!(replaced_callback, snapshot(&f));
+
+    let txn = f.begin();
+    f.access(&txn).close(&f.owner, handle).unwrap();
+    f.commit(&txn);
+    let closing = snapshot(&f);
+    assert_ne!(replaced_callback, closing);
+    assert_eq!(closing, snapshot(&f));
+}
+
+#[test]
+fn mismatched_ready_endpoints_leave_setup_retryable_and_publish_nothing() {
+    for listening in [false, true] {
+        let mut f = Fixture::new(1, 4, 2);
+        let txn = f.begin();
+        let access = f.access(&txn);
+        let handle = if listening {
+            access.listen(&f.owner, endpoint(0), callback(&f.owner))
+        } else {
+            access.connect(&f.owner, "localhost".into(), 9, callback(&f.owner))
+        }
+        .unwrap();
+        f.commit(&txn);
+        assert!(
+            matches!(&f.commands.try_recv().unwrap()[..], [SocketCommand::Open { handle: h, .. }] if *h == handle)
+        );
+
+        let txn = f.begin();
+        let access = f.access(&txn);
+        let remote = (!listening).then_some(endpoint(9));
+        let wrong_remote = listening.then_some(endpoint(9));
+        assert!(access.ready(handle, endpoint(1000), wrong_remote).is_err());
+        assert!(txn.with(|t| t.is_clean()));
+        assert!(access.lease(handle).unwrap().is_none());
+        let info = access.info(handle).unwrap();
+        assert_eq!(
+            info.state,
+            if listening {
+                SocketState::Binding
+            } else {
+                SocketState::Connecting
+            }
+        );
+        assert_eq!(info.local, None);
+        assert_eq!(info.remote, None);
+        assert!(access.ready(handle, endpoint(1000), remote).unwrap());
+        f.commit(&txn);
+        assert!(f.commands.is_empty());
+        let txn = f.begin();
+        let lease = f.access(&txn).lease(handle).unwrap().unwrap();
+        assert_eq!(
+            lease.event().data,
+            SocketEventData::Ready {
+                local: endpoint(1000),
+                remote
+            }
+        );
+    }
+}
+
+#[test]
+fn destroyed_owners_cannot_create_socket_registrations() {
+    let mut f = Fixture::new(1, 4, 2);
+    let txn = f.begin();
+    let cell = *f.owner.cell.get_or_init(VarId::new);
+    txn.with(|t| t.remove_object(cell, f.owner.clone()));
+    assert!(!f.owner.is_live(&txn));
+    let access = f.access(&txn);
+    assert!(
+        access
+            .connect(&f.owner, "localhost".into(), 9, callback(&f.owner))
+            .is_err()
+    );
+    assert!(
+        access
+            .listen(&f.owner, endpoint(0), callback(&f.owner))
+            .is_err()
+    );
+    assert!(access.query(None).unwrap().is_empty());
+    f.commit(&txn);
+    assert!(f.commands.is_empty());
+    assert!(f.access(&f.begin()).query(None).unwrap().is_empty());
 }

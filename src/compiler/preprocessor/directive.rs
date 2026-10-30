@@ -1312,4 +1312,111 @@ mod tests {
         assert_eq!(span.file_id(), 3);
         assert_eq!(span.l(), 104); // 100 + the backtick's offset
     }
+
+    #[test]
+    fn directive_classification_and_parsing_advance_through_whitespace_and_names() {
+        let (tx, rx) = flume::bounded(1);
+        let worker = std::thread::spawn(move || {
+            let object = "# \t define VALUE 1\r\n";
+            assert_eq!(classify(object), DirectiveKind::Define);
+            assert!(matches!(
+                parse(object, Span::new(0, 0..object.len())).unwrap(),
+                Directive::Define { name, params: None, body, .. } if name == "VALUE" && body == "1"
+            ));
+            let function = "#\tdefine ADD(left, right)\t((left) + (right))\n";
+            assert_eq!(classify(function), DirectiveKind::Define);
+            assert!(matches!(
+                parse(function, Span::new(0, 0..function.len())).unwrap(),
+                Directive::Define { name, params: Some(params), body, .. }
+                    if name == "ADD" && params == ["left", "right"] && body == "((left) + (right))"
+            ));
+            let pragma = "#pragma strict_types, no_clone";
+            assert_eq!(classify(pragma), DirectiveKind::Pragma);
+            assert!(matches!(
+                parse(pragma, Span::new(0, 0..pragma.len())).unwrap(),
+                Directive::Pragma { names } if names == ["strict_types", "no_clone"]
+            ));
+            tx.send(()).unwrap();
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(2))
+            .expect("directive cursors must make progress");
+        worker.join().unwrap();
+    }
+    #[test]
+    fn empty_directive_operands_keep_a_visible_file_relative_span() {
+        for line in ["#define EMPTY", "#define EMPTY()", "#elif"] {
+            let base = 100;
+            let directive = parse(line, Span::new(3, base..base + line.len())).unwrap();
+            let point = base + line.len();
+            let span = match directive {
+                Directive::Define {
+                    body, body_span, ..
+                } => {
+                    assert!(body.is_empty());
+                    body_span
+                }
+                Directive::Elif {
+                    operand,
+                    operand_span,
+                } => {
+                    assert!(operand.is_empty());
+                    operand_span
+                }
+                other => panic!("unexpected directive: {other:?}"),
+            };
+            assert_eq!(span, Span::new(3, point..point + 1), "{line}");
+        }
+    }
+    #[test]
+    fn empty_include_paths_label_both_delimiters() {
+        for line in ["#include \"\"", "#include <>"] {
+            let base = 100;
+            let error = parse(line, Span::new(3, base..base + line.len())).unwrap_err();
+            assert!(error.message().contains("expected \"path\" or <path>"));
+            assert_eq!(
+                error.span(),
+                Some(Span::new(3, base + line.len() - 2..base + line.len())),
+                "{line}"
+            );
+        }
+    }
+    #[test]
+    fn balanced_expression_branches_release_their_parse_depth() {
+        let mut text = "1".to_owned();
+        for _ in 0..9 {
+            text = format!("({text} + {text})");
+        }
+        let node = parse_if_expression(&text, Span::new(3, 0..text.len())).unwrap();
+        let mut pending = vec![&node];
+        let mut leaves = 0;
+        while let Some(node) = pending.pop() {
+            match node {
+                PreprocessorNode::Int(1) => leaves += 1,
+                PreprocessorNode::BinaryOp(BinaryOperation::Add, left, right) => {
+                    pending.push(left.as_ref());
+                    pending.push(right.as_ref());
+                }
+                other => panic!("unexpected expression: {other:?}"),
+            }
+        }
+        assert_eq!(leaves, 512);
+    }
+    #[test]
+    fn minimum_integer_magnitude_requires_a_negative_prefix() {
+        let negative = "-9223372036854775808";
+        assert_eq!(
+            parse_if_expression(negative, Span::new(3, 100..100 + negative.len())).unwrap(),
+            PreprocessorNode::Int(LpcIntInner::MIN)
+        );
+        for invalid in [
+            "9223372036854775808",
+            "!9223372036854775808",
+            "~9223372036854775808",
+        ] {
+            assert!(
+                parse_if_expression(invalid, Span::new(3, 100..100 + invalid.len())).is_err(),
+                "{invalid}"
+            );
+        }
+    }
 }

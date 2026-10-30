@@ -104,7 +104,7 @@ impl LpcTypeUnion {
 
     /// Do we match against another type?
     pub fn matches_type(self, other: LpcType) -> bool {
-        if self.mixed() {
+        if self.mixed() && other != LpcType::Void {
             return true;
         }
 
@@ -161,13 +161,9 @@ impl LpcTypeUnion {
                 if array {
                     self.is_array()
                 } else {
-                    self.int()
-                        || self.string()
-                        || self.bytes()
-                        || self.float()
-                        || self.object()
-                        || self.mapping()
-                        || self.mixed()
+                    self.types()
+                        .into_iter()
+                        .any(|member| member != LpcType::Void)
                 }
             }
             LpcType::Function(array) => {
@@ -304,6 +300,10 @@ impl Mangle for LpcTypeUnion {
             vec.push(LpcType::Mixed(true).mangle());
         }
 
+        if self.function() {
+            vec.push(LpcType::Function(false).mangle());
+        }
+
         if self.function_array() {
             vec.push(LpcType::Function(true).mangle());
         }
@@ -337,6 +337,132 @@ impl BitOr for LpcTypeUnion {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MEMBERS: [LpcType; 18] = [
+        LpcType::Nil,
+        LpcType::Void,
+        LpcType::Int(false),
+        LpcType::Int(true),
+        LpcType::String(false),
+        LpcType::String(true),
+        LpcType::Bytes(false),
+        LpcType::Bytes(true),
+        LpcType::Float(false),
+        LpcType::Float(true),
+        LpcType::Object(false),
+        LpcType::Object(true),
+        LpcType::Mapping(false),
+        LpcType::Mapping(true),
+        LpcType::Mixed(false),
+        LpcType::Mixed(true),
+        LpcType::Function(false),
+        LpcType::Function(true),
+    ];
+
+    #[test]
+    fn inserting_each_primitive_preserves_its_identity_and_array_kind() {
+        for member in MEMBERS {
+            let mut union = LpcTypeUnion::new();
+            union.insert(member).unwrap();
+
+            assert_eq!(union.types(), vec![member]);
+            assert_eq!(union.is_array(), member.is_array(), "{member}");
+        }
+    }
+
+    #[test]
+    fn empty_unions_have_no_members_or_array_kind() {
+        let union = LpcTypeUnion::new();
+
+        assert!(union.types().is_empty());
+        assert!(!union.is_array());
+        assert_eq!(union.mangle(), "");
+        assert_eq!(union.to_string(), "");
+    }
+
+    #[test]
+    fn duplicate_members_survive_union_insertion_and_bitwise_combination() {
+        let mut union = LpcTypeUnion::new();
+        union.insert(LpcType::String(false)).unwrap();
+        let original = union;
+
+        union.insert(LpcType::Union(original)).unwrap();
+
+        assert_eq!(union.types(), vec![LpcType::String(false)]);
+        assert_eq!((original | original).types(), vec![LpcType::String(false)]);
+    }
+
+    #[test]
+    fn union_equality_distinguishes_different_member_sets() {
+        let mut union = LpcTypeUnion::new();
+        union.insert(LpcType::Int(false)).unwrap();
+        let mut other = LpcTypeUnion::new();
+        other.insert(LpcType::String(false)).unwrap();
+
+        assert!(union.matches_type(LpcType::Union(union)));
+        assert!(!union.matches_type(LpcType::Union(other)));
+    }
+
+    #[test]
+    fn a_single_member_union_preserves_primitive_compatibility() {
+        for expected in MEMBERS {
+            let mut union = LpcTypeUnion::new();
+            union.insert(expected).unwrap();
+
+            for found in MEMBERS {
+                assert_eq!(
+                    LpcType::Union(union).matches_type(found),
+                    expected.matches_type(found),
+                    "union of {expected} against {found}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn two_member_unions_accept_values_allowed_by_either_member() {
+        for left in MEMBERS {
+            for right in MEMBERS {
+                let union = left | right;
+                for found in MEMBERS {
+                    assert_eq!(
+                        union.matches_type(found),
+                        left.matches_type(found) || right.matches_type(found),
+                        "{left} | {right} against {found}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mangling_retains_scalar_function_members() {
+        let union = LpcType::String(false) | LpcType::Function(false);
+
+        assert_eq!(union.mangle(), "s|F");
+        assert_ne!(
+            union.mangle(),
+            (LpcType::String(false) | LpcType::String(false)).mangle()
+        );
+    }
+
+    #[test]
+    fn all_members_keep_their_canonical_order_independent_of_insertion_order() {
+        let mut union = LpcTypeUnion::new();
+        for member in MEMBERS.into_iter().rev() {
+            union.insert(member).unwrap();
+        }
+
+        assert_eq!(union.types(), MEMBERS);
+        assert_eq!(
+            union.to_string(),
+            "nil | void | int | int * | string | string * | bytes | bytes * | float | float * | object | object * | mapping | mapping * | mixed | mixed * | function | function *"
+        );
+        assert_eq!(
+            union.mangle(),
+            "n|v|i|i*|s|s*|b|b*|f|f*|o|o*|m|m*|x|x*|F|F*"
+        );
+    }
 
     #[test]
     fn a_function_member_displays() {

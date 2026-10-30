@@ -259,6 +259,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_diagnostic_line_at_the_string_limit_is_accepted() {
+        let program = |literal: &str| {
+            format!(
+                "string literal() {{ return \"{literal}\"; }}\n\
+                 string *create() {{ return disassemble(this_object()); }}"
+            )
+        };
+        let marker = "boundary_marker";
+        let baseline = strings_of(&program(marker)).await;
+        let overhead = baseline
+            .iter()
+            .find(|line| line.contains(marker))
+            .unwrap()
+            .len()
+            - marker.len();
+        let literal = "x".repeat(lpc_rs_utils::string::MAX_STRING_LENGTH - overhead);
+        let lines = strings_of(&program(&literal)).await;
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.len() == lpc_rs_utils::string::MAX_STRING_LENGTH)
+        );
+    }
+
+    #[tokio::test]
     async fn prototypes_and_existing_clones_follow_recompilation() {
         let root = lib_holding(
             "disassemble-recompile",

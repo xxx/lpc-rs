@@ -1,4 +1,8 @@
 fn main() {
-    // Scanning the workspace root races with rustc's temporary directories in target.
-    lalrpop::process_src().unwrap();
+    // Tracking parser inputs keeps Cargo from scanning unrelated workspace directories.
+    lalrpop::Configuration::new()
+        .set_in_dir("./src")
+        .emit_rerun_directives(true)
+        .process()
+        .unwrap();
 }

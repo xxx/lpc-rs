@@ -48,8 +48,7 @@ impl Display for RegisterVariant {
     }
 }
 
-/// A newtype around a usize representing a Register numbered with its value,
-/// `x.0`.
+/// A register index with the driver's configured [`RegisterSize`] width.
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Default)]
 pub struct Register(pub RegisterSize);
 
@@ -108,6 +107,65 @@ impl From<&Register> for RegisterSize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn operand_kinds_preserve_the_register_index() {
+        for index in [0, 1, 255, 256, RegisterSize::MAX] {
+            let register = Register(index);
+            for operand in [
+                RegisterVariant::Local(register),
+                RegisterVariant::Global(register),
+                RegisterVariant::Upvalue(register),
+                RegisterVariant::Constant(register),
+            ] {
+                assert_eq!(operand.index(), index);
+                assert_eq!(operand.as_register(), register);
+            }
+        }
+    }
+
+    #[test]
+    fn variant_creation_uses_the_requested_bank() {
+        let register = Register(256);
+
+        assert_eq!(
+            [
+                register.as_local(),
+                register.as_global(),
+                register.as_upvalue(),
+                register.as_constant()
+            ],
+            [
+                RegisterVariant::Local(register),
+                RegisterVariant::Global(register),
+                RegisterVariant::Upvalue(register),
+                RegisterVariant::Constant(register)
+            ]
+        );
+    }
+
+    #[test]
+    fn register_size_conversions_preserve_owned_and_borrowed_indices() {
+        for index in [0, 1, 256, RegisterSize::MAX] {
+            let register = Register(index);
+
+            assert_eq!(RegisterSize::from(register), index);
+            assert_eq!(RegisterSize::from(&register), index);
+        }
+    }
+
+    #[test]
+    fn operand_display_distinguishes_register_banks_without_truncation() {
+        let register = Register(RegisterSize::MAX);
+        for (operand, expected) in [
+            (register.as_local(), "r65535"),
+            (register.as_global(), "g65535"),
+            (register.as_upvalue(), "u65535"),
+            (register.as_constant(), "k65535"),
+        ] {
+            assert_eq!(operand.to_string(), expected);
+        }
+    }
 
     #[test]
     fn test_index_is_correct() {

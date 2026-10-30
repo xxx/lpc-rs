@@ -194,6 +194,7 @@ mod tests {
         cache.insert(2, Arc::new(2), 30);
         cache.get_if(&1, |_| true);
         cache.insert(3, Arc::new(3), 40);
+        assert_eq!(cache.stats().estimated_bytes, 60);
         assert!(cache.get_if(&2, |_| true).is_none());
         cache.insert(1, Arc::new(4), 90);
         assert_eq!(cache.stats().entries, 1);
@@ -208,9 +209,22 @@ mod tests {
     fn zero_limits_disable_retention() {
         for (entries, bytes, seconds) in [(0, 100, 10), (10, 0, 10), (10, 100, 0)] {
             let cache = RetainedCache::new(entries, bytes, Duration::from_secs(seconds));
-            cache.insert(1, Arc::new(1), 1);
-            assert_eq!(cache.stats().entries, 0);
+            for cost in [0, 1] {
+                cache.insert(1, Arc::new(1), cost);
+                assert_eq!(cache.stats().entries, 0);
+            }
         }
+    }
+
+    #[test]
+    fn entries_filling_the_byte_budget_are_retained() {
+        let cache = RetainedCache::new(4, 100, Duration::from_secs(10));
+        cache.insert(1, Arc::new(1), 40);
+        cache.insert(2, Arc::new(2), 60);
+        assert_eq!(cache.stats().entries, 2);
+        assert_eq!(cache.stats().estimated_bytes, 100);
+        assert_eq!(cache.get_if(&1, |_| true).as_deref(), Some(&1));
+        assert_eq!(cache.get_if(&2, |_| true).as_deref(), Some(&2));
     }
 
     #[tokio::test(start_paused = true)]

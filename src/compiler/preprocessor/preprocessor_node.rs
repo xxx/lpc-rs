@@ -36,3 +36,36 @@ impl Display for PreprocessorNode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_expressions_preserve_values_names_and_operators() {
+        use PreprocessorNode::{BinaryOp, Defined, Int, String as Text, UnaryOp, Var};
+
+        let cases = [
+            (Var("FEATURE".into()), "FEATURE"),
+            (Int(-7), "-7"),
+            (Text("literal".into()), "literal"),
+            (Defined("FEATURE".into(), false), "defined(FEATURE)"),
+            (Defined("FEATURE".into(), true), "not defined(FEATURE)"),
+            (
+                BinaryOp(BinaryOperation::Add, Box::new(Int(2)), Box::new(Int(3))),
+                "2 + 3",
+            ),
+            (
+                UnaryOp(
+                    UnaryOperation::Bang,
+                    Box::new(Defined("FEATURE".into(), false)),
+                ),
+                "!defined(FEATURE)",
+            ),
+        ];
+
+        for (expression, expected) in cases {
+            assert_eq!(expression.to_string(), expected);
+        }
+    }
+}

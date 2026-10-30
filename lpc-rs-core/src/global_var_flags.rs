@@ -83,6 +83,101 @@ mod tests {
     use super::*;
 
     #[test]
+    fn validation_accepts_every_supported_modifier() {
+        let modifiers = [
+            "public",
+            "private",
+            "protected",
+            "static",
+            "nosave",
+            "nomask",
+        ];
+
+        assert!(GlobalVarFlags::validate(&modifiers).is_empty());
+    }
+
+    #[test]
+    fn validation_preserves_unknown_modifiers_in_input_order() {
+        let modifiers = ["varargs", "private", "unknown", "nomask", "varargs"];
+
+        assert_eq!(
+            GlobalVarFlags::validate(&modifiers),
+            vec!["varargs", "unknown", "varargs"]
+        );
+    }
+
+    #[test]
+    fn storage_aliases_combine_with_visibility_and_nomask() {
+        for (modifier, visibility) in [
+            ("public", Visibility::Public),
+            ("private", Visibility::Private),
+            ("protected", Visibility::Protected),
+        ] {
+            for storage in ["static", "nosave"] {
+                let flags = GlobalVarFlags::from(vec![modifier, storage, "nomask"]);
+                let expected = GlobalVarFlags::default()
+                    .with_visibility(visibility)
+                    .with_is_static(true)
+                    .with_nomask(true);
+
+                assert_eq!(flags, expected, "{modifier} {storage}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_last_visibility_modifier_preserves_storage_flags() {
+        for (modifiers, expected) in [
+            (["private", "public"], Visibility::Public),
+            (["public", "private"], Visibility::Private),
+            (["private", "protected"], Visibility::Protected),
+        ] {
+            let flags = GlobalVarFlags::from(vec!["static", "nomask", modifiers[0], modifiers[1]]);
+
+            assert_eq!(flags.visibility(), expected);
+            assert!(flags.is_static());
+            assert!(flags.nomask());
+        }
+    }
+
+    #[test]
+    fn owned_unknown_modifiers_leave_known_flags_intact() {
+        let modifiers = ["unknown", "private", "nosave", "nomask"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let expected = GlobalVarFlags::default()
+            .with_visibility(Visibility::Private)
+            .with_is_static(true)
+            .with_nomask(true);
+
+        assert_eq!(GlobalVarFlags::from(modifiers), expected);
+    }
+
+    #[test]
+    fn display_keeps_modifiers_in_canonical_order() {
+        for (visibility, name) in [
+            (Visibility::Public, "public"),
+            (Visibility::Private, "private"),
+            (Visibility::Protected, "protected"),
+        ] {
+            for (storage, nomask, suffix) in [
+                (false, false, ""),
+                (true, false, " static"),
+                (false, true, " nomask"),
+                (true, true, " static nomask"),
+            ] {
+                let flags = GlobalVarFlags::default()
+                    .with_visibility(visibility)
+                    .with_is_static(storage)
+                    .with_nomask(nomask);
+
+                assert_eq!(flags.to_string(), format!("{name}{suffix}"));
+            }
+        }
+    }
+
+    #[test]
     fn test_from() {
         let vec = vec!["public", "private"];
         let flags = GlobalVarFlags::from(vec);

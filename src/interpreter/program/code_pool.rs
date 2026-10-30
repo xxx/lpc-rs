@@ -308,4 +308,23 @@ mod tests {
             assert!(CodePool::default().publish(code, Arc::default()).is_err());
         }
     }
+
+    #[test]
+    fn periodic_pruning_keeps_live_code_and_reclaims_dead_buckets() {
+        let pool = CodePool::default();
+        let retained = pool.publish(function(7.0), Arc::default()).unwrap();
+        for index in 0..1024 {
+            let mut transient = function(1.0);
+            transient.prototype = FunctionPrototypeBuilder::default()
+                .name(format!("temporary_{index}"))
+                .filename(transient.prototype.filename.clone())
+                .return_type(LpcType::Float(false))
+                .build()
+                .unwrap();
+            drop(pool.publish(transient, Arc::default()).unwrap());
+        }
+        let again = pool.publish(function(7.0), Arc::default()).unwrap();
+        assert!(Arc::ptr_eq(&retained, &again));
+        assert!(pool.entries.lock().functions.len() < 512);
+    }
 }

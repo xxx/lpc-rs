@@ -418,6 +418,10 @@ impl Process {
                 return Err(WouldContainItself);
             }
             ancestor = Self::environment_of_inner(t, &env);
+            debug_assert!(
+                ancestor.is_none() || t.read(env.position.environment.id).is_some(),
+                "environment traversal returned a parent without a stored link"
+            );
         }
         Ok(())
     }
@@ -896,5 +900,175 @@ mod tests {
         committer
             .commit(reader.with(|t| t.take_changeset()))
             .unwrap();
+    }
+
+    #[test]
+    fn living_inventory_is_visible_before_removal_and_stable_in_old_snapshots() {
+        let (mut committer, space, room, item) = populated_inventory();
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let living = Process::livings_of(&reader, &room);
+        assert_eq!(living.len(), 1);
+        assert!(Arc::ptr_eq(&living[0], &item));
+        let remover = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        txn_undo_insert(&remover, &space, &item);
+        assert!(Process::livings_of(&remover, &room).is_empty());
+        committer
+            .commit(remover.with(Transaction::take_changeset))
+            .unwrap();
+        let retained = Process::livings_of(&reader, &room);
+        assert_eq!(retained.len(), 1);
+        assert!(Arc::ptr_eq(&retained[0], &item));
+        let fresh = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert!(Process::livings_of(&fresh, &room).is_empty());
+        assert!(
+            committer
+                .commit(reader.with(Transaction::take_changeset))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn moving_a_living_object_updates_both_membership_cells() {
+        let (mut committer, space, room, item) = populated_inventory();
+        let before = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let destination = Arc::new(Process::new(program_at("/destination.c")));
+        let writer = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        txn_insert_process(&writer, &space, &destination);
+        Process::move_to(&writer, &item, &destination).unwrap();
+        assert!(Process::livings_of(&writer, &room).is_empty());
+        let moved = Process::livings_of(&writer, &destination);
+        assert_eq!(moved.len(), 1);
+        assert!(Arc::ptr_eq(&moved[0], &item));
+        committer
+            .commit(writer.with(Transaction::take_changeset))
+            .unwrap();
+        let retained = Process::livings_of(&before, &room);
+        assert_eq!(retained.len(), 1);
+        assert!(Arc::ptr_eq(&retained[0], &item));
+        let fresh = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert!(Process::livings_of(&fresh, &room).is_empty());
+        let moved = Process::livings_of(&fresh, &destination);
+        assert_eq!(moved.len(), 1);
+        assert!(Arc::ptr_eq(&moved[0], &item));
+    }
+
+    #[test]
+    fn bootstrap_membership_and_pending_instances_have_distinct_liveness_rules() {
+        use crate::interpreter::stm::{Snapshot, Version};
+
+        let space = ObjectSpace::default();
+        let bootstrap = Arc::new(Process::new(program_at("/bootstrap.c")));
+        ObjectSpace::insert_process_physical(&space, bootstrap.clone());
+        let mut snapshot = Snapshot::new(Version::new(), imbl::HashMap::new());
+        snapshot
+            .objects
+            .insert("/bootstrap".into(), bootstrap.clone());
+        let before = TxnHandle::new(Transaction::new(snapshot.clone()));
+        assert!(bootstrap.is_live(&before));
+        let pending = Process::new(program_at("/bootstrap.c"));
+        assert!(pending.is_live(&before));
+        bootstrap.cell.get_or_init(VarId::new);
+        snapshot.objects.remove("/bootstrap");
+        let after = TxnHandle::new(Transaction::new(snapshot));
+        assert!(!bootstrap.is_live(&after));
+        assert_eq!(bootstrap.liveness(&after), Liveness::Dead);
+        assert!(bootstrap.is_live(&before));
+    }
+
+    #[tokio::test]
+    async fn diagnostic_cell_names_cover_structural_cleanup_program_and_named_globals() {
+        let (program, _config, _simul) = crate::test_support::compile_prog(
+            "int alpha; int beta; int clean_up(int count) { return 0; }",
+        )
+        .await;
+        let process = Process::new(program);
+        let name = process.filename().into_owned();
+        for (cell, field) in [
+            (process.initialized.id, "initialized"),
+            (process.commands_enabled.id, "commands_enabled"),
+            (process.rules.id, "rules"),
+            (process.position.environment.id, "environment"),
+            (process.position.inventory.id, "inventory"),
+            (process.position.livings.id, "livings"),
+            (process.connection.id, "connection"),
+            (process.shadow.shadows.id, "shadows"),
+            (process.shadow.shadowing.id, "shadowing"),
+            (process.image_cell.id, "program"),
+            (
+                process.cleanup.as_ref().unwrap().disabled.id,
+                "cleanup_disabled",
+            ),
+        ] {
+            assert_eq!(process.describe_cell(cell), Some(format!("{name}.{field}")));
+        }
+        assert_eq!(
+            process.describe_cell(process.initial_program().clones.id),
+            Some(format!("{}.clones", process.initial_program().filename)),
+        );
+        for global in ["alpha", "beta"] {
+            let symbol = &process.initial_program().global_variables[global];
+            let Some(lpc_rs_core::register::RegisterVariant::Global(register)) = symbol.location
+            else {
+                panic!("global declaration needs a global register");
+            };
+            assert_eq!(
+                process.describe_cell(process.var_id(register.index())),
+                Some(format!("{name}.global.{global}")),
+            );
+        }
+        assert_eq!(process.describe_cell(VarId::new()), None);
+    }
+
+    #[test]
+    fn diagnostic_global_names_fall_back_to_the_slot_without_source_symbols() {
+        let process = Process::new(Program {
+            filename: Arc::new("/anonymous.c".into()),
+            num_globals: 1,
+            ..Program::default()
+        });
+        assert_eq!(
+            process.describe_cell(process.var_id(0)),
+            Some("/anonymous.global[0]".into())
+        );
+        assert_eq!(process.describe_cell(VarId::new()), None);
+    }
+
+    #[test]
+    fn process_equality_and_hashing_follow_the_stable_object_name() {
+        use std::collections::hash_map::DefaultHasher;
+
+        let file = Process::new(program_at("/identity.c"));
+        let same = Process::new(program_at("/identity.c"));
+        let different = Process::new(program_at("/different.c"));
+        assert_eq!(file, same);
+        assert_ne!(file, different);
+        let clone = Process::new_clone(program_at("/identity.c").into(), 1);
+        let other_clone = Process::new_clone(program_at("/identity.c").into(), 2);
+        assert_ne!(file, clone);
+        assert_ne!(clone, other_clone);
+        let virtual_one = Process::new_virtual(program_at("/one.c").into(), "/virtual".into());
+        let virtual_two = Process::new_virtual(program_at("/two.c").into(), "/virtual".into());
+        assert_eq!(virtual_one, virtual_two);
+        let hash = |process: &Process| {
+            let mut hasher = DefaultHasher::new();
+            process.hash(&mut hasher);
+            hasher.finish()
+        };
+        assert_eq!(hash(&file), hash(&same));
+        assert_eq!(hash(&virtual_one), hash(&virtual_two));
+        let before = hash(&file);
+        let txn = TxnHandle::empty();
+        assert!(file.claim_init(&txn));
+        txn.with(|t| t.write(file.commands_enabled.id, 1.into()));
+        assert_eq!(hash(&file), before);
+        assert_eq!(file, same);
+        let distinct = [&file, &different, &clone, &other_clone, &virtual_one]
+            .into_iter()
+            .map(hash)
+            .collect::<std::collections::HashSet<_>>();
+        assert!(
+            distinct.len() > 1,
+            "distinct object names collapsed to one hash"
+        );
     }
 }

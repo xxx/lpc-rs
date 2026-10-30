@@ -289,6 +289,37 @@ mod tests {
     }
 
     #[test]
+    fn connection_stops_only_the_matching_registration() {
+        let observer = Arc::new(Process::default());
+        let target = Arc::new(Process::default());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let connection = Arc::new(Connection::new("127.0.0.1:1".parse().unwrap(), tx));
+        let old = Arc::new(Registration::new(&observer, &target, &connection, 1024));
+        let current = Arc::new(Registration::new(&observer, &target, &connection, 1024));
+
+        connection.set_snoop(Some(old.clone()));
+        connection.observe("before", "output", false);
+        assert_eq!(old.queue.lock().records.len(), 1);
+        connection.set_snoop(Some(current.clone()));
+        connection.stop_snoop(old.id);
+        connection.observe("current", "output", false);
+        assert_eq!(current.queue.lock().records.len(), 1);
+        connection.stop_snoop(current.id);
+        connection.observe("after", "output", false);
+        assert_eq!(current.queue.lock().records.len(), 1);
+    }
+
+    #[test]
+    fn shared_handles_keep_registration_identity_and_new_registrations_differ() {
+        let observer = Arc::new(Process::default());
+        let first = Arc::new(registration(&observer, 4));
+        let shared = first.clone();
+        let other = registration(&observer, 4);
+        assert_eq!(first.as_ref(), shared.as_ref());
+        assert_ne!(first.as_ref(), &other);
+    }
+
+    #[test]
     fn snoop_budget_includes_in_flight_text_across_reattachment() {
         let observer = Arc::new(Process::default());
         let old = registration(&observer, 4);
@@ -324,5 +355,43 @@ mod tests {
         assert!(registration.queue.lock().failure.take().is_some());
         registration.capture("again", "output", false);
         assert!(registration.queue.lock().failure.take().is_none());
+    }
+
+    #[tokio::test]
+    async fn an_open_registration_with_a_departed_target_cannot_invoke_its_handler() {
+        use crate::interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm};
+
+        let vm = Vm::new(crate::test_support::test_config());
+        let observer = vm
+            .initialize_process_from_code(
+                "/snoop-observer.c",
+                "int calls; void receive_snoop(string text, object target, string direction) { calls++; }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let registration = Arc::new(registration(&observer, 1024));
+        assert!(!registration.is_closed());
+        assert!(registration.target.upgrade().is_none());
+
+        registration
+            .run(
+                &vm.global_state,
+                observer.clone(),
+                SeedEntry::Snoop(registration.clone()),
+                vec![
+                    SeedArg::Value(LpcRef::from("stale output")),
+                    SeedArg::Value(LpcRef::from(0)),
+                    SeedArg::Value(LpcRef::from("output")),
+                ],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            vm.global_state.committed_global(&observer, 0u16),
+            LpcRef::from(0)
+        );
     }
 }

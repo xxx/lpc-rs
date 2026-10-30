@@ -29,7 +29,7 @@ use backend::snapshot;
     ))
 )))]
 fn snapshot() -> LpcMapping {
-    LpcMapping::default()
+    Default::default()
 }
 
 #[cfg(all(
@@ -59,14 +59,15 @@ mod backend {
         i128::from(time.tv_sec()) * 1000 + i128::from(time.tv_usec()) / 1000
     }
 
+    fn resident_kib(raw: i128, in_bytes: bool) -> i128 {
+        if in_bytes { raw / 1024 } else { raw }
+    }
+
     fn usage_mapping(result: nix::Result<Usage>) -> LpcMapping {
         let Ok(usage) = result else {
             return LpcMapping::default();
         };
-        let mut maxrss = i128::from(usage.max_rss());
-        if cfg!(target_vendor = "apple") {
-            maxrss /= 1024;
-        }
+        let maxrss = resident_kib(i128::from(usage.max_rss()), cfg!(target_vendor = "apple"));
         let fields = [
             ("utime", cpu_milliseconds(usage.user_time())),
             ("stime", cpu_milliseconds(usage.system_time())),
@@ -180,6 +181,14 @@ mod backend {
         }
 
         #[test]
+        fn resident_memory_units_preserve_kib_and_truncate_bytes() {
+            for (raw, kib) in [(0, 0), (1023, 0), (1024, 1), (2047, 1), (5120, 5)] {
+                assert_eq!(resident_kib(raw, false), raw);
+                assert_eq!(resident_kib(raw, true), kib);
+            }
+        }
+
+        #[test]
         fn failed_sampling_returns_an_empty_mapping() {
             assert!(usage_mapping(Err(Errno::EIO)).is_empty());
         }
@@ -218,8 +227,7 @@ mod backend {
             let before = getrusage(UsageWho::RUSAGE_SELF).unwrap();
             std::thread::spawn(|| {
                 let start = getrusage(UsageWho::RUSAGE_THREAD).unwrap();
-                let start =
-                    cpu_milliseconds(start.user_time()) + cpu_milliseconds(start.system_time());
+                let start = start.user_time() + start.system_time();
                 loop {
                     let mut work = 1_u64;
                     for _ in 0..10_000 {
@@ -228,9 +236,9 @@ mod backend {
                         );
                     }
                     let now = getrusage(UsageWho::RUSAGE_THREAD).unwrap();
-                    if cpu_milliseconds(now.user_time()) + cpu_milliseconds(now.system_time())
-                        >= start + 10
-                    {
+                    let elapsed = now.user_time() + now.system_time() - start;
+                    // Separate user/system counters can lose one millisecond to truncation.
+                    if elapsed >= TimeVal::new(0, 11_000) {
                         break;
                     }
                 }

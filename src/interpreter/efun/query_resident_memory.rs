@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
 
-/// `query_resident_memory`, an efun for returning the number of bytes of memory in use.
+/// Return jemalloc's resident-memory estimate in bytes.
 pub fn query_resident_memory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     // TODO: once jemalloc is featurized, this needs to be conditional
     let _ = epoch::advance();
@@ -19,4 +19,21 @@ pub fn query_resident_memory<const N: usize>(context: &mut EfunContext<'_, N>) -
     context.return_efun_result(result);
 
     Ok(())
+}
+
+#[cfg(all(test, not(target_env = "msvc")))]
+mod tests {
+    use super::*;
+    use crate::test_support::run_prog;
+
+    #[tokio::test]
+    async fn resident_bytes_include_a_live_allocation() {
+        let allocation = vec![1u8; 4 * 1024 * 1024];
+        let task = run_prog("int create() { return query_resident_memory(); }").await;
+        let Some(LpcRef::Int(bytes)) = task.result() else {
+            panic!("resident-memory byte count");
+        };
+        assert!(bytes.0 >= i64::try_from(allocation.len()).unwrap());
+        std::hint::black_box(&allocation);
+    }
 }

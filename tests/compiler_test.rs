@@ -24,6 +24,25 @@ fn default_compiler() -> Compiler {
     CompilerBuilder::default().config(config).build().unwrap()
 }
 
+#[tokio::test]
+async fn register_exhaustion_returns_a_source_diagnostic() {
+    let code = format!(
+        "void create() {{ int value;\n{} }}",
+        "value += 1;\n".repeat(usize::from(RegisterSize::MAX))
+    );
+    let error = default_compiler()
+        .compile_string("/register_limit.c", &code)
+        .await
+        .expect_err("register exhaustion must stop compilation");
+
+    assert_eq!(
+        error.message(),
+        "register allocation limit of 65535 exceeded"
+    );
+    assert!(!error.is_bug());
+    assert!(error.span().is_some());
+}
+
 mod callable_visibility {
     use lpc_rs::{
         compile_time_config::MAX_CALL_STACK_SIZE,
@@ -179,7 +198,7 @@ mod callable_visibility {
                 r#"
                 private void callback(int ref n) {{ n++; }}
                 {type_} callback = (: $1 + $2 :);
-                int create() {{ return callback(2, 3) + callback(4, 5); }}
+                int create() {{ int first = 2; return callback(first, 3) + callback(4, 5); }}
             "#
             );
             assert_eq!(result(&code, NullMode::Distinct).await, LpcRef::from(14));
@@ -194,10 +213,12 @@ mod callable_visibility {
                 function sscanf = (: $3 + 1 :);
                 int *values = ({ 3 });
                 class Value value = new(class Value, n: 4);
-                return sscanf("", "", values[0]) + sscanf("", "", value.n);
+                int number = 5;
+                return sscanf("", "", values[0]) + sscanf("", "", value.n)
+                    + sscanf("", "", number);
             }
         "#;
-        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(9));
+        assert_eq!(result(code, NullMode::Distinct).await, LpcRef::from(15));
     }
 
     #[tokio::test]
@@ -413,6 +434,32 @@ async fn unnamed_prototype_signatures_do_not_override_definitions() {
     "# };
     let task = run_prog(code).await;
     assert_eq!(task.context.result().unwrap(), LpcRef::from(6));
+}
+
+#[tokio::test]
+async fn folded_integer_boundaries_match_runtime_operations() {
+    let task = run_prog(indoc! { r#"
+        int add(int left, int right) { return left + right; }
+        int subtract(int left, int right) { return left - right; }
+        int multiply(int left, int right) { return left * right; }
+        int quotient(int left, int right) { return left / right; }
+        int remainder(int left, int right) { return left % right; }
+        int left_shift(int left, int right) { return left << right; }
+        int right_shift(int left, int right) { return left >> right; }
+        int create() {
+            return add(9223372036854775807, 1) == (9223372036854775807 + 1)
+                && subtract(-9223372036854775808, 1) == (-9223372036854775808 - 1)
+                && multiply(9223372036854775807, 2) == (9223372036854775807 * 2)
+                && quotient(-9223372036854775808, -1) == (-9223372036854775808 / -1)
+                && remainder(-9223372036854775808, -1) == (-9223372036854775808 % -1)
+                && left_shift(1, 64) == (1 << 64)
+                && left_shift(1, -1) == (1 << -1)
+                && right_shift(-9223372036854775808, 64) == (-9223372036854775808 >> 64)
+                && right_shift(-9223372036854775808, -1) == (-9223372036854775808 >> -1);
+        }
+    "# })
+    .await;
+    assert_eq!(task.context.result().unwrap(), LpcRef::from(1));
 }
 
 #[tokio::test]

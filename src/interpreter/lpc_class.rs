@@ -709,6 +709,64 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn memory_charge_includes_retained_class_storage_and_values() {
+        use crate::interpreter::{memory::object_memory, process::Process, program::Program};
+        use lpc_rs_core::lpc_type::LpcType;
+
+        let process = Process::new(Program {
+            num_globals: 1,
+            ..Default::default()
+        });
+        let txn = TxnHandle::empty();
+        let old = scope(definition(&[
+            ("text", LpcType::String(false)),
+            ("n", LpcType::Int(false)),
+        ]));
+        let new = scope(definition(&[("n", LpcType::Int(false))]));
+        let cell = txn.with(|t| t.mint_class(LpcClass::new(old.definitions[0].clone())));
+        let value = LpcRef::Class(cell);
+        txn.with(|t| t.write(process.initial_image().global(0), value.clone()));
+        assert_eq!(
+            read_member(&value, &txn, &new, ustr::ustr("n")).unwrap(),
+            NULL
+        );
+
+        let before = object_memory(&process, &txn).await.unwrap();
+        assert!(before.data_bytes >= size_of::<LpcClass>());
+        write_member(
+            &value,
+            &txn,
+            &old,
+            ustr::ustr("text"),
+            "x".repeat(4096).into(),
+        )
+        .unwrap();
+        let after = object_memory(&process, &txn).await.unwrap();
+        assert!(after.data_bytes >= before.data_bytes + 4096);
+    }
+
+    #[test]
+    fn reading_an_existing_view_does_not_publish_writes() {
+        use crate::interpreter::stm::{Committer, Transaction};
+        use lpc_rs_core::lpc_type::LpcType;
+
+        let mut committer = Committer::new();
+        let scope = scope(definition(&[("n", LpcType::Int(false))]));
+        let seed = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        let cell = seed.with(|t| t.mint_class(LpcClass::new(scope.definitions[0].clone())));
+        let value = LpcRef::Class(cell);
+        write_member(&value, &seed, &scope, ustr::ustr("n"), 42.into()).unwrap();
+        committer.commit(seed.with(|t| t.take_changeset())).unwrap();
+
+        let reader = TxnHandle::new(Transaction::new(committer.snapshot_clone()));
+        assert_eq!(
+            read_member(&value, &reader, &scope, ustr::ustr("n")).unwrap(),
+            LpcRef::from(42)
+        );
+        assert!(!reader.with(|t| t.take_changeset()).has_changes());
+    }
+
     #[test]
     fn copying_preserves_all_views_without_acquiring_one_or_changing_the_source() {
         use lpc_rs_core::lpc_type::LpcType;

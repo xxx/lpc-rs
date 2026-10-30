@@ -253,6 +253,10 @@ mod tests {
                 "\"%=-3s\", \"\x1b[31mabcdefg\x1b[0m\"",
                 "\x1b[31mabc\ndef\ng\x1b[0m",
             ),
+            (
+                "\">%=-1s\", \"a\x1b[41mbc\x1b[0m\"",
+                ">a\n \x1b[41mb\n c\x1b[0m\n",
+            ),
             (r#""%=-3s", "界界x""#, "界\n界x\n"),
             (r#""%=-1s", "界x""#, "界\nx\n"),
             ("\"%=-2s\", \"e\u{301}e\u{301}x\"", "e\u{301}e\u{301}\nx"),
@@ -573,6 +577,10 @@ mod tests {
                 r#""%Q", sprintf("%c%c%c", 0, 27, 127)"#,
                 r#""\x00\x1b\x7f""#,
             ),
+            (
+                r#""%Q", sprintf("%c%c", 0x2028, 0x2029)"#,
+                r#""\u2028\u2029""#,
+            ),
             ("\"%Q\", \"界e\u{301}👩‍💻\"", "\"界e\u{301}👩‍💻\""),
             (r#""%8Q", "x""#, "     \"x\""),
             (r#""%.3Q", "abc""#, "\"ab"),
@@ -754,5 +762,21 @@ mod tests {
         let code = "mixed create() { mixed f = 1; return sprintf(f); }";
         let err = try_run_prog(code).await.unwrap_err().to_string();
         assert!(err.contains("sprintf: int is not a string"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn zero_and_missing_widths_preserve_justification_rules() {
+        check(&[
+            (r#""%$*s", 0, "a  b""#, "a b"),
+            (r#""%$*s", -1, "a  b""#, "a  b"),
+            (r#""%$0s", "a  b""#, "a  b"),
+            (r#""%*0s", 5, "x""#, "x"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn an_empty_first_column_row_keeps_its_continuation() {
+        check(&[(r#""%-=3s", "\na""#, "\na")]).await;
     }
 }

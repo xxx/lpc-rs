@@ -99,7 +99,13 @@ fn bare_count(rest: &str) -> Option<Option<u32>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{strings_of, try_run_prog};
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    use crate::{
+        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        test_support::{TempLib, strings_of, try_run_prog},
+    };
 
     /// `crypt("password", "ab")` from every `crypt(3)`.
     const DES: &str = "abJnggxhB/yWI";
@@ -230,6 +236,33 @@ mod tests {
             assert_eq!(hash.len(), 106, "{hash}");
         }
         assert_ne!(results[0], results[1], "salts are random");
+    }
+
+    #[tokio::test]
+    async fn an_omitted_salt_uses_sha512_in_distinct_nil_mode() {
+        let root = TempLib::new("crypt-distinct-default");
+        let vm = Vm::new(
+            ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .null_mode(NullMode::Distinct)
+                .build()
+                .unwrap(),
+        );
+        let task = vm
+            .initialize_process_from_code(
+                "/hash.c",
+                r#"
+                int create() {
+                    string hash = crypt("password");
+                    return strindex(hash, "$6$") == 0 && sizeof(hash) == 106
+                        && crypt("password", hash) == hash;
+                }
+            "#,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
     }
 
     #[tokio::test]

@@ -2007,4 +2007,73 @@ mod tests {
             );
         }
     }
+
+    #[tokio::test]
+    async fn file_reads_stop_after_extension_fallback_and_preserve_other_io_errors() {
+        use crate::compiler::source_reader::SourceKind;
+        use parking_lot::Mutex;
+        use std::{
+            io,
+            path::{Path, PathBuf},
+        };
+
+        #[derive(Debug)]
+        struct RecoveringReader {
+            error: ErrorKind,
+            failures: usize,
+            reads: Mutex<Vec<PathBuf>>,
+        }
+
+        #[async_trait::async_trait]
+        impl SourceReader for RecoveringReader {
+            async fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+                let mut reads = self.reads.lock();
+                reads.push(path.to_path_buf());
+                if reads.len() <= self.failures {
+                    Err(io::Error::new(self.error, "source unavailable"))
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+
+            async fn kind(&self, _: &Path) -> io::Result<SourceKind> {
+                Ok(SourceKind::File)
+            }
+        }
+
+        for (input, error, expected) in [
+            (
+                "/source-read/missing",
+                ErrorKind::NotFound,
+                vec!["/source-read/missing", "/source-read/missing.c"],
+            ),
+            (
+                "/source-read/missing.c",
+                ErrorKind::NotFound,
+                vec!["/source-read/missing.c"],
+            ),
+            (
+                "/source-read/denied",
+                ErrorKind::PermissionDenied,
+                vec!["/source-read/denied"],
+            ),
+        ] {
+            let reader = Arc::new(RecoveringReader {
+                error,
+                failures: expected.len(),
+                reads: Mutex::new(Vec::new()),
+            });
+            let compiler = CompilerBuilder::default()
+                .config(crate::test_support::test_config())
+                .source_reader(Some(reader.clone() as Arc<dyn SourceReader>))
+                .build()
+                .unwrap();
+            let Err(error) = compiler.read_file(LpcPath::new_server(input)).await else {
+                panic!("a failed source read unexpectedly recovered");
+            };
+            assert!(error.message().contains("source unavailable"), "{error}");
+            let expected: Vec<_> = expected.into_iter().map(PathBuf::from).collect();
+            assert_eq!(*reader.reads.lock(), expected, "{input}");
+        }
+    }
 }

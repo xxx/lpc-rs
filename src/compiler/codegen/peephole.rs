@@ -15,11 +15,16 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 /// or `Jmp`, and drop a `Jmp` to the next address.
 pub fn peephole(func: &mut ProgramFunction) {
     loop {
+        #[cfg(debug_assertions)]
+        let len = func.instructions.len();
         let copies = coalesce_copies(func);
         let control = prune_control(func);
         if !copies && !control {
             break;
         }
+        // Each continued pass must remove an instruction.
+        #[cfg(debug_assertions)]
+        assert!(func.instructions.len() < len, "peephole failed to converge");
     }
 }
 
@@ -172,10 +177,18 @@ fn mentions(func: &ProgramFunction, reg: RegisterVariant) -> usize {
 /// How many of this instruction's operand slots, its argument list's
 /// included, name `reg`.
 fn mentions_in(func: &ProgramFunction, instruction: &Instruction, reg: RegisterVariant) -> usize {
-    func.operand_registers(instruction)
-        .into_iter()
-        .filter(|&r| r == reg)
-        .count()
+    let count = std::cell::Cell::new(0);
+    let _ = instruction.map_registers(|operand| {
+        count.set(count.get() + usize::from(operand == reg));
+        operand
+    });
+    count.get()
+        + instruction.arg_list().map_or(0, |list| {
+            func.args(list)
+                .iter()
+                .filter(|arg| arg.register() == reg)
+                .count()
+        })
 }
 
 /// The single use of `temp` reachable straight-line from the copy at
@@ -298,6 +311,35 @@ mod tests {
 
     fn global(i: u16) -> RegisterVariant {
         RegisterVariant::Global(Register(i))
+    }
+
+    #[test]
+    fn an_end_address_survives_instruction_deletion() {
+        let mut func = func_with(vec![
+            Copy(local(1), local(1)),
+            Jz(local(2), Address(3)),
+            Ret,
+        ]);
+        func.labels
+            .as_mut()
+            .unwrap()
+            .insert("end".into(), Address(3));
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, vec![Jz(local(2), Address(2)), Ret]);
+        assert_eq!(func.labels.as_ref().unwrap()["end"], Address(2));
+        assert_eq!(func.debug_spans.len(), 2);
+    }
+
+    #[test]
+    fn a_dead_tail_ending_in_a_tracked_copy_is_pruned() {
+        let mut func = func_with(vec![Ret, Copy(global(0), local(0))]);
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, vec![Ret]);
+        assert_eq!(func.debug_spans.len(), 1);
     }
 
     #[test]

@@ -130,8 +130,11 @@ mod tests {
     }
 
     #[test]
-    fn a_width_below_one_is_one() {
+    fn the_width_always_leaves_at_least_one_text_column() {
         assert_eq!(wrap("a b", 0, ""), "a\nb");
+        for width in [0, 1, 2, 3] {
+            assert_eq!(wrap(" ", width, ">>"), ">> ", "{width}");
+        }
     }
 
     #[test]

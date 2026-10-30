@@ -969,4 +969,87 @@ mod tests {
             "/foo/bar"
         );
     }
+    #[test]
+    fn consuming_results_preserves_empty_and_completed_values() {
+        assert_eq!(TaskResult::new().into_inner(), None);
+        let result = TaskResult::new();
+        result.set(37.into()).unwrap();
+        assert_eq!(result.into_inner(), Some(LpcRef::from(37)));
+
+        assert_eq!(result_test_ctx().into_result(), None);
+        let context = result_test_ctx();
+        context.set_result(53.into()).unwrap();
+        assert_eq!(context.into_result(), Some(LpcRef::from(53)));
+    }
+
+    #[test]
+    fn system_object_lookup_respects_fresh_contexts_and_attempt_removals() {
+        use crate::interpreter::stm::{Committer, Transaction};
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        let config = ConfigBuilder::default()
+            .simul_efun_file("/secure/simul_efuns.c")
+            .build()
+            .unwrap();
+        let object = |filename: LpcPath| {
+            Arc::new(Process::new(
+                ProgramBuilder::default()
+                    .filename(filename)
+                    .build()
+                    .unwrap(),
+            ))
+        };
+        let simul = object(config.simul_efun_source().unwrap());
+        let master = object(LpcPath::new_in_game(
+            config.master_object.as_str(),
+            "/",
+            &*config.lib_dir,
+        ));
+        let (tx, _rx) = mpsc::channel(1);
+        let global = Arc::new(GlobalState::new(config, tx));
+        let cells = [&simul, &master].map(|process| {
+            ObjectSpace::insert_process_physical(&global.object_space, process.clone());
+            global
+                .object_space
+                .cell_id(&global.object_space.process_key(process))
+        });
+        let mut context = TaskContext::new(global, master.clone(), None);
+        assert!(!context.txn.joinable());
+        assert!(Arc::ptr_eq(&context.simul_efuns().unwrap(), &simul));
+        assert!(Arc::ptr_eq(&context.master_object().unwrap(), &master));
+
+        context.txn = TxnHandle::new(Transaction::new(Committer::new().snapshot_clone()));
+        context.txn.with(|txn| {
+            for cell in cells {
+                txn.drop_var(cell);
+            }
+        });
+        assert!(context.simul_efuns().is_none());
+        assert!(context.master_object().is_none());
+    }
+
+    #[test]
+    fn clearing_commands_discards_shared_scopes_without_resetting_the_result() {
+        let context = result_test_ctx();
+        let nested = context.clone();
+        context.command.lock().extend([
+            CommandState {
+                verb_reported: "look".into(),
+                ..CommandState::default()
+            },
+            CommandState {
+                verb_reported: "get".into(),
+                ..CommandState::default()
+            },
+        ]);
+        assert_eq!(
+            nested.with_command(|command| command.map(|command| command.verb_reported.clone())),
+            Some("get".into())
+        );
+        context.set_result(7.into()).unwrap();
+        context.clear_commands();
+        assert!(context.with_command(|command| command.is_none()));
+        assert!(nested.with_command(|command| command.is_none()));
+        assert_eq!(context.result(), Some(LpcRef::from(7)));
+    }
 }

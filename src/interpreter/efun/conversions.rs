@@ -139,9 +139,12 @@ pub fn to_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()>
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_core::null_mode::NullMode;
+    use lpc_rs_utils::config::ConfigBuilder;
+
     use crate::{
         interpreter::lpc_ref::LpcRef,
-        test_support::{run_prog, try_run_prog},
+        test_support::{run_prog, try_run_prog, try_run_prog_with_config},
     };
 
     async fn result_of(code: &str) -> LpcRef {
@@ -149,7 +152,31 @@ mod tests {
     }
 
     async fn error_of(code: &str) -> String {
-        try_run_prog(code).await.unwrap_err().to_string()
+        match try_run_prog(code).await {
+            Err(error) => error.to_string(),
+            Ok(_) => panic!("conversion unexpectedly succeeded"),
+        }
+    }
+
+    #[tokio::test]
+    async fn numeric_conversions_reject_live_objects_in_both_null_modes() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            for (name, result_type) in [("to_int", "int"), ("to_float", "float")] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let code = format!("{result_type} create() {{ return {name}(this_object()); }}");
+                let error = match try_run_prog_with_config(&code, config.into()).await {
+                    Err(error) => error.to_string(),
+                    Ok(_) => panic!("{name}: a live object was accepted in {mode} mode"),
+                };
+                assert!(
+                    error.contains(&format!("{name}: object cannot be converted")),
+                    "{error}"
+                );
+            }
+        }
     }
 
     #[tokio::test]
@@ -192,15 +219,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn to_int_of_a_destructed_object_is_zero() {
-        let code = r#"
-            int create() {
-                object o = clone_object("/clone_target");
-                destruct(o);
-                return to_int(o);
+    async fn numeric_conversions_observe_destruction_in_both_null_modes() {
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            for (name, result_type, zero) in [
+                ("to_int", "int", LpcRef::from(0)),
+                ("to_float", "float", LpcRef::from(0.0)),
+            ] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let code = format!(
+                    r#"
+                        {result_type} create() {{
+                            object target = clone_object("/clone_target");
+                            destruct(target);
+                            return {name}(target);
+                        }}
+                    "#
+                );
+                let result = try_run_prog_with_config(&code, config.into()).await;
+                match mode {
+                    NullMode::Zero => assert_eq!(result.unwrap().result(), Some(zero), "{name}"),
+                    NullMode::Distinct => {
+                        let error = match result {
+                            Err(error) => error.to_string(),
+                            Ok(_) => {
+                                panic!("{name}: a destructed object was accepted in {mode} mode")
+                            }
+                        };
+                        assert!(error.contains("cannot be converted"), "{error}");
+                    }
+                }
             }
-        "#;
-        assert_eq!(result_of(code).await, LpcRef::from(0));
+        }
     }
 
     #[tokio::test]
@@ -217,14 +269,32 @@ mod tests {
 
     #[tokio::test]
     async fn to_float_of_a_string_takes_its_leading_number() {
-        let r = result_of(r#"float create() { return to_float("1.5abc"); }"#).await;
-        assert_eq!(r, LpcRef::from(1.5));
+        for (input, expected) in [
+            ("1.5abc", 1.5),
+            ("1.25abc", 1.25),
+            (".125tail", 0.125),
+            ("-12.125tail", -12.125),
+            ("12.tail", 12.0),
+        ] {
+            let code = format!(r#"float create() {{ return to_float("{input}"); }}"#);
+            assert_eq!(result_of(&code).await, LpcRef::from(expected), "{input}");
+        }
     }
 
     #[tokio::test]
     async fn to_float_of_a_string_takes_an_exponent() {
-        let r = result_of(r#"float create() { return to_float("-2e3x"); }"#).await;
-        assert_eq!(r, LpcRef::from(-2000.0));
+        for (input, expected) in [
+            ("-2e3x", -2000.0),
+            ("2e12tail", 2.0e12),
+            ("2e+2tail", 200.0),
+            ("5e-1tail", 0.5),
+            ("1e", 1.0),
+            ("1e+", 1.0),
+            ("1e-", 1.0),
+        ] {
+            let code = format!(r#"float create() {{ return to_float("{input}"); }}"#);
+            assert_eq!(result_of(&code).await, LpcRef::from(expected), "{input}");
+        }
     }
 
     #[tokio::test]

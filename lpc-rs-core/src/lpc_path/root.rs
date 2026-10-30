@@ -259,6 +259,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn source_formatting_uses_only_lpc_visible_names() {
+        let root = LibRoot::new("/mud/lib");
+        for (input, expected) in [
+            (LpcPath::from("/room/file.c"), "/room/file.c"),
+            (LpcPath::new_server("/mud/lib/room/file.c"), "/room/file.c"),
+            (LpcPath::new_server("/private/secret.c"), "<outside mudlib>"),
+        ] {
+            let name = root.source_name(&input);
+            let resolved = root.source(&input);
+
+            for formatted in [
+                format!("{name}"),
+                format!("{name:?}"),
+                format!("{resolved}"),
+                format!("{resolved:?}"),
+            ] {
+                assert_eq!(formatted, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn confinement_errors_explain_the_failure_without_host_paths() {
+        let root = LibRoot::new("/mud/lib");
+        let input = LpcPath::new_server("/private/secret.c");
+
+        let error = root.confine(&input).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "attempt to access a file outside of lib_dir: `<outside mudlib>`"
+        );
+    }
+
+    #[test]
     fn resolves_inputs_with_the_existing_virtual_root_rules() {
         let root = LibRoot::new("/home/mud/lib");
         for (given, cwd, expected) in [

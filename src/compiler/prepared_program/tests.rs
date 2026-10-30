@@ -205,6 +205,23 @@ async fn inaccessible_lexical_definitions_block_receiver_fallback() {
 }
 
 #[tokio::test]
+async fn descendant_supplier_signatures_survive_public_intermediate_inherits() {
+    returns(
+        &[
+            ("consumer.c", "int result() { return supply(3); }"),
+            ("provider.c", "string supply(string text) { return text; }"),
+            ("middle.c", "inherit \"/consumer\"; inherit \"/provider\";"),
+        ],
+        r#"inherit "/middle";
+            int supply(int n) { return n + 4; }
+            int create() { return result(); }
+        "#,
+        7,
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn private_import_suppliers_keep_their_binding_in_descendants() {
     returns(&[
         ("consumer.c", "int result() { return supply() << 1; }"),
@@ -430,4 +447,106 @@ async fn discovery_preserves_authorization_order_and_does_not_reread_bodies() {
             "efun /child.c intp",
         ]
     );
+}
+
+#[tokio::test]
+async fn finite_inheritance_chains_respect_the_configured_depth_boundary() {
+    let root = lib_holding(
+        "inheritance-depth-boundary",
+        &[
+            ("base.c", "int value() { return 7; }"),
+            ("middle.c", r#"inherit "/base";"#),
+        ],
+    );
+    for (limit, source, accepted) in [
+        (0u8, "int value() { return 7; }", true),
+        (0, r#"inherit "/base";"#, false),
+        (1, r#"inherit "/base";"#, true),
+        (1, r#"inherit "/middle";"#, false),
+        (2, r#"inherit "/middle";"#, true),
+    ] {
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .max_inherit_depth(limit)
+            .build()
+            .unwrap();
+        let result = Compiler::new(config)
+            .compile_string("/child.c", source)
+            .await;
+        match (result, accepted) {
+            (Ok(_), true) => {}
+            (Err(error), false) => {
+                assert_eq!(error.to_string(), "maximum inheritance depth reached");
+            }
+            (Ok(_), false) => panic!("inheritance deeper than {limit} was accepted"),
+            (Err(error), true) => panic!("inheritance within {limit} was rejected: {error}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn private_import_suppliers_do_not_escape_into_descendant_siblings() {
+    rejects(
+        &[
+            ("provider.c", "int supply() { return 7; }"),
+            (
+                "middle.c",
+                r#"private inherit "/provider"; int exposed() { return supply(); }"#,
+            ),
+            ("consumer.c", "int result() { return supply(); }"),
+        ],
+        r#"inherit "/middle"; inherit "/consumer"; int create() { return result(); }"#,
+        "unknown function `supply`",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn prepared_interfaces_keep_local_basenames_and_private_import_boundaries() {
+    use crate::compiler::source::CompilerSource;
+
+    let root = lib_holding(
+        "interface-visibility",
+        &[
+            ("provider.c", "int supply() { return 7; }"),
+            (
+                "middle.c",
+                r#"private inherit "/provider"; int exposed() { return supply(); }"#,
+            ),
+        ],
+    );
+    let config = Arc::new(
+        ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .build()
+            .unwrap(),
+    );
+    let compiler = Compiler::new(config.clone());
+    let source = Arc::new(CompilerSource::new("/folder/child.c", &config));
+    let prepared = super::PreparedProgram::parse(
+        &compiler,
+        source,
+        r#"inherit "/middle"; int visible() { return 7; }"#,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(prepared.interface.has_basename("child"));
+    for other in ["middle", "/folder/child", "child.c"] {
+        assert!(!prepared.interface.has_basename(other));
+    }
+    assert!(
+        !prepared
+            .interface
+            .receiver_functions()
+            .contains_key("supply")
+    );
+    assert!(
+        prepared.parents[0]
+            .interface
+            .receiver_functions()
+            .contains_key("supply")
+    );
+    assert!(prepared.interface.lookup("visible").is_some());
 }

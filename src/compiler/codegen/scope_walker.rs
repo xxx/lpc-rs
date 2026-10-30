@@ -709,6 +709,95 @@ mod tests {
     use super::*;
     use crate::{assert_regex, test_support::factories::*};
 
+    #[tokio::test]
+    async fn closure_local_blocks_do_not_allocate_capture_cells() {
+        let compiled = crate::compiler::Compiler::default()
+            .compile_string(
+                "/closure_layout.c",
+                r#"
+                function make() {
+                    return (: [int arg] {
+                        int total = arg;
+                        { int inside = 1; total += inside; }
+                        return total;
+                    } :);
+                }
+            "#,
+            )
+            .await
+            .unwrap();
+        let closures = compiled
+            .program
+            .functions
+            .values()
+            .filter(|function| function.is_closure())
+            .collect::<Vec<_>>();
+        assert_eq!(closures.len(), 1);
+        assert_eq!(closures[0].num_upvalues, 0);
+    }
+
+    #[tokio::test]
+    async fn a_failed_capture_keeps_earlier_scope_diagnostics() {
+        let error = crate::compiler::Compiler::default()
+            .compile_string(
+                "/capture_diagnostics.c",
+                r#"
+                int shared;
+                void nothing() {}
+                function make() {
+                    int shared = 1;
+                    return (: $(nothing()) :);
+                }
+            "#,
+            )
+            .await
+            .unwrap_err()
+            .diagnostic_string();
+        assert!(
+            error.contains("cannot capture a void expression"),
+            "{error}"
+        );
+        assert!(
+            error.contains("`shared` shadows a global variable"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn foreign_method_names_ignore_inherited_private_callbacks() {
+        let compiler = crate::compiler::Compiler::new(crate::test_support::test_config());
+        for name in ["hidden", "hidden_mixed"] {
+            let code = format!(
+                r#"inherit "/callable_private";
+                mixed call_external(object target) {{ return target->{name}(); }}"#
+            );
+            compiler
+                .compile_string("/foreign_call.c", &code)
+                .await
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn ordinary_reference_calls_do_not_allocate_efun_output_cells() {
+        use crate::test_support::CompileThrough;
+
+        let walker = ScopeWalker::compile_through(
+            r#"
+            void change(int ref value) { value++; }
+            void f(mixed value) {
+                int *items = ({ 1 });
+                change(items[0]);
+                change(value.n);
+            }
+        "#,
+        )
+        .await
+        .unwrap();
+        let scope = walker.context.scopes.function_scope("f").unwrap();
+        assert_eq!(scope.num_upvalues, 0);
+    }
+
     mod references {
         use lpc_rs_core::register::{Register, RegisterVariant};
 

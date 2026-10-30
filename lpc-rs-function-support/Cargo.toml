@@ -22,4 +22,5 @@ readonly = "0.2.14"
 tracing = "~0.1.44"
 
 [dev-dependencies]
+indextree = "4.9.1"
 ustr = "1.1.0"

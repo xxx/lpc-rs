@@ -139,3 +139,55 @@ impl<T> DerefMut for Bank<T> {
         &mut self.registers
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+    use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+    use std::sync::Arc;
+
+    #[test]
+    fn unmapped_parameters_keep_return_and_argument_defaults_in_distinct_mode() {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("defaults")
+            .filename(Arc::new("/defaults.c".into()))
+            .return_type(LpcType::String(false))
+            .arity(FunctionArity::new(2))
+            .arg_types(vec![LpcType::Int(false), LpcType::String(false)])
+            .build()
+            .unwrap();
+        let mut function = ProgramFunction::new(prototype, 1);
+        function.null_mode = NullMode::Distinct;
+        let bank = RefBank::initialized_for_function(&function, 4);
+        assert_eq!(
+            bank.registers.as_slice(),
+            [
+                LpcRef::Nil,
+                0.into(),
+                LpcRef::Nil,
+                0.into(),
+                0.into(),
+                0.into()
+            ]
+        );
+    }
+
+    #[test]
+    fn bank_storage_reserves_grows_and_exposes_consistent_register_views() {
+        let mut bank = Bank::new(vec![10, 20]);
+        bank.reserve(4);
+        assert!(bank.registers.capacity() >= 6);
+        bank.push(30);
+        bank[Register(1)] = 21;
+        let index: RegisterSize = 2;
+        bank[index] = 31;
+        let slice: &mut [i32] = &mut bank;
+        slice[0] = 11;
+        assert_eq!(bank[Register(1)], 21);
+        assert_eq!(bank[index], 31);
+        let slice: &[i32] = &bank;
+        assert_eq!(slice, [11, 21, 31]);
+        assert_eq!(bank.to_string(), "[11, 21, 31]");
+    }
+}

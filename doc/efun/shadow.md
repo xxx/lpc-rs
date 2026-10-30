@@ -33,6 +33,12 @@ error, `shadow '<caller>' on '<ob>': <reason>`:
   does;
 - `query_allow_shadow(ob)` answers a false value.
 
+After the master allows the request, both objects must still be live and all
+structural restrictions are checked again before attachment. The master's
+callback can reenter LPC, so changes it makes may cause this later check to
+refuse the request. A caught refusal preserves the callback's other changes
+in the same transaction.
+
 A lib that wants a refusal as an outcome rather than an error asks its own
 question first, or wraps the call in `catch`.
 

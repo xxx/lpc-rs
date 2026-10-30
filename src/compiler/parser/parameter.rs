@@ -49,3 +49,72 @@ impl Parameter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compiler::ast::{expression_node::ExpressionNode, int_node::IntNode};
+
+    #[test]
+    fn named_and_unnamed_variadic_parameters_require_mixed_or_array_types() {
+        for (type_, accepted) in [
+            (LpcType::Mixed(false), true),
+            (LpcType::Mixed(true), true),
+            (LpcType::Int(true), true),
+            (LpcType::String(true), true),
+            (LpcType::Int(false), false),
+            (LpcType::Float(false), false),
+            (LpcType::String(false), false),
+            (LpcType::Object(false), false),
+        ] {
+            for parameter in [
+                Parameter::Named(Box::new(VarInitNode::new("values", type_))),
+                Parameter::Unnamed {
+                    type_: type_.into(),
+                    by_ref: false,
+                    span: Span::new(0, 0..1),
+                },
+            ] {
+                let result = parameter.validate_variadic();
+                assert_eq!(result.is_ok(), accepted, "{parameter:?}");
+                if let Err(error) = result {
+                    assert_eq!(
+                        error.to_string(),
+                        "a named variadic parameter must have type `mixed` or an array type"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variadic_collectors_reject_references_and_default_values() {
+        let mut reference = VarInitNode::new("values", LpcType::Mixed(false));
+        reference.by_ref = true;
+        let mut defaulted = VarInitNode::new("values", LpcType::Mixed(false));
+        defaulted.value = Some(ExpressionNode::Int(IntNode::new(0)));
+        for (parameter, expected) in [
+            (
+                Parameter::Named(Box::new(reference)),
+                "a named variadic parameter cannot be `ref`",
+            ),
+            (
+                Parameter::Unnamed {
+                    type_: LpcType::Mixed(false).into(),
+                    by_ref: true,
+                    span: Span::new(0, 0..1),
+                },
+                "a named variadic parameter cannot be `ref`",
+            ),
+            (
+                Parameter::Named(Box::new(defaulted)),
+                "a named variadic parameter cannot have a default value",
+            ),
+        ] {
+            assert_eq!(
+                parameter.validate_variadic().unwrap_err().to_string(),
+                expected
+            );
+        }
+    }
+}

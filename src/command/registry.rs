@@ -748,4 +748,31 @@ pub(crate) mod tests {
         assert_eq!(snapshot.len(), 4);
         world.commit(&txn).unwrap();
     }
+
+    #[test]
+    fn actor_matching_excludes_live_owners_outside_the_requested_scope() {
+        let mut world = World::new();
+        let actor = Arc::new(Process::default());
+        let outside = Arc::new(Process::default());
+        let (_live, txn) = world.begin();
+        let actions = ActorRules::new(&txn, &actor);
+        register(&actions, &actor, "look");
+        register(&actions, &outside, "look");
+        register(&actions, &outside, "wave");
+        world.commit(&txn).unwrap();
+
+        let (_live, txn) = world.begin();
+        let actions = ActorRules::new(&txn, &actor);
+        let scope = Scope::new([actor.clone()]);
+        let selected = actions.matching("look", &scope);
+        assert_eq!(selected.len(), 1);
+        assert!(selected[0].owned_by(&actor));
+
+        let scope = Scope::new([actor.clone(), outside.clone()]);
+        let selected = actions.matching("look", &scope);
+        assert_eq!(selected.len(), 2);
+        assert!(selected[0].owned_by(&outside));
+        assert!(selected[1].owned_by(&actor));
+        assert_eq!(verbs(&actions.all()), ["look", "look", "wave"]);
+    }
 }

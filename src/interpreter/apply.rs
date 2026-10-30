@@ -624,4 +624,33 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[tokio::test]
+    async fn a_missing_warning_handler_is_only_reported_when_warnings_exist() {
+        let vm = Vm::new(test_config());
+        let process = vm
+            .create_process_from_code("/loader.c", "void create() {}")
+            .await
+            .unwrap();
+        let ctx = TaskTemplate::from(vm.global_state.clone()).into_task_context(process);
+        let file = LpcPath::from("/warned.c");
+        for has_warnings in [false, true] {
+            let log = LogCapture::default();
+            let warnings = if has_warnings {
+                vec![lpc_rs_errors::lpc_warning!("a compile warning")]
+            } else {
+                Vec::new()
+            };
+            report_warnings(&ctx, None, &file, warnings)
+                .with_subscriber(log.subscriber("info,lpc_rs::applies=debug"))
+                .await
+                .unwrap();
+            let logged = log.contents();
+            assert_eq!(
+                logged.contains("apply=\"warning_handler\""),
+                has_warnings,
+                "{logged}"
+            );
+        }
+    }
 }

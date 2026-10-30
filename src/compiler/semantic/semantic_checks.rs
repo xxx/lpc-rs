@@ -227,7 +227,7 @@ pub fn check_binary_operation_types(
                     "Reverse indexing requires an array, string or bytes"
                 ));
             }
-            if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
+            if matches!(left_type, LpcType::Mapping(false) | LpcType::Mixed(false))
                 || ((left_type.is_array()
                     || matches!(left_type, LpcType::String(false) | LpcType::Bytes(false)))
                     && (LpcType::Int(false).matches_type(right_type)
@@ -2911,6 +2911,256 @@ mod tests {
                 };
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
+            }
+        }
+    }
+
+    #[test]
+    fn all_array_types_require_integer_or_range_indices() {
+        use crate::compiler::ast::range_node::RangeNode;
+
+        let mut context = CompilationContext::default();
+        context.scopes.push_new();
+        for type_ in [
+            LpcType::Int(true),
+            LpcType::Float(true),
+            LpcType::String(true),
+            LpcType::Bytes(true),
+            LpcType::Object(true),
+            LpcType::Function(true),
+            LpcType::Mapping(true),
+            LpcType::Mixed(true),
+        ] {
+            context
+                .scopes
+                .current_mut()
+                .unwrap()
+                .insert(Symbol::new("items", type_));
+            let check = |index| {
+                check_binary_operation_types(
+                    &BinaryOpNode {
+                        l: Box::new(ExpressionNode::Var(VarNode::new("items"))),
+                        r: Box::new(index),
+                        op: BinaryOperation::Index,
+                        span: None,
+                    },
+                    &context,
+                )
+            };
+            assert!(check(ExpressionNode::from("key")).is_err(), "{type_}");
+            assert!(check(ExpressionNode::from(0)).is_ok(), "{type_}");
+            assert!(
+                check(ExpressionNode::Range(RangeNode::new(
+                    Some(ExpressionNode::from(0)),
+                    Some(ExpressionNode::from(1)),
+                    None,
+                )))
+                .is_ok(),
+                "{type_}"
+            );
+        }
+        for type_ in [LpcType::Mapping(false), LpcType::Mixed(false)] {
+            context
+                .scopes
+                .current_mut()
+                .unwrap()
+                .insert(Symbol::new("items", type_));
+            let node = BinaryOpNode {
+                l: Box::new(ExpressionNode::Var(VarNode::new("items"))),
+                r: Box::new(ExpressionNode::from("key")),
+                op: BinaryOperation::Index,
+                span: None,
+            };
+            assert!(
+                check_binary_operation_types(&node, &context).is_ok(),
+                "{type_}"
+            );
+        }
+    }
+
+    #[test]
+    fn function_composition_requires_two_function_operands() {
+        let mut context = CompilationContext::default();
+        context.scopes.push_new();
+        context
+            .scopes
+            .current_mut()
+            .unwrap()
+            .insert(Symbol::new("handler", LpcType::Function(false)));
+        let function = ExpressionNode::Var(VarNode::new("handler"));
+        for (left, right, valid) in [
+            (function.clone(), function.clone(), true),
+            (function.clone(), ExpressionNode::from(1), false),
+            (ExpressionNode::from(1), function, false),
+            (ExpressionNode::from(1), ExpressionNode::from(2), false),
+        ] {
+            let node = BinaryOpNode {
+                l: Box::new(left),
+                r: Box::new(right),
+                op: BinaryOperation::Compose,
+                span: None,
+            };
+            assert_eq!(check_binary_operation_types(&node, &context).is_ok(), valid);
+        }
+    }
+
+    #[test]
+    fn literal_null_typing_and_casts_use_the_configured_mode() {
+        use lpc_rs_utils::config::ConfigBuilder;
+        use std::sync::Arc;
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let context = CompilationContext {
+                config: Arc::new(ConfigBuilder::default().null_mode(mode).build().unwrap()),
+                ..CompilationContext::default()
+            };
+            let nil = ExpressionNode::Nil(crate::compiler::ast::nil_node::NilNode { span: None });
+            let expected_nil = if mode == NullMode::Distinct {
+                LpcType::Nil
+            } else {
+                LpcType::Int(false)
+            };
+            assert_eq!(node_type(&nil, &context).unwrap(), expected_nil);
+            for (body, alternative) in [
+                (ExpressionNode::from(0), ExpressionNode::from(1.5)),
+                (ExpressionNode::from(1.5), ExpressionNode::from(0)),
+            ] {
+                let ternary = ExpressionNode::Ternary(TernaryNode {
+                    condition: Box::new(ExpressionNode::from(1)),
+                    body: Box::new(body),
+                    else_clause: Box::new(alternative),
+                    span: None,
+                });
+                let expected = if mode == NullMode::Zero {
+                    LpcType::Float(false)
+                } else {
+                    LpcType::Int(false) | LpcType::Float(false)
+                };
+                assert_eq!(node_type(&ternary, &context).unwrap(), expected);
+            }
+            for value in [0, 1] {
+                let cast = CastNode {
+                    expr: Box::new(ExpressionNode::from(value)),
+                    type_: LpcType::Float(false).into(),
+                    span: None,
+                };
+                let expected = if mode == NullMode::Zero && value == 0 {
+                    None
+                } else {
+                    Some(LpcType::Int(false))
+                };
+                assert_eq!(
+                    impossible_cast(&cast, &context).unwrap(),
+                    expected,
+                    "{mode:?}: {value}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn impossible_scalar_casts_name_the_matching_conversion_function() {
+        for (code, conversion) in [
+            (r#"void f() { int value = (int) "1"; }"#, "to_int"),
+            (r#"void f() { float value = (float) "1"; }"#, "to_float"),
+            (r#"void f() { string value = (string) 1; }"#, "to_string"),
+        ] {
+            let error = crate::compiler::Compiler::default()
+                .compile_string("/cast-advice.c", code)
+                .await
+                .expect_err("the cast cannot convert the value");
+            let diagnostic = error.diagnostic_string();
+            assert!(diagnostic.contains("can never succeed"), "{diagnostic}");
+            assert!(diagnostic.contains(conversion), "{diagnostic}");
+        }
+    }
+
+    #[tokio::test]
+    async fn foreach_inference_does_not_invent_element_types() {
+        use crate::{
+            compiler::codegen::{
+                semantic_check_walker::SemanticCheckWalker, tree_walker::ContextHolder,
+            },
+            test_support::CompileThrough,
+        };
+
+        for (code, expected) in [
+            (
+                r#"void f(int flag) { int *numbers = ({1}); string *words = ({"a"}); foreach (int value: (flag ? numbers : words)) {} }"#,
+                Vec::<String>::new(),
+            ),
+            (
+                "void f() { foreach (string value: 1) {} }",
+                vec!["`foreach` must iterate over an array or mapping, found int".to_owned()],
+            ),
+        ] {
+            let context = SemanticCheckWalker::compile_through(code)
+                .await
+                .unwrap()
+                .into_context();
+            let errors: Vec<_> = context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|error| !error.is_warning())
+                .map(ToString::to_string)
+                .collect();
+            assert_eq!(errors, expected, "{code}");
+        }
+    }
+
+    #[test]
+    fn array_inference_distinguishes_nullable_elements_and_mixed_values() {
+        use lpc_rs_utils::config::ConfigBuilder;
+        use std::sync::Arc;
+
+        for mode in [NullMode::Zero, NullMode::Distinct] {
+            let context = CompilationContext {
+                config: Arc::new(ConfigBuilder::default().null_mode(mode).build().unwrap()),
+                ..CompilationContext::default()
+            };
+            let nil = ExpressionNode::Nil(crate::compiler::ast::nil_node::NilNode { span: None });
+            for (items, expected) in [
+                (
+                    vec![ExpressionNode::from("a"), ExpressionNode::from(1)],
+                    LpcType::Mixed(true),
+                ),
+                (
+                    vec![ExpressionNode::from(1), ExpressionNode::from("a")],
+                    LpcType::Mixed(true),
+                ),
+                (
+                    vec![nil.clone(), ExpressionNode::from("a")],
+                    LpcType::String(true),
+                ),
+                (
+                    vec![ExpressionNode::from("a"), nil.clone()],
+                    LpcType::String(true),
+                ),
+                (vec![nil.clone()], LpcType::Mixed(true)),
+                (
+                    vec![nil, ExpressionNode::from(1)],
+                    if mode == NullMode::Zero {
+                        LpcType::Int(true)
+                    } else {
+                        LpcType::Mixed(true)
+                    },
+                ),
+                (
+                    vec![ExpressionNode::from(0), ExpressionNode::from("a")],
+                    if mode == NullMode::Zero {
+                        LpcType::String(true)
+                    } else {
+                        LpcType::Mixed(true)
+                    },
+                ),
+            ] {
+                let expression = ExpressionNode::from(items);
+                assert_eq!(
+                    node_type(&expression, &context).unwrap(),
+                    expected,
+                    "{mode:?}: {expression}"
+                );
             }
         }
     }

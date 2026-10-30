@@ -1402,4 +1402,58 @@ mod tests {
             vec![LpcRef::from(0)]
         );
     }
+
+    #[tokio::test]
+    async fn a_dynamic_handler_bound_to_a_destructed_receiver_is_skipped() {
+        let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
+        vm.create_process_from_code("/third.c", "int do_look(string arg) { return 1; }")
+            .await
+            .unwrap();
+        let player = vm
+            .initialize_process_from_code(
+                "/player.c",
+                r#"
+            string arg;
+            int result;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_action("do_look", "look");
+                add_action(papplyv(&->do_look(), ({ find_object("/third") })), "look");
+                destruct(find_object("/third"));
+                result = command("look here");
+            }
+            int do_look(string text) { arg = text; return 1; }
+            "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&player, 0u16),
+            LpcRef::from("here")
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&player, 1u16),
+            LpcRef::from(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn command_from_a_live_body_without_enabled_commands_runs_no_hooks() {
+        let code = r#"
+            int hooks;
+            int result = 99;
+            string heard = "";
+            void create() {
+                set_this_player(this_object());
+                result = command("look");
+            }
+            string process_input(string line) { hooks++; return line; }
+            void catch_tell(string message) { heard = message; }
+        "#;
+        assert_eq!(globals(code, 3).await, vec![0.into(), 0.into(), s("")]);
+    }
 }

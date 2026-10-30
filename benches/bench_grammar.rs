@@ -1,5 +1,4 @@
-//! Grammar-engine cost per rule: building a typical rule and parsing one
-//! command line against it, hit and miss.
+//! Grammar construction, command parsing, and visible-object traversal costs.
 
 use std::hint::black_box;
 use std::sync::Arc;
@@ -76,6 +75,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("grammar/build/give_rule", |b| b.iter(give_rule));
 
     let g = give_rule();
+    let captured = parse(&g, "give the red sword to bob", Limits::default())
+        .next()
+        .unwrap();
+    c.bench_function("grammar/capture_spans/give_rule", |b| {
+        b.iter(|| black_box(&captured).capture_spans())
+    });
     c.bench_function("grammar/parse_hit/give_rule", |b| {
         b.iter(|| {
             parse(
@@ -147,9 +152,144 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
+fn native_patterns(c: &mut Criterion) {
+    use lpc_rs::command::frontend::native;
+
+    // Reusing these names bounds the global interned string pool.
+    let patterns = (0..1025)
+        .map(|index| format!("'scan_{index}' %w %s %d %o"))
+        .collect::<Vec<_>>();
+    let mut next = patterns.iter().cycle();
+    let mut primed = false;
+    c.bench_function("grammar/build/native_capture_pattern", |b| {
+        if !primed {
+            let first = native::compile(&patterns[0]).unwrap();
+            for pattern in &patterns[1..] {
+                black_box(native::compile(pattern).unwrap());
+            }
+            let rebuilt = native::compile(&patterns[0]).unwrap();
+            assert!(
+                !Arc::ptr_eq(&first, &rebuilt),
+                "the working set must exceed the pattern cache"
+            );
+            primed = true;
+        }
+        b.iter(|| black_box(native::compile(black_box(next.next().unwrap())).unwrap()));
+    });
+
+    let pattern = "'scan_cached' %w %s %d %o";
+    let mut primed = false;
+    c.bench_function("grammar/cache_hit/native_capture_pattern", |b| {
+        if !primed {
+            let first = native::compile(pattern).unwrap();
+            let cached = native::compile(pattern).unwrap();
+            assert!(Arc::ptr_eq(&first, &cached));
+            primed = true;
+        }
+        b.iter(|| black_box(native::compile(black_box(pattern)).unwrap()));
+    });
+}
+
+fn scope_walk(c: &mut Criterion) {
+    use lpc_rs::interpreter::{
+        lpc_ref::LpcRef,
+        task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+        vm::Vm,
+    };
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    const NAME: &str = "grammar/scope_walk/containers_64";
+    if std::env::args().any(|arg| arg == "--list") {
+        c.bench_function(NAME, |_| {});
+        return;
+    }
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let (vm, actor) = rt.block_on(async {
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "string *ids = ({}); string *parse_command_id_list() { return ids; }",
+        )
+        .await
+        .unwrap();
+        let actor = vm
+            .initialize_process_from_code(
+                "/actor.c",
+                r#"
+                void create() { enable_commands(); parse_init(); parse_add_rule("take", "OBJ"); }
+                mixed can_take_obj(object ob, string word) { return 1; }
+                void do_take_obj(object ob, string word) {}
+                int run() { set_this_player(this_object()); return parse_sentence("take gem"); }
+            "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        for index in 0..64 {
+            let noun = if index == 63 { "gem" } else { "stone" };
+            vm.initialize_process_from_code(
+                format!("/box_{index}.c"),
+                r#"
+                string *ids = ({ "box" });
+                void create() { move_object(find_object("/actor")); }
+                string *parse_command_id_list() { return ids; }
+                int inventory_visible() { return 1; }
+                int inventory_accessible() { return 1; }
+            "#,
+            )
+            .await
+            .unwrap();
+            vm.initialize_process_from_code(
+                format!("/gem_{index}.c"),
+                format!(
+                    r#"
+                    string *ids = ({{ "{noun}" }});
+                    void create() {{ move_object(find_object("/box_{index}")); }}
+                    string *parse_command_id_list() {{ return ids; }}
+                    mixed direct_take_obj(object ob, string word) {{ return 1; }}
+                "#
+                ),
+            )
+            .await
+            .unwrap();
+        }
+        (vm, actor)
+    });
+    let template = TaskTemplate::from(vm.global_state.clone());
+    let before = rt
+        .block_on(apply_function_by_name(
+            "run",
+            &[],
+            actor.clone(),
+            template.clone(),
+            None,
+        ))
+        .unwrap()
+        .unwrap();
+    assert_eq!(before, LpcRef::from(1));
+    c.bench_function(NAME, |b| {
+        b.to_async(&rt).iter(|| async {
+            black_box(
+                apply_function_by_name("run", &[], actor.clone(), template.clone(), None)
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            )
+        });
+    });
+}
+
 criterion_group! {
     name = benches;
     config = profiler::profiled();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, native_patterns, scope_walk
 }
 criterion_main!(benches);

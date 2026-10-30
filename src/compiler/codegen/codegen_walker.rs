@@ -201,6 +201,21 @@ fn expect_value(arg: Arg, span: Option<Span>) -> Result<RegisterVariant> {
     }
 }
 
+#[cold]
+#[inline(never)]
+fn register_limit_error(span: Option<Span>) -> LpcError {
+    lpc_error!(
+        span,
+        "register allocation limit of {} exceeded",
+        RegisterSize::MAX
+    )
+}
+
+#[inline]
+fn allocate_register(counter: &mut RegisterCounter, span: Option<Span>) -> Result<Register> {
+    counter.next().ok_or_else(|| register_limit_error(span))
+}
+
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug)]
 pub struct CodegenWalker {
@@ -329,7 +344,7 @@ impl CodegenWalker {
             })
         {
             let args = if takes_args {
-                let args = self.register_counter.next().unwrap().as_local();
+                let args = allocate_register(&mut self.register_counter, None)?.as_local();
                 populate_argv_index = Some(self.current_address());
                 push_instruction!(self, Instruction::PopulateArgv(args, 0, 0), None);
                 vec![Arg::Spread(args)]
@@ -516,7 +531,7 @@ impl CodegenWalker {
 
     async fn member_target(&mut self, node: &mut MemberNode) -> Result<RegisterVariant> {
         node.receiver.visit(self).await?;
-        let target = self.register_counter.next().unwrap().as_local();
+        let target = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(
             self,
             Instruction::Copy(self.current_result, target),
@@ -647,9 +662,9 @@ impl CodegenWalker {
         }
 
         let current_register = if sym.is_global() {
-            self.global_counter.next().unwrap().as_global()
+            allocate_register(&mut self.global_counter, sym.span)?.as_global()
         } else {
-            self.register_counter.next().unwrap().as_local()
+            allocate_register(&mut self.register_counter, sym.span)?.as_local()
         };
 
         trace!("Assigning location {} to {}", current_register, sym);
@@ -682,7 +697,7 @@ impl CodegenWalker {
     ) -> Result<RegisterVariant> {
         let (index, from_end) = self.emit_index_bound(expr).await?;
         if from_end {
-            let result = self.register_counter.next().unwrap().as_local();
+            let result = allocate_register(&mut self.register_counter, expr.span())?.as_local();
             push_instruction!(
                 self,
                 Instruction::IndexFromEnd(container, index, result),
@@ -712,23 +727,23 @@ impl CodegenWalker {
             return Err(lpc_bug!(span, "compound target must be indexed"));
         };
         container.visit(self).await?;
-        let saved_container = self.register_counter.next().unwrap().as_local();
+        let saved_container = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(
             self,
             Instruction::Copy(self.current_result, saved_container),
             span
         );
         let index = self.emit_index(saved_container, index).await?;
-        let saved_index = self.register_counter.next().unwrap().as_local();
+        let saved_index = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(self, Instruction::Copy(index, saved_index), span);
-        let old = self.register_counter.next().unwrap().as_local();
+        let old = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(
             self,
             Instruction::Load(saved_container, saved_index, old),
             span
         );
         self.guard_class(old, target, span)?;
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, span)?.as_local();
         let short = matches!(op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
         let end = self.new_label("indexed-assignment-end");
         if short {
@@ -764,17 +779,35 @@ impl CodegenWalker {
         Ok(())
     }
 
-    fn bound_may_mutate(expr: &ExpressionNode) -> bool {
+    fn expression_may_mutate(expr: &ExpressionNode) -> bool {
         match expr {
-            ExpressionNode::Int(_) | ExpressionNode::Var(_) => false,
+            ExpressionNode::Int(_)
+            | ExpressionNode::Float(_)
+            | ExpressionNode::String(_)
+            | ExpressionNode::Nil(_)
+            | ExpressionNode::Var(_)
+            | ExpressionNode::Ref(_) => false,
             ExpressionNode::UnaryOp(node) => {
                 matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
-                    || Self::bound_may_mutate(&node.expr)
+                    || Self::expression_may_mutate(&node.expr)
             }
             ExpressionNode::BinaryOp(node) => {
-                Self::bound_may_mutate(&node.l) || Self::bound_may_mutate(&node.r)
+                Self::expression_may_mutate(&node.l) || Self::expression_may_mutate(&node.r)
             }
-            ExpressionNode::Cast(node) => Self::bound_may_mutate(&node.expr),
+            ExpressionNode::Cast(node) => Self::expression_may_mutate(&node.expr),
+            ExpressionNode::Spread(node) => Self::expression_may_mutate(&node.expr),
+            ExpressionNode::Array(node) => node.value.iter().any(Self::expression_may_mutate),
+            ExpressionNode::FunctionPtr(node) => {
+                node.arguments
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .any(Self::expression_may_mutate)
+                    || matches!(
+                        &node.receiver,
+                        Some(FunctionPtrReceiver::Static(receiver)) if Self::expression_may_mutate(receiver)
+                    )
+            }
             _ => true,
         }
     }
@@ -785,20 +818,28 @@ impl CodegenWalker {
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
     async fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
-        let start_may_mutate = node.l.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
-        let end_may_mutate = node.r.as_ref().as_ref().is_some_and(Self::bound_may_mutate);
+        let start_may_mutate = node
+            .l
+            .as_ref()
+            .as_ref()
+            .is_some_and(Self::expression_may_mutate);
+        let end_may_mutate = node
+            .r
+            .as_ref()
+            .as_ref()
+            .is_some_and(Self::expression_may_mutate);
         let reference = if (start_may_mutate || end_may_mutate)
             && !matches!(reference, RegisterVariant::Constant(_))
         {
             self.current_result = reference;
-            self.save_result(node.span)
+            self.save_result(node.span)?
         } else {
             reference
         };
         let (first_index, start_from_end) = if let Some(expr) = &mut *node.l {
             let (value, from_end) = self.emit_index_bound(expr).await?;
             let value = if end_may_mutate && !matches!(value, RegisterVariant::Constant(_)) {
-                self.save_result(expr.span())
+                self.save_result(expr.span())?
             } else {
                 value
             };
@@ -806,7 +847,10 @@ impl CodegenWalker {
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
             // 0.
-            (self.register_counter.next().unwrap().as_local(), false)
+            (
+                allocate_register(&mut self.register_counter, node.span)?.as_local(),
+                false,
+            )
         };
 
         let (second_index, end_from_end) = if let Some(expr) = &mut *node.r {
@@ -816,7 +860,7 @@ impl CodegenWalker {
             (self.constant(LpcConstant::Int(-1), node.span)?, false)
         };
 
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = result;
         let direction = match (start_from_end, end_from_end) {
             (true, true) => Some(ReverseRange::Both),
@@ -835,10 +879,22 @@ impl CodegenWalker {
         Ok(())
     }
 
-    fn save_result(&mut self, span: Option<Span>) -> RegisterVariant {
-        let saved = self.register_counter.next().unwrap().as_local();
+    fn save_result(&mut self, span: Option<Span>) -> Result<RegisterVariant> {
+        let saved = allocate_register(&mut self.register_counter, span)?.as_local();
         push_instruction!(self, Instruction::Copy(self.current_result, saved), span);
-        saved
+        Ok(saved)
+    }
+
+    fn capture_result(
+        &mut self,
+        mutates_later: bool,
+        span: Option<Span>,
+    ) -> Result<RegisterVariant> {
+        if mutates_later && !matches!(self.current_result, RegisterVariant::Constant(_)) {
+            self.save_result(span)
+        } else {
+            Ok(self.current_result)
+        }
     }
 
     async fn capture_assignment_owner(
@@ -846,7 +902,7 @@ impl CodegenWalker {
         owner: &mut ExpressionNode,
         span: Option<Span>,
     ) -> Result<(RegisterVariant, Instruction)> {
-        let value = self.register_counter.next().unwrap().as_local();
+        let value = allocate_register(&mut self.register_counter, span)?.as_local();
         let writeback = match owner {
             ExpressionNode::Var(_) => {
                 owner.visit(self).await?;
@@ -870,9 +926,9 @@ impl CodegenWalker {
                 ..
             }) => {
                 l.visit(self).await?;
-                let container = self.save_result(l.span());
+                let container = self.save_result(l.span())?;
                 self.current_result = self.emit_index(container, r).await?;
-                let key = self.save_result(r.span());
+                let key = self.save_result(r.span())?;
                 push_instruction!(self, Instruction::Load(container, key, value), span);
                 Instruction::Store(value, container, key)
             }
@@ -897,7 +953,7 @@ impl CodegenWalker {
             owner.visit(self).await?;
             (replacement, self.current_result, None)
         } else {
-            let replacement = self.save_result(rhs.span());
+            let replacement = self.save_result(rhs.span())?;
             let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
             (replacement, value, Some(writeback))
         };
@@ -925,12 +981,12 @@ impl CodegenWalker {
         span: Option<Span>,
     ) -> Result<()> {
         rhs.visit(self).await?;
-        let replacement = self.save_result(rhs.span());
+        let replacement = self.save_result(rhs.span())?;
         let (value, writeback) = self.capture_assignment_owner(owner, span).await?;
         let (start, start_from_end) = if let Some(expr) = &mut *range.l {
             let (value, reverse) = self.emit_index_bound(expr).await?;
             self.current_result = value;
-            (self.save_result(expr.span()), reverse)
+            (self.save_result(expr.span())?, reverse)
         } else {
             (self.constant(LpcConstant::Int(0), span)?, false)
         };
@@ -1038,7 +1094,7 @@ impl CodegenWalker {
         body: &mut T,
         span: Option<Span>,
     ) -> Result<()> {
-        let result_register = self.register_counter.next().unwrap().as_local();
+        let result_register = allocate_register(&mut self.register_counter, span)?.as_local();
         let start_address = self.current_address();
         push_instruction!(
             self,
@@ -1138,7 +1194,7 @@ impl CodegenWalker {
 
             if let Some((kind, l, r)) = as_comparison(node) {
                 l.visit(self).await?;
-                let left = self.current_result;
+                let left = self.capture_result(Self::expression_may_mutate(r), l.span())?;
                 r.visit(self).await?;
                 let right = self.current_result;
                 return self.emit_compare_jump(kind, left, right, when, label, span);
@@ -1479,13 +1535,19 @@ impl CodegenWalker {
     async fn visit_partial_arguments(
         &mut self,
         arguments: &mut Option<Vec<Option<ExpressionNode>>>,
+        mutates_after: bool,
     ) -> Result<Vec<Option<RegisterVariant>>> {
         let mut applied = vec![];
         if let Some(args) = arguments {
-            for argument in args {
+            let last_mutation = args
+                .iter()
+                .rposition(|argument| argument.as_ref().is_some_and(Self::expression_may_mutate));
+            for (index, argument) in args.iter_mut().enumerate() {
                 if let Some(n) = argument {
                     n.visit(self).await?;
-                    applied.push(Some(self.current_result));
+                    let mutates_later =
+                        mutates_after || last_mutation.is_some_and(|last| index < last);
+                    applied.push(Some(self.capture_result(mutates_later, n.span())?));
                 } else {
                     applied.push(None);
                 }
@@ -1518,12 +1580,12 @@ impl CodegenWalker {
         let container_result = self.current_result;
         let index_result = self.emit_index(container_result, index).await?;
 
-        let element = self.register_counter.next().unwrap().as_local();
+        let element = allocate_register(&mut self.register_counter, span)?.as_local();
         let load = Instruction::Load(container_result, index_result, element);
         push_instruction!(self, load, span);
 
         let result = if is_post {
-            let before = self.register_counter.next().unwrap().as_local();
+            let before = allocate_register(&mut self.register_counter, span)?.as_local();
             let copy = Instruction::Copy(element, before);
             push_instruction!(self, copy, span);
             before
@@ -1588,7 +1650,8 @@ impl TreeWalker for CodegenWalker {
                 let mut value = self.current_result;
                 if !matches!(value, RegisterVariant::Constant(_)) {
                     // Later expressions may reassign the register that supplied this value.
-                    let saved = self.register_counter.next().unwrap().as_local();
+                    let saved = allocate_register(&mut self.register_counter, expression.span())?
+                        .as_local();
                     push_instruction!(self, Instruction::Copy(value, saved), expression.span());
                     value = saved;
                 }
@@ -1599,7 +1662,7 @@ impl TreeWalker for CodegenWalker {
                 });
             }
             let list = self.arg_list(items, node.span)?;
-            let destination = self.register_counter.next().unwrap().as_local();
+            let destination = allocate_register(&mut self.register_counter, node.span)?.as_local();
             push_instruction!(
                 self,
                 Instruction::AConstSpread(list, destination),
@@ -1610,12 +1673,14 @@ impl TreeWalker for CodegenWalker {
         }
 
         let mut items = Vec::with_capacity(node.value.len());
-        for member in &mut node.value {
-            let _ = member.visit(self).await;
-            items.push(self.current_result);
+        let last_mutation = node.value.iter().rposition(Self::expression_may_mutate);
+        for (index, member) in node.value.iter_mut().enumerate() {
+            member.visit(self).await?;
+            let mutates_later = last_mutation.is_some_and(|last| index < last);
+            items.push(self.capture_result(mutates_later, member.span())?);
         }
 
-        let register = self.register_counter.next().unwrap().as_local();
+        let register = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = register;
         for item in items.iter() {
             let instruction = Instruction::PushArrayItem(*item);
@@ -1629,7 +1694,7 @@ impl TreeWalker for CodegenWalker {
     async fn visit_class_init(&mut self, node: &mut ClassInitNode) -> Result<()> {
         let target = node.type_.resolved()?;
         let index = self.type_index(target, node.span)?;
-        let instance = self.register_counter.next().unwrap().as_local();
+        let instance = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(self, Instruction::ClassConst(index, instance), node.span);
         for (name, value) in &mut node.initializers {
             value.visit(self).await?;
@@ -1645,7 +1710,7 @@ impl TreeWalker for CodegenWalker {
 
     async fn visit_member(&mut self, node: &mut MemberNode) -> Result<()> {
         node.receiver.visit(self).await?;
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(
             self,
             Instruction::MemberLoad(self.current_result, node.name, result),
@@ -1663,13 +1728,13 @@ impl TreeWalker for CodegenWalker {
         };
         let receiver = self.member_target(member).await?;
         let name = member.name;
-        let old = self.register_counter.next().unwrap().as_local();
+        let old = allocate_register(&mut self.register_counter, node.span)?.as_local();
         push_instruction!(
             self,
             Instruction::MemberLoad(receiver, name, old),
             node.span
         );
-        let result = self.register_counter.next().unwrap().as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         let short = matches!(node.op, BinaryOperation::AndAnd | BinaryOperation::OrOr);
         let end = self.new_label("member-assignment-end");
         if short {
@@ -1765,7 +1830,8 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
         node.rhs.visit(self).await?;
-        let rhs_result = self.current_result;
+        let rhs_result =
+            self.capture_result(Self::expression_may_mutate(&node.lhs), node.rhs.span())?;
         let target = node_type(&node.lhs, &self.context)?;
         self.guard_class(rhs_result, target, node.span)?;
         let lhs = &mut *node.lhs;
@@ -1820,7 +1886,7 @@ impl TreeWalker for CodegenWalker {
             // A loop re-enters with the last iteration's value still in the
             // result register.
             let end_label = self.new_label("andand-end");
-            let reg_result = self.register_counter.next().unwrap().as_local();
+            let reg_result = allocate_register(&mut self.register_counter, node.span)?.as_local();
             let zero = self.constant(LpcConstant::Int(0), node.span)?;
             push_instruction!(self, Instruction::Copy(zero, reg_result), node.span);
 
@@ -1854,7 +1920,8 @@ impl TreeWalker for CodegenWalker {
                 // Handle short-circuit behavior
                 let end_label = self.new_label("oror-end");
 
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
                 let instruction = Instruction::Copy(reg_left, reg_result);
                 push_instruction!(self, instruction, node.span);
 
@@ -1875,6 +1942,8 @@ impl TreeWalker for CodegenWalker {
             BinaryOperation::Compose => {
                 // This literally just sets up a call to the compose() efun, and
                 // puts the result of it into a register.
+                let reg_left =
+                    self.capture_result(Self::expression_may_mutate(&node.r), node.l.span())?;
                 node.r.visit(self).await?;
                 let reg_right = self.current_result;
                 let list =
@@ -1888,7 +1957,8 @@ impl TreeWalker for CodegenWalker {
                     node.span
                 );
 
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
                 let instruction =
                     Instruction::Copy(RegisterVariant::Local(Register(0)), reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -1900,6 +1970,7 @@ impl TreeWalker for CodegenWalker {
             _ => { /* fallthrough */ }
         }
 
+        let reg_left = self.capture_result(Self::expression_may_mutate(&node.r), node.l.span())?;
         let reg_right = if node.op == BinaryOperation::Index {
             self.emit_index(reg_left, &mut node.r).await?
         } else {
@@ -1907,7 +1978,7 @@ impl TreeWalker for CodegenWalker {
             self.current_result
         };
 
-        let reg_result = self.register_counter.next().unwrap().as_local();
+        let reg_result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = reg_result;
 
         let instruction = self.choose_op_instruction(node.op, reg_left, reg_right, reg_result);
@@ -1966,6 +2037,8 @@ impl TreeWalker for CodegenWalker {
 
         let argument_len = node.arguments.len();
 
+        let last_mutation = node.arguments.iter().rposition(Self::expression_may_mutate);
+
         // Resolved before the arguments are visited: an implicit efun lvalue
         // is pushed as a cell, never evaluated.
         // A function-typed variable answers a bare name only.
@@ -1988,9 +2061,16 @@ impl TreeWalker for CodegenWalker {
         let receiver_result = match receiver {
             Some(rcvr) => {
                 rcvr.visit(self).await?;
-                Some(self.current_result)
+                Some(self.capture_result(last_mutation.is_some(), rcvr.span())?)
             }
             None => None,
+        };
+
+        let variable_result = if !has_receiver && calls_variable {
+            self.current_result = self.location_of(name)?;
+            Some(self.capture_result(last_mutation.is_some(), node.span)?)
+        } else {
+            None
         };
 
         let mut arg_results: Vec<Arg> = Vec::with_capacity(argument_len);
@@ -1999,9 +2079,11 @@ impl TreeWalker for CodegenWalker {
         let mut write_backs: Vec<Instruction> = Vec::new();
         let lvalue_temps = node.lvalue_temps.clone();
         for (index, argument) in node.arguments.iter_mut().enumerate() {
+            let mutates_later = last_mutation.is_some_and(|last| index < last);
             if let ExpressionNode::Spread(spread) = argument {
                 spread.expr.visit(self).await?;
-                arg_results.push(Arg::Spread(self.current_result));
+                let result = self.capture_result(mutates_later, spread.span)?;
+                arg_results.push(Arg::Spread(result));
                 spread_seen = true;
                 continue;
             }
@@ -2072,13 +2154,14 @@ impl TreeWalker for CodegenWalker {
                 }
                 None => {
                     argument.visit(self).await?;
-                    arg_results.push(Arg::Value(self.current_result));
+                    let result = self.capture_result(mutates_later, argument.span())?;
+                    arg_results.push(Arg::Value(result));
                 }
             }
         }
 
         if !has_receiver && name.as_str() == SIZEOF {
-            let result = self.register_counter.next().unwrap().as_local();
+            let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
             // `sizeof`'s arity is checked by the semantic walker, fatal before codegen runs.
             let arg = expect_value(*arg_results.first().unwrap(), node.span)?;
             let instruction = Instruction::Sizeof(arg, result);
@@ -2114,8 +2197,8 @@ impl TreeWalker for CodegenWalker {
 
                 Instruction::CallOther(receiver, name_index, list)
             } else {
-                if calls_variable {
-                    Instruction::CallFp(self.location_of(name)?, list)
+                if let Some(variable_result) = variable_result {
+                    Instruction::CallFp(variable_result, list)
                 } else {
                     let Some(func) = self.context.lookup_function_complete(name, namespace) else {
                         return Err(lpc_bug!(
@@ -2153,8 +2236,9 @@ impl TreeWalker for CodegenWalker {
 
         push_instruction!(self, instruction, node.span);
 
-        let push_copy = |walker: &mut Self| {
-            let next_register = walker.register_counter.next().unwrap().as_local();
+        let push_copy = |walker: &mut Self| -> Result<()> {
+            let next_register =
+                allocate_register(&mut walker.register_counter, node_span)?.as_local();
 
             push_instruction!(
                 walker,
@@ -2163,16 +2247,17 @@ impl TreeWalker for CodegenWalker {
             );
 
             walker.current_result = next_register;
+            Ok(())
         };
 
         // Take care of the result after the call returns.
         if has_receiver || calls_variable {
-            push_copy(self);
+            push_copy(self)?;
         } else if let Some(func) = self.context.lookup_function_complete(name, namespace) {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
             } else {
-                push_copy(self);
+                push_copy(self)?;
             }
         } else {
             return Err(lpc_bug!(
@@ -2197,25 +2282,30 @@ impl TreeWalker for CodegenWalker {
         };
 
         chain_node.visit(self).await?;
-        let fp_loc = self.current_result;
+
+        let last_mutation = node.arguments.iter().rposition(Self::expression_may_mutate);
+        let fp_loc = self.capture_result(last_mutation.is_some(), node.span)?;
 
         let argument_len = node.arguments.len();
         let mut arg_results = Vec::with_capacity(argument_len);
 
-        for argument in &mut node.arguments {
+        for (index, argument) in node.arguments.iter_mut().enumerate() {
+            let mutates_later = last_mutation.is_some_and(|last| index < last);
             if let ExpressionNode::Spread(spread) = argument {
                 spread.expr.visit(self).await?;
-                arg_results.push(Arg::Spread(self.current_result));
+                let result = self.capture_result(mutates_later, spread.span)?;
+                arg_results.push(Arg::Spread(result));
             } else {
                 argument.visit(self).await?;
-                arg_results.push(Arg::Value(self.current_result));
+                let result = self.capture_result(mutates_later, argument.span())?;
+                arg_results.push(Arg::Value(result));
             }
         }
 
         let list = self.arg_list(arg_results, node.span)?;
         push_instruction!(self, Instruction::CallFp(fp_loc, list), node.span);
 
-        let next_register = self.register_counter.next().unwrap().as_local();
+        let next_register = allocate_register(&mut self.register_counter, node.span)?.as_local();
 
         push_instruction!(
             self,
@@ -2234,11 +2324,7 @@ impl TreeWalker for CodegenWalker {
         node: &mut crate::compiler::ast::capture_node::CaptureNode,
     ) -> Result<()> {
         node.expr.visit(self).await?;
-        let result = self
-            .register_counter
-            .next()
-            .ok_or_else(|| lpc_bug!(node.span, "capture has no result register"))?
-            .as_local();
+        let result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         // A local initialized from this value must not alias the hidden capture cell.
         push_instruction!(
             self,
@@ -2355,7 +2441,7 @@ impl TreeWalker for CodegenWalker {
 
         // At this point, the closure has been generated and stored.
         // We just need to store a reference to it in the current result.
-        let location = self.register_counter.next().unwrap().as_local();
+        let location = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = location;
 
         // closures are just pointers to functions
@@ -2477,7 +2563,7 @@ impl TreeWalker for CodegenWalker {
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         node.collection.visit(self).await?;
         // Rebinding the source variable must not redirect later element loads.
-        let collection_location = self.save_result(node.collection.span());
+        let collection_location = self.save_result(node.collection.span())?;
 
         let index_location = self.assign_sym_location(FOREACH_INDEX)?;
         // Only the first run of the foreach gets the frame's NULL fill for its index.
@@ -2662,7 +2748,13 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
-        let applied_arguments = self.visit_partial_arguments(&mut node.arguments).await?;
+        let receiver_mutates = matches!(
+            &node.receiver,
+            Some(FunctionPtrReceiver::Static(receiver)) if Self::expression_may_mutate(receiver)
+        );
+        let applied_arguments = self
+            .visit_partial_arguments(&mut node.arguments, receiver_mutates)
+            .await?;
 
         let receiver = if let Some(rcvr) = &mut node.receiver {
             // remote receiver, i.e. `call_other`
@@ -2698,7 +2790,7 @@ impl TreeWalker for CodegenWalker {
 
         self.stage_partial_arguments(&applied_arguments, node.span);
 
-        let location = self.register_counter.next().unwrap().as_local();
+        let location = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = location;
 
         let instruction = Instruction::FunctionPtrConst {
@@ -2782,13 +2874,18 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
         let mut items = Vec::with_capacity(node.value.len() * 2);
+        let last_mutation = node.value.iter().rposition(|(key, value)| {
+            Self::expression_may_mutate(key) || Self::expression_may_mutate(value)
+        });
 
-        for (key, value) in &mut node.value {
+        for (index, (key, value)) in node.value.iter_mut().enumerate() {
+            let later_pairs_mutate = last_mutation.is_some_and(|last| index < last);
+            let value_mutates = Self::expression_may_mutate(value);
             key.visit(self).await?;
-            items.push(self.current_result);
+            items.push(self.capture_result(later_pairs_mutate || value_mutates, key.span())?);
 
             value.visit(self).await?;
-            items.push(self.current_result);
+            items.push(self.capture_result(later_pairs_mutate, value.span())?);
         }
 
         for item in items {
@@ -2796,7 +2893,7 @@ impl TreeWalker for CodegenWalker {
             push_instruction!(self, Instruction::PushArrayItem(item), node.span);
         }
 
-        let register = self.register_counter.next().unwrap().as_local();
+        let register = allocate_register(&mut self.register_counter, node.span)?.as_local();
         self.current_result = register;
         push_instruction!(self, Instruction::MapConst(register), node.span);
 
@@ -2805,7 +2902,9 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_operator(&mut self, node: &mut OperatorNode) -> Result<()> {
-        let applied_arguments = self.visit_partial_arguments(&mut node.arguments).await?;
+        let applied_arguments = self
+            .visit_partial_arguments(&mut node.arguments, false)
+            .await?;
         self.stage_partial_arguments(&applied_arguments, node.span);
 
         node.closure.visit(self).await
@@ -3022,7 +3121,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
-        let result_reg = self.register_counter.next().unwrap().as_local();
+        let result_reg = allocate_register(&mut self.register_counter, node.span)?.as_local();
         let else_label = self.new_label("ternary-else");
         let end_label = self.new_label("ternary-end");
 
@@ -3062,7 +3161,7 @@ impl TreeWalker for CodegenWalker {
         node.expr.visit(self).await?;
         let location = self.current_result;
 
-        let reg_result = self.register_counter.next().unwrap().as_local();
+        let reg_result = allocate_register(&mut self.register_counter, node.span)?.as_local();
         let target = node.type_.resolved()?;
         let index = self.type_index(target, node.span)?;
         let instruction = Instruction::Cast(location, index, reg_result);
@@ -3078,14 +3177,14 @@ impl TreeWalker for CodegenWalker {
             && let ExpressionNode::Member(member) = &mut *node.expr
         {
             let receiver = self.member_target(member).await?;
-            let value = self.register_counter.next().unwrap().as_local();
+            let value = allocate_register(&mut self.register_counter, node.span)?.as_local();
             push_instruction!(
                 self,
                 Instruction::MemberLoad(receiver, member.name, value),
                 node.span
             );
             let result = if node.is_post {
-                let before = self.register_counter.next().unwrap().as_local();
+                let before = allocate_register(&mut self.register_counter, node.span)?.as_local();
                 push_instruction!(self, Instruction::Copy(value, before), node.span);
                 before
             } else {
@@ -3131,7 +3230,8 @@ impl TreeWalker for CodegenWalker {
                 ));
             }
             UnaryOperation::Negate => {
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
 
                 let instruction = Instruction::Negate(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -3147,7 +3247,7 @@ impl TreeWalker for CodegenWalker {
 
                 if node.is_post {
                     // TODO: only copy if pre-operation value is needed elsewhere
-                    let temp = self.register_counter.next().unwrap().as_local();
+                    let temp = allocate_register(&mut self.register_counter, node.span)?.as_local();
                     let copy = Instruction::Copy(location, temp);
                     push_instruction!(self, copy, node.span);
                     push_instruction!(self, instruction, node.span);
@@ -3158,7 +3258,8 @@ impl TreeWalker for CodegenWalker {
                 }
             }
             UnaryOperation::Bang => {
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
 
                 let instruction = Instruction::Not(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -3166,7 +3267,8 @@ impl TreeWalker for CodegenWalker {
                 reg_result
             }
             UnaryOperation::BitwiseNot => {
-                let reg_result = self.register_counter.next().unwrap().as_local();
+                let reg_result =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
 
                 let instruction = Instruction::BitwiseNot(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -3280,7 +3382,8 @@ impl TreeWalker for CodegenWalker {
                 );
                 next_register
             } else if global {
-                let next_register = self.global_counter.next().unwrap().as_global();
+                let next_register =
+                    allocate_register(&mut self.global_counter, node.span)?.as_global();
 
                 trace!("Copying global to {:?}", next_register);
                 push_instruction!(
@@ -3296,12 +3399,21 @@ impl TreeWalker for CodegenWalker {
                     "captured `{}` was never given a cell",
                     node.name
                 ));
-            } else if matches!(expression, ExpressionNode::Var(_))
-                || matches!(self.current_result, RegisterVariant::Constant(_))
+            } else if matches!(
+                expression,
+                ExpressionNode::Var(_)
+                    | ExpressionNode::Assignment(_)
+                    | ExpressionNode::CommaExpression(_)
+                    | ExpressionNode::UnaryOp(UnaryOpNode {
+                        op: UnaryOperation::Inc | UnaryOperation::Dec,
+                        is_post: false,
+                        ..
+                    })
+            ) || !matches!(self.current_result, RegisterVariant::Local(Register(1..)))
             {
-                // Copy to a new register so the new var isn't literally
-                // sharing a register with the old one, or living in the pool.
-                let next_register = self.register_counter.next().unwrap().as_local();
+                // Expression results may still name another variable's storage.
+                let next_register =
+                    allocate_register(&mut self.register_counter, node.span)?.as_local();
                 trace!("Copying var to {:?}", next_register);
                 push_instruction!(
                     self,
@@ -3310,7 +3422,6 @@ impl TreeWalker for CodegenWalker {
                 );
                 next_register
             } else {
-                trace!("Not copying the result");
                 self.current_result
             }
         } else {
@@ -3471,6 +3582,93 @@ mod tests {
         );
 
         walker
+    }
+
+    #[test]
+    fn allocation_exhaustion_reports_the_source_span_without_advancing() {
+        let span = Some(Span::new(0, 3..8));
+        let mut counter = RegisterCounter::new(1);
+        counter.set(RegisterSize::MAX - 1);
+
+        assert_eq!(
+            allocate_register(&mut counter, span).unwrap(),
+            Register(RegisterSize::MAX - 1)
+        );
+        let error = allocate_register(&mut counter, span).unwrap_err();
+
+        assert_eq!(error.span(), span);
+        assert!(!error.is_bug());
+        assert_eq!(
+            error.message(),
+            "register allocation limit of 65535 exceeded"
+        );
+        assert_eq!(counter.number_emitted(), RegisterSize::MAX - 1);
+    }
+
+    #[test]
+    fn exhausted_symbol_allocation_keeps_the_symbol_unassigned() {
+        for global in [false, true] {
+            let mut context = CompilationContext::default();
+            context.scopes.push_new();
+            if !global {
+                context.scopes.push_new();
+            }
+            let scope_id = context.scopes.current().unwrap().id;
+            let mut walker = CodegenWalker::new(context);
+            let span = Some(Span::new(0, 4..9));
+            insert_symbol(
+                &mut walker,
+                Symbol {
+                    scope_id,
+                    span,
+                    ..Symbol::new("value", LpcType::Int(false))
+                },
+            );
+            if global {
+                walker.global_counter.set(RegisterSize::MAX);
+            } else {
+                walker.register_counter.set(RegisterSize::MAX);
+            }
+
+            let error = walker.assign_sym_location("value").unwrap_err();
+
+            assert_eq!(error.span(), span);
+            assert!(!error.is_bug());
+            assert_eq!(walker.context.lookup_var("value").unwrap().location, None);
+        }
+    }
+
+    #[test]
+    fn saving_a_result_propagates_allocation_failure_before_emitting_code() {
+        let mut walker = default_walker();
+        walker.register_counter.set(RegisterSize::MAX);
+        let span = Some(Span::new(0, 4..9));
+        let address = walker.current_address();
+
+        let error = walker.save_result(span).unwrap_err();
+
+        assert_eq!(error.span(), span);
+        assert_eq!(walker.current_address(), address);
+    }
+
+    #[tokio::test]
+    async fn array_members_propagate_the_original_allocation_failure() {
+        let mut walker = default_walker();
+        walker.register_counter.set(RegisterSize::MAX);
+        let child_span = Some(Span::new(0, 3..5));
+        let mut array = ArrayNode {
+            value: vec![ExpressionNode::UnaryOp(UnaryOpNode {
+                expr: Box::new(ExpressionNode::from(1)),
+                op: UnaryOperation::Negate,
+                is_post: false,
+                span: child_span,
+            })],
+            span: Some(Span::new(0, 0..8)),
+        };
+
+        let error = walker.visit_array(&mut array).await.unwrap_err();
+
+        assert_eq!(error.span(), child_span);
     }
 
     async fn walk_prog(prog: &str) -> CodegenWalker {
@@ -7330,16 +7528,26 @@ mod tests {
 
         #[tokio::test]
         async fn an_if_comparison_is_one_branch() {
-            let code = "void f(int a, int b) { if (a < b) { a = 1; } }";
-            assert_eq!(
-                instructions_of_f(code).await,
-                vec![
-                    Instruction::Jncmp(Comparison::Lt, local(1), local(2), Address(2)),
-                    Instruction::Copy(constant(0), local(1)),
-                    Instruction::Copy(constant(1), local(0)),
-                    Instruction::Ret,
-                ]
-            );
+            for (operator, kind) in [
+                ("<", Comparison::Lt),
+                ("<=", Comparison::Lte),
+                (">", Comparison::Gt),
+                (">=", Comparison::Gte),
+                ("==", Comparison::Eq),
+                ("!=", Comparison::Ne),
+            ] {
+                let code = format!("void f(int a, int b) {{ if (a {operator} b) {{ a = 1; }} }}");
+                assert_eq!(
+                    instructions_of_f(&code).await,
+                    vec![
+                        Instruction::Jncmp(kind, local(1), local(2), Address(2)),
+                        Instruction::Copy(constant(0), local(1)),
+                        Instruction::Copy(constant(1), local(0)),
+                        Instruction::Ret,
+                    ],
+                    "{operator}",
+                );
+            }
         }
 
         #[tokio::test]
@@ -8300,5 +8508,470 @@ mod tests {
                 f.arg_lists
             );
         }
+    }
+
+    #[tokio::test]
+    async fn local_initializers_keep_independent_storage() {
+        use crate::interpreter::lpc_ref::LpcRef;
+        use lpc_rs_core::null_mode::NullMode;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        for code in [
+            "int create() { int original = 1; int copied = ++original; copied++; return original * 10 + copied; }",
+            "int create() { int original = 3; int copied = --original; copied++; return original * 10 + copied; }",
+            "int create() { int original = 1; int copied = (original = 2); copied++; return original * 10 + copied; }",
+            "int create() { int original = 1; int copied = (0, ++original); copied++; return original * 10 + copied; }",
+            "int original = 1; int create() { int copied = ++original; copied++; return original * 10 + copied; }",
+            "int create() { int original = 1; function read = (: original :); int copied = ++original; copied++; return evaluate(read) * 10 + copied; }",
+            "int pack(int ref original) { int copied = ++original; copied++; return original * 10 + copied; } int create() { int original = 1; return pack(ref original); }",
+        ] {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let task = crate::test_support::run_prog_with_config(code, Arc::new(config)).await;
+                assert_eq!(task.result(), Some(LpcRef::from(23)), "{mode:?}: {code}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn calls_capture_values_before_later_arguments_reassign_them() {
+        use crate::interpreter::lpc_ref::LpcRef;
+        use lpc_rs_core::null_mode::NullMode;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        for (code, expected) in [
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; return pack(value, value = 2); }",
+                12,
+            ),
+            (
+                "int value = 1; int change() { value = 2; return value; } int pack(int left, int right) { return left * 10 + right; } int create() { return pack(value, change()); }",
+                12,
+            ),
+            (
+                "int change(int ref value) { value = 2; return value; } int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; return pack(value, change(ref value)); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; function f = pack; return f(value, value = 2); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } function get_pack() { return pack; } int create() { int value = 1; return get_pack()(value, value = 2); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int *values = ({ 1 }); return pack(values..., sizeof(values = ({ 2, 3 }))); }",
+                12,
+            ),
+            (
+                "int pack(int left, int right) { return left * 10 + right; } int create() { int *values = ({ 1 }); return pack(values..., values[0] = 2); }",
+                22,
+            ),
+            (
+                "int mark(object ignored) { return 7; } int create() { object target = this_object(); return target->mark(target = nil); }",
+                7,
+            ),
+            (
+                "int mark(object ignored) { return 7; } int create() { object target = this_object(); return call_other(target, \"mark\", target = nil); }",
+                7,
+            ),
+            (
+                "int first(int ignored) { return 1; } int second(int ignored) { return 2; } int change(function ref f) { f = second; return 0; } int create() { function f = first; return f(change(ref f)); }",
+                1,
+            ),
+        ] {
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                let config = crate::test_config_builder!()
+                    .null_mode(mode)
+                    .build()
+                    .unwrap();
+                let task = crate::test_support::run_prog_with_config(code, Arc::new(config)).await;
+                assert_eq!(
+                    task.result(),
+                    Some(LpcRef::from(expected)),
+                    "{mode:?}: {code}"
+                );
+            }
+        }
+    }
+
+    mod operand_capture_regressions {
+        use super::*;
+        use crate::interpreter::lpc_ref::LpcRef;
+        use lpc_rs_core::null_mode::NullMode;
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        async fn run(code: &str, mode: NullMode) -> Option<LpcRef> {
+            let config = crate::test_config_builder!()
+                .null_mode(mode)
+                .build()
+                .unwrap();
+            crate::test_support::run_prog_with_config(code, Arc::new(config))
+                .await
+                .result()
+        }
+
+        #[tokio::test]
+        async fn arithmetic_keeps_the_left_value_before_the_right_reassigns_it() {
+            let code = "int create() { int value = 1; return value + (value = 2); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(3)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn fused_comparisons_keep_the_left_value_before_the_right_reassigns_it() {
+            let code =
+                "int create() { int value = 1; if (value < (value = 2)) return 1; return 0; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(1)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn array_items_keep_values_before_later_items_reassign_them() {
+            let code = "int create() { int value = 1; int *items = ({ value, value = 2 }); return items[0] * 10 + items[1]; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(12)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn mapping_keys_and_values_are_saved_before_later_entries_run() {
+            let code = "int create() { int value = 1; mapping items = ([ value : value, value = 2 : 3 ]); return items[1] * 10 + items[2]; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(13)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn indexed_assignment_keeps_the_rhs_before_the_index_reassigns_it() {
+            let code = "int create() { int value = 1; int *items = ({ 0, 0, 0 }); items[value = 2] = value; return items[2]; }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(1)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn partial_arguments_keep_values_before_later_arguments_reassign_them() {
+            let code = "int pack(int left, int right) { return left * 10 + right; } int create() { int value = 1; function f = &pack(value, value = 2); return evaluate(f); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(12)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn operator_arguments_keep_values_before_later_arguments_reassign_them() {
+            let code = "int create() { int value = 1; function f = &operator(-)(value, value = 2); return evaluate(f); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(-1)), "{mode:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn partial_arguments_keep_values_before_the_receiver_runs() {
+            let code = "int value = 1; object target() { value = 2; return this_object(); } int read(int x) { return x; } int create() { function f = &(target())->read(value); return evaluate(f); }";
+            for mode in [NullMode::Zero, NullMode::Distinct] {
+                assert_eq!(run(code, mode).await, Some(LpcRef::from(1)), "{mode:?}");
+            }
+        }
+        #[tokio::test]
+        async fn function_pointer_effects_do_not_replace_an_earlier_argument() {
+            for code in [
+                "int read(int number) { return number; } int take(int first, function unused) { return first; } int create() { int value = 1; return take(value, &read(value = 2)); }",
+                "int value = 1; object target() { value = 2; return this_object(); } int read() { return 0; } int take(int first, function unused) { return first; } int create() { return take(value, &(target())->read()); }",
+            ] {
+                for mode in [NullMode::Zero, NullMode::Distinct] {
+                    assert_eq!(
+                        run(code, mode).await,
+                        Some(LpcRef::from(1)),
+                        "{mode:?}: {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn inconsistent_debug_spans_prevent_program_publication() {
+        for initializer in [false, true] {
+            let mut walker = walk_prog("void f() {}").await;
+            let function = if initializer {
+                walker.initializer.as_mut().unwrap()
+            } else {
+                walker
+                    .functions
+                    .values_mut()
+                    .find(|f| f.name() == "f")
+                    .unwrap()
+            };
+            Arc::make_mut(function).debug_spans.clear();
+
+            let error = walker.into_program().unwrap_err();
+
+            assert!(error.to_string().contains("out of sync"), "{error}");
+        }
+    }
+
+    #[tokio::test]
+    async fn pure_later_arguments_do_not_copy_an_earlier_parameter() {
+        use lpc_rs_asm::instruction::Arg;
+
+        for expression in [
+            "value",
+            "1",
+            "1.5",
+            "\"text\"",
+            "nil",
+            "-value",
+            "!value",
+            "~value",
+            "value + 1",
+            "(int)value",
+            "({ value })",
+            "({ ({ value })... })",
+            "&dump()",
+            "&dump(value)",
+            "&target->dump()",
+        ] {
+            let code = format!(
+                "int consume(mixed first, mixed second) {{ return 0; }} int f(int value, object target) {{ return consume(value, {expression}); }}"
+            );
+            let walker = walk_prog(&code).await;
+            let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+
+            assert_eq!(
+                function.arg_lists.last().unwrap().first(),
+                Some(&Arg::Value(Register(1).as_local())),
+                "{expression}: {:?}",
+                function.instructions,
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn slice_bounds_are_copied_only_before_later_mutation() {
+        let walker =
+            walk_prog("mixed f(mixed *items, int begin, int end) { return items[begin..end]; }")
+                .await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let operands = function
+            .instructions
+            .iter()
+            .find_map(|instruction| match *instruction {
+                Instruction::Range(reference, begin, end, _) => Some((reference, begin, end)),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            operands,
+            (
+                Register(1).as_local(),
+                Register(2).as_local(),
+                Register(3).as_local()
+            ),
+            "{:?}",
+            function.instructions
+        );
+
+        let walker = walk_prog("string f(int end) { return \"abc\"[1..end++]; }").await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let (reference, begin) = function
+            .instructions
+            .iter()
+            .find_map(|instruction| match *instruction {
+                Instruction::Range(reference, begin, _, _) => Some((reference, begin)),
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            matches!(reference, RegisterVariant::Constant(_)),
+            "{:?}",
+            function.instructions
+        );
+        assert!(
+            matches!(begin, RegisterVariant::Constant(_)),
+            "{:?}",
+            function.instructions
+        );
+    }
+
+    #[tokio::test]
+    async fn context_accessors_preserve_declarations_through_the_handoff() {
+        let mut walker = walk_prog("int first() { return 1; } int retained() { return 2; }").await;
+
+        assert!(walker.context().function_prototypes.contains_key("first"));
+        assert!(
+            walker
+                .context_mut()
+                .function_prototypes
+                .remove("first")
+                .is_some()
+        );
+
+        let context = walker.into_context();
+        assert!(!context.function_prototypes.contains_key("first"));
+        assert!(context.function_prototypes.contains_key("retained"));
+    }
+
+    #[tokio::test]
+    async fn the_last_bound_argument_is_not_copied_without_a_later_effect() {
+        for expression in ["&pack(value, value = 2)", "&operator(-)(value, value = 2)"] {
+            let walker = walk_prog(&format!(
+                "int pack(int first, int second) {{ return first * 10 + second; }} function f(int value) {{ return {expression}; }}"
+            )).await;
+            let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+            let arguments = function
+                .instructions
+                .iter()
+                .filter_map(|instruction| match instruction {
+                    Instruction::PushPartialArg(Some(register)) => Some(*register),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                arguments.len(),
+                2,
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_ne!(
+                arguments[0],
+                Register(1).as_local(),
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_eq!(
+                arguments[1],
+                Register(1).as_local(),
+                "{expression}: {:?}",
+                function.instructions
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_last_array_item_is_not_copied_without_a_later_effect() {
+        let walker = walk_prog("mixed f(int value) { return ({ value, value = 2 }); }").await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let items = function
+            .instructions
+            .iter()
+            .filter_map(|instruction| match instruction {
+                Instruction::PushArrayItem(register) => Some(*register),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 2, "{:?}", function.instructions);
+        assert_ne!(
+            items[0],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+        assert_eq!(
+            items[1],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+    }
+
+    #[tokio::test]
+    async fn the_last_call_argument_is_not_copied_without_a_later_effect() {
+        use lpc_rs_asm::instruction::Arg;
+
+        for expression in [
+            "pack(value, value = 2)",
+            "callback(value, value = 2)",
+            "get_pack()(value, value = 2)",
+        ] {
+            let walker = walk_prog(&format!(
+                "int pack(int first, int second) {{ return first * 10 + second; }} function get_pack() {{ return pack; }} mixed f(int value, function callback) {{ return {expression}; }}"
+            )).await;
+            let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+            let arguments = function.arg_lists.last().unwrap();
+
+            assert_eq!(
+                arguments.len(),
+                2,
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_ne!(
+                arguments[0],
+                Arg::Value(Register(1).as_local()),
+                "{expression}: {:?}",
+                function.instructions
+            );
+            assert_eq!(
+                arguments[1],
+                Arg::Value(Register(1).as_local()),
+                "{expression}: {:?}",
+                function.instructions
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_last_mapping_entry_is_not_copied_without_a_later_effect() {
+        let walker = walk_prog(
+            "mixed f(int value, int other) { return ([ value : other, value = 2 : other ]); }",
+        )
+        .await;
+        let function = walker.functions.values().find(|f| f.name() == "f").unwrap();
+        let items = function
+            .instructions
+            .iter()
+            .filter_map(|instruction| match instruction {
+                Instruction::PushArrayItem(register) => Some(*register),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 4, "{:?}", function.instructions);
+        assert_ne!(
+            items[0],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+        assert_eq!(
+            items[2],
+            Register(1).as_local(),
+            "{:?}",
+            function.instructions
+        );
+        assert_eq!(
+            items[3],
+            Register(2).as_local(),
+            "{:?}",
+            function.instructions
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reference_cannot_be_returned_as_an_ordinary_value() {
+        let mut walker = default_walker();
+        let before = walker_init_instructions(&mut walker);
+        let mut node = ReturnNode::new(Some(ExpressionNode::Ref(RefNode {
+            name: ustr("value"),
+            span: None,
+            global: false,
+        })));
+
+        let error = walker.visit_return(&mut node).await.unwrap_err();
+
+        assert!(
+            error.to_string().contains("outside an argument list"),
+            "{error}"
+        );
+        assert_eq!(walker_init_instructions(&mut walker), before);
     }
 }

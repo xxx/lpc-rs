@@ -480,11 +480,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.txn().with(|t| t.record_effect(effect));
     }
 
-    /// Whether this efun's attempt has recorded a `mkdir` of `server`.
-    pub(crate) fn has_pending_dir(&self, server: &std::path::Path) -> bool {
-        self.txn().with(|t| t.has_pending_dir(server))
-    }
-
     /// Find an object by path, transactionally. Delegates to
     /// [`TaskContext::find_object`]; does not initialize or create.
     pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
@@ -959,6 +954,33 @@ mod tests {
             err.contains("argument 2 of `this_object` is not a by-reference argument"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn fired_efun_paths_use_the_owners_directory_and_keep_clone_identity() {
+        let (task_context, mut stack) = efun_context();
+        let owner = Arc::new(Process::new(
+            ProgramBuilder::default()
+                .filename(LpcPath::in_game("/zone/caller.c".into()))
+                .build()
+                .unwrap(),
+        ));
+        let ctx = EfunContext::fired(
+            &mut stack,
+            &task_context,
+            Efun::clone_object,
+            vec![],
+            owner,
+            Some(Arc::new(LpcPath::in_game("/writer/source.c".into()))),
+        );
+        for (path, expected) in [
+            ("next#7", "/zone/next#7"),
+            ("../room", "/room"),
+            ("/other/file", "/other/file"),
+        ] {
+            assert_eq!(ctx.in_game_path(path).to_string(), expected);
+        }
+        assert!(ctx.in_game_path("next#7").is_clone());
     }
 
     /// The calling frame's file is the program.

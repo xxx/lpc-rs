@@ -66,7 +66,7 @@ pub struct FunctionPrototype {
     pub ref_tail: Option<RegisterSize>,
 
     /// The span of the definition of this function, for use in error messaging.
-    /// When None, we assume this is an Efun prototype.
+    /// Absent for builtins and synthesized functions.
     #[builder(default)]
     pub span: Option<Span>,
 
@@ -115,7 +115,9 @@ impl FunctionPrototype {
         self.ref_params
             .iter()
             .position(|&by_ref| by_ref)
-            .or_else(|| self.ref_tail.map(usize::from))
+            .into_iter()
+            .chain(self.ref_tail.map(usize::from))
+            .min()
     }
 }
 
@@ -143,7 +145,10 @@ impl Display for FunctionPrototype {
 
         let mut args = self.arg_types.iter().map(|t| t.to_string()).join(", ");
         if flags.ellipsis() {
-            args.push_str(", ...");
+            if !args.is_empty() {
+                args.push_str(", ");
+            }
+            args.push_str("...");
         }
 
         write!(
@@ -159,6 +164,111 @@ impl Display for FunctionPrototype {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn signature_builder() -> FunctionPrototypeBuilder {
+        let mut builder = FunctionPrototypeBuilder::default();
+        builder
+            .name("f")
+            .filename(Arc::new(LpcPath::from("/prototype.c")))
+            .return_type(LpcType::Int(false));
+        builder
+    }
+
+    #[test]
+    fn efun_classification_uses_function_kind() {
+        for (kind, expected) in [
+            (FunctionKind::Local, false),
+            (FunctionKind::Closure, false),
+            (FunctionKind::Efun, true),
+        ] {
+            let prototype = signature_builder().kind(kind).build().unwrap();
+
+            assert_eq!(prototype.is_efun(), expected);
+        }
+    }
+
+    #[test]
+    fn variadic_arity_accepts_the_register_limit_but_not_more() {
+        for varargs in [false, true] {
+            let prototype = signature_builder()
+                .flags(
+                    FunctionFlags::default()
+                        .with_ellipsis(true)
+                        .with_varargs(varargs),
+                )
+                .build()
+                .unwrap();
+
+            assert!(prototype.accepts_arg_count(usize::from(RegisterSize::MAX)));
+            assert!(!prototype.accepts_arg_count(usize::from(RegisterSize::MAX) + 1));
+        }
+    }
+
+    #[test]
+    fn the_first_ref_position_is_the_earliest_declared_ref_or_tail() {
+        for (declared, tail, expected) in [
+            (vec![], None, None),
+            (vec![], Some(0), Some(0)),
+            (vec![false, true, false], Some(3), Some(1)),
+            (vec![false, false, true], Some(1), Some(1)),
+        ] {
+            let prototype = signature_builder()
+                .kind(FunctionKind::Efun)
+                .arity(FunctionArity::new(3))
+                .arg_types(vec![LpcType::Int(false); 3])
+                .ref_params(declared)
+                .ref_tail(tail)
+                .flags(FunctionFlags::default().with_ellipsis(true))
+                .build()
+                .unwrap();
+
+            assert_eq!(prototype.first_ref_param(), expected);
+        }
+    }
+
+    #[test]
+    fn mangling_retains_the_return_type_filename_flags_and_argument_types() {
+        let prototype = signature_builder()
+            .arity(FunctionArity::new(2))
+            .arg_types(vec![LpcType::Int(false), LpcType::String(false)])
+            .build()
+            .unwrap();
+
+        assert_eq!(prototype.mangle(), "f__i__/prototype.c__pb__i_s");
+    }
+
+    #[test]
+    fn variadic_display_does_not_introduce_a_leading_comma() {
+        for (types, expected) in [
+            (vec![], "public int f(...)"),
+            (vec![LpcType::Int(false)], "public int f(int, ...)"),
+        ] {
+            let prototype = signature_builder()
+                .arity(FunctionArity::new(types.len().try_into().unwrap()))
+                .arg_types(types)
+                .flags(FunctionFlags::default().with_ellipsis(true))
+                .build()
+                .unwrap();
+
+            assert_eq!(prototype.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn display_includes_optional_declaration_modifiers() {
+        let prototype = signature_builder()
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::String(false)])
+            .flags(
+                FunctionFlags::default()
+                    .with_nomask(true)
+                    .with_varargs(true),
+            )
+            .build()
+            .unwrap();
+
+        assert_eq!(prototype.to_string(), "nomask varargs public int f(string)");
+    }
 
     fn prototype(flags: FunctionFlags) -> FunctionPrototype {
         FunctionPrototypeBuilder::default()

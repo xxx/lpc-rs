@@ -61,6 +61,16 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
         return Err(context.runtime_error(refuse("The master refused the shadow.".to_string())));
     }
 
+    if !caller.is_live(&txn) {
+        return Err(context.runtime_error("shadow: the caller has been destructed"));
+    }
+    if !target.is_live(&txn) {
+        return Err(context.runtime_error("shadow: the target has been destructed"));
+    }
+    if let Some(reason) = structural_refusal(&txn, context.task_context(), &caller, &target) {
+        return Err(context.runtime_error(refuse(reason)));
+    }
+
     Process::attach_shadow(&txn, &caller, &target);
     context.return_efun_result(LpcRef::from(Arc::downgrade(&target)));
     Ok(())

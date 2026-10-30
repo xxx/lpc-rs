@@ -180,9 +180,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_verb_attached_cell_starts_empty() {
+    async fn the_verb_attached_cell_exposes_committed_registrations() {
         let vm = Vm::new(test_config());
         assert!(vm.global_state.committed_verb_rules().is_empty());
+        let owner = vm
+            .initialize_process_from_code(
+                "/verb-owner.c",
+                r#"void create() { parse_init(); parse_add_rule("look", ""); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let rules = vm.global_state.committed_verb_rules();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].verb.as_str(), "look");
+        assert!(Arc::ptr_eq(&rules[0].owner.upgrade().unwrap(), &owner));
     }
 
     #[tokio::test]

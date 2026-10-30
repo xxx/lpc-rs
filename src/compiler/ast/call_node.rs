@@ -73,9 +73,9 @@ impl Display for CallNode {
                 namespace,
             } => {
                 if let Some(rcvr) = receiver {
-                    write!(f, "{rcvr}->{namespace}")?;
+                    write!(f, "{rcvr}->")?;
                 }
-                write!(f, "{name}({args})")
+                write!(f, "{namespace}{name}({args})")
             }
             CallChain::Node(node) => write!(f, "{node}({args})"),
         }

@@ -204,7 +204,46 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use crate::test_support::try_run_prog;
+    use super::MAX_RECURSION;
+    use crate::test_support::{run_prog, try_run_prog};
+
+    #[tokio::test]
+    async fn formatting_accepts_the_depth_boundary_and_rejects_another_layer() {
+        // Each collection consumes one value frame and one collection frame.
+        let layers = MAX_RECURSION / 2;
+        for (nest, prefix, suffix) in [
+            ("value = ({ value });", "({", "})"),
+            ("value = ([ 0: value ]);", "([0:", "])"),
+            ("value = ([ value: 0 ]);", "([", ":0])"),
+        ] {
+            let code = |depth| {
+                format!(
+                    r#"
+                        string create() {{
+                            mixed value = 42;
+                            for (int i = 0; i < {depth}; i++) {{ {nest} }}
+                            return sprintf("%#Q", value);
+                        }}
+                    "#
+                )
+            };
+            let mut expected = String::from("42");
+            for _ in 0..layers {
+                expected = format!("{prefix}{expected}{suffix}");
+            }
+            let task = run_prog(&code(layers)).await;
+            assert_eq!(
+                task.result().unwrap().as_str(),
+                Some(expected.as_str()),
+                "{nest}"
+            );
+            let error = match try_run_prog(&code(layers + 1)).await {
+                Err(error) => error.to_string(),
+                Ok(_) => panic!("{nest}: accepted a value beyond the formatting depth limit"),
+            };
+            assert!(error.contains("Too deep recursion"), "{error}");
+        }
+    }
 
     #[tokio::test]
     async fn does_not_crash_on_recursive_structures() {

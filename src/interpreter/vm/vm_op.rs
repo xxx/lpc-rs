@@ -29,3 +29,44 @@ impl PartialEq for VmOp {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interpreter::vm::{object_recompile::RecompileTarget, object_update::UpdateRequest};
+    use std::sync::Weak;
+
+    #[test]
+    fn equality_requires_the_same_operation_and_identity() {
+        let login = |port| {
+            let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+            VmOp::InitiateLogin(Arc::new(Connection::new(([127, 0, 0, 1], port).into(), tx)))
+        };
+        let update = |id, program: &str| {
+            VmOp::ObjectUpdate(Arc::new(UpdateRequest {
+                id,
+                target: RecompileTarget::Object(Weak::new()),
+                caller: Weak::new(),
+                player: None,
+                program: Some(program.to_owned()),
+            }))
+        };
+        let operations = [
+            login(1000),
+            login(1001),
+            VmOp::PrioritizeCallOut(17),
+            VmOp::PrioritizeCallOut(18),
+            VmOp::Shutdown(17),
+            VmOp::Shutdown(18),
+            update(17, "/admin.c"),
+            update(18, "/admin.c"),
+        ];
+        for (i, left) in operations.iter().enumerate() {
+            for (j, right) in operations.iter().enumerate() {
+                assert_eq!(left == right, i == j, "message indices {i} and {j}");
+            }
+        }
+        assert_eq!(login(1000), login(1000));
+        assert_eq!(update(17, "/first.c"), update(17, "/second.c"));
+    }
+}

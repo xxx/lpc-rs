@@ -117,14 +117,25 @@ mod tests {
     #[tokio::test]
     async fn set_bit_sets_one_of_six_bits_in_a_character() {
         // "?" is 31; bit 5 makes 63, "_".
-        let code = r#"string *create() { return ({ set_bit("?", 5), set_bit("78", 3), set_bit(set_bit("78", 3), 8) }); }"#;
-        assert_eq!(strings_of(code).await, ["_", "?8", "?<"]);
+        let code = r#"
+            string *create() {
+                return ({ set_bit("?", 5), set_bit("78", 3),
+                    set_bit(set_bit("78", 3), 8), set_bit("_", 0),
+                    set_bit(set_bit("78", 3), 3) });
+            }
+        "#;
+        assert_eq!(strings_of(code).await, ["_", "?8", "?<", "_", "?8"]);
     }
 
     #[tokio::test]
     async fn set_bit_extends_the_string_with_spaces() {
-        let code = r#"string *create() { return ({ set_bit("", 6), set_bit("_", 12) }); }"#;
-        assert_eq!(strings_of(code).await, [" !", "_ !"]);
+        let code = r#"
+            string *create() {
+                return ({ set_bit("", 6), set_bit("_", 12),
+                    set_bit("", 0), set_bit("_", 6) });
+            }
+        "#;
+        assert_eq!(strings_of(code).await, [" !", "_ !", "!", "_!"]);
     }
 
     #[tokio::test]
@@ -135,14 +146,21 @@ mod tests {
 
     #[tokio::test]
     async fn clear_bit_past_the_end_leaves_the_string_as_it_is() {
-        let code = r#"string create() { return clear_bit("?", 100); }"#;
-        assert_eq!(run_prog(code).await.result(), Some(LpcRef::from("?")));
+        for (text, bit) in [("?", 100), ("", 0), ("_", 6)] {
+            let code = format!(r#"string create() {{ return clear_bit("{text}", {bit}); }}"#);
+            assert_eq!(run_prog(&code).await.result(), Some(LpcRef::from(text)));
+        }
     }
 
     #[tokio::test]
     async fn test_bit_reads_one_bit() {
-        let code = r#"int *create() { return ({ test_bit("_", 5), test_bit(" ", 3), test_bit("?<", 8), test_bit("?", 100) }); }"#;
-        assert_eq!(strings_of(code).await, ["1", "0", "1", "0"]);
+        let code = r#"
+            int *create() {
+                return ({ test_bit("_", 5), test_bit(" ", 3), test_bit("?<", 8),
+                    test_bit("?", 100), test_bit("", 0), test_bit("_", 6) });
+            }
+        "#;
+        assert_eq!(strings_of(code).await, ["1", "0", "1", "0", "0", "0"]);
     }
 
     #[tokio::test]

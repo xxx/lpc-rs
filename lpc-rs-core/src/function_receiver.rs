@@ -38,3 +38,29 @@ impl Display for FunctionReceiver {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::register::Register;
+
+    use super::*;
+
+    #[test]
+    fn display_distinguishes_receiver_roles_and_operand_banks() {
+        for (receiver, expected) in [
+            (FunctionReceiver::Local, "local"),
+            (FunctionReceiver::Dynamic, "dynamic"),
+            (FunctionReceiver::Efun, "efun"),
+            (FunctionReceiver::SimulEfun, "simul_efun"),
+            (FunctionReceiver::Var(Register(3).as_local()), "var(r3)"),
+            (FunctionReceiver::Var(Register(7).as_global()), "var(g7)"),
+            (FunctionReceiver::Value(Register(5).as_local()), "value(r5)"),
+            (
+                FunctionReceiver::Value(Register(7).as_upvalue()),
+                "value(u7)",
+            ),
+        ] {
+            assert_eq!(receiver.to_string(), expected);
+        }
+    }
+}

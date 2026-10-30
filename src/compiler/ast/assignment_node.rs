@@ -121,7 +121,63 @@ impl Display for AssignmentNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::{interpreter::lpc_ref::LpcRef, test_support::run_prog};
+    use super::*;
+    use crate::{
+        compiler::{
+            ast::ast_node::AstNode, compilation_context::CompilationContext, lexer::LexWrapper,
+        },
+        interpreter::lpc_ref::LpcRef,
+        test_support::run_prog,
+    };
+
+    #[test]
+    fn assignment_operations_render_their_source_spellings() {
+        for (operation, spelling) in [
+            (AssignmentOperation::Simple, "="),
+            (AssignmentOperation::AddEq, "+="),
+            (AssignmentOperation::AndAndEq, "&&="),
+            (AssignmentOperation::AndEq, "&="),
+            (AssignmentOperation::DivEq, "/="),
+            (AssignmentOperation::Index, "[]"),
+            (AssignmentOperation::ModEq, "%="),
+            (AssignmentOperation::MulEq, "*="),
+            (AssignmentOperation::OrEq, "|="),
+            (AssignmentOperation::OrOrEq, "||="),
+            (AssignmentOperation::ShlEq, "<<="),
+            (AssignmentOperation::ShrEq, ">>="),
+            (AssignmentOperation::SubEq, "-="),
+            (AssignmentOperation::XorEq, "^="),
+        ] {
+            assert_eq!(operation.to_string(), spelling);
+        }
+    }
+
+    #[test]
+    fn parsed_assignment_retains_its_range_and_source_form() {
+        let source = "int value = target = 7;";
+        let mut context = CompilationContext::default();
+        let mut program = crate::lpc_parser::ProgramParser::new()
+            .parse(&mut context, LexWrapper::new(source, 5).triples())
+            .unwrap();
+        let Some(AstNode::Decl(mut declaration)) = program.body.pop() else {
+            panic!("assignment declaration");
+        };
+        let Some(ExpressionNode::Assignment(assignment)) = declaration
+            .initializations
+            .pop()
+            .and_then(|init| init.value)
+        else {
+            panic!("assignment initializer");
+        };
+        assert_eq!(
+            assignment.span(),
+            Some(Span::new(
+                5,
+                source.find("target").unwrap()..source.find('7').unwrap() + 1
+            ))
+        );
+        assert_eq!(assignment.to_string(), "target = 7");
+    }
 
     #[tokio::test]
     async fn indexed_compound_assignment_checks_the_class_loaded_from_an_alias() {

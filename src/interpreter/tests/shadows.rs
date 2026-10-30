@@ -92,6 +92,29 @@ async fn the_query_walks_the_chain_inner_to_outer() {
 }
 
 #[tokio::test]
+async fn the_default_flag_attaches_for_direct_and_pointer_calls() {
+    for body in [
+        "return shadow(target);",
+        "function attach = shadow; return attach(target);",
+    ] {
+        let candidate = format!("object go(object target) {{ {body} }}");
+        let values = run(
+            ALLOWING,
+            &[("/s.c", S), ("/candidate.c", &candidate)],
+            r#"
+            mixed *create() {
+                object target = clone_object("/s");
+                object candidate = clone_object("/candidate");
+                return ({ candidate->go(target) == target, shadow(target, 0) == candidate });
+            }
+        "#,
+        )
+        .await;
+        assert_eq!(ints(&values), vec![1, 1]);
+    }
+}
+
+#[tokio::test]
 async fn garbage_collection_preserves_shadow_chains() {
     for lookup in ["find_object", "clone_object"] {
         let vm = Vm::new(crate::test_support::test_config());
@@ -306,6 +329,108 @@ async fn a_refusing_master_refuses() {
     let main = r#"void create() { object t = clone_object("/s"); object s = clone_object("/s"); s->go(t); }"#;
     let err = fails(REFUSING, &[("/s.c", S)], main).await;
     assert!(err.contains("The master refused the shadow."), "{err}");
+}
+
+#[tokio::test]
+async fn shadow_authorization_cannot_attach_destructed_objects() {
+    for (change, expected) in [
+        ("destruct(target);", "the target has been destructed"),
+        (
+            "destruct(previous_object());",
+            "the caller has been destructed",
+        ),
+    ] {
+        let master = format!(
+            r#"
+            int valid_destruct(object caller, object target, string program) {{ return 1; }}
+            int query_allow_shadow(object target) {{ {change} return 1; }}
+        "#
+        );
+        let values = run(
+            &master,
+            &[("/s.c", S)],
+            r#"
+            mixed *create() {
+                object target = clone_object("/s");
+                object candidate = clone_object("/s");
+                return ({ catch(candidate->go(target)) });
+            }
+        "#,
+        )
+        .await;
+        let LpcRef::String(error) = &values[0] else {
+            panic!("authorization must reject destruction: {}", values[0]);
+        };
+        assert!(error.to_str().contains(expected), "{error}");
+    }
+}
+
+#[tokio::test]
+async fn shadow_authorization_rechecks_the_callers_environment() {
+    let master = r#"
+        int query_allow_shadow(object target) {
+            previous_object()->enter(target);
+            return 1;
+        }
+    "#;
+    let values = run(
+        master,
+        &[("/s.c", S)],
+        r#"
+        mixed *create() {
+            object target = clone_object("/s");
+            object candidate = clone_object("/s");
+            mixed problem = catch(candidate->go(target));
+            return ({ problem, environment(candidate) == target, shadow(target, 0) == nil });
+        }
+    "#,
+    )
+    .await;
+    let LpcRef::String(error) = &values[0] else {
+        panic!("authorization must reject a moved shadow: {}", values[0]);
+    };
+    assert!(
+        error
+            .to_str()
+            .contains("The shadow must not reside inside another object.")
+    );
+    assert_eq!(ints(&values[1..]), vec![1, 1]);
+}
+
+#[tokio::test]
+async fn shadow_authorization_cannot_attach_the_caller_twice() {
+    let master = r#"
+        int entered;
+        int query_allow_shadow(object target) {
+            if (!entered) {
+                entered = 1;
+                previous_object()->go(find_object("/other"));
+            }
+            return 1;
+        }
+    "#;
+    let values = run(
+        master,
+        &[("/s.c", S), ("/other.c", S)],
+        r#"
+        mixed *create() {
+            object target = clone_object("/s");
+            object candidate = clone_object("/s");
+            mixed problem = catch(candidate->go(target));
+            return ({ problem, shadow(find_object("/other"), 0) == candidate,
+                shadow(target, 0) == nil });
+        }
+    "#,
+    )
+    .await;
+    let LpcRef::String(error) = &values[0] else {
+        panic!(
+            "authorization must reject a second attachment: {}",
+            values[0]
+        );
+    };
+    assert!(error.to_str().contains("Already shadowing."));
+    assert_eq!(ints(&values[1..]), vec![1, 1]);
 }
 
 #[tokio::test]

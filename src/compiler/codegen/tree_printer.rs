@@ -1150,4 +1150,961 @@ mod diagnostic_tests {
         assert!(!printer.lines.is_empty());
         assert!(printer.work >= 512);
     }
+
+    #[test]
+    fn the_documented_byte_budget_accepts_four_mebibytes_then_rejects_more() {
+        let mut printer = TreePrinter::new();
+        let line = "x".repeat(1023);
+        for _ in 0..4096 {
+            printer.println_indented(format_args!("{line}")).unwrap();
+        }
+
+        let error = printer.println_indented(format_args!("")).unwrap_err();
+
+        assert!(error.to_string().contains("4 MiB"), "{error}");
+        assert_eq!(printer.into_output().len(), 4_194_304);
+    }
+
+    #[tokio::test]
+    async fn catch_blocks_render_their_body_and_restore_indentation() {
+        let mut printer = TreePrinter::new();
+        let mut node = CatchNode {
+            body: BlockNode::new(vec![]),
+            span: None,
+        };
+        printer.visit_catch(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(7)).await.unwrap();
+
+        assert_eq!(
+            printer.into_lines(),
+            ["Catch", "  Block {", "  }", "Int: 7"]
+        );
+    }
+
+    #[tokio::test]
+    async fn calls_render_receivers_namespaces_and_chains_with_stable_indentation() {
+        use crate::compiler::ast::expression_node::ExpressionNode;
+        use lpc_rs_core::call_namespace::CallNamespace;
+        use ustr::ustr;
+
+        fn call(
+            namespace: CallNamespace,
+            receiver: Option<ExpressionNode>,
+            name: &str,
+            arguments: Vec<ExpressionNode>,
+        ) -> CallNode {
+            CallNode {
+                chain: CallChain::Root {
+                    receiver: receiver.map(Box::new),
+                    namespace,
+                    name: ustr(name),
+                },
+                arguments,
+                span: None,
+                lvalue_temps: vec![],
+            }
+        }
+
+        for (namespace, line) in [
+            (CallNamespace::Local, None),
+            (CallNamespace::Parent, Some("  namespace: ::")),
+            (
+                CallNamespace::Named(ustr("base")),
+                Some("  namespace: base::"),
+            ),
+            (
+                CallNamespace::Named(ustr("efun")),
+                Some("  namespace: efun::"),
+            ),
+        ] {
+            let mut node = call(namespace, None, "invoke", vec![IntNode::new(7).into()]);
+            let mut printer = TreePrinter::new();
+            printer.visit_call(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            let mut expected = vec!["Call", "  name: invoke"];
+            if let Some(line) = line {
+                expected.push(line);
+            }
+            expected.extend(["  args:", "    Int: 7", "Int: 9"]);
+            assert_eq!(printer.into_lines(), expected);
+        }
+
+        let mut node = call(
+            CallNamespace::Local,
+            Some(VarNode::new("target").into()),
+            "invoke",
+            vec![IntNode::new(7).into()],
+        );
+        let mut printer = TreePrinter::new();
+        printer.visit_call(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Call Other",
+                "  receiver:",
+                "    Var",
+                "      name: target",
+                "  name: invoke",
+                "  args:",
+                "    Int: 7",
+                "Int: 9",
+            ]
+        );
+
+        let factory = call(CallNamespace::Local, None, "factory", vec![]);
+        let mut node = CallNode {
+            chain: CallChain::Node(Box::new(ExpressionNode::Call(factory))),
+            arguments: vec![IntNode::new(7).into()],
+            span: None,
+            lvalue_temps: vec![],
+        };
+        let mut printer = TreePrinter::new();
+        printer.visit_call(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Call",
+                "  name: factory",
+                "  args:",
+                "  chain args:",
+                "    Int: 7",
+                "Int: 9",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn comma_expressions_indent_values_and_restore_the_following_node() {
+        let mut node = CommaExpressionNode {
+            value: vec![IntNode::new(7).into(), IntNode::new(8).into()],
+            span: None,
+        };
+        let mut printer = TreePrinter::new();
+        printer.visit_comma_expression(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+
+        assert_eq!(
+            printer.into_lines(),
+            ["Comma Expression", "  Int: 7", "  Int: 8", "Int: 9"]
+        );
+    }
+
+    #[tokio::test]
+    async fn do_while_renders_its_body_condition_and_following_indentation() {
+        use crate::compiler::ast::ast_node::AstNode;
+
+        let mut node = DoWhileNode::new(
+            AstNode::Block(BlockNode::new(vec![])),
+            IntNode::new(7).into(),
+            None,
+        );
+        let mut printer = TreePrinter::new();
+        printer.visit_do_while(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+
+        assert_eq!(
+            printer.into_lines(),
+            ["Do", "  Block {", "  }", "while:", "  Int: 7", "Int: 9"]
+        );
+    }
+
+    #[tokio::test]
+    async fn for_loops_render_present_and_omitted_clauses_and_restore_indentation() {
+        use crate::compiler::ast::ast_node::AstNode;
+
+        for (mut node, expected) in [
+            (
+                ForNode::new(
+                    Some(AstNode::Expression(IntNode::new(1).into())),
+                    Some(IntNode::new(2).into()),
+                    Some(IntNode::new(3).into()),
+                    AstNode::Block(BlockNode::new(vec![])),
+                    None,
+                ),
+                vec![
+                    "For:",
+                    "  init:",
+                    "    Int: 1",
+                    "  condition:",
+                    "    Int: 2",
+                    "  incrementer:",
+                    "    Int: 3",
+                    "  body:",
+                    "    Block {",
+                    "    }",
+                    "Int: 9",
+                ],
+            ),
+            (
+                ForNode::new(
+                    None,
+                    None,
+                    None,
+                    AstNode::Block(BlockNode::new(vec![])),
+                    None,
+                ),
+                vec![
+                    "For:",
+                    "  init:",
+                    "  condition:",
+                    "  incrementer:",
+                    "  body:",
+                    "    Block {",
+                    "    }",
+                    "Int: 9",
+                ],
+            ),
+        ] {
+            let mut printer = TreePrinter::new();
+            printer.visit_for(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            assert_eq!(printer.into_lines(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn standalone_function_definitions_render_parameters_body_and_restore_indentation() {
+        use crate::compiler::ast::ast_node::AstNode;
+
+        let mut tree = parsed("int render(int value) { return value; }").await;
+        let AstNode::FunctionDef(mut function) = tree.body.remove(0) else {
+            panic!("expected a function definition")
+        };
+        let mut printer = TreePrinter::new();
+        printer.visit_function_def(&mut function).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Function Def",
+                "  name: render",
+                "  return type: int",
+                "  parameters:",
+                "    VarInit",
+                "      name: value",
+                "      type: int",
+                "      value: None",
+                "      array: false",
+                "  body:",
+                "    Return",
+                "      Var",
+                "        name: value",
+                "Int: 9",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn function_pointers_render_receiver_forms_bound_values_and_holes() {
+        use ustr::ustr;
+
+        for (mut node, expected) in [
+            (
+                FunctionPtrNode {
+                    receiver: None,
+                    arguments: None,
+                    name: ustr("invoke"),
+                    span: None,
+                },
+                vec![
+                    "Function Ptr",
+                    "  receiver: None",
+                    "  name: invoke",
+                    "  arguments:",
+                    "    None",
+                    "Int: 9",
+                ],
+            ),
+            (
+                FunctionPtrNode {
+                    receiver: Some(FunctionPtrReceiver::Dynamic),
+                    arguments: Some(vec![]),
+                    name: ustr("invoke"),
+                    span: None,
+                },
+                vec![
+                    "Function Ptr",
+                    "  receiver: dynamic",
+                    "  name: invoke",
+                    "  arguments:",
+                    "Int: 9",
+                ],
+            ),
+            (
+                FunctionPtrNode {
+                    receiver: Some(FunctionPtrReceiver::Static(Box::new(
+                        VarNode::new("target").into(),
+                    ))),
+                    arguments: Some(vec![
+                        Some(IntNode::new(7).into()),
+                        None,
+                        Some(IntNode::new(8).into()),
+                    ]),
+                    name: ustr("invoke"),
+                    span: None,
+                },
+                vec![
+                    "Function Ptr",
+                    "  receiver:",
+                    "    Var",
+                    "      name: target",
+                    "  name: invoke",
+                    "  arguments:",
+                    "    Int: 7",
+                    "    None",
+                    "    Int: 8",
+                    "Int: 9",
+                ],
+            ),
+        ] {
+            let mut printer = TreePrinter::new();
+            printer.visit_function_ptr(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            assert_eq!(printer.into_lines(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn conditionals_render_both_forms_and_restore_the_following_indentation() {
+        use crate::compiler::ast::ast_node::AstNode;
+
+        for (with_else, expected) in [
+            (
+                false,
+                vec!["If", "  Int: 1", "then", "  Return", "    Int: 7", "Int: 9"],
+            ),
+            (
+                true,
+                vec![
+                    "If",
+                    "  Int: 1",
+                    "then",
+                    "  Return",
+                    "    Int: 7",
+                    "else",
+                    "  Return",
+                    "    Int: 8",
+                    "Int: 9",
+                ],
+            ),
+        ] {
+            let alternative =
+                with_else.then(|| AstNode::Return(ReturnNode::new(Some(IntNode::new(8).into()))));
+            let mut node = IfNode::new(
+                IntNode::new(1).into(),
+                AstNode::Return(ReturnNode::new(Some(IntNode::new(7).into()))),
+                alternative,
+                None,
+            );
+            let mut printer = TreePrinter::new();
+            printer.visit_if(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            assert_eq!(printer.into_lines(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn standalone_inherits_render_visibility_aliases_and_restore_indentation() {
+        use lpc_rs_core::visibility::Visibility;
+        use ustr::ustr;
+
+        for (visibility, namespace, expected) in [
+            (
+                Visibility::Public,
+                None,
+                vec![
+                    "Inherit:",
+                    "  \"/parent\"",
+                    "  visibility: public",
+                    "Int: 9",
+                ],
+            ),
+            (
+                Visibility::Protected,
+                Some(ustr("base")),
+                vec![
+                    "Inherit:",
+                    "  \"/parent\"",
+                    "  visibility: protected",
+                    "  namespace: base",
+                    "Int: 9",
+                ],
+            ),
+            (
+                Visibility::Private,
+                None,
+                vec![
+                    "Inherit:",
+                    "  \"/parent\"",
+                    "  visibility: private",
+                    "Int: 9",
+                ],
+            ),
+        ] {
+            let mut node = InheritNode {
+                path: ustr("/parent"),
+                namespace,
+                visibility,
+                span: None,
+            };
+            let mut printer = TreePrinter::new();
+            printer.visit_inherit(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            assert_eq!(printer.into_lines(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn mappings_render_each_key_value_pair_and_restore_indentation() {
+        let mut node = MappingNode::new(
+            vec![
+                (IntNode::new(1).into(), IntNode::new(7).into()),
+                (IntNode::new(2).into(), IntNode::new(8).into()),
+            ],
+            None,
+        );
+        let mut printer = TreePrinter::new();
+        printer.visit_mapping(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Mapping ([",
+                "  Int: 1",
+                "  : ",
+                "  Int: 7",
+                "  Int: 2",
+                "  : ",
+                "  Int: 8",
+                "])",
+                "Int: 9",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn operator_functions_render_binding_holes_and_their_synthetic_body() {
+        use crate::compiler::ast::{binary_op_node::BinaryOperation, operator_node::Operator};
+        use ustr::ustr;
+
+        for (arguments, argument_lines) in [
+            (None, vec!["    None"]),
+            (
+                Some(vec![Some(IntNode::new(7).into()), None]),
+                vec!["    Int: 7", "    None"],
+            ),
+        ] {
+            let mut node = OperatorNode::new(
+                Operator::Binary(BinaryOperation::Add),
+                arguments,
+                ustr("addition"),
+                None,
+            );
+            let mut printer = TreePrinter::new();
+            printer.visit_operator(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            let mut expected = vec!["Operator +", "  arguments:"];
+            expected.extend(argument_lines);
+            expected.extend([
+                "  Closure", "    name: addition", "    return type: mixed",
+                "    flags: FunctionFlags { ellipsis: false, varargs: false, nomask: false, visibility: Private }",
+                "    parameters:", "    body:", "      Binary Op", "        operation: Add", "        l: ",
+                "          Var", "            name: $1", "        r: ", "          Var", "            name: $2", "Int: 9",
+            ]);
+            assert_eq!(printer.into_lines(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_printer_can_render_separate_programs_at_the_same_root_indentation() {
+        let mut printer = TreePrinter::new();
+        printer
+            .visit_program(&mut ProgramNode::default())
+            .await
+            .unwrap();
+        printer
+            .visit_program(&mut ProgramNode::default())
+            .await
+            .unwrap();
+        assert_eq!(printer.into_lines(), ["Program", "Program"]);
+    }
+
+    #[tokio::test]
+    async fn ranges_render_open_closed_and_reverse_bounds_and_restore_indentation() {
+        use crate::compiler::ast::{
+            expression_node::ExpressionNode, unary_op_node::UnaryOperation,
+        };
+
+        let reverse = |value| {
+            ExpressionNode::UnaryOp(UnaryOpNode {
+                expr: Box::new(IntNode::new(value).into()),
+                op: UnaryOperation::FromEnd,
+                is_post: false,
+                span: None,
+            })
+        };
+        for (mut node, expected) in [
+            (
+                RangeNode::new(None, None, None),
+                vec!["Range", "l: ", "  None", "r: ", "  None", "Int: 9"],
+            ),
+            (
+                RangeNode::new(Some(IntNode::new(1).into()), None, None),
+                vec!["Range", "l: ", "  Int: 1", "r: ", "  None", "Int: 9"],
+            ),
+            (
+                RangeNode::new(None, Some(IntNode::new(7).into()), None),
+                vec!["Range", "l: ", "  None", "r: ", "  Int: 7", "Int: 9"],
+            ),
+            (
+                RangeNode::new(
+                    Some(IntNode::new(1).into()),
+                    Some(IntNode::new(7).into()),
+                    None,
+                ),
+                vec!["Range", "l: ", "  Int: 1", "r: ", "  Int: 7", "Int: 9"],
+            ),
+            (
+                RangeNode::new(Some(reverse(1)), Some(reverse(2)), None),
+                vec![
+                    "Range",
+                    "l: ",
+                    "  Unary Op",
+                    "    operation: FromEnd",
+                    "    expr: ",
+                    "      Int: 1",
+                    "r: ",
+                    "  Unary Op",
+                    "    operation: FromEnd",
+                    "    expr: ",
+                    "      Int: 2",
+                    "Int: 9",
+                ],
+            ),
+        ] {
+            let mut printer = TreePrinter::new();
+            printer.visit_range(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            assert_eq!(printer.into_lines(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn standalone_unary_expressions_render_prefix_and_postfix_forms() {
+        use crate::compiler::ast::unary_op_node::UnaryOperation;
+
+        for (mut node, expected) in [
+            (
+                UnaryOpNode {
+                    expr: Box::new(IntNode::new(7).into()),
+                    op: UnaryOperation::Negate,
+                    is_post: false,
+                    span: None,
+                },
+                vec![
+                    "Unary Op",
+                    "  operation: Negate",
+                    "  expr: ",
+                    "    Int: 7",
+                    "Int: 9",
+                ],
+            ),
+            (
+                UnaryOpNode {
+                    expr: Box::new(VarNode::new("value").into()),
+                    op: UnaryOperation::Inc,
+                    is_post: true,
+                    span: None,
+                },
+                vec![
+                    "Unary Op",
+                    "  operation: Inc",
+                    "  post: true",
+                    "  expr: ",
+                    "    Var",
+                    "      name: value",
+                    "Int: 9",
+                ],
+            ),
+        ] {
+            let mut printer = TreePrinter::new();
+            printer.visit_unary_op(&mut node).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            assert_eq!(printer.into_lines(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn casts_render_the_type_and_operand_at_root_and_nested_depths() {
+        use crate::compiler::ast::expression_node::ExpressionNode;
+        use lpc_rs_core::lpc_type::LpcType;
+
+        let cast = || CastNode {
+            type_: LpcType::Int(false).into(),
+            expr: Box::new(VarNode::new("value").into()),
+            span: None,
+        };
+        let mut node = cast();
+        let mut printer = TreePrinter::new();
+        printer.visit_cast(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Cast",
+                "  type: int",
+                "  expr: ",
+                "    Var",
+                "      name: value",
+                "Int: 9"
+            ]
+        );
+
+        let mut node = ArrayNode::new(vec![ExpressionNode::Cast(cast())]);
+        let mut printer = TreePrinter::new();
+        printer.visit_array(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Array ({",
+                "  Cast",
+                "    type: int",
+                "    expr: ",
+                "      Var",
+                "        name: value",
+                "})",
+                "Int: 9"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn while_loops_render_condition_body_and_restore_indentation() {
+        use crate::compiler::ast::ast_node::AstNode;
+
+        let mut node = WhileNode::new(
+            IntNode::new(1).into(),
+            AstNode::Return(ReturnNode::new(Some(IntNode::new(7).into()))),
+            None,
+        );
+        let mut printer = TreePrinter::new();
+        printer.visit_while(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "While",
+                "  Int: 1",
+                "body:",
+                "  Return",
+                "    Int: 7",
+                "Int: 9"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn standalone_class_definitions_render_visibility_fields_and_restore_indentation() {
+        use crate::compiler::ast::ast_node::AstNode;
+
+        let mut tree = parsed("private class Record { int count; string label; }").await;
+        let AstNode::ClassDef(mut node) = tree.body.remove(0) else {
+            panic!("expected a class definition")
+        };
+        let mut printer = TreePrinter::new();
+        printer.visit_class_def(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Class Def: Record",
+                "  visibility: private",
+                "  field: int count",
+                "  field: string label",
+                "Int: 9"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn class_constructors_render_named_values_at_root_and_nested_depths() {
+        use crate::compiler::ast::{ast_node::AstNode, expression_node::ExpressionNode};
+
+        let tree = parsed("class Record { int count; int other; } mixed f() { return new(class Record, count: 7, other: 8); }").await;
+        let mut function = tree
+            .body
+            .into_iter()
+            .find_map(|node| match node {
+                AstNode::FunctionDef(function) => Some(function),
+                _ => None,
+            })
+            .unwrap();
+        let AstNode::Return(mut returned) = function.body.remove(0) else {
+            panic!("expected a return")
+        };
+        let Some(ExpressionNode::ClassInit(mut node)) = returned.value.take() else {
+            panic!("expected a class constructor")
+        };
+        let nested = node.clone();
+        let mut printer = TreePrinter::new();
+        printer.visit_class_init(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Class Init: class Record",
+                "  field: count",
+                "    Int: 7",
+                "  field: other",
+                "    Int: 8",
+                "Int: 9"
+            ]
+        );
+
+        let mut node = ArrayNode::new(vec![ExpressionNode::ClassInit(nested)]);
+        let mut printer = TreePrinter::new();
+        printer.visit_array(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Array ({",
+                "  Class Init: class Record",
+                "    field: count",
+                "      Int: 7",
+                "    field: other",
+                "      Int: 8",
+                "})",
+                "Int: 9"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn member_chains_and_compound_values_render_nested_receivers() {
+        use crate::compiler::ast::{
+            binary_op_node::BinaryOperation, expression_node::ExpressionNode,
+        };
+        use lpc_rs_core::call_namespace::CallNamespace;
+        use ustr::ustr;
+
+        let receiver = MemberNode {
+            receiver: Box::new(VarNode::new("record").into()),
+            name: ustr("next"),
+            span: None,
+        };
+        let member = MemberNode {
+            receiver: Box::new(ExpressionNode::Member(receiver)),
+            name: ustr("count"),
+            span: None,
+        };
+        let mut read = member.clone();
+        let compound = CompoundAssignmentNode {
+            lhs: Box::new(ExpressionNode::Member(member)),
+            rhs: Box::new(IntNode::new(7).into()),
+            op: BinaryOperation::Add,
+            span: None,
+        };
+        let mut call = CallNode {
+            chain: CallChain::Root {
+                receiver: None,
+                namespace: CallNamespace::Local,
+                name: ustr("consume"),
+            },
+            arguments: vec![ExpressionNode::CompoundAssignment(compound)],
+            span: None,
+            lvalue_temps: vec![],
+        };
+        let mut printer = TreePrinter::new();
+        printer.visit_call(&mut call).await.unwrap();
+        printer.visit_member(&mut read).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Call",
+                "  name: consume",
+                "  args:",
+                "    Compound Assignment: +",
+                "      lhs:",
+                "        Member: count",
+                "          Member: next",
+                "            Var",
+                "              name: record",
+                "      rhs:",
+                "        Int: 7",
+                "Member: count",
+                "  Member: next",
+                "    Var",
+                "      name: record",
+                "Int: 9",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn captures_render_initialization_values_and_restore_indentation() {
+        use lpc_rs_core::lpc_type::LpcType;
+        use ustr::ustr;
+
+        let mut initializer = VarInitNode::new("saved", LpcType::Mixed(false));
+        initializer.value = Some(IntNode::new(7).into());
+        let mut capture = CaptureNode {
+            name: ustr("saved"),
+            expr: Box::new(IntNode::new(7).into()),
+            span: None,
+        };
+        let mut printer = TreePrinter::new();
+        printer
+            .visit_capture_initializer(&mut initializer)
+            .await
+            .unwrap();
+        printer.visit_capture(&mut capture).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Capture Init",
+                "  VarInit",
+                "    name: saved",
+                "    type: mixed",
+                "    value:",
+                "      Int: 7",
+                "    array: false",
+                "Capture: saved",
+                "  Int: 7",
+                "Int: 9",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn spreads_render_their_operand_at_root_and_inside_arrays() {
+        use crate::compiler::ast::expression_node::ExpressionNode;
+
+        let spread = || SpreadNode {
+            expr: Box::new(VarNode::new("items").into()),
+            span: None,
+        };
+        let mut node = spread();
+        let mut printer = TreePrinter::new();
+        printer.visit_spread(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            ["Spread", "  Var", "    name: items", "Int: 9"]
+        );
+
+        let mut node = ArrayNode::new(vec![ExpressionNode::Spread(spread())]);
+        let mut printer = TreePrinter::new();
+        printer.visit_array(&mut node).await.unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(
+            printer.into_lines(),
+            [
+                "Array ({",
+                "  Spread",
+                "    Var",
+                "      name: items",
+                "})",
+                "Int: 9"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn nested_fragments_preserve_their_relative_indentation() {
+        use crate::compiler::ast::{
+            ast_node::AstNode, binary_op_node::BinaryOperation, expression_node::ExpressionNode,
+            operator_node::Operator,
+        };
+        use lpc_rs_core::call_namespace::CallNamespace;
+        use ustr::ustr;
+
+        fn root_call(
+            receiver: Option<ExpressionNode>,
+            name: &str,
+            arguments: Vec<ExpressionNode>,
+        ) -> CallNode {
+            CallNode {
+                chain: CallChain::Root {
+                    receiver: receiver.map(Box::new),
+                    namespace: CallNamespace::Local,
+                    name: ustr(name),
+                },
+                arguments,
+                span: None,
+                lvalue_temps: vec![],
+            }
+        }
+
+        let factory = root_call(None, "factory", vec![]);
+        let fragments = [
+            AstNode::For(ForNode::new(
+                Some(AstNode::Expression(IntNode::new(1).into())),
+                Some(IntNode::new(2).into()),
+                Some(IntNode::new(3).into()),
+                AstNode::Block(BlockNode::new(vec![])),
+                None,
+            )),
+            AstNode::Call(root_call(
+                Some(VarNode::new("target").into()),
+                "invoke",
+                vec![IntNode::new(7).into()],
+            )),
+            AstNode::Call(CallNode {
+                chain: CallChain::Node(Box::new(ExpressionNode::Call(factory))),
+                arguments: vec![IntNode::new(7).into()],
+                span: None,
+                lvalue_temps: vec![],
+            }),
+            AstNode::Expression(ExpressionNode::FunctionPtr(FunctionPtrNode {
+                receiver: Some(FunctionPtrReceiver::Static(Box::new(
+                    VarNode::new("target").into(),
+                ))),
+                arguments: Some(vec![Some(IntNode::new(7).into()), None]),
+                name: ustr("invoke"),
+                span: None,
+            })),
+            AstNode::Expression(ExpressionNode::Operator(OperatorNode::new(
+                Operator::Binary(BinaryOperation::Add),
+                Some(vec![Some(IntNode::new(7).into()), None]),
+                ustr("addition"),
+                None,
+            ))),
+        ];
+        for (index, fragment) in fragments.into_iter().enumerate() {
+            let mut root = fragment.clone();
+            let mut printer = TreePrinter::new();
+            root.visit(&mut printer).await.unwrap();
+            let lines = printer.into_lines();
+
+            let mut nested = BlockNode::new(vec![fragment]);
+            let mut printer = TreePrinter::new();
+            nested.visit(&mut printer).await.unwrap();
+            printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+            let mut expected = vec!["Block {".to_owned()];
+            expected.extend(lines.into_iter().map(|line| format!("  {line}")));
+            expected.extend(["}".to_owned(), "Int: 9".to_owned()]);
+            assert_eq!(printer.into_lines(), expected, "fragment {index}");
+        }
+    }
+
+    #[tokio::test]
+    async fn float_literals_keep_their_value_type_and_signed_zero() {
+        let mut printer = TreePrinter::new();
+        printer.visit_float(&mut FloatNode::new(1.5)).await.unwrap();
+        printer
+            .visit_float(&mut FloatNode::new(-0.0))
+            .await
+            .unwrap();
+        printer.visit_int(&mut IntNode::new(9)).await.unwrap();
+        assert_eq!(printer.into_lines(), ["Float: 1.5", "Float: -0", "Int: 9"]);
+    }
 }

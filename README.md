@@ -252,6 +252,42 @@ Tests live alongside the Rust code and in [tests](tests); performance workloads
 live in [benches](benches) and [examples](examples). See [AGENTS.md](AGENTS.md)
 for repository conventions and profiling commands.
 
+### Mutation testing
+
+[cargo-mutants](https://mutants.rs/) checks whether tests detect changes to
+production code. The current scope and exclusion rationales are maintained in
+[`.cargo/mutants.toml`](.cargo/mutants.toml). CI selection, sharding, tool versions
+and job limits are defined in the [mutation workflow](.github/workflows/mutation.yml).
+
+Install the cargo-mutants version pinned by that workflow and cargo-nextest.
+From the repository root, list or test the configured scope:
+
+```sh
+cargo mutants --workspace --list
+CARGO_TARGET_DIR="$PWD/target" cargo mutants --workspace --jobs 1 --output /tmp/lpc-rs-mutants
+```
+
+For a local run limited to changed production lines, compare the working tree
+with the desired base and pass the resulting patch to `--in-diff`:
+
+```sh
+git diff --no-ext-diff --no-textconv --unified=0 origin/master -- '*.rs' > /tmp/lpc-rs-mutants.diff
+CARGO_TARGET_DIR="$PWD/target" cargo mutants --workspace --jobs 1 \
+  --in-diff /tmp/lpc-rs-mutants.diff --output /tmp/lpc-rs-mutants
+```
+
+Mutation runs first check the unmodified tests, then test each change using
+nextest. Continue using the workspace checks above for normal validation,
+including doctests. Reports and per-mutation logs are written under
+`/tmp/lpc-rs-mutants/mutants.out/`.
+
+Inspect `missed.txt` for undetected changes and check `timeout.txt` and
+`unviable.txt` separately; a timeout or compilation failure does not demonstrate
+that an assertion caught the change. Verify `mutants.json` when narrowing a run.
+Select downstream consumers when needed with `--test-workspace=true` or
+`--test-package`. Keep exclusions narrow and document their rationale beside the
+configuration entry.
+
 ## Licence
 
 [MIT](LICENSE).

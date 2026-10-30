@@ -377,7 +377,8 @@ impl GrammarBuilder {
 /// Compute which nonterminals derive the empty string, by fixpoint over the productions.
 fn compute_nullable(productions: &[Production], count: usize) -> Vec<bool> {
     let mut nullable = vec![false; count];
-    loop {
+    // Every changing pass marks at least one previously false entry.
+    for _ in 0..count {
         let mut changed = false;
         for p in productions {
             if nullable[p.lhs.0 as usize] {
@@ -396,11 +397,37 @@ fn compute_nullable(productions: &[Production], count: usize) -> Vec<bool> {
             return nullable;
         }
     }
+    nullable
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grammar_errors_preserve_their_context_in_diagnostics() {
+        for (error, expected) in [
+            (
+                GrammarError::UnknownNonTerminal {
+                    name: "Ghost".into(),
+                },
+                "nonterminal `Ghost` has no production",
+            ),
+            (
+                GrammarError::BadRegex {
+                    class: "word".into(),
+                    message: "invalid token regex".into(),
+                },
+                "token rule `word`: invalid token regex",
+            ),
+            (
+                GrammarError::DfaBuild("size limit exceeded".into()),
+                "token rules: size limit exceeded",
+            ),
+        ] {
+            assert_eq!(error.to_string(), expected);
+        }
+    }
 
     #[test]
     fn nonterminal_is_idempotent_by_name() {
@@ -476,6 +503,20 @@ mod tests {
     }
 
     #[test]
+    fn nullable_propagation_can_use_every_nonterminal_pass() {
+        let mut builder = GrammarBuilder::new();
+        let chain: Vec<_> = (0..64)
+            .map(|i| builder.nonterminal(&format!("N{i}")))
+            .collect();
+        for pair in chain.windows(2) {
+            builder.production(pair[0], [nt(pair[1])]);
+        }
+        builder.production(*chain.last().unwrap(), []);
+        let grammar = builder.build(chain[0]).unwrap();
+        assert!(chain.into_iter().all(|id| grammar.is_nullable(id)));
+    }
+
+    #[test]
     fn labels_ride_on_elements() {
         let e = lit("get").labeled(Label(3));
         assert_eq!(e.label, Some(Label(3)));
@@ -495,6 +536,7 @@ mod tests {
         assert_eq!(scan.tokens().len(), 2);
         assert_eq!(scan.token_text(1), "there");
         assert_eq!(g.token_name(word), "word");
+        assert_eq!(g.nonterminal_name(s), "S");
         assert!(g.tokenize("").unwrap().tokens().is_empty());
     }
 }

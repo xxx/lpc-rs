@@ -27,6 +27,10 @@ Prefer the bare function name when no arguments are being bound:
 `evaluate(strindex, "hello", "ll")`. Use `&name(args)` to bind arguments,
 such as `function add_ten = &add(10)`.
 
+Bound arguments run from left to right when the pointer is constructed, keeping
+their values before later bound expressions can reassign their variables. In a
+receiver-bound pointer, the receiver expression runs after the bound arguments.
+
 Breaking it down by syntax, functions can take the following forms:
 
 * `function_name` - A reference to a function of this program (own or
@@ -70,6 +74,9 @@ Breaking it down by syntax, functions can take the following forms:
   Subsequent arguments are passed to the function. Partial application can be used.
   If the receiver has no function by that name, the call returns `0`, including
   when the pointer is used as an efun callback such as `filter` or `map`.
+  Only public methods are eligible; private and protected methods return the
+  selected null value, as with an ordinary `->` call. This also applies to a
+  pointer to `call_other`.
 
 * `operator(op)` - An operator as a function. `operator(+)` is the function
   that adds its two arguments exactly as `a + b` would, for every operand

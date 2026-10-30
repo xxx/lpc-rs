@@ -160,3 +160,91 @@ impl Display for FunctionAddress {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
+    use lpc_rs_function_support::{
+        function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunctionBuilder,
+    };
+
+    use super::*;
+    use crate::interpreter::program::ProgramBuilder;
+
+    fn local_addresses() -> (Arc<Process>, FunctionAddress, FunctionAddress) {
+        let program = ProgramBuilder::default()
+            .filename(LpcPath::in_game("/target".into()))
+            .build()
+            .unwrap();
+        let receiver = Arc::new(Process::new(program));
+        let bind = |name: &'static str| {
+            let prototype = FunctionPrototypeBuilder::default()
+                .name(name)
+                .filename(Arc::new(LpcPath::in_game("/target.c".into())))
+                .return_type(LpcType::Void)
+                .build()
+                .unwrap();
+            let function = ProgramFunctionBuilder::default()
+                .prototype(prototype)
+                .build()
+                .unwrap();
+            FunctionAddress::local(&receiver, Arc::new(function).into(), &TxnHandle::empty())
+        };
+        let first = bind("first");
+        let second = bind("second");
+        (receiver, first, second)
+    }
+
+    #[test]
+    fn local_identity_and_diagnostics_survive_the_weak_receiver() {
+        let (receiver, first, second) = local_addresses();
+        let FunctionAddress::Local(owner, local) = &first else {
+            unreachable!();
+        };
+        let FunctionAddress::Local(_, other) = &second else {
+            unreachable!();
+        };
+        assert_eq!(local, &local.clone());
+        assert_ne!(local, other);
+        assert!(local.to_string().contains("first"));
+        assert!(first.to_string().starts_with(&format!("{receiver}::")));
+
+        drop(receiver);
+        assert!(owner.upgrade().is_none());
+        assert_eq!(local, &local.clone());
+        assert_ne!(local, other);
+        assert!(first.to_string().starts_with("<destructed>::"));
+        assert!(first.to_string().contains("first"));
+    }
+
+    #[test]
+    fn address_equality_uses_both_kind_and_function_name() {
+        let (_receiver, first, second) = local_addresses();
+        let addresses = [
+            first,
+            FunctionAddress::Dynamic(ustr::ustr("first")),
+            FunctionAddress::Efun(ustr::ustr("first")),
+            FunctionAddress::SimulEfun(ustr::ustr("first")),
+        ];
+        let different_names = [
+            second,
+            FunctionAddress::Dynamic(ustr::ustr("second")),
+            FunctionAddress::Efun(ustr::ustr("second")),
+            FunctionAddress::SimulEfun(ustr::ustr("second")),
+        ];
+        for (i, address) in addresses.iter().enumerate() {
+            assert_eq!(address.function_name(), "first");
+            assert_ne!(address, &different_names[i]);
+            for (j, other) in addresses.iter().enumerate() {
+                assert_eq!(address == other, i == j, "{address:?} and {other:?}");
+            }
+        }
+        for (address, expected) in
+            addresses[1..]
+                .iter()
+                .zip(["dynamic::first", "efun::first", "simul_efun::first"])
+        {
+            assert_eq!(address.to_string(), expected);
+        }
+    }
+}

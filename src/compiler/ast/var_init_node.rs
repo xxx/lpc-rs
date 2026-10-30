@@ -28,7 +28,7 @@ pub struct VarInitNode {
     /// The var name
     pub name: Ustr,
 
-    /// The initialization value. When missing, defaults to 0.
+    /// An omitted initializer uses the declared type's default value.
     pub value: Option<ExpressionNode>,
 
     /// Is this var actually an array?
@@ -83,13 +83,11 @@ impl AstNodeTrait for VarInitNode {
 
 impl Display for VarInitNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let v = if let Some(x) = &self.value {
-            format!(" = {x}")
-        } else {
-            String::from("")
-        };
-
-        write!(f, "{} {} = {}", self.type_, self.name, v)
+        write!(f, "{} {}", self.type_, self.name)?;
+        if let Some(value) = &self.value {
+            write!(f, " = {value}")?;
+        }
+        Ok(())
     }
 }
 
@@ -109,7 +107,53 @@ impl TryFrom<&mut VarInitNode> for Symbol {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compiler::{
+        ast::ast_node::AstNode, compilation_context::CompilationContext, lexer::LexWrapper,
+    };
     use lpc_rs_core::lpc_type::LpcType;
+
+    fn parsed_initializer(source: &str) -> VarInitNode {
+        let mut context = CompilationContext::default();
+        let mut program = crate::lpc_parser::ProgramParser::new()
+            .parse(&mut context, LexWrapper::new(source, 3).triples())
+            .unwrap();
+        let Some(AstNode::Decl(mut declaration)) = program.body.pop() else {
+            panic!("variable declaration");
+        };
+        declaration
+            .initializations
+            .pop()
+            .expect("variable initializer")
+    }
+
+    #[test]
+    fn an_uninitialized_declaration_has_no_assignment_marker() {
+        assert_eq!(parsed_initializer("int count;").to_string(), "int count");
+    }
+
+    #[test]
+    fn an_initialized_declaration_has_one_assignment_marker() {
+        assert_eq!(
+            parsed_initializer("int count = 7;").to_string(),
+            "int count = 7"
+        );
+    }
+
+    #[test]
+    fn parsed_globals_keep_their_source_range_and_symbol_annotations() {
+        let source = "private nosave int count = 7;";
+        let mut node = parsed_initializer(source);
+        let span = Some(Span::new(
+            3,
+            source.find("count").unwrap()..source.find('7').unwrap() + 1,
+        ));
+        assert_eq!(node.span(), span);
+        let symbol = Symbol::try_from(&mut node).unwrap();
+        assert_eq!(symbol.name, "count");
+        assert_eq!(symbol.span, span);
+        assert!(!symbol.visible_to_children());
+        assert!(symbol.flags.is_static());
+    }
 
     #[test]
     fn test_update_type_maintains_the_array_state() {

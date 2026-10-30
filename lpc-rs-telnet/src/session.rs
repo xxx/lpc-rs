@@ -117,7 +117,7 @@ enum Remote {
 type Policy = fn(Opt) -> (Local, Remote);
 
 /// Which side may enable each option.
-fn v1(opt: Opt) -> (Local, Remote) {
+fn default_policy(opt: Opt) -> (Local, Remote) {
     match opt {
         Opt::Echo => (Local::OnDemand, Remote::Refuse),
         Opt::Sga => (Local::Accept, Remote::Accept),
@@ -194,7 +194,7 @@ impl Default for Session {
 impl Session {
     /// A session for a client that just connected; its offers are already queued.
     pub fn new() -> Self {
-        Self::with_policy(v1)
+        Self::with_policy(default_policy)
     }
 
     fn with_policy(policy: Policy) -> Self {
@@ -360,6 +360,25 @@ impl Session {
             }
         }
         None
+    }
+
+    /// Take the next protocol event while leaving text for a later input mode.
+    pub fn next_protocol_event(&mut self) -> Option<Event> {
+        let index = self
+            .incoming
+            .iter()
+            .position(|incoming| matches!(incoming, Incoming::Event(_)))?;
+        match self.incoming.remove(index) {
+            Some(Incoming::Event(event)) => Some(event),
+            _ => unreachable!("the selected item is a protocol event"),
+        }
+    }
+
+    /// Whether unread client text is queued for decoding.
+    pub fn has_pending_input(&self) -> bool {
+        self.incoming
+            .iter()
+            .any(|incoming| matches!(incoming, Incoming::Data(_)))
     }
 
     /// Move everything queued for the client into `into`.
@@ -572,8 +591,6 @@ impl Session {
                     &[CHARSET_TTABLE_REJECTED],
                 );
             }
-            // Nothing to record: output stays UTF-8 either way (D10).
-            CHARSET_REJECTED => {}
             _ => {}
         }
     }
@@ -629,6 +646,30 @@ mod tests {
     }
 
     #[test]
+    fn protocol_events_leave_buffered_text_for_the_selected_input_mode() {
+        let mut session = connected();
+        assert!(!session.has_pending_input());
+        assert_eq!(session.next_protocol_event(), None);
+        session.feed("é\r\n".as_bytes());
+        session.feed(&[IAC, SB, NAWS, 0, 80, 0, 24, IAC, SE]);
+        session.feed(b"Z\r\n");
+        assert!(session.has_pending_input());
+        assert_eq!(
+            session.next_protocol_event(),
+            Some(Event::Naws { cols: 80, rows: 24 })
+        );
+        assert_eq!(session.next_protocol_event(), None);
+        assert!(session.has_pending_input());
+        session.set_input_mode(InputMode::Character);
+        assert_eq!(session.next_event(), Some(Event::Character("é".into())));
+        assert_eq!(session.next_event(), Some(Event::Character("\r".into())));
+        session.set_input_mode(InputMode::Line);
+        assert_eq!(session.next_event(), Some(Event::Line("Z".into())));
+        assert_eq!(session.next_event(), None);
+        assert!(!session.has_pending_input());
+    }
+
+    #[test]
     fn connect_offers_extensions_in_order() {
         let mut session = Session::new();
         assert_eq!(
@@ -646,6 +687,43 @@ mod tests {
         s.feed(&[IAC, DO, GMCP]);
         assert!(out(&mut s).is_empty());
         assert!(s.is_on(Opt::Gmcp));
+    }
+
+    #[test]
+    fn a_dont_withdraws_an_enabled_local_option() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, GMCP]);
+        assert!(s.is_on(Opt::Gmcp));
+        s.feed(&[IAC, DONT, GMCP]);
+        assert!(!s.is_on(Opt::Gmcp));
+        assert_eq!(out(&mut s), [IAC, WONT, GMCP]);
+        s.send(Op::Gmcp {
+            package: "Core.Ping",
+            payload: "",
+        });
+        assert!(out(&mut s).is_empty());
+        assert_eq!(s.stats().dropped, 1);
+    }
+
+    #[test]
+    fn plain_reads_do_not_queue_a_chunk_per_byte() {
+        let mut s = connected();
+        s.feed(&[b'a'; 1024]);
+        s.feed(&[b'b'; 1024]);
+        assert!(
+            s.incoming.len() <= 2,
+            "two reads queued {} data chunks",
+            s.incoming.len()
+        );
+        s.feed(b"\n");
+        assert_eq!(
+            events(&mut s),
+            [Event::Line(format!(
+                "{}{}",
+                "a".repeat(1024),
+                "b".repeat(1024)
+            ))]
+        );
     }
 
     #[test]
@@ -1124,6 +1202,18 @@ mod tests {
         assert!(events(&mut s).is_empty());
         s.send(Op::Text("é"));
         assert_eq!(out(&mut s), "é".as_bytes());
+    }
+
+    #[test]
+    fn charset_rejection_preserves_the_previous_agreement() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, CHARSET]);
+        out(&mut s);
+        s.feed(b"\xff\xfa\x2a\x02UTF-8\xff\xf0");
+        assert_eq!(events(&mut s), [Event::Charset("UTF-8".into())]);
+        s.feed(&[IAC, SB, CHARSET, CHARSET_REJECTED, IAC, SE]);
+        assert_eq!(s.charset(), Some("UTF-8"));
+        assert!(events(&mut s).is_empty());
     }
 
     #[test]

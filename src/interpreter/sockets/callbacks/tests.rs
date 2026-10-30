@@ -231,6 +231,78 @@ fn invocation(f: &Fixture, event: Pending) -> Invocation<'_> {
     }
 }
 
+#[tokio::test]
+async fn shutdown_reports_a_failed_supervisor_task() {
+    let (stop, _stopping) = watch::channel(false);
+    let task = tokio::spawn(async { Err::<(), _>(error("controlled supervisor failure")) });
+    let runtime = SocketRuntime {
+        stop,
+        task: Some(task),
+    };
+    let failure = runtime.shutdown().await.unwrap_err();
+    assert!(failure.message().contains("controlled supervisor failure"));
+}
+
+#[tokio::test]
+async fn dropping_runtime_cancels_a_supervisor_blocked_outside_the_stop_watch() {
+    let (stop, _stopping) = watch::channel(false);
+    let (held, released) = tokio::sync::oneshot::channel::<()>();
+    let task = tokio::spawn(async move {
+        std::future::pending::<()>().await;
+        drop(held);
+        Ok(())
+    });
+    drop(SocketRuntime {
+        stop,
+        task: Some(task),
+    });
+    assert!(
+        timeout(Duration::from_secs(3), released)
+            .await
+            .unwrap()
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn invocation_reports_its_owner_and_execution_budget() {
+    let f = Fixture::with_budget(RECORDER, 1234).await;
+    let handle = f.connect(f.pointer(&f.owner, "event").await).await;
+    f.ready(handle).await;
+    let mut body = invocation(&f, f.head(handle).await);
+    let RegisterVariant::Global(count) = f.owner.initial_program().global_variables["count"]
+        .location
+        .unwrap()
+    else {
+        panic!("count is a global");
+    };
+    let cell = f.owner.var_id(count.index());
+    assert_eq!(body.timeout_ms(), 1234);
+    assert!(body.origin().is_none());
+    assert!(body.describe_cell(cell).is_none());
+    let _live = body
+        .begin_attempt(&f.gs().committer_tx)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(body.failure.is_none());
+    assert_eq!(
+        body.origin().unwrap().to_string(),
+        format!("{}::socket_callback", f.owner.filename()),
+    );
+    assert_eq!(
+        body.describe_cell(cell),
+        Some("/owner.global.count".to_owned())
+    );
+    assert_eq!(body.take_compilation_time(), Duration::ZERO);
+    tokio::time::pause();
+    let compiling = body.txn.as_ref().unwrap().time_compilation();
+    tokio::time::advance(Duration::from_millis(17)).await;
+    drop(compiling);
+    assert_eq!(body.take_compilation_time(), Duration::from_millis(17));
+    assert_eq!(body.take_compilation_time(), Duration::ZERO);
+}
+
 enum Action {
     Write(Arc<Process>, String, LpcRef),
     Transfer(SocketHandle, Arc<Process>, Arc<Process>, Arc<FunctionPtr>),
@@ -483,6 +555,41 @@ async fn caught_callback_errors_commit_normally() {
 }
 
 #[tokio::test]
+async fn an_uninitialized_callback_receiver_initializes_once_before_its_events() {
+    let f = Fixture::new(RECORDER).await;
+    let receiver =
+        f.vm.create_process_from_code(
+            "/receiver.c",
+            r#"
+                int initializations = 0;
+                string state = "globals";
+                void create() { initializations++; state += ":create"; }
+                void event(int h, string e, mixed d) { state += ":" + e; }
+            "#,
+        )
+        .await
+        .unwrap();
+    let handle = f.connect(f.pointer(&receiver, "event").await).await;
+    f.ready(handle).await;
+    f.dispatch(handle).await;
+    assert_eq!(f.global(&receiver, "initializations"), LpcRef::from(1));
+    assert_eq!(
+        f.global(&receiver, "state"),
+        LpcRef::from("globals:create:ready")
+    );
+
+    f.read(handle, 1, b"x").await;
+    f.dispatch(handle).await;
+    assert_eq!(f.global(&receiver, "initializations"), LpcRef::from(1));
+    assert_eq!(
+        f.global(&receiver, "state"),
+        LpcRef::from("globals:create:ready:read")
+    );
+    assert!(f.info(handle).await.is_some());
+    assert_eq!(f.global(&f.master, "errors"), LpcRef::from(0));
+}
+
+#[tokio::test]
 async fn callbacks_use_driver_origin_and_the_scheduling_owner_without_player_context() {
     let f = Fixture::new(RECORDER).await;
     let receiver = f
@@ -509,8 +616,10 @@ async fn callbacks_use_driver_origin_and_the_scheduling_owner_without_player_con
     assert_eq!(f.global(&receiver, "player"), LpcRef::Nil);
     assert_eq!(f.global(&receiver, "interactive"), LpcRef::Nil);
     assert_eq!(f.global(&receiver, "command"), LpcRef::Nil);
-    f.gs()
-        .with_call_outs(|calls| assert!(calls.queue().iter().all(|(_, c)| c.player.is_none())));
+    f.gs().with_call_outs(|calls| {
+        assert_eq!(calls.len(), 1);
+        assert!(calls.queue().iter().all(|(_, c)| c.player.is_none()));
+    });
 }
 
 #[tokio::test]
@@ -909,7 +1018,9 @@ async fn evaluation_timeout_reports_and_discards_the_event_without_callback_writ
     let receiver = f.object("/receiver.c", "int count; void event(int h, string e, mixed d) { count++; if (e == \"ready\") while (1) {} }").await;
     let handle = f.connect(f.pointer(&receiver, "event").await).await;
     f.ready(handle).await;
-    f.dispatch(handle).await;
+    timeout(Duration::from_secs(3), f.dispatch(handle))
+        .await
+        .expect("the callback execution limit must terminate the infinite LPC loop");
     assert_eq!(f.global(&receiver, "count"), LpcRef::from(0));
     assert_eq!(f.global(&f.master, "errors"), LpcRef::from(1));
     assert_eq!(

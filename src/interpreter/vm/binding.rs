@@ -316,6 +316,69 @@ mod tests {
         ))
     }
 
+    #[tokio::test]
+    async fn binding_attempts_describe_their_origin_and_cells() {
+        let vm = Vm::new(test_config());
+        let process = vm.create_process_from_code("/body.c", "").await.unwrap();
+        let other = vm.create_process_from_code("/other.c", "").await.unwrap();
+        let connection = make_connection();
+        let attach = AttachBody {
+            global_state: vm.global_state.clone(),
+            connection: connection.clone(),
+            process: process.clone(),
+            attempt: None,
+        };
+        let detach = DetachBody {
+            global_state: &vm.global_state,
+            connection,
+            process: process.clone(),
+            attempt: None,
+            held: false,
+        };
+        assert_eq!(
+            attach.origin().unwrap().to_string(),
+            format!("{}::attach", process.filename())
+        );
+        assert_eq!(
+            detach.origin().unwrap().to_string(),
+            format!("{}::detach", process.filename())
+        );
+        let label = Some(format!("{}.connection", process.filename()));
+        assert_eq!(attach.describe_cell(process.connection.id), label);
+        assert_eq!(detach.describe_cell(process.connection.id), label);
+        assert_eq!(
+            attach.describe_cell(other.connection.id),
+            Some(format!("{}.connection", other.filename()))
+        );
+        assert_eq!(detach.describe_cell(other.connection.id), None);
+    }
+
+    #[tokio::test]
+    async fn attach_moves_the_connection_and_clears_the_old_body() {
+        let vm = Vm::new(test_config());
+        let old = vm.create_process_from_code("/old.c", "").await.unwrap();
+        let new = vm.create_process_from_code("/new.c", "").await.unwrap();
+        let mut on = connect(&vm, &old).await;
+
+        vm.global_state
+            .attach(on.connection.clone(), new.clone())
+            .await;
+
+        assert!(vm.global_state.committed_connection(&old).is_none());
+        assert!(
+            vm.global_state
+                .committed_connection(&new)
+                .is_some_and(|held| Arc::ptr_eq(&held, &on.connection))
+        );
+        assert!(
+            on.connection
+                .body()
+                .is_some_and(|body| Arc::ptr_eq(&body, &new))
+        );
+        assert_eq!(on.rx.try_recv(), Ok(ConnectionOp::Attached));
+        assert!(on.rx.try_recv().is_err());
+    }
+
     /// A rejected attach attempt re-runs: the second attempt commits the
     /// connection cell and only then flushes the back-reference.
     #[tokio::test]
@@ -486,6 +549,7 @@ mod tests {
     #[test]
     fn the_registry_counts_the_logged_in() {
         let registry = Registry::default();
+        assert!(registry.is_empty());
         let a = make_connection();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let b = Arc::new(Connection::new("127.0.0.1:23125".parse().unwrap(), tx));

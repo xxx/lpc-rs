@@ -54,6 +54,46 @@ async fn object(vm: &Vm, path: &str, code: &str) -> Arc<Process> {
         .process
 }
 
+#[tokio::test]
+async fn a_dead_movers_arrival_does_not_depend_on_its_destination() {
+    let vm = Vm::new(test_config());
+    crate::test_support::allow_destruct(&vm).await;
+    let room = object(&vm, "/room.c", "void die() { destruct(this_object()); }").await;
+    let mover = object(&vm, "/mover.c", "void create() { move_object(\"/room\"); }").await;
+    let controller = object(
+        &vm,
+        "/controller.c",
+        "int visits; void kill() { destruct(find_object(\"/mover\")); } void mark() { visits++; }",
+    )
+    .await;
+    call(
+        &TaskTemplate::from(vm.global_state.clone()),
+        &controller,
+        "kill",
+    )
+    .await;
+
+    let arrival = Pending::new(&vm).await;
+    let ctx = arrival
+        .template
+        .clone()
+        .into_task_context(controller.clone());
+    assert!(!mover.is_live(ctx.txn()));
+    super::after_move(&ctx, None, &mover, &room).await.unwrap();
+    arrival.call(&controller, "mark").await;
+    let departure = Pending::new(&vm).await;
+    departure.call(&room, "die").await;
+    departure.commit(&vm).await.unwrap();
+    arrival
+        .commit(&vm)
+        .await
+        .expect("a dead mover must not track the destination");
+    assert_eq!(
+        vm.global_state.committed_global(&controller, 0u16),
+        crate::interpreter::lpc_ref::LpcRef::from(1)
+    );
+}
+
 fn assert_living_index(vm: &Vm, room: &Arc<Process>) {
     let inventory = vm.global_state.committed_inventory(room);
     let expected: Vec<_> = inventory

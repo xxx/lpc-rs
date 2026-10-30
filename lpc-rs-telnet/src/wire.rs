@@ -88,4 +88,18 @@ mod tests {
     fn utf8_passes_through() {
         assert_eq!(collect(|o| text(o, "é")), "é".as_bytes());
     }
+
+    #[test]
+    fn plain_text_reservation_does_not_grow_quadratically() {
+        let mut small = BytesMut::new();
+        text(&mut small, &"a".repeat(64));
+        let mut large = BytesMut::new();
+        text(&mut large, &"a".repeat(128));
+        assert!(
+            large.capacity() < 4 * small.capacity(),
+            "doubling plaintext grew capacity from {} to {}",
+            small.capacity(),
+            large.capacity()
+        );
+    }
 }

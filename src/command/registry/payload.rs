@@ -91,3 +91,41 @@ impl RuleEdit {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{command::registry::tests::rule, interpreter::process::Process};
+
+    #[test]
+    fn owned_rule_lists_preserve_registration_order_and_snapshot_edits() {
+        let owner = Arc::new(Process::default());
+        let original: RuleList = vec![rule(&owner, "look"), rule(&owner, "get")].into();
+        let rebuilt: RuleList = original.iter().cloned().collect();
+        assert_eq!(
+            original
+                .iter()
+                .map(|rule| rule.verb.as_str())
+                .collect::<Vec<_>>(),
+            ["look", "get"]
+        );
+        assert_eq!(rebuilt, original);
+
+        let mut edited = original.clone();
+        RuleEdit::append(vec![rule(&owner, "drop")]).apply(&mut edited);
+        assert_eq!(
+            original
+                .iter()
+                .map(|rule| rule.verb.as_str())
+                .collect::<Vec<_>>(),
+            ["look", "get"]
+        );
+        assert_eq!(
+            edited
+                .iter()
+                .map(|rule| rule.verb.as_str())
+                .collect::<Vec<_>>(),
+            ["look", "get", "drop"]
+        );
+    }
+}

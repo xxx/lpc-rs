@@ -179,6 +179,41 @@ impl Drop for CompilationTimer {
 mod tests {
     use super::*;
 
+    #[test]
+    fn conflicts_identify_affected_cells_without_inventing_them_for_versions() {
+        let cell = VarId::new();
+        for conflict in [
+            Conflict::ReadInvalidated {
+                cell,
+                base: Version(2),
+                current: Version(5),
+                written_at: Version(4),
+                writer: None,
+            },
+            Conflict::MergeMismatch {
+                cell,
+                base: Version(2),
+                current: Version(5),
+            },
+        ] {
+            assert_eq!(conflict.cell(), Some(cell));
+        }
+        for conflict in [
+            Conflict::HistoryUnavailable {
+                base: Version(2),
+                oldest: Version(4),
+                current: Version(5),
+            },
+            Conflict::FutureVersion {
+                base: Version(6),
+                current: Version(5),
+            },
+            Conflict::Forced,
+        ] {
+            assert_eq!(conflict.cell(), None);
+        }
+    }
+
     #[tokio::test(start_paused = true)]
     async fn nested_compilation_is_counted_once_when_cancelled() {
         let txn = TxnHandle::empty();
@@ -216,26 +251,32 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let process = vm
-            .initialize_process_from_code("/daemon.c", "mapping members = ([]);")
+            .initialize_process_from_code(
+                "/daemon.c",
+                "mapping members = ([]); mixed *items = ({});",
+            )
             .await
             .unwrap()
             .context
             .process;
         let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
         let txn = Transaction::new(live.inner.clone());
-        let global = process.var_id(0);
-        let Some(WorldValue::Ref(LpcRef::Mapping(payload))) = txn.snapshot.peek(global) else {
-            panic!("global should hold a mapping");
-        };
-        assert_eq!(
-            txn.describe_cell(&vm.global_state.object_space, payload.id)
-                .as_deref(),
-            Some("mapping payload via /daemon.global.members")
-        );
-        assert!(
-            txn.changeset
-                .conflicting_read(&[global, payload.id].into_iter().collect())
-                .is_none()
-        );
+        for (reg, kind, name) in [(0, "mapping", "members"), (1, "array", "items")] {
+            let global = process.var_id(reg);
+            let payload = match txn.snapshot.peek(global) {
+                Some(WorldValue::Ref(LpcRef::Mapping(payload))) => payload.id,
+                Some(WorldValue::Ref(LpcRef::Array(payload))) => payload.id,
+                other => panic!("global should hold a {kind}, got {other:?}"),
+            };
+            assert_eq!(
+                txn.describe_cell(&vm.global_state.object_space, payload),
+                Some(format!("{kind} payload via /daemon.global.{name}")),
+            );
+            assert!(
+                txn.changeset
+                    .conflicting_read(&[global, payload].into_iter().collect())
+                    .is_none()
+            );
+        }
     }
 }

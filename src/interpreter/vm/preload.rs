@@ -131,14 +131,16 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog};
-    use tokio::io::AsyncReadExt;
 
     use crate::{
         interpreter::{
             process::Process,
             vm::{Vm, vm_op::VmOp},
         },
-        test_support::{PERMISSIVE_MASTER, TempLib, lib_holding, string_global, temp_lib_config},
+        test_support::{
+            PERMISSIVE_MASTER, TempLib, lib_holding, log_capture::LogCapture, string_global,
+            temp_lib_config,
+        },
     };
 
     /// A file whose `create()` runs quietly.
@@ -314,38 +316,73 @@ void preload(string file) { loaded += file + ";"; }
         assert!(errors.ends_with("@master;"), "{errors}");
     }
 
-    #[tokio::test]
-    async fn a_list_without_a_preload_apply_is_logged() {
-        let root = lib_holding("preload-no-apply", &[("good.c", QUIET)]);
-        let source = format!(
-            "{PERMISSIVE_MASTER}string *epilog(int load_empty) {{ return ({{ \"/good\" }}); }}\n"
-        );
+    async fn booted_with_log(master: &str) -> (Vm, LogCapture, TempLib) {
+        let root = lib_holding("preload-logging", &[("good.c", QUIET), ("also.c", QUIET)]);
+        let source = format!("{PERMISSIVE_MASTER}{master}");
         std::fs::write(root.join("secure/master.c"), source).unwrap();
-        let (writer, mut reader) = tokio::io::duplex(4096);
+        let log = LogCapture::default();
         let config = ConfigBuilder::default()
             .lib_dir(root.to_str().unwrap())
-            .debug_log(DebugLog::new(writer))
+            .debug_log(DebugLog::new(log.clone()))
             .build()
             .unwrap();
         let mut vm = Vm::new(config);
         vm.bootstrap().await.expect("the master boots");
+        (vm, log, root)
+    }
 
-        vm.preload().await;
+    #[tokio::test]
+    async fn a_list_without_a_preload_apply_is_logged() {
+        for (files, expected) in [
+            (
+                r#""/good""#,
+                "epilog listed 1 file but the master defines no `preload`",
+            ),
+            (
+                r#""/good", "/also""#,
+                "epilog listed 2 files but the master defines no `preload`",
+            ),
+        ] {
+            let source = format!("string *epilog(int load_empty) {{ return ({{ {files} }}); }}");
+            let (vm, log, _root) = booted_with_log(&source).await;
+            vm.preload().await;
+            vm.global_state
+                .config
+                .debug_log
+                .as_ref()
+                .unwrap()
+                .flush()
+                .await;
+            let logged = log.contents();
+            assert!(logged.contains(expected), "{logged}");
+            assert!(!is_loaded(&vm, "/good"));
+            assert!(!is_loaded(&vm, "/also"));
+        }
+    }
 
-        let logged = tokio::time::timeout(Duration::from_secs(1), async {
-            let mut logged = String::new();
-            let mut chunk = [0u8; 4096];
-            while !logged.contains("no `preload`") {
-                let n = reader.read(&mut chunk).await.unwrap();
-                assert!(n > 0, "the log closed before the line arrived: {logged}");
-                logged.push_str(&String::from_utf8_lossy(&chunk[..n]));
+    #[tokio::test]
+    async fn non_array_epilog_answers_are_logged_and_null_is_quiet() {
+        for (answer, expected) in [(r#""/good""#, true), ("nil", false)] {
+            let source = format!("mixed epilog(int load_empty) {{ return {answer}; }}");
+            let (vm, log, _root) = booted_with_log(&source).await;
+            vm.preload().await;
+            vm.global_state
+                .config
+                .debug_log
+                .as_ref()
+                .unwrap()
+                .flush()
+                .await;
+            let logged = log.contents();
+            assert_eq!(logged.contains("epilog answered"), expected, "{logged}");
+            if expected {
+                assert!(
+                    logged.contains("epilog answered a string; nothing preloaded"),
+                    "{logged}"
+                );
             }
-            logged
-        })
-        .await
-        .expect("the log line arrives");
-        assert!(logged.contains("no `preload`"), "{logged}");
-        assert!(!is_loaded(&vm, "/good"));
+            assert!(!is_loaded(&vm, "/good"));
+        }
     }
 
     /// Nothing after the destructed master is applied.

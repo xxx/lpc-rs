@@ -903,6 +903,73 @@ mod tests {
     use super::*;
 
     #[test]
+    fn comparison_relations_distinguish_less_equal_and_greater_operands() {
+        for (left, right, expected) in [
+            (1, 2, [true, true, false, false, false, true]),
+            (2, 2, [false, true, false, true, true, false]),
+            (3, 2, [false, false, true, true, false, true]),
+        ] {
+            for (comparison, expected) in Comparison::ALL.into_iter().zip(expected) {
+                assert_eq!(
+                    comparison.holds(left, right),
+                    expected,
+                    "{left} {comparison} {right}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unordered_operands_follow_partial_order_comparison_rules() {
+        for (left, right) in [(f64::NAN, 0.0), (0.0, f64::NAN), (f64::NAN, f64::NAN)] {
+            for (comparison, expected) in Comparison::ALL
+                .into_iter()
+                .zip([false, false, false, false, false, true])
+            {
+                assert_eq!(comparison.holds(left, right), expected, "{comparison}");
+            }
+        }
+    }
+
+    #[test]
+    fn reverse_ranges_keep_each_endpoint_direction_independent() {
+        for (range, expected) in [
+            (ReverseRange::Start, (true, false)),
+            (ReverseRange::End, (false, true)),
+            (ReverseRange::Both, (true, true)),
+        ] {
+            assert_eq!((range.start_from_end(), range.end_from_end()), expected);
+        }
+    }
+
+    #[test]
+    fn table_operands_display_their_role_and_full_index() {
+        for (index, type_name, list_name) in [
+            (0, "t0", "a0"),
+            (256, "t256", "a256"),
+            (u16::MAX, "t65535", "a65535"),
+        ] {
+            assert_eq!(TypeIndex(index).to_string(), type_name);
+            assert_eq!(ArgList(index).to_string(), list_name);
+        }
+    }
+
+    #[test]
+    fn backpatching_updates_address_carriers_and_rejects_other_instructions() {
+        for original in every_variant() {
+            let mut instruction = original;
+            if original.address().is_some() {
+                instruction.backpatch(37usize).unwrap();
+                assert_eq!(instruction.address(), Some(Address(37)));
+                assert_eq!(instruction.index(), original.index());
+            } else {
+                assert!(instruction.backpatch(37usize).unwrap_err().is_bug());
+                assert_eq!(instruction, original);
+            }
+        }
+    }
+
+    #[test]
     fn a_comparison_holds_between_ordered_values() {
         let answers: Vec<bool> = Comparison::ALL.iter().map(|&k| k.holds(1, 2)).collect();
         assert_eq!(answers, [true, true, false, false, false, true]);

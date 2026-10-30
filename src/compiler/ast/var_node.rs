@@ -83,6 +83,36 @@ impl Display for VarNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compiler::{
+        ast::{ast_node::AstNode, expression_node::ExpressionNode},
+        compilation_context::CompilationContext,
+        lexer::LexWrapper,
+    };
+
+    #[test]
+    fn a_parsed_reference_keeps_its_identifier_range_and_source_form() {
+        let source = "mixed value = incoming;";
+        let mut context = CompilationContext::default();
+        let mut program = crate::lpc_parser::ProgramParser::new()
+            .parse(&mut context, LexWrapper::new(source, 3).triples())
+            .unwrap();
+        let Some(AstNode::Decl(mut declaration)) = program.body.pop() else {
+            panic!("variable declaration");
+        };
+        let Some(ExpressionNode::Var(node)) = declaration
+            .initializations
+            .pop()
+            .and_then(|init| init.value)
+        else {
+            panic!("variable reference");
+        };
+        let start = source.find("incoming").unwrap();
+        assert_eq!(
+            node.span(),
+            Some(Span::new(3, start..start + "incoming".len()))
+        );
+        assert_eq!(node.to_string(), "incoming");
+    }
 
     #[test]
     fn test_is_closure_arg_var() {
