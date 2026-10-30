@@ -35,6 +35,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "1"
+  CARGO_PROFILE_TEST_DEBUG: "0"
   RUST_BACKTRACE: "1"
 
 jobs:
@@ -143,6 +144,7 @@ jobs:
           MUTATION_SHARD: ${{ matrix.shard }}
         run: >-
           cargo mutants --workspace --in-place --no-shuffle
+          --cargo-arg=--workspace
           --in-diff /tmp/lpc-rs-mutants.diff --shard "$MUTATION_SHARD" --sharding round-robin
           --timeout-multiplier 2 --output /tmp/lpc-rs-mutants
 
