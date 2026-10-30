@@ -22,6 +22,12 @@ Output and `input_to` registrations are delivered in call order after the
 `logon` transaction commits. An uncaught error discards both; conflict retries
 deliver only the successful attempt's operations.
 
+Typed input waits until `logon` succeeds and its output and callback
+registrations have been delivered. A client can reply as soon as it sees a
+prompt without racing a later `input_to` or `get_char` registration. Telnet
+protocol events, including GMCP and window-size updates, can still arrive
+during login.
+
 ### Examples
 
 ```c

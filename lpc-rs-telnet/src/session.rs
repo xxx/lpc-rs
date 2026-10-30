@@ -362,6 +362,25 @@ impl Session {
         None
     }
 
+    /// Take the next protocol event while leaving text for a later input mode.
+    pub fn next_protocol_event(&mut self) -> Option<Event> {
+        let index = self
+            .incoming
+            .iter()
+            .position(|incoming| matches!(incoming, Incoming::Event(_)))?;
+        match self.incoming.remove(index) {
+            Some(Incoming::Event(event)) => Some(event),
+            _ => unreachable!("the selected item is a protocol event"),
+        }
+    }
+
+    /// Whether unread client text is queued for decoding.
+    pub fn has_pending_input(&self) -> bool {
+        self.incoming
+            .iter()
+            .any(|incoming| matches!(incoming, Incoming::Data(_)))
+    }
+
     /// Move everything queued for the client into `into`.
     pub fn drain_output(&mut self, into: &mut BytesMut) {
         into.extend_from_slice(&self.out);
@@ -624,6 +643,30 @@ mod tests {
 
     fn events(session: &mut Session) -> Vec<Event> {
         std::iter::from_fn(|| session.next_event()).collect()
+    }
+
+    #[test]
+    fn protocol_events_leave_buffered_text_for_the_selected_input_mode() {
+        let mut session = connected();
+        assert!(!session.has_pending_input());
+        assert_eq!(session.next_protocol_event(), None);
+        session.feed("é\r\n".as_bytes());
+        session.feed(&[IAC, SB, NAWS, 0, 80, 0, 24, IAC, SE]);
+        session.feed(b"Z\r\n");
+        assert!(session.has_pending_input());
+        assert_eq!(
+            session.next_protocol_event(),
+            Some(Event::Naws { cols: 80, rows: 24 })
+        );
+        assert_eq!(session.next_protocol_event(), None);
+        assert!(session.has_pending_input());
+        session.set_input_mode(InputMode::Character);
+        assert_eq!(session.next_event(), Some(Event::Character("é".into())));
+        assert_eq!(session.next_event(), Some(Event::Character("\r".into())));
+        session.set_input_mode(InputMode::Line);
+        assert_eq!(session.next_event(), Some(Event::Line("Z".into())));
+        assert_eq!(session.next_event(), None);
+        assert!(!session.has_pending_input());
     }
 
     #[test]

@@ -138,13 +138,12 @@ impl Vm {
                 }
             }
 
-            // No command line ran, so nothing else asks for the cycle that
-            // marks logon()'s first prompt.
-            let _ = connection.send(ConnectionOp::PromptCycle);
             // A client that left mid-login is not a player.
             if !connection.is_dead() {
                 connection.set_logged_in();
             }
+            // Wake the connection after all login effects are ready for buffered input.
+            let _ = connection.send(ConnectionOp::PromptCycle);
         });
     }
 }

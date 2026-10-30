@@ -173,7 +173,8 @@ impl Telnet {
             outbox.fill_from(&mut session);
             let turn = tokio::select! {
                 op = connection_rx.recv() => Turn::Op(op),
-                read = reader.read(&mut buf), if !outbox.is_overflowed() => Turn::Read(read),
+                read = reader.read(&mut buf), if !outbox.is_overflowed()
+                    && (connection.is_logged_in() || !session.has_pending_input()) => Turn::Read(read),
                 wrote = async {
                     if needs_flush { Turn::Flushed(writer.flush().await) }
                     else { Turn::Wrote(writer.write(outbox.pending()).await) }
@@ -258,7 +259,12 @@ impl Telnet {
                 if matches!(flow, Flow::Leave(_)) {
                     break;
                 }
-                let Some(event) = session.next_event() else {
+                let event = if connection.is_logged_in() {
+                    session.next_event()
+                } else {
+                    session.next_protocol_event()
+                };
+                let Some(event) = event else {
                     break;
                 };
                 Self::handle_event(
@@ -1390,6 +1396,10 @@ mod tests {
 
         /// `wire`, under the test's own config.
         async fn wire_with(config: Config) -> Wired {
+            wire_with_login(config, true).await
+        }
+
+        async fn wire_with_login(config: Config, logged_in: bool) -> Wired {
             let vm = Vm::new(config);
             let (mut client, server) = tokio::io::duplex(4096);
             let addr: SocketAddr = ADDR.parse().expect("a literal address");
@@ -1415,6 +1425,10 @@ mod tests {
                     EOR, IAC, WILL, MSSP, IAC, DO, 24
                 ]
             );
+            if logged_in {
+                connection.set_logged_in();
+                connection.send(ConnectionOp::PromptCycle).unwrap();
+            }
             Wired {
                 client,
                 connection,
@@ -1454,6 +1468,47 @@ mod tests {
                 matches!(w.vm.next_op(), Some(VmOp::InitiateLogin(c)) if c.address == addr),
                 "the loop asks the VM for its login"
             );
+        }
+
+        #[tokio::test]
+        async fn input_waits_for_logon_to_finish_registering_its_callback() {
+            let mut w = wire_with_login(test_config(), false).await;
+            let process = bind(
+                &w,
+                r#"
+                    string process_input(string line) { write_socket("command\n"); return line; }
+                    void heard(string line) { write_socket("heard:" + line + "\n"); }
+                    void arm() { input_to(heard); }
+                "#,
+            )
+            .await;
+            w.vm.global_state
+                .attach(w.connection.clone(), process.clone())
+                .await;
+            w.connection
+                .send(ConnectionOp::SendMessage("Name: ".into()))
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 6).await, b"Name: ");
+            w.client.write_all(b"alice\r\n").await.unwrap();
+            let mut byte = [0];
+            assert!(
+                tokio::time::timeout(Duration::from_millis(50), w.client.read(&mut byte))
+                    .await
+                    .is_err(),
+                "input was dispatched before logon finished"
+            );
+
+            let template = TaskTemplate::from(w.vm.global_state.clone());
+            template.set_this_player(Some(process.clone()));
+            apply_function_by_name("arm", &[], process, template, Some(5_000))
+                .await
+                .unwrap()
+                .unwrap();
+            w.connection.set_logged_in();
+            w.connection.send(ConnectionOp::PromptCycle).unwrap();
+            let mut expected = vec![IAC, GA];
+            expected.extend(b"heard:alice\r\n");
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
         }
 
         #[tokio::test]
@@ -2546,7 +2601,7 @@ mod tests {
 
         #[tokio::test]
         async fn mssp_merges_the_masters_stats_over_the_defaults() {
-            let mut w = wire().await;
+            let mut w = wire_with_login(test_config(), false).await;
             let master = indoc! { r#"
                 mapping get_mud_stats() {
                     return ([
@@ -2596,7 +2651,7 @@ mod tests {
 
         #[tokio::test]
         async fn mssp_without_a_usable_master_is_the_defaults() {
-            let mut w = wire().await;
+            let mut w = wire_with_login(test_config(), false).await;
             w.vm.initialize_process_from_code(
                 "/secure/master.c",
                 "int get_mud_stats() { return 1; }",
@@ -2612,7 +2667,7 @@ mod tests {
 
         #[tokio::test]
         async fn mssp_counts_the_logged_in() {
-            let mut w = wire().await;
+            let mut w = wire_with_login(test_config(), false).await;
             w.connection.set_logged_in();
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
             let vars = read_mssp(&mut w.client).await;
