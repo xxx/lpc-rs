@@ -1427,7 +1427,6 @@ mod tests {
             );
             if logged_in {
                 connection.set_logged_in();
-                connection.send(ConnectionOp::PromptCycle).unwrap();
             }
             Wired {
                 client,
