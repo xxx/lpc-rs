@@ -144,7 +144,7 @@ jobs:
         run: >-
           cargo mutants --workspace --in-place --no-shuffle
           --in-diff /tmp/lpc-rs-mutants.diff --shard "$MUTATION_SHARD" --sharding round-robin
-          --timeout 30 --output /tmp/lpc-rs-mutants
+          --timeout-multiplier 2 --output /tmp/lpc-rs-mutants
 
       - name: Upload mutation results
         if: always()
