@@ -101,7 +101,7 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.count != '0'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 16
@@ -154,7 +154,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: mutation-results-${{ strategy.job-index }}
+          name: mutation-results-${{ strategy.job-index }}-attempt-${{ github.run_attempt }}
           path: /tmp/lpc-rs-mutants/mutants.out
           if-no-files-found: warn
           retention-days: 14
