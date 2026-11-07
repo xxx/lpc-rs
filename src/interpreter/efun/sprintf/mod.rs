@@ -115,6 +115,29 @@ pub fn sprintf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "fuzzing")]
+pub(crate) fn bounded_format(format: &str) -> bool {
+    let mut chars = format.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character != '%' {
+            continue;
+        }
+        if matches!(chars.peek(), Some('%' | '^')) {
+            chars.next();
+            continue;
+        }
+        if let Ok(spec) = spec::parse(&mut chars)
+            && [spec.width, spec.precision]
+                .into_iter()
+                .flatten()
+                .any(|size| matches!(size, Size::Fixed(n) if n > 256))
+        {
+            return false;
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_support::{run_prog, try_run_prog};

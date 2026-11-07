@@ -1,0 +1,62 @@
+[package]
+name = "lpc-rs-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+async-trait = "0.1.92"
+codespan-reporting = "0.13.1"
+libfuzzer-sys = "0.4.13"
+lpc-rs = { path = "..", features = ["fuzzing"] }
+lpc-rs-core = { path = "../lpc-rs-core" }
+lpc-rs-errors = { path = "../lpc-rs-errors" }
+lpc-rs-utils = { path = "../lpc-rs-utils" }
+tokio = { version = "1.53.1", features = ["rt", "time"] }
+
+[[bin]]
+name = "compiler"
+path = "fuzz_targets/compiler.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "save_format"
+path = "fuzz_targets/save_format.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "save_round_trip"
+path = "fuzz_targets/save_round_trip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grammar"
+path = "fuzz_targets/grammar.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "formatting"
+path = "fuzz_targets/formatting.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stm"
+path = "fuzz_targets/stm.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

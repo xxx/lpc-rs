@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![cfg_attr(any(fuzzing, feature = "fuzzing"), recursion_limit = "256")]
 #![warn(clippy::disallowed_types)]
 
 extern crate core;
@@ -13,15 +14,19 @@ pub mod runtime;
 pub mod telnet;
 pub mod util;
 
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing;
+
 pub mod bench_support;
 
 #[cfg(test)]
 pub mod test_support;
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(all(not(target_env = "msvc"), not(fuzzing)))]
 use jemallocator::Jemalloc;
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(all(not(target_env = "msvc"), not(fuzzing)))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 

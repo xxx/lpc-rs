@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "compilers", "game-engines"]
 lalrpop = "0.23.1"
 
 [dependencies]
+arbitrary = { version = "1.4.2", optional = true }
 lpc-rs-asm = { version = "0.1", path = "./lpc-rs-asm"}
 lpc-rs-core = { version = "0.1", path = "./lpc-rs-core"}
 lpc-rs-errors = { version = "0.1", path = "./lpc-rs-errors"}
@@ -92,6 +93,9 @@ nix = { version = "0.31.3", default-features = false, features = ["resource"] }
 [features]
 default = ["max_level_trace", "release_max_level_debug"]
 
+# Internal entry points used by the standalone fuzz workspace.
+fuzzing = ["dep:arbitrary"]
+
 # Per-opcode dispatch counters in the eval loop.
 opcode-profile = []
 
@@ -168,7 +172,10 @@ members = [
     "lpc-rs-telnet",
     "lpc-rs-utils",
 ]
-exclude = ["lpc-rs-telnet/fuzz"]
+exclude = ["fuzz", "lpc-rs-telnet/fuzz"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 
 [profile.release]
 lto = "thin"

@@ -1,0 +1,5 @@
+word = /[a-z]+/
+whitespace = /[ \t]+/
+S: word word
+// fuzz-input
+hello world

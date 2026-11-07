@@ -302,6 +302,25 @@ pub fn sscanf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "fuzzing")]
+pub(crate) fn check_scanners(input: &str, format: &str) {
+    for scanned in [scan_int(input, 10), scan_int(input, 16), scan_float(input)]
+        .into_iter()
+        .flatten()
+    {
+        assert!(scanned.len <= input.len());
+        assert!(input.is_char_boundary(scanned.len));
+    }
+    if let Ok(pieces) = pieces(format) {
+        for next in pieces.iter().map(Some).chain(std::iter::once(None)) {
+            if let Some(end) = stop_for(next, input) {
+                assert!(end <= input.len());
+                assert!(input.is_char_boundary(end));
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use indoc::indoc;

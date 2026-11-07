@@ -57,6 +57,14 @@ and benchmark compilation in parallel jobs on stable Rust. Cargo checks use
 `--locked`; broken intra-doc links fail CI. The final `ci` job is the required
 branch-protection check and must fail if any preceding job fails or is skipped.
 
+The required CI also builds and smoke-fuzzes the standalone `fuzz/` and
+`lpc-rs-telnet/fuzz/` workspaces on nightly. Their committed seeds, campaign
+runner, coverage reports and scheduled runs are documented in `fuzz/README.md`.
+These workspaces are excluded from normal Cargo workspace commands, so verify
+affected fuzz targets explicitly. `--features fuzzing` checks the root crate's
+internal harnesses; cargo-fuzz additionally sets `cfg(fuzzing)` for the system
+allocator used by ASan.
+
 Rust dependency caches are separate per job and keyed by the toolchain, manifests,
 lockfiles, and build settings; only `master` runs save them, and PRs restore them.
 Dependabot proposes weekly updates for the commit-pinned GitHub Actions.

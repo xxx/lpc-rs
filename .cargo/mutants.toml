@@ -431,6 +431,9 @@ gitignore = true
 copy_target = false
 
 exclude_re = [
+    # Fuzz harness checks run in the standalone campaigns.
+    "^src/interpreter/efun/(?:sprintf/mod|sscanf)\\.rs:.*\\b(?:bounded_format|check_scanners)\\b",
+    "^src/interpreter/stm/committer\\.rs:.*\\bCommitter::snapshot_clone\\b",
     # The empty include-path branch has a zero path length.
     "^src/compiler/preprocessor/directive\\.rs:320:23:\\ replace\\ \\+\\ with\\ \\-\\ in\\ Cursor<'a>::include$",
     # Parameter error ranges widen to the same one-byte span in sub_span.
