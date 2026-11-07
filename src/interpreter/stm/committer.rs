@@ -238,6 +238,12 @@ impl Committer {
         committer
     }
 
+    /// Snapshot access for tests and fuzz reference models.
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub(crate) fn snapshot_clone(&self) -> Snapshot {
+        self.snapshot.clone()
+    }
+
     /// Subscribe to the per-commit watermark bump.
     pub(crate) fn commit_watch(&self) -> watch::Receiver<Version> {
         self.commit_watch.subscribe()
@@ -739,12 +745,6 @@ impl Committer {
     #[cfg(test)]
     pub(crate) fn committed(&self, var_id: VarId) -> WorldValue {
         self.snapshot.read(var_id).unwrap_or_else(WorldValue::null)
-    }
-
-    /// A clone of the current world snapshot (sibling test modules can't
-    /// reach the field directly).
-    pub(crate) fn snapshot_clone(&self) -> Snapshot {
-        self.snapshot.clone()
     }
 
     /// Run the committer loop, rejecting the first `n` `Commit`s it

@@ -1,0 +1,98 @@
+name: Fuzzing
+
+on:
+  workflow_call:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+  CARGO_TARGET_DIR: ${{ github.workspace }}/target/fuzz
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: core
+            directory: fuzz
+          - project: telnet
+            directory: lpc-rs-telnet/fuzz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: nightly
+          components: clippy, rustfmt, rust-src, llvm-tools-preview
+
+      - name: Restore fuzz corpora
+        uses: actions/cache/restore@a7833574556fa59680c1b7cb190c1735db73ebf0 # v5.0.0
+        with:
+          path: ${{ matrix.directory }}/corpus
+          key: fuzz-corpus-${{ runner.os }}-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-corpus-${{ runner.os }}-${{ matrix.project }}-
+
+      - name: Cache fuzz builds
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: fuzz-${{ matrix.project }}
+          workspaces: ${{ matrix.directory }} -> ${{ github.workspace }}/target/fuzz
+          cache-workspace-crates: true
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        with:
+          tool: cargo-fuzz@0.13.2
+
+      - name: Run smoke campaign
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        run: python3 fuzz/run.py --project '${{ matrix.project }}' --seconds 20
+
+      - name: Run extended campaign and measure coverage
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: python3 fuzz/run.py --project '${{ matrix.project }}' --seconds 300 --coverage
+
+      - name: Verify lockfiles
+        run: git diff --exit-code -- Cargo.lock fuzz/Cargo.lock lpc-rs-telnet/fuzz/Cargo.lock
+
+      - name: Save fuzz corpora
+        if: success() && github.ref == 'refs/heads/master'
+        uses: actions/cache/save@a7833574556fa59680c1b7cb190c1735db73ebf0 # v5.0.0
+        with:
+          path: ${{ matrix.directory }}/corpus
+          key: fuzz-corpus-${{ runner.os }}-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload fuzz results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-${{ matrix.project }}-${{ github.run_attempt }}
+          path: |
+            ${{ matrix.directory }}/artifacts
+            ${{ matrix.directory }}/corpus
+            ${{ matrix.directory }}/coverage/*/coverage.profdata
+            ${{ matrix.directory }}/coverage/*/report.txt
+            ${{ matrix.directory }}/logs
+          if-no-files-found: ignore
+          retention-days: 14

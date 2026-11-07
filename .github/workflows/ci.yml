@@ -46,7 +46,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Run Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --features fuzzing --locked -- -D warnings
 
   test:
     name: Tests and documentation
@@ -110,14 +110,17 @@ jobs:
         # Select explicit benches without rebuilding library and binary test harnesses.
         run: cargo bench --workspace --locked --bench '*' --no-run
 
+  fuzz:
+    uses: ./.github/workflows/fuzz.yml
+
   # Branch protection requires this check name.
   ci:
-    needs: [lint, test, bench]
+    needs: [lint, test, bench, fuzz]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require all checks to pass
         env:
-          SUCCESS: ${{ needs.lint.result == 'success' && needs.test.result == 'success' && needs.bench.result == 'success' }}
+          SUCCESS: ${{ needs.lint.result == 'success' && needs.test.result == 'success' && needs.bench.result == 'success' && needs.fuzz.result == 'success' }}
         run: test "$SUCCESS" = "true"

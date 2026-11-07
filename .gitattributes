@@ -1,0 +1,2 @@
+fuzz/seeds/** -text -whitespace
+lpc-rs-telnet/fuzz/seeds/** -text -whitespace

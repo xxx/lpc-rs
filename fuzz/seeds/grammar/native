@@ -1,0 +1,3 @@
+'put' %i 'in' %o
+// fuzz-input
+put two swords in bag

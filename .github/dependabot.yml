@@ -12,3 +12,11 @@ updates:
       github-actions:
         patterns:
           - "*"
+  - package-ecosystem: cargo
+    directory: /fuzz
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /lpc-rs-telnet/fuzz
+    schedule:
+      interval: weekly
