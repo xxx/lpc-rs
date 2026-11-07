@@ -32,6 +32,9 @@ may grow to 32 KiB, enough to cross Telnet's 8 KiB limits. Cargo output goes to
 the shared `target/fuzz/` directory. Logs, generated corpora, crash artifacts and
 coverage stay in the corresponding fuzz workspace and are gitignored.
 
+Every fuzz command explicitly selects the host from `rustc +nightly -vV`,
+including when the installed cargo-fuzz binary was built for another target.
+
 Each target reads both its accumulated `corpus/<target>/` and its committed
 `seeds/<target>/`. New inputs go only into `corpus/`; keep curated seeds small
 and named for the behavior they exercise. The large Telnet seeds intentionally

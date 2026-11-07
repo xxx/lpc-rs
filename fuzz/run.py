@@ -18,6 +18,11 @@ def host_triple():
         ["rustc", "+nightly", "-vV"], text=True).splitlines() if line.startswith("host: "))
 
 
+def fuzz_command(operation, directory):
+    return ["cargo", "+nightly", "fuzz", operation, "--fuzz-dir", directory,
+            "--target", host_triple(), "--codegen-units", "16"]
+
+
 def run(command, environment, log):
     print("+", " ".join(map(str, command)), flush=True)
     with log.open("w") as output:
@@ -30,9 +35,8 @@ def run(command, environment, log):
 def coverage(target, directory, environment):
     build_directory = Path(environment["CARGO_TARGET_DIR"]) / "coverage"
     run(
-        ["cargo", "+nightly", "fuzz", "coverage", "--fuzz-dir", directory,
-         "--target-dir", build_directory,
-         "--codegen-units", "16", target, directory / "corpus" / target, directory / "seeds" / target],
+        fuzz_command("coverage", directory) + ["--target-dir", build_directory,
+         target, directory / "corpus" / target, directory / "seeds" / target],
         environment, directory / "logs" / f"{target}-coverage.log",
     )
     sysroot = Path(subprocess.check_output(["rustc", "+nightly", "--print", "sysroot"], text=True).strip())
@@ -74,13 +78,13 @@ def main():
     run(["cargo", "+nightly", "clippy", "--manifest-path", directory / "Cargo.toml",
          "--all-targets", "--locked", "--", "-D", "warnings"],
         environment, directory / "logs/clippy.log")
-    run(["cargo", "+nightly", "fuzz", "build", "--fuzz-dir", directory, "--codegen-units", "16"],
+    run(fuzz_command("build", directory),
         environment, directory / "logs/build.log")
     for target in targets:
         corpus = directory / "corpus" / target
         corpus.mkdir(parents=True, exist_ok=True)
-        run(["cargo", "+nightly", "fuzz", "run", "--fuzz-dir", directory, "--codegen-units", "16",
-             target, corpus, directory / "seeds" / target, "--", f"-max_total_time={args.seconds}",
+        run(fuzz_command("run", directory) + [target, corpus, directory / "seeds" / target,
+             "--", f"-max_total_time={args.seconds}",
              "-max_len=32768", "-timeout=10", "-rss_limit_mb=2048"],
             environment, directory / "logs" / f"{target}.log")
     if args.coverage:
