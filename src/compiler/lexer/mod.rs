@@ -155,8 +155,7 @@ impl Iterator for TokenTriples<'_> {
 pub enum Token {
     #[token("+", track_slice)]
     Plus(Span),
-    #[token("-", track_slice)]
-    #[token("−", track_slice)]
+    #[regex(r"[-−]", track_slice)]
     Minus(Span),
     #[token("*", track_slice)]
     Mul(Span),

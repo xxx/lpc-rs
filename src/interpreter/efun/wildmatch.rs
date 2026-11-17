@@ -41,12 +41,8 @@ pub(crate) fn matches(pattern: &str, subject: &str) -> bool {
                 }
                 _ => false,
             },
-            None => {
-                if p.is_empty() && s.is_empty() {
-                    return true;
-                }
-                false
-            }
+            None if p.is_empty() && s.is_empty() => return true,
+            None => false,
         };
         if advanced {
             continue;
